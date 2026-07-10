@@ -371,20 +371,6 @@ const assetPrefix = (page) => (page.locale === "ru" ? "../" : "../../");
 
 const renderHead = (page) => {
   const prefix = assetPrefix(page);
-  const faqSchema = page.faq
-    ? {
-        "@context": "https://schema.org",
-        "@type": "FAQPage",
-        mainEntity: page.faq.map(([question, answer]) => ({
-          "@type": "Question",
-          name: question,
-          acceptedAnswer: {
-            "@type": "Answer",
-            text: answer,
-          },
-        })),
-      }
-    : null;
   const breadcrumbSchema = {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
@@ -459,10 +445,7 @@ ${renderJsonLd(softwareSchema)}
     </script>
     <script type="application/ld+json">
 ${renderJsonLd(breadcrumbSchema)}
-    </script>${faqSchema ? `
-    <script type="application/ld+json">
-${renderJsonLd(faqSchema)}
-    </script>` : ""}
+    </script>
   </head>`;
 };
 

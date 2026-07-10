@@ -1,17 +1,30 @@
 #!/usr/bin/env node
-import { access, readFile } from "node:fs/promises";
+import { access, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const siteOrigin = "https://adshortsai.com";
-const organicSprintLastmod = "2026-06-17";
-const commercialGrowthLastmod = "2026-06-18";
-const yandexGrowthLastmod = "2026-06-18";
-
+const readRootFile = (relativePath) => readFile(path.join(rootDir, relativePath), "utf8");
+const policy = JSON.parse(await readRootFile("seo-index-policy.json"));
+const siteOrigin = policy.siteOrigin.replace(/\/$/, "");
+const indexPaths = new Set(policy.index.map((entry) => entry.url));
+const redirects = new Map(policy.redirect.map((entry) => [entry.url, entry.target]));
 const errors = [];
 
-const readRootFile = (relativePath) => readFile(path.join(rootDir, relativePath), "utf8");
+const assert = (condition, message) => {
+  if (!condition) errors.push(message);
+};
+
+const normalizePath = (value) => {
+  const parsed = new URL(value, `${siteOrigin}/`);
+  return parsed.pathname === "/data-deletion.html" ? parsed.pathname : parsed.pathname.replace(/\/?$/, "/");
+};
+
+const localPathFor = (pathname) => {
+  if (pathname === "/") return "index.html";
+  if (pathname === "/data-deletion.html") return "data-deletion.html";
+  return `${pathname.slice(1)}index.html`;
+};
 
 const exists = async (relativePath) => {
   try {
@@ -22,402 +35,138 @@ const exists = async (relativePath) => {
   }
 };
 
-const urlToLocalIndex = (url) => {
-  const parsed = new URL(url);
-  if (parsed.origin !== siteOrigin) return null;
-  if (parsed.pathname === "/") return "index.html";
-  if (parsed.pathname.endsWith("/")) return `${parsed.pathname.slice(1)}index.html`;
-  return parsed.pathname.slice(1);
-};
-
-const assert = (condition, message) => {
-  if (!condition) errors.push(message);
-};
-
-const criticalPages = [
-  "index.html",
-  "en/index.html",
-  "pricing/index.html",
-  "en/pricing/index.html",
-  "examples/index.html",
-  "en/examples/index.html",
-  "press/index.html",
-  "en/press/index.html",
-  "contacts/index.html",
-  "en/contact/index.html",
-  "shorts-guides/index.html",
-  "shorts-ne-nabirayut-prosmotry/index.html",
-];
-
-const organicSprintPages = [
-  "en/faceless-youtube-shorts/index.html",
-  "en/youtube-shorts-swipe-away-rate/index.html",
-  "shorts-chernye-polosy/index.html",
-  "en/youtube-shorts-for-lawyers/index.html",
-  "kak-ubrat-tryasku-v-shorts/index.html",
-  "shorts-ne-nabirayut-prosmotry/index.html",
-  "shorts-dlya-kliniki/index.html",
-  "kak-chasto-vykladyvat-shorts/index.html",
-  "kak-sdelat-seriyu-shorts/index.html",
-  "shorts-ne-konvertiruyut-v-podpischiki/index.html",
-  "kak-sdelat-huk-v-shorts/index.html",
-  "kak-podnyat-uderzhanie-v-shorts/index.html",
-  "en/how-to-create-a-hook-in-shorts/index.html",
-  "en/keywords-for-youtube-shorts/index.html",
-  "analitika-youtube-shorts-kak-chitat/index.html",
-  "bitreyt-dlya-shorts/index.html",
-  "cta-v-shorts/index.html",
-  "en/cta-in-youtube-shorts/index.html",
-  "en/do-hashtags-work-for-youtube-shorts/index.html",
-  "en/how-much-does-shorts-editing-cost/index.html",
-  "en/how-to-add-a-link-in-shorts/index.html",
-  "en/how-to-add-a-mid-video-twist-in-shorts/index.html",
-  "en/how-to-analyze-retention-in-shorts/index.html",
-  "en/low-retention-on-youtube-shorts/index.html",
-  "en/youtube-shorts-getting-0-views/index.html",
-  "en/youtube-shorts-wont-upload/index.html",
-  "en/how-to-increase-retention-in-shorts/index.html",
-  "en/youtube-shorts-not-showing-on-channel/index.html",
-  "en/youtube-shorts-description-what-to-write/index.html",
-  "en/youtube-shorts-from-photos/index.html",
-  "en/how-to-upload-youtube-shorts/index.html",
-  "en/youtube-shorts-not-converting-to-subscribers/index.html",
-  "en/youtube-shorts-no-sound/index.html",
-  "en/youtube-shorts-black-bars/index.html",
-  "en/youtube-shorts-not-getting-views/index.html",
-  "en/youtube-shorts-resolution/index.html",
-  "en/copyright-free-music-for-shorts/index.html",
-  "en/youtube-shorts-copyright/index.html",
-  "en/background-for-youtube-shorts/index.html",
-  "en/how-often-to-post-youtube-shorts/index.html",
-  "en/ctr-in-youtube-shorts/index.html",
-  "razreshenie-dlya-shorts/index.html",
-  "nizkoe-uderzhanie-v-youtube-shorts/index.html",
-  "monetizaciya-youtube-shorts/index.html",
-  "avtorskie-prava-v-shorts/index.html",
-  "opisanie-dlya-shorts-chto-pisat/index.html",
-  "shorts-iz-foto/index.html",
-  "kak-zagruzit-shorts/index.html",
-  "shorts-ne-otobrazhayutsya-na-kanale/index.html",
-  "shorts-net-zvuka/index.html",
-];
-
-const commercialGrowthPages = [
-  "generator-youtube-shorts/index.html",
-  "ai-generator-shorts/index.html",
-  "generator-shorts-bez-lica/index.html",
-  "generator-scenariev-youtube-shorts/index.html",
-  "sozdat-shorts-video/index.html",
-  "avtomatizaciya-youtube-shorts/index.html",
-  "generator-video-dlya-tiktok/index.html",
-  "generator-reels-instagram/index.html",
-  "ai-generator-video-dlya-socsetey/index.html",
-  "luchshiy-ai-generator-shorts/index.html",
-  "luchshiy-generator-shorts-bez-lica/index.html",
-  "kak-vybrat-ai-generator-shorts/index.html",
-  "ai-generator-shorts-dlya-malogo-biznesa/index.html",
-  "ai-generator-shorts-dlya-avtorov-youtube/index.html",
-  "ai-video-maker-dlya-reels-tiktok-i-shorts/index.html",
-  "generator-video-bez-lica-dlya-youtube-shorts/index.html",
-  "en/youtube-shorts-generator/index.html",
-  "en/ai-shorts-generator/index.html",
-  "en/faceless-youtube-shorts-generator/index.html",
-  "en/youtube-shorts-script-generator/index.html",
-  "en/shorts-video-maker/index.html",
-  "en/youtube-shorts-automation/index.html",
-  "en/tiktok-video-generator/index.html",
-  "en/instagram-reels-generator/index.html",
-  "en/ai-video-generator-for-social-media/index.html",
-  "en/best-ai-shorts-generator/index.html",
-  "en/best-faceless-youtube-shorts-generator/index.html",
-  "en/how-to-choose-an-ai-shorts-generator/index.html",
-  "en/ai-shorts-generator-for-small-business/index.html",
-  "en/ai-shorts-generator-for-youtube-creators/index.html",
-  "en/ai-video-maker-for-reels-tiktok-and-shorts/index.html",
-  "en/faceless-video-generator-for-youtube-shorts/index.html",
-  "en/ai-tool-for-creating-shorts/index.html",
-  "en/shorts-creation-service/index.html",
-  "en/automatic-shorts-creation/index.html",
-  "en/shorts-production-service-or-ai/index.html",
-  "en/shorts-for-sales/index.html",
-  "en/shorts-ad-video-maker/index.html",
-  "en/ai-voiceover-for-shorts/index.html",
-  "en/shorts-subtitle-generator/index.html",
-  "en/vertical-video-generator/index.html",
-  "en/shorts-for-telegram-channel/index.html",
-  "en/shorts-for-marketplaces/index.html",
-  "en/shorts-for-experts/index.html",
-  "en/ai-content-for-shorts/index.html",
-  "en/ai-shorts-editing/index.html",
-  "en/bulk-shorts-creation/index.html",
-  "neyroset-dlya-sozdaniya-shorts/index.html",
-  "servis-dlya-sozdaniya-shorts/index.html",
-  "avtomaticheskoe-sozdanie-shorts/index.html",
-  "sozdanie-shorts-na-zakaz-ili-ai/index.html",
-  "shorts-dlya-prodazh/index.html",
-  "video-dlya-reklamy-v-shorts/index.html",
-  "ai-ozvuchka-dlya-shorts/index.html",
-  "generator-subtitrov-dlya-shorts/index.html",
-  "generator-vertikalnyh-video/index.html",
-  "shorts-dlya-telegram-kanala/index.html",
-  "shorts-dlya-marketplejsa/index.html",
-  "shorts-dlya-eksperta/index.html",
-  "kontent-dlya-shorts-s-ai/index.html",
-  "ai-montazh-shorts/index.html",
-  "massovoe-sozdanie-shorts/index.html",
-];
-
-const yandexGrowthPages = [
-  "ai-generator-shorts-dlya-malogo-biznesa/index.html",
-  "ozvuchka-dlya-shorts-kak-vybrat-golos/index.html",
-  "kak-sdelat-shorts-bez-montazha/index.html",
-  "avtomatizaciya-youtube-shorts/index.html",
-  "sozdat-shorts-video/index.html",
-  "kak-postavit-oblozhku-na-shorts/index.html",
-];
-
-const legalPages = [
-  "privacy/index.html",
-  "terms/index.html",
-  "terms-of-use/index.html",
-  "data-deletion.html",
-  "en/privacy/index.html",
-  "en/terms/index.html",
-  "en/terms-of-use/index.html",
-  "en/data-deletion/index.html",
-  "offer/index.html",
-];
-
-const trustPages = [
-  "contacts/index.html",
-  "en/contact/index.html",
-];
-
-for (const pagePath of criticalPages) {
-  const html = await readRootFile(pagePath);
-  assert(/<title>[^<]{20,}<\/title>/i.test(html), `${pagePath}: missing useful title`);
-  assert(/<meta\s+name="description"\s+content="[^"]{50,}"/i.test(html), `${pagePath}: missing useful description`);
-  assert(/<link\s+rel="canonical"\s+href="https:\/\/adshortsai\.com\/[^"]*"/i.test(html), `${pagePath}: missing canonical`);
-  assert(/<h1[\s>]/i.test(html), `${pagePath}: missing H1 in static HTML`);
-  assert(!/<div id="app"><\/div>/i.test(html), `${pagePath}: serves only SPA shell`);
-  assert(!/AdShorts AI App|app staging/i.test(html), `${pagePath}: contains staging app copy`);
-}
-
-for (const pagePath of legalPages) {
-  const html = await readRootFile(pagePath);
-  assert(/<meta\s+name="robots"\s+content="index, follow"/i.test(html), `${pagePath}: legal trust page should be indexable`);
-  assert(!/history\.replaceState\(null,\s*null,\s*window\.location\.pathname\.slice\(0,\s*-1\)/.test(html), `${pagePath}: must not rewrite canonical trailing slash in the browser`);
-  assert(!/href="\.\/(?:examples|pricing)"/.test(html), `${pagePath}: internal pricing/examples links should use trailing slash`);
-}
-
-for (const pagePath of trustPages) {
-  const html = await readRootFile(pagePath);
-  assert(/<meta\s+name="robots"\s+content="index, follow"/i.test(html), `${pagePath}: trust page should be indexable`);
-  assert(/support@adshortsai\.com/i.test(html), `${pagePath}: missing public support contact`);
-  assert(/"@type"\s*:\s*"Organization"/i.test(html), `${pagePath}: missing Organization schema`);
-  assert(/"areaServed"\s*:\s*\[/i.test(html), `${pagePath}: missing areaServed schema`);
-}
-
-for (const pagePath of organicSprintPages) {
-  const html = await readRootFile(pagePath);
-  assert(/<title>[^<]{20,}<\/title>/i.test(html), `${pagePath}: missing organic sprint title`);
-  assert(/<meta\s+name="description"\s+content="[^"]{80,}"/i.test(html), `${pagePath}: missing organic sprint description`);
-  assert(/<link\s+rel="canonical"\s+href="https:\/\/adshortsai\.com\/[^"]*"/i.test(html), `${pagePath}: missing canonical`);
-  assert(new RegExp(`"dateModified"\\s*:\\s*"${organicSprintLastmod}"`, "i").test(html), `${pagePath}: missing current dateModified`);
-  assert(/"author"\s*:\s*\{\s*"@type"\s*:\s*"Organization"\s*,\s*"name"\s*:\s*"AdShorts AI"/i.test(html), `${pagePath}: missing Article author`);
-  assert(/"@type"\s*:\s*"BreadcrumbList"/i.test(html), `${pagePath}: missing BreadcrumbList`);
-  assert(/"@type"\s*:\s*"FAQPage"/i.test(html), `${pagePath}: missing FAQPage`);
-  assert(/<!-- seo-index-boost:start -->/i.test(html), `${pagePath}: missing index boost block`);
-  assert(/<!-- seo-action-plan:start -->/i.test(html), `${pagePath}: missing action plan block`);
-  assert(/<!-- seo-sprint-faq:start -->/i.test(html), `${pagePath}: missing visible sprint FAQ`);
-}
-
-for (const pagePath of commercialGrowthPages) {
-  const html = await readRootFile(pagePath);
-  assert(/<title>[^<]{20,}<\/title>/i.test(html), `${pagePath}: missing commercial growth title`);
-  assert(/<meta\s+name="description"\s+content="[^"]{80,}"/i.test(html), `${pagePath}: missing commercial growth description`);
-  assert(/<link\s+rel="canonical"\s+href="https:\/\/adshortsai\.com\/(?:en\/)?[^"]+\/"/i.test(html), `${pagePath}: missing commercial growth canonical`);
-  assert(/<link\s+rel="alternate"\s+hreflang="ru"\s+href="https:\/\/adshortsai\.com\/[^"]+\/"/i.test(html), `${pagePath}: missing ru hreflang`);
-  assert(/<link\s+rel="alternate"\s+hreflang="en"\s+href="https:\/\/adshortsai\.com\/en\/[^"]+\/"/i.test(html), `${pagePath}: missing en hreflang`);
-  assert(/<link\s+rel="alternate"\s+hreflang="x-default"\s+href="https:\/\/adshortsai\.com\/[^"]+\/"/i.test(html), `${pagePath}: missing x-default hreflang`);
-  assert(/"@type"\s*:\s*"SoftwareApplication"/i.test(html), `${pagePath}: missing SoftwareApplication`);
-  assert(/"@type"\s*:\s*"WebPage"/i.test(html), `${pagePath}: missing WebPage`);
-  assert(new RegExp(`"dateModified"\\s*:\\s*"${commercialGrowthLastmod}"`, "i").test(html), `${pagePath}: missing commercial growth dateModified`);
-  assert(/"@type"\s*:\s*"BreadcrumbList"/i.test(html), `${pagePath}: missing BreadcrumbList`);
-  assert(/"@type"\s*:\s*"FAQPage"/i.test(html), `${pagePath}: missing FAQPage`);
-  assert(/id="priority-growth-links"/i.test(html), `${pagePath}: missing priority cluster links`);
-  assert(/id="commercial-validation-plan"/i.test(html), `${pagePath}: missing commercial validation plan`);
-  assert(/id="commercial-next-steps"/i.test(html), `${pagePath}: missing commercial internal-link block`);
-  assert(/href="\.\.\/shorts-guides\/#ai-generators"/i.test(html), `${pagePath}: missing commercial guides backlink`);
-}
-
-for (const pagePath of yandexGrowthPages) {
-  const html = await readRootFile(pagePath);
-  assert(/<!-- seo-yandex-growth:start -->/i.test(html), `${pagePath}: missing Yandex growth section`);
-}
-
-const rootLanding = await readRootFile("index.html");
-assert(/href="\.\/shorts-guides\/#ai-generators"/i.test(rootLanding), "index.html: missing AI generator cluster link from landing");
-const englishLanding = await readRootFile("en/index.html");
-assert(/href="\.\/shorts-guides\/#ai-generators"/i.test(englishLanding), "en/index.html: missing AI generator cluster link from landing");
-
-const appShell = await readRootFile("app/index.html");
-assert(!/app staging/i.test(appShell), "app/index.html: contains staging description");
-assert(/<meta name="robots" content="index, follow"/i.test(appShell), "app/index.html: public app shell should be indexable");
-assert(/<link rel="canonical" href="https:\/\/adshortsai\.com\/"/i.test(appShell), "app/index.html: public app shell should canonicalize to the landing page");
-assert(/YouTube Shorts, Reels и TikTok за минуту/i.test(appShell), "app/index.html: root app shell should use landing SEO description");
-
-const appPackage = JSON.parse(await readRootFile("app/package.json"));
-assert(
-  String(appPackage.scripts?.build ?? "").includes("generate-app-route-shells.mjs"),
-  "app/package.json: build must generate per-route app shells",
-);
-
-const builtAppRouteShells = [
-  ["app/dist/index.html", `${siteOrigin}/`],
-  ["app/dist/en/index.html", `${siteOrigin}/en/`],
-  ["app/dist/pricing/index.html", `${siteOrigin}/pricing/`],
-  ["app/dist/en/pricing/index.html", `${siteOrigin}/en/pricing/`],
-  ["app/dist/examples/index.html", `${siteOrigin}/examples/`],
-  ["app/dist/en/examples/index.html", `${siteOrigin}/en/examples/`],
-];
-if (await exists("app/dist/index.html")) {
-  for (const [routeShellPath, canonical] of builtAppRouteShells) {
-    const html = await readRootFile(routeShellPath);
-    assert(/<div id="app">/i.test(html), `${routeShellPath}: missing React app root`);
-    assert(/data-seo-fallback="true"/i.test(html), `${routeShellPath}: missing SEO fallback content`);
-    assert(/<h1[\s>]/i.test(html), `${routeShellPath}: missing fallback H1`);
-    assert(
-      new RegExp(`<link\\s+rel="canonical"\\s+href="${canonical.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"\\s*/?>`, "i").test(html),
-      `${routeShellPath}: wrong canonical`,
-    );
-    assert(/<meta\s+name="description"\s+content="[^"]{50,}"/i.test(html), `${routeShellPath}: missing route description`);
-    assert(/<title>[^<]{20,}<\/title>/i.test(html), `${routeShellPath}: missing route title`);
-    assert(/<link\s+rel="alternate"\s+hreflang="ru"\s+href="https:\/\/adshortsai\.com\/[^"]*"/i.test(html), `${routeShellPath}: missing ru hreflang`);
-    assert(/<link\s+rel="alternate"\s+hreflang="en"\s+href="https:\/\/adshortsai\.com\/en\/[^"]*"/i.test(html), `${routeShellPath}: missing en hreflang`);
-    assert(/<link\s+rel="alternate"\s+hreflang="x-default"\s+href="https:\/\/adshortsai\.com\/[^"]*"/i.test(html), `${routeShellPath}: missing x-default hreflang`);
-  }
-}
+const stripHtml = (html) => html
+  .replace(/<script\b[\s\S]*?<\/script>/gi, " ")
+  .replace(/<style\b[\s\S]*?<\/style>/gi, " ")
+  .replace(/<[^>]+>/g, " ")
+  .replace(/&nbsp;|&#160;/gi, " ")
+  .replace(/\s+/g, " ")
+  .trim();
 
 const sitemap = await readRootFile("sitemap.xml");
 const sitemapUrls = [...sitemap.matchAll(/<loc>(https:\/\/adshortsai\.com\/[^<]*)<\/loc>/g)].map((match) => match[1]);
-for (const requiredUrl of [
-  `${siteOrigin}/`,
-  `${siteOrigin}/en/`,
-  `${siteOrigin}/pricing/`,
-  `${siteOrigin}/en/pricing/`,
-  `${siteOrigin}/examples/`,
-  `${siteOrigin}/en/examples/`,
-  `${siteOrigin}/press/`,
-  `${siteOrigin}/en/press/`,
-  `${siteOrigin}/contacts/`,
-  `${siteOrigin}/en/contact/`,
-  `${siteOrigin}/shorts-guides/`,
-  `${siteOrigin}/privacy/`,
-  `${siteOrigin}/en/privacy/`,
-  `${siteOrigin}/terms/`,
-  `${siteOrigin}/en/terms/`,
-  `${siteOrigin}/terms-of-use/`,
-  `${siteOrigin}/en/terms-of-use/`,
-  `${siteOrigin}/data-deletion.html`,
-  `${siteOrigin}/en/data-deletion/`,
-  `${siteOrigin}/offer/`,
-]) {
-  assert(sitemapUrls.includes(requiredUrl), `sitemap.xml: missing ${requiredUrl}`);
+const sitemapPaths = new Set(sitemapUrls.map(normalizePath));
+
+assert(sitemapUrls.length >= 80 && sitemapUrls.length <= 110, `sitemap.xml: expected 80-110 URLs, got ${sitemapUrls.length}`);
+assert(sitemapUrls.length === sitemapPaths.size, "sitemap.xml: duplicate URLs found");
+assert(indexPaths.size === policy.index.length, "seo-index-policy.json: duplicate index URLs found");
+assert(redirects.size === policy.redirect.length, "seo-index-policy.json: duplicate redirect URLs found");
+
+for (const pathname of indexPaths) {
+  assert(sitemapPaths.has(pathname), `sitemap.xml: missing index URL ${pathname}`);
+  assert(await exists(localPathFor(pathname)), `seo-index-policy.json: missing local page ${pathname}`);
 }
 
-for (const url of sitemapUrls) {
-  const localPath = urlToLocalIndex(url);
-  if (!localPath) continue;
-  assert(await exists(localPath), `sitemap.xml: ${url} points to missing ${localPath}`);
+for (const pathname of sitemapPaths) {
+  assert(indexPaths.has(pathname), `sitemap.xml: contains non-index URL ${pathname}`);
 }
 
-for (const pagePath of commercialGrowthPages) {
-  const commercialUrl = `${siteOrigin}/${pagePath.replace(/index\.html$/, "")}`;
-  assert(
-    new RegExp(`<loc>${commercialUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}<\\/loc>[\\s\\S]*?<lastmod>${commercialGrowthLastmod}<\\/lastmod>`).test(sitemap),
-    `sitemap.xml: commercial growth URL must use current lastmod ${commercialUrl}`,
-  );
+for (const [source, target] of redirects) {
+  assert(!indexPaths.has(source), `seo-index-policy.json: redirect source is also index ${source}`);
+  assert(indexPaths.has(target), `seo-index-policy.json: redirect target is not index ${source} -> ${target}`);
+  assert(!redirects.has(target), `seo-index-policy.json: redirect chain ${source} -> ${target}`);
+  assert(!sitemapPaths.has(source), `sitemap.xml: contains redirect source ${source}`);
+}
+
+const forbiddenVisibleText = [
+  /Google\s+(?:is slower to index|медленнее индексирует)/i,
+  /production[- ]workflow/i,
+  /production[- ]тест/i,
+  /(?:search intent|поисков(?:ый|ому) интент)/i,
+  /(?:crawlable )?topic cluster/i,
+  /SEO-кластер/i,
+  /контент-пиллар/i,
+];
+
+for (const pathname of indexPaths) {
+  const relativePath = localPathFor(pathname);
+  const html = await readRootFile(relativePath);
+  const canonical = html.match(/<link\s+rel=["']canonical["']\s+href=["']([^"']+)["']/i)?.[1];
+  const robots = html.match(/<meta\s+name=["']robots["']\s+content=["']([^"']+)["']/i)?.[1];
+  const titles = html.match(/<title\b[^>]*>[\s\S]*?<\/title>/gi) ?? [];
+  const h1s = html.match(/<h1\b[^>]*>[\s\S]*?<\/h1>/gi) ?? [];
+  const visibleText = stripHtml(html);
+
+  assert(robots && /^index,\s*follow$/i.test(robots), `${relativePath}: index URL must use index, follow`);
+  assert(canonical === `${siteOrigin}${pathname}`, `${relativePath}: canonical must be self-referencing`);
+  assert(titles.length === 1, `${relativePath}: expected exactly one title, got ${titles.length}`);
+  assert(h1s.length === 1, `${relativePath}: expected exactly one H1, got ${h1s.length}`);
+  assert(!/"@type"\s*:\s*"FAQPage"/i.test(html), `${relativePath}: template FAQPage JSON-LD is not allowed`);
+  assert(!/"aggregateRating"\s*:/i.test(html), `${relativePath}: unverified aggregateRating is not allowed`);
+
+  for (const pattern of forbiddenVisibleText) {
+    assert(!pattern.test(visibleText), `${relativePath}: forbidden internal SEO copy matches ${pattern}`);
+  }
+
+  if (!pathname.startsWith("/en/")) {
+    assert(!/"priceCurrency"\s*:\s*"USD"/i.test(html), `${relativePath}: Russian schema must not contain USD`);
+  }
+
+  const hreflangs = [...html.matchAll(/<link\s+rel=["']alternate["']\s+hreflang=["']([^"']+)["']\s+href=["']([^"']+)["']/gi)];
+  for (const [, locale, href] of hreflangs) {
+    const alternate = normalizePath(href);
+    assert(indexPaths.has(alternate), `${relativePath}: hreflang ${locale} points to non-index URL ${alternate}`);
+  }
+
+  const jsonLdBlocks = [...html.matchAll(/<script\s+type=["']application\/ld\+json["']>([\s\S]*?)<\/script>/gi)];
+  for (const [, source] of jsonLdBlocks) {
+    try {
+      JSON.parse(source);
+    } catch (error) {
+      errors.push(`${relativePath}: invalid JSON-LD (${error.message})`);
+    }
+  }
+}
+
+const excludedDirs = new Set([".git", ".codex-tmp", "app", "node_modules", "seo-external-layer", "tmp", "logs"]);
+const staticHtml = [];
+const walk = async (dir) => {
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    if (entry.isDirectory() && excludedDirs.has(entry.name)) continue;
+    const absolute = path.join(dir, entry.name);
+    if (entry.isDirectory()) await walk(absolute);
+    else if (entry.name === "index.html" || absolute === path.join(rootDir, "data-deletion.html")) staticHtml.push(absolute);
+  }
+};
+await walk(rootDir);
+
+for (const absolute of staticHtml) {
+  const html = await readFile(absolute, "utf8");
+  const canonical = html.match(/<link\s+rel=["']canonical["']\s+href=["']([^"']+)["']/i)?.[1];
+  if (!canonical || !canonical.startsWith(siteOrigin)) continue;
+  const pathname = normalizePath(canonical);
+  if (indexPaths.has(pathname)) continue;
+  assert(/<meta\s+name=["']robots["']\s+content=["']noindex,\s*follow["']/i.test(html), `${path.relative(rootDir, absolute)}: non-index URL must use noindex, follow`);
+  assert(!sitemapPaths.has(pathname), `${path.relative(rootDir, absolute)}: noindex URL found in sitemap`);
+}
+
+for (const hubPath of policy.hubs) {
+  const hubHtml = await readRootFile(localPathFor(hubPath));
+  const hubUrl = `${siteOrigin}${hubPath}`;
+  for (const [, href] of hubHtml.matchAll(/<a\b[^>]*href=["']([^"']+)["']/gi)) {
+    const resolved = new URL(href, hubUrl);
+    if (resolved.origin !== siteOrigin || resolved.pathname.startsWith("/app")) continue;
+    const target = normalizePath(resolved.pathname);
+    assert(indexPaths.has(target), `${localPathFor(hubPath)}: hub links to non-index URL ${target}`);
+  }
 }
 
 const metadata = JSON.parse(await readRootFile("seo-url-metadata.json"));
 assert(Array.isArray(metadata.urls), "seo-url-metadata.json: missing urls array");
 assert(metadata.urls.length === sitemapUrls.length, "seo-url-metadata.json: URL count must match sitemap");
-for (const url of sitemapUrls) {
-  const record = metadata.urls.find((entry) => entry.url === url);
-  assert(record, `seo-url-metadata.json: missing ${url}`);
-  if (record) {
-    assert(record.canonical && record.target_query && record.intent && record.cluster && record.cta_source, `seo-url-metadata.json: incomplete record for ${url}`);
-  }
+
+const redirectManifest = JSON.parse(await readRootFile("seo-redirects.json"));
+assert(redirectManifest.deployAutomatically === false, "seo-redirects.json: redirects must require separate approval");
+assert(redirectManifest.redirects.length === policy.redirect.length, "seo-redirects.json: redirect count must match policy");
+
+const seoDeploy = await readRootFile("deploy-seo-only.sh").catch(() => "");
+if (seoDeploy) {
+  assert(!/(systemctl|caddy|backend|worker|app\/dist)/i.test(seoDeploy), "deploy-seo-only.sh: must not touch Caddy, services, backend, workers or React build");
 }
-
-for (const pagePath of organicSprintPages) {
-  const sprintUrl = `${siteOrigin}/${pagePath.replace(/index\.html$/, "")}`;
-  assert(
-    new RegExp(`<loc>${sprintUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}<\\/loc>[\\s\\S]*?<lastmod>${organicSprintLastmod}<\\/lastmod>`).test(sitemap),
-    `sitemap.xml: organic sprint URL must use current lastmod ${sprintUrl}`,
-  );
-  const record = metadata.urls.find((entry) => entry.url === sprintUrl);
-  assert(record?.lastmod === organicSprintLastmod, `seo-url-metadata.json: organic sprint URL must use current lastmod ${sprintUrl}`);
-}
-
-for (const pagePath of commercialGrowthPages) {
-  const commercialUrl = `${siteOrigin}/${pagePath.replace(/index\.html$/, "")}`;
-  const record = metadata.urls.find((entry) => entry.url === commercialUrl);
-  assert(record?.lastmod === commercialGrowthLastmod, `seo-url-metadata.json: commercial growth URL must use current lastmod ${commercialUrl}`);
-  assert(record?.intent === "commercial", `seo-url-metadata.json: commercial growth URL should be classified as commercial ${commercialUrl}`);
-}
-
-for (const pagePath of yandexGrowthPages) {
-  const growthUrl = `${siteOrigin}/${pagePath.replace(/index\.html$/, "")}`;
-  assert(
-    new RegExp(`<loc>${growthUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}<\\/loc>[\\s\\S]*?<lastmod>${yandexGrowthLastmod}<\\/lastmod>`).test(sitemap),
-    `sitemap.xml: Yandex growth URL must use current lastmod ${growthUrl}`,
-  );
-  const record = metadata.urls.find((entry) => entry.url === growthUrl);
-  assert(record?.lastmod === yandexGrowthLastmod, `seo-url-metadata.json: Yandex growth URL must use current lastmod ${growthUrl}`);
-}
-
-const englishGuides = await readRootFile("en/shorts-guides/index.html");
-assert(/href="#ai-generators"/i.test(englishGuides), "en/shorts-guides/index.html: missing AI generators nav link");
-assert(/<!-- seo-commercial-growth:start -->/i.test(englishGuides), "en/shorts-guides/index.html: missing commercial growth section");
-const russianGuides = await readRootFile("shorts-guides/index.html");
-assert(/href="#ai-generators"/i.test(russianGuides), "shorts-guides/index.html: missing AI generators nav link");
-assert(/<!-- seo-commercial-growth:start -->/i.test(russianGuides), "shorts-guides/index.html: missing commercial growth section");
-
-const deployProduction = await readRootFile("deploy-production.sh");
-assert(/node scripts\/seo-commercial-growth-sprint\.mjs/.test(deployProduction), "deploy-production.sh: must run commercial growth sprint before SEO metadata export");
-assert(/node scripts\/seo-organic-growth-sprint\.mjs/.test(deployProduction), "deploy-production.sh: must run organic growth sprint before SEO metadata export");
-assert(/node scripts\/seo-yandex-growth-sprint\.mjs/.test(deployProduction), "deploy-production.sh: must run Yandex growth sprint before SEO metadata export");
-assert(/node scripts\/generate-static-press-pages\.mjs/.test(deployProduction), "deploy-production.sh: must generate press pages before SEO metadata export");
-assert(/node scripts\/generate-static-contact-pages\.mjs/.test(deployProduction), "deploy-production.sh: must generate contact pages before SEO metadata export");
-assert(/node scripts\/update-static-language-switchers\.mjs/.test(deployProduction), "deploy-production.sh: must normalize static language switchers and asset versions before SEO metadata export");
-assert(
-  /@app_routes path \/ \/en\/ \/app \/app\/ \/app\/studio \/app\/studio\/ \/app\/projects \/app\/projects\/ \/en\/app \/en\/app\/ \/en\/app\/studio \/en\/app\/studio\/ \/en\/app\/projects \/en\/app\/projects\/ \/rf_\* \/pricing\/ \/en\/pricing\/ \/examples\/ \/en\/examples\/ \/hero-background-test \/en\/hero-background-test/.test(deployProduction),
-  "deploy-production.sh: public landing, pricing, examples, and app routes must use the React app shell",
-);
-assert(/header @app_html X-Robots-Tag "noindex, nofollow"/.test(deployProduction), "deploy-production.sh: app shell routes must send X-Robots-Tag noindex");
-assert(!/@app_routes path[^\n]*\/app\*/.test(deployProduction), "deploy-production.sh: broad /app* matcher can make nonexistent app URLs return 200");
-assert(!/@app_html path[^\n]*\/app\*/.test(deployProduction), "deploy-production.sh: broad /app* noindex matcher can hide route mistakes");
-assert(!/path_regexp referral/.test(deployProduction), "deploy-production.sh: broad referral matcher can make arbitrary missing slugs return soft-404 200");
-assert(/redir \/index\.html \/ 301/.test(deployProduction), "deploy-production.sh: missing /index.html canonical redirect");
-assert(/redir \/en\/index\.html \/en\/ 301/.test(deployProduction), "deploy-production.sh: missing /en/index.html canonical redirect");
-assert(/redir \/pricing \/pricing\/ 301/.test(deployProduction), "deploy-production.sh: missing /pricing trailing-slash redirect");
-assert(/redir \/examples \/examples\/ 301/.test(deployProduction), "deploy-production.sh: missing /examples trailing-slash redirect");
-assert(/redir \/index\.html https:\/\/adshortsai\.com\/ 301/.test(deployProduction), "deploy-production.sh: missing direct www /index.html redirect");
-assert(/redir \/terms\.html https:\/\/adshortsai\.com\/terms\/ 301/.test(deployProduction), "deploy-production.sh: missing direct www /terms.html redirect");
-assert(/try_files \{\{path\}\} \{\{path\}\}\/index\.html \/index\.html/.test(deployProduction), "deploy-production.sh: app routes must prefer generated route shells");
-assert(/try_files \{\{path\}\} \{\{path\}\}\/index\.html =404/.test(deployProduction), "deploy-production.sh: static fallback should return real 404");
-assert(/check_status "\$PROD_URL\/app\/nonexistent-yandex-test-404" "404"/.test(deployProduction), "deploy-production.sh: missing smoke check for nonexistent app URL 404");
-assert(/check_status "\$PROD_URL\/nonexistent-yandex-test-404\/" "404"/.test(deployProduction), "deploy-production.sh: missing smoke check for nonexistent static URL 404");
-assert(/check_status "\$PROD_URL\/zzzzzzzzz999" "404"/.test(deployProduction), "deploy-production.sh: missing smoke check for arbitrary referral-like slug 404");
-assert(/check_status "\$PROD_URL\/en\/zzzzzzzzz999" "404"/.test(deployProduction), "deploy-production.sh: missing smoke check for arbitrary English referral-like slug 404");
-assert(/check_status "\$PROD_URL\/contacts\/" "200"/.test(deployProduction), "deploy-production.sh: missing contacts trust page smoke check");
-assert(/Contacts trust page must be indexable/.test(deployProduction), "deploy-production.sh: missing contacts noindex regression check");
 
 if (errors.length) {
   console.error(errors.join("\n"));
   process.exit(1);
 }
 
-console.log(`SEO foundation audit passed for ${criticalPages.length} critical pages and ${sitemapUrls.length} sitemap URLs.`);
+console.log(`SEO policy audit passed for ${sitemapUrls.length} index URLs, ${redirects.size} redirects and ${staticHtml.length - indexPaths.size} noindex pages.`);

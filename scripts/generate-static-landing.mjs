@@ -149,17 +149,12 @@ const renderHead = (locale, localeConfig) => {
     image: logoUrl,
     logo: logoUrl,
     applicationCategory: "MultimediaApplication",
-    operatingSystem: "Web, Telegram",
+    operatingSystem: "Web",
     description: localeConfig.softwareDescription,
     offers: {
       "@type": "Offer",
       price: "0",
       priceCurrency: localeConfig.priceCurrency,
-    },
-    aggregateRating: {
-      "@type": "AggregateRating",
-      ratingValue: "5",
-      ratingCount: "1",
     },
   };
   const organization = {
@@ -168,7 +163,6 @@ const renderHead = (locale, localeConfig) => {
     name: "AdShorts AI",
     url: "https://adshortsai.com",
     logo: logoUrl,
-    sameAs: ["https://t.me/AdShortsAIBot"],
     contactPoint: {
       "@type": "ContactPoint",
       email: "support@adshortsai.com",

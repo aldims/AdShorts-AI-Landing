@@ -643,19 +643,6 @@ const renderBreadcrumbJsonLd = ({ locale, h1, canonical }) => {
   };
 };
 
-const renderFaqJsonLd = (faq) => ({
-  "@context": "https://schema.org",
-  "@type": "FAQPage",
-  mainEntity: faq.map(([question, answer]) => ({
-    "@type": "Question",
-    name: question,
-    acceptedAnswer: {
-      "@type": "Answer",
-      text: answer,
-    },
-  })),
-});
-
 const addJsonLdBlock = (html, name, data) => {
   const cleaned = stripBlock(html, name);
   const block = `    <!-- ${name}:start -->
@@ -708,7 +695,7 @@ const processPage = async (route) => {
   }
 
   const faq = getFaq({ locale, h1, category });
-  html = addJsonLdBlock(html, "seo-sprint-faq-jsonld", renderFaqJsonLd(faq));
+  html = stripBlock(html, "seo-sprint-faq-jsonld");
   html = stripBlock(html, "seo-sprint-faq");
   html = stripBlock(html, "seo-index-boost");
   html = stripBlock(html, "seo-action-plan");
