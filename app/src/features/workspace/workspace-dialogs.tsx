@@ -496,6 +496,102 @@ export function WorkspaceSegmentEditorResetConfirmModal({
   );
 }
 
+type WorkspaceSegmentEditorStartFreshConfirmModalProps = {
+  isBusy: boolean;
+  isOpen: boolean;
+  locale: Locale;
+  onClose: () => void;
+  onConfirm: () => void;
+};
+
+export function WorkspaceSegmentEditorStartFreshConfirmModal({
+  isBusy,
+  isOpen,
+  locale,
+  onClose,
+  onConfirm,
+}: WorkspaceSegmentEditorStartFreshConfirmModalProps) {
+  if (!isOpen || typeof document === "undefined") {
+    return null;
+  }
+
+  return createPortal(
+    <div
+      className="workspace-confirm-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-label={workspaceText(locale, "Новый проект по сценам", "New scenes project")}
+    >
+      <button
+        className="workspace-confirm-modal__backdrop route-close"
+        type="button"
+        aria-label={workspaceText(locale, "Закрыть подтверждение", "Close confirmation")}
+        onClick={onClose}
+      />
+      <div className="workspace-confirm-modal__panel" role="document">
+        <button
+          className="workspace-confirm-modal__close route-close"
+          type="button"
+          aria-label={workspaceText(locale, "Закрыть подтверждение", "Close confirmation")}
+          onClick={onClose}
+          disabled={isBusy}
+        >
+          ×
+        </button>
+
+        <div className="workspace-confirm-modal__header">
+          <div className="workspace-confirm-modal__icon" aria-hidden="true">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
+              <path d="M12 5v14M5 12h14" strokeLinecap="round" />
+              <path d="M4 4h16v16H4z" strokeLinejoin="round" opacity=".5" />
+            </svg>
+          </div>
+          <div className="workspace-confirm-modal__copy">
+            <h2 className="workspace-confirm-modal__title">
+              {workspaceText(locale, "Начать новый проект?", "Start a new project?")}
+            </h2>
+            <p className="workspace-confirm-modal__message">
+              {workspaceText(
+                locale,
+                "Откроется чистый режим «По сценам». Все несохранённые изменения текущего монтажа будут потеряны.",
+                "A clean By scenes workspace will open. All unsaved changes in the current edit will be lost.",
+              )}
+            </p>
+          </div>
+        </div>
+
+        <p className="workspace-confirm-modal__project">
+          {workspaceText(
+            locale,
+            "Новый проект начнётся с пустой сцены.",
+            "The new project will start with an empty scene.",
+          )}
+        </p>
+
+        <div className="workspace-confirm-modal__actions">
+          <button
+            className="workspace-confirm-modal__action workspace-confirm-modal__action--secondary"
+            type="button"
+            onClick={onClose}
+            disabled={isBusy}
+          >
+            {workspaceText(locale, "Отмена", "Cancel")}
+          </button>
+          <button
+            className="workspace-confirm-modal__action workspace-confirm-modal__action--danger"
+            type="button"
+            onClick={onConfirm}
+            disabled={isBusy}
+          >
+            {workspaceText(locale, "Начать заново", "Start fresh")}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 type WorkspaceSegmentEditorDeleteConfirmModalProps = {
   canDelete: boolean;
   isBusy: boolean;

@@ -7,10 +7,65 @@ import {
   isWorkspaceSegmentEditorProjectUnavailableError,
   isWorkspaceSegmentSceneSoundRunBusy,
   isStudioGenerationUserFacing,
+  resolveWorkspaceScenesModeSwitchTarget,
   shouldShowStudioGenerationError,
+  shouldShowWorkspaceStartFreshScenesAction,
   shouldShowWorkspaceSegmentEditorFullPreviewBusyIndicator,
   type WorkspacePublishBootstrapPayload,
 } from "./workspace-page-model";
+
+describe("studio creation mode switching", () => {
+  it("opens the displayed video project before restoring an older editor draft", () => {
+    expect(
+      resolveWorkspaceScenesModeSwitchTarget({
+        hasSegmentEditorDraft: true,
+        hasVisibleGeneratedVideo: true,
+        isSegmentEditorActive: false,
+      }),
+    ).toBe("project");
+  });
+
+  it("resumes an editor draft and only creates a scratch project when the studio is empty", () => {
+    expect(
+      resolveWorkspaceScenesModeSwitchTarget({
+        hasSegmentEditorDraft: true,
+        hasVisibleGeneratedVideo: false,
+        isSegmentEditorActive: false,
+      }),
+    ).toBe("resume");
+    expect(
+      resolveWorkspaceScenesModeSwitchTarget({
+        hasSegmentEditorDraft: false,
+        hasVisibleGeneratedVideo: false,
+        isSegmentEditorActive: false,
+      }),
+    ).toBe("scratch");
+  });
+
+  it("shows the start-fresh action for content or unsaved editor changes", () => {
+    expect(
+      shouldShowWorkspaceStartFreshScenesAction({
+        hasContent: true,
+        hasResettableChanges: false,
+        isSegmentEditorActive: true,
+      }),
+    ).toBe(true);
+    expect(
+      shouldShowWorkspaceStartFreshScenesAction({
+        hasContent: false,
+        hasResettableChanges: true,
+        isSegmentEditorActive: true,
+      }),
+    ).toBe(true);
+    expect(
+      shouldShowWorkspaceStartFreshScenesAction({
+        hasContent: true,
+        hasResettableChanges: true,
+        isSegmentEditorActive: false,
+      }),
+    ).toBe(false);
+  });
+});
 
 describe("studio generation visibility", () => {
   it("keeps restored bootstrap polling visible in the Studio preview", () => {

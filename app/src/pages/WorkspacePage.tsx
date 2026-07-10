@@ -458,6 +458,7 @@ import {
   WorkspaceSegmentEditorDeleteConfirmModal,
   WorkspaceSegmentEditorVoiceoverGenerationRequiredModal,
   WorkspaceSegmentEditorResetConfirmModal,
+  WorkspaceSegmentEditorStartFreshConfirmModal,
 } from "../features/workspace/workspace-dialogs";
 import {
   StudioBrandSelectorChip,
@@ -589,7 +590,9 @@ import {
   isWorkspaceSegmentEditorProjectUnavailableError,
   isWorkspaceSegmentEditorPreparingError,
   isStudioGenerationUserFacing,
+  resolveWorkspaceScenesModeSwitchTarget,
   shouldShowStudioGenerationError,
+  shouldShowWorkspaceStartFreshScenesAction,
   shouldShowWorkspaceSegmentEditorFullPreviewBusyIndicator,
   getPublishBootstrapForPlatform,
   getPublishChannelsForPlatform,
@@ -1904,7 +1907,7 @@ export function WorkspacePage({
   const [segmentEditorLoadedSession, setSegmentEditorLoadedSession] = useState<WorkspaceSegmentEditorSession | null>(null);
   const [segmentEditorDraft, setSegmentEditorDraft] = useState<WorkspaceSegmentEditorDraftSession | null>(null);
   const isScratchSegmentEditorDraft = isWorkspaceSegmentEditorScratchDraft(segmentEditorDraft);
-  const isScenesCreateMode = createMode === "segment-editor" && isScratchSegmentEditorDraft;
+  const isScenesCreateMode = createMode === "segment-editor";
   const hasScratchSegmentEditorRenderableScene =
     isScratchSegmentEditorDraft && hasWorkspaceSegmentEditorRenderableScratchScene(segmentEditorDraft);
   const hasSegmentEditorTextAndVoiceForSubtitles = (draft: WorkspaceSegmentEditorDraftSession | null) => {
@@ -1936,6 +1939,7 @@ export function WorkspacePage({
   >({});
   const [segmentEditorPendingDeleteIndex, setSegmentEditorPendingDeleteIndex] = useState<number | null>(null);
   const [isSegmentEditorResetConfirmOpen, setIsSegmentEditorResetConfirmOpen] = useState(false);
+  const [isSegmentEditorStartFreshConfirmOpen, setIsSegmentEditorStartFreshConfirmOpen] = useState(false);
   const [isSegmentEditorVoiceoverPreviewRequiredModalOpen, setIsSegmentEditorVoiceoverPreviewRequiredModalOpen] = useState(false);
   const [segmentEditorPendingFullPreviewStartToken, setSegmentEditorPendingFullPreviewStartToken] = useState(0);
   const [segmentThumbDropInsertIndex, setSegmentThumbDropInsertIndex] = useState<number | null>(null);
@@ -3498,6 +3502,7 @@ export function WorkspacePage({
     isSegmentEditorVoiceoverPreviewRequiredModalOpen ||
     isLocalExampleModalOpen ||
     isSegmentEditorResetConfirmOpen ||
+    isSegmentEditorStartFreshConfirmOpen ||
     segmentEditorPendingDeleteIndex !== null ||
     Boolean(mediaLibraryPendingDeleteItem) ||
     Boolean(projectPendingDelete) ||
@@ -3655,6 +3660,13 @@ export function WorkspacePage({
     setIsSegmentEditorResetConfirmOpen(false);
   };
 
+  const closeSegmentEditorStartFreshModal = () => {
+    if (isSegmentEditorStructureActionBusy) {
+      return;
+    }
+    setIsSegmentEditorStartFreshConfirmOpen(false);
+  };
+
   const openSegmentEditorVoiceoverPreviewRequiredModal = () => {
     setIsSegmentEditorVoiceoverPreviewRequiredModalOpen(true);
   };
@@ -3721,6 +3733,10 @@ export function WorkspacePage({
           closeSegmentEditorResetModal();
           return;
         }
+        if (isSegmentEditorStartFreshConfirmOpen) {
+          closeSegmentEditorStartFreshModal();
+          return;
+        }
         if (isSegmentEditorVoiceoverPreviewRequiredModalOpen) {
           closeSegmentEditorVoiceoverPreviewRequiredModal();
           return;
@@ -3749,6 +3765,7 @@ export function WorkspacePage({
     isLocalExampleModalOpen,
     isPublishModalOpen,
     isSegmentEditorResetConfirmOpen,
+    isSegmentEditorStartFreshConfirmOpen,
     isSegmentAiPhotoModalOpen,
     mediaLibraryPendingDeleteItem,
     projectPendingDelete,
@@ -3768,6 +3785,7 @@ export function WorkspacePage({
       setProjectPendingDeleteProjects([]);
       setSegmentEditorPendingDeleteIndex(null);
       setIsSegmentEditorResetConfirmOpen(false);
+      setIsSegmentEditorStartFreshConfirmOpen(false);
       closeSegmentEditorVoiceoverPreviewRequiredModal();
       closeLocalExampleModal();
       closeSegmentAiPhotoModal();
@@ -10611,14 +10629,18 @@ export function WorkspacePage({
     setCreateMode("segment-editor");
   };
 
-  const createScratchSegmentEditorDraft = () =>
+  const createScratchSegmentEditorDraft = (options?: { emptyDescription?: boolean }) =>
     createWorkspaceSegmentEditorScratchDraftSession({
-      description: topicInput,
+      description: options?.emptyDescription ? "" : topicInput,
       language: selectedLanguage,
       title: workspaceText(locale, "Новый Shorts", "New Shorts"),
     });
 
-  const openScratchSegmentEditor = (options?: { forceFreshDraft?: boolean; replaceRoute?: boolean }) => {
+  const openScratchSegmentEditor = (options?: {
+    emptyDescription?: boolean;
+    forceFreshDraft?: boolean;
+    replaceRoute?: boolean;
+  }) => {
     const storedScratchDraft = options?.forceFreshDraft
       ? null
       : readStoredWorkspaceSegmentEditorScratchDraft(session.email);
@@ -10638,7 +10660,7 @@ export function WorkspacePage({
         ? segmentEditorDraft
         : scratchDraftOpenSource === "stored" && restoredScratchDraft
           ? restoredScratchDraft
-          : createScratchSegmentEditorDraft();
+          : createScratchSegmentEditorDraft({ emptyDescription: options?.emptyDescription });
 
     cancelPendingSegmentEditorLoad("segment-editor-scratch");
     if (scratchDraftOpenSource === "fresh") {
@@ -11431,6 +11453,7 @@ export function WorkspacePage({
         setSegmentAiPhotoModalTab("ai_photo");
       }
       setCreateMode("segment-editor");
+      syncSegmentEditorRouteForArrayIndex(segmentEditorDraft, activeSegmentIndex, { replace: true });
       return;
     }
 
@@ -11445,7 +11468,57 @@ export function WorkspacePage({
 
   const handleStudioCreateScenesModeSelect = () => {
     suppressScratchSegmentEditorRouteOpenRef.current = false;
-    openScratchSegmentEditor({ forceFreshDraft: true, replaceRoute: true });
+    const target = resolveWorkspaceScenesModeSwitchTarget({
+      hasSegmentEditorDraft: Boolean(segmentEditorDraft),
+      hasVisibleGeneratedVideo: Boolean(studioInlinePreview),
+      isSegmentEditorActive: createMode === "segment-editor",
+    });
+
+    if (target === "current") {
+      return;
+    }
+    if (target === "project") {
+      void handleOpenSegmentEditor();
+      return;
+    }
+    if (target === "resume") {
+      void handleStudioCreateModeSwitch("segment-editor");
+      return;
+    }
+    openScratchSegmentEditor({ replaceRoute: true });
+  };
+
+  const requestStartFreshSegmentEditor = () => {
+    if (!segmentEditorDraft || isSegmentEditorStructureActionBusy) {
+      return;
+    }
+    setSegmentEditorVideoError(null);
+    setIsSegmentEditorStartFreshConfirmOpen(true);
+  };
+
+  const confirmStartFreshSegmentEditor = () => {
+    if (isSegmentEditorStructureActionBusy) {
+      return;
+    }
+
+    const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+    if (currentDraft) {
+      if (isWorkspaceSegmentEditorScratchDraft(currentDraft)) {
+        removeStoredWorkspaceSegmentEditorScratchDraft(session.email);
+        removeStoredWorkspaceSegmentEditorScratchBaseline(session.email);
+      } else {
+        removeStoredWorkspaceSegmentEditorDraft(session.email, currentDraft.projectId);
+        removeStoredWorkspaceSegmentEditorBrandSnapshot(session.email, currentDraft.projectId);
+        clearSegmentEditorExplicitStructureChange(currentDraft.projectId);
+        setStoredSegmentEditorDrafts((currentDrafts) =>
+          currentDrafts.filter((draft) => draft.projectId !== currentDraft.projectId),
+        );
+      }
+    }
+
+    clearDetachedSegmentEditorDraft();
+    setIsSegmentEditorStartFreshConfirmOpen(false);
+    openScratchSegmentEditor({ emptyDescription: true, forceFreshDraft: true, replaceRoute: true });
   };
 
   const handleStudioTopMenuSelect = (section: StudioEntryIntentSection) => {
@@ -32993,37 +33066,58 @@ export function WorkspacePage({
     </aside>
   );
   const renderStudioShortsGenerationStatus = () => renderWorkspaceStudioShortsGenerationStatus(locale);
-  const shouldShowStudioCreateModeSwitch =
-    studioView === "create" && (!isSegmentEditorPageActive || isScratchSegmentEditorDraft);
+  const shouldShowStudioCreateModeSwitch = studioView === "create";
+  const shouldShowStartFreshScenesAction = shouldShowWorkspaceStartFreshScenesAction({
+    hasContent: hasSegmentEditorFullPreviewContent,
+    hasResettableChanges: hasSegmentEditorResettableChanges,
+    isSegmentEditorActive: isSegmentEditorPageActive,
+  });
   const studioCreateModeSwitch = shouldShowStudioCreateModeSwitch ? (
-    <div
-      className="studio-create-mode-switch"
-      role="tablist"
-      aria-label={workspaceText(locale, "Режим создания Shorts", "Shorts creation mode")}
-    >
-      <button
-        className={`studio-create-mode-switch__btn${!isScenesCreateMode ? " is-active" : ""}`}
-        type="button"
-        role="tab"
-        aria-selected={!isScenesCreateMode}
-        onClick={handleStudioCreateIdeaModeSelect}
+    <div className="studio-create-mode-controls">
+      <div
+        className="studio-create-mode-switch"
+        role="tablist"
+        aria-label={workspaceText(locale, "Режим создания Shorts", "Shorts creation mode")}
       >
-        {workspaceText(locale, "Из идеи", "From idea")}
-      </button>
-      <button
-        className={`studio-create-mode-switch__btn${isScenesCreateMode ? " is-active" : ""}`}
-        type="button"
-        role="tab"
-        aria-selected={isScenesCreateMode}
-        disabled={isEditHideEnabled}
-        onClick={handleStudioCreateScenesModeSelect}
-      >
-        {workspaceText(
-          locale,
-          isEditHideEnabled ? "По сценам(Скоро)" : "По сценам",
-          isEditHideEnabled ? "By scenes (Soon)" : "By scenes",
-        )}
-      </button>
+        <button
+          className={`studio-create-mode-switch__btn${!isScenesCreateMode ? " is-active" : ""}`}
+          type="button"
+          role="tab"
+          aria-selected={!isScenesCreateMode}
+          onClick={handleStudioCreateIdeaModeSelect}
+        >
+          {workspaceText(locale, "Из идеи", "From idea")}
+        </button>
+        <button
+          className={`studio-create-mode-switch__btn${isScenesCreateMode ? " is-active" : ""}`}
+          type="button"
+          role="tab"
+          aria-selected={isScenesCreateMode}
+          disabled={isEditHideEnabled}
+          onClick={handleStudioCreateScenesModeSelect}
+        >
+          {workspaceText(
+            locale,
+            isEditHideEnabled ? "По сценам(Скоро)" : "По сценам",
+            isEditHideEnabled ? "By scenes (Soon)" : "By scenes",
+          )}
+        </button>
+      </div>
+      {shouldShowStartFreshScenesAction ? (
+        <button
+          className="studio-create-mode-fresh-action"
+          type="button"
+          aria-label={workspaceText(locale, "Начать новый проект по сценам", "Start a new scenes project")}
+          title={workspaceText(locale, "Новый проект по сценам", "New scenes project")}
+          onClick={requestStartFreshSegmentEditor}
+          disabled={isSegmentEditorStructureActionBusy}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
+            <path d="M7 3.75h7.6L19 8.15v12.1H7z" strokeLinejoin="round" />
+            <path d="M14.5 3.75v4.5H19M9.7 14h6.6M13 10.7v6.6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+      ) : null}
     </div>
   ) : null;
 
@@ -34804,6 +34898,14 @@ export function WorkspacePage({
           locale={locale}
           onClose={closeSegmentEditorResetModal}
           onConfirm={confirmResetSegmentEditorChanges}
+        />
+
+        <WorkspaceSegmentEditorStartFreshConfirmModal
+          isBusy={isSegmentEditorStructureActionBusy}
+          isOpen={isSegmentEditorStartFreshConfirmOpen}
+          locale={locale}
+          onClose={closeSegmentEditorStartFreshModal}
+          onConfirm={confirmStartFreshSegmentEditor}
         />
 
         <WorkspaceSegmentEditorVoiceoverGenerationRequiredModal

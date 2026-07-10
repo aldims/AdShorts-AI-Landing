@@ -11,6 +11,7 @@ import "./styles/studio-header-centered-nav.css";
 import "./styles/site-header-premium.css";
 import "./styles/studio-prompt-refinement.css";
 import "./styles/studio-scenes-glass.css";
+import "./styles/studio-project-mode-switch.css";
 
 const appElement = document.getElementById("app");
 

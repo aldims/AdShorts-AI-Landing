@@ -1234,3 +1234,27 @@ export const workspaceCreditTopupPacks: Array<Record<Locale, WorkspaceCreditTopu
 ];
 
 export type StudioCreateMode = "default" | "segment-editor";
+
+export type WorkspaceScenesModeSwitchTarget = "current" | "project" | "resume" | "scratch";
+
+export const resolveWorkspaceScenesModeSwitchTarget = (options: {
+  hasSegmentEditorDraft: boolean;
+  hasVisibleGeneratedVideo: boolean;
+  isSegmentEditorActive: boolean;
+}): WorkspaceScenesModeSwitchTarget => {
+  if (options.isSegmentEditorActive) {
+    return "current";
+  }
+  if (options.hasVisibleGeneratedVideo) {
+    return "project";
+  }
+  return options.hasSegmentEditorDraft ? "resume" : "scratch";
+};
+
+export const shouldShowWorkspaceStartFreshScenesAction = (options: {
+  hasContent: boolean;
+  hasResettableChanges: boolean;
+  isSegmentEditorActive: boolean;
+}) =>
+  options.isSegmentEditorActive &&
+  (options.hasContent || options.hasResettableChanges);
