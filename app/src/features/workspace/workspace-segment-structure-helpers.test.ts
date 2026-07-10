@@ -47,8 +47,31 @@ describe("workspace segment drag preview", () => {
         currentScrollLeft: 40,
         draggedIndex: 1,
         initialScrollLeft: 0,
-        targetCenters: [50, 150, 250, 350],
+        targets: [
+          { left: 0, right: 100 },
+          { left: 100, right: 200 },
+          { left: 200, right: 300 },
+          { left: 300, right: 400 },
+        ],
       }),
     ).toBe(3);
+  });
+
+  it("switches slots after crossing one quarter of the neighboring scene", () => {
+    const options = {
+      currentScrollLeft: 0,
+      draggedIndex: 1,
+      initialScrollLeft: 0,
+      targets: [
+        { left: 0, right: 100 },
+        { left: 200, right: 300 },
+        { left: 300, right: 400 },
+      ],
+    };
+
+    expect(resolveWorkspaceSegmentDragInsertIndex({ ...options, clientX: 224.9 })).toBe(2);
+    expect(resolveWorkspaceSegmentDragInsertIndex({ ...options, clientX: 225.1 })).toBe(3);
+    expect(resolveWorkspaceSegmentDragInsertIndex({ ...options, clientX: 75.1 })).toBe(2);
+    expect(resolveWorkspaceSegmentDragInsertIndex({ ...options, clientX: 74.9 })).toBe(0);
   });
 });

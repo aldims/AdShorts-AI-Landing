@@ -864,8 +864,7 @@ export type WorkspaceSegmentAiVideoJobStatusResponse = {
 
 export type WorkspaceSegmentThumbDragState = {
   draggedIndex: number;
-  dropTargetCenters: number[];
-  height: number;
+  dropTargets: Array<{ left: number; right: number }>;
   initialScrollLeft: number;
   offsetX: number;
   offsetY: number;

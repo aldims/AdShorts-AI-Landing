@@ -70,13 +70,16 @@ export const resolveWorkspaceSegmentDragInsertIndex = (options: {
   currentScrollLeft: number;
   draggedIndex: number;
   initialScrollLeft: number;
-  targetCenters: number[];
+  targets: Array<{ left: number; right: number }>;
 }) => {
   const scrollDelta = options.currentScrollLeft - options.initialScrollLeft;
   let visibleInsertIndex = 0;
 
-  for (const targetCenter of options.targetCenters) {
-    if (options.clientX < targetCenter - scrollDelta) {
+  for (const target of options.targets) {
+    const width = Math.max(0, target.right - target.left);
+    const thresholdRatio = visibleInsertIndex < options.draggedIndex ? 0.75 : 0.25;
+    const threshold = target.left + width * thresholdRatio - scrollDelta;
+    if (options.clientX < threshold) {
       break;
     }
     visibleInsertIndex += 1;

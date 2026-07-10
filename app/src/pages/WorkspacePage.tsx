@@ -7541,12 +7541,16 @@ export function WorkspacePage({
   const segmentEditorTimelineActiveStableIndex =
     segmentEditorDraft?.segments[segmentEditorTimelineActiveArrayIndex]?.index ?? null;
   const segmentThumbDragGhostStyle: CSSProperties | null = segmentThumbDragState
-    ? {
-        left: `${segmentThumbDragState.x - segmentThumbDragState.offsetX}px`,
-        top: `${segmentThumbDragState.y - segmentThumbDragState.offsetY}px`,
-        height: `${segmentThumbDragState.height}px`,
-        width: `${segmentThumbDragState.width}px`,
-      }
+    ? (() => {
+        const width = Math.min(segmentThumbDragState.width, 132);
+        const scale = width / Math.max(1, segmentThumbDragState.width);
+        return {
+          aspectRatio: "9 / 16",
+          left: `${segmentThumbDragState.x - segmentThumbDragState.offsetX * scale}px`,
+          top: `${segmentThumbDragState.y - segmentThumbDragState.offsetY * scale}px`,
+          width: `${width}px`,
+        };
+      })()
     : null;
 
   useEffect(() => {
@@ -8989,14 +8993,14 @@ export function WorkspacePage({
     const scrollContainer = segmentTimelineScrollRef.current;
     if (
       dragState?.draggedIndex === draggedIndex &&
-      dragState.dropTargetCenters.length === Math.max(0, segmentEditorDraft.segments.length - 1)
+      dragState.dropTargets.length === Math.max(0, segmentEditorDraft.segments.length - 1)
     ) {
       return resolveWorkspaceSegmentDragInsertIndex({
         clientX,
         currentScrollLeft: scrollContainer?.scrollLeft ?? dragState.initialScrollLeft,
         draggedIndex,
         initialScrollLeft: dragState.initialScrollLeft,
-        targetCenters: dragState.dropTargetCenters,
+        targets: dragState.dropTargets,
       });
     }
 
@@ -9046,20 +9050,21 @@ export function WorkspacePage({
     const offsetY = Math.min(Math.max(pointer.clientY - bounds.top, 0), bounds.height);
     scrollSegmentThumbStripForPointer(pointer.clientX);
     const scrollContainer = segmentTimelineScrollRef.current;
-    const dropTargetCenters = segmentEditorDraft?.segments
+    const dropTargets = segmentEditorDraft?.segments
       .map((segment, index) => {
         if (index === draggedIndex) {
           return null;
         }
 
         const targetBounds = segmentThumbButtonRefs.current[segment.index]?.getBoundingClientRect();
-        return targetBounds && targetBounds.width > 0 ? targetBounds.left + targetBounds.width / 2 : null;
+        return targetBounds && targetBounds.width > 0
+          ? { left: targetBounds.left, right: targetBounds.right }
+          : null;
       })
-      .filter((center): center is number => center !== null) ?? [];
+      .filter((target): target is { left: number; right: number } => target !== null) ?? [];
     const nextDragState: WorkspaceSegmentThumbDragState = {
       draggedIndex,
-      dropTargetCenters,
-      height: bounds.height,
+      dropTargets,
       initialScrollLeft: scrollContainer?.scrollLeft ?? 0,
       offsetX,
       offsetY,
@@ -29747,7 +29752,9 @@ export function WorkspacePage({
   const segmentEditorTimeline =
     segmentEditorDraft && segmentEditorTracks ? (
       <div
-        className={`studio-segment-editor__timeline${isSegmentEditorTimelineStandardFit ? " is-standard-fit" : ""}`}
+        className={`studio-segment-editor__timeline${isSegmentEditorTimelineStandardFit ? " is-standard-fit" : ""}${
+          draggedSegmentStableIndex !== null ? " is-reordering" : ""
+        }`}
         style={
           {
             "--studio-segment-editor-timeline-add-gutter": `${segmentEditorTimelineAddGutterPx}px`,

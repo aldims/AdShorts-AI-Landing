@@ -2030,10 +2030,7 @@
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drop-gap {
-  height: calc(
-    var(--studio-segment-editor-timeline-scene-backdrop-height) -
-      var(--studio-segment-editor-timeline-scrollbar-lane, 16px)
-  );
+  height: calc(var(--studio-segment-editor-timeline-scene-backdrop-height) + 1px);
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle::before {
