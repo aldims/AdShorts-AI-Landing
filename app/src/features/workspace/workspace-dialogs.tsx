@@ -560,14 +560,6 @@ export function WorkspaceSegmentEditorStartFreshConfirmModal({
           </div>
         </div>
 
-        <p className="workspace-confirm-modal__project">
-          {workspaceText(
-            locale,
-            "Новый проект начнётся с пустой сцены.",
-            "The new project will start with an empty scene.",
-          )}
-        </p>
-
         <div className="workspace-confirm-modal__actions">
           <button
             className="workspace-confirm-modal__action workspace-confirm-modal__action--secondary"
