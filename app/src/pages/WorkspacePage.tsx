@@ -9942,6 +9942,10 @@ export function WorkspacePage({
     }
 
     const handlePointerDown = (event: PointerEvent) => {
+      if (window.matchMedia("(max-width: 640px)").matches) {
+        return;
+      }
+
       const target = event.target;
       if (!(target instanceof Element)) {
         return;
