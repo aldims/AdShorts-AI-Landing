@@ -2650,12 +2650,6 @@ export function WorkspacePage({
   const closeStudioWelcomeCard = useCallback(() => {
     setIsStudioWelcomeCardClosed(true);
   }, []);
-  const handleStudioWelcomeStart = useCallback(() => {
-    closeStudioWelcomeCard();
-    window.requestAnimationFrame(() => {
-      promptTextareaRef.current?.focus();
-    });
-  }, [closeStudioWelcomeCard]);
   const openStudioWelcomeCard = useCallback(() => {
     setIsStudioWelcomeCardClosed(false);
     setIsStudioWelcomeCardDismissed(false);
@@ -33869,7 +33863,7 @@ export function WorkspacePage({
                             <div className="studio-welcome-card__eyebrow">
                               <span className="studio-welcome-card__eyebrow-dot" aria-hidden="true"></span>
                               <strong>{workspaceText(locale, "ДВА РЕЖИМА", "TWO MODES")}</strong>
-                              <span>{workspaceText(locale, "один удобный workflow", "one seamless workflow")}</span>
+                              <span>{workspaceText(locale, "один понятный путь", "one clear path")}</span>
                             </div>
 
                             <h2>
@@ -33887,7 +33881,7 @@ export function WorkspacePage({
                               className="studio-welcome-card__modes"
                               aria-label={workspaceText(locale, "Режимы создания", "Creation modes")}
                             >
-                              <button className="studio-welcome-card__mode is-primary" type="button" onClick={handleStudioWelcomeStart}>
+                              <div className="studio-welcome-card__mode is-primary is-selected">
                                 <span className="studio-welcome-card__mode-topline">
                                   <span className="studio-welcome-card__mode-icon" aria-hidden="true">
                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
@@ -33905,18 +33899,19 @@ export function WorkspacePage({
                                   <small>
                                     {workspaceText(
                                       locale,
-                                      "AI соберёт готовый Shorts: сценарий, фото, озвучка, музыка и субтитры.",
-                                      "AI assembles a complete Short: script, images, voiceover, music, and captions.",
+                                      "AI создаст сценарий, визуалы, озвучку, музыку и субтитры.",
+                                      "AI creates the script, visuals, voiceover, music, and captions.",
                                     )}
                                   </small>
                                 </span>
-                                <span className="studio-welcome-card__mode-action">
-                                  {workspaceText(locale, "Создать основу", "Create a base")}
+                                <span className="studio-welcome-card__mode-result">
                                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                    <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                                    <path d="m6 12 4 4 8-9" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+                                    <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.4" opacity=".55" />
                                   </svg>
+                                  {workspaceText(locale, "Полноценный Shorts · готов к публикации", "Complete Short · ready to publish")}
                                 </span>
-                              </button>
+                              </div>
                               <button
                                 className="studio-welcome-card__mode"
                                 type="button"
@@ -34035,13 +34030,6 @@ export function WorkspacePage({
                               </small>
                             </span>
                           </div>
-
-                          <button className="studio-welcome-card__start" type="button" onClick={handleStudioWelcomeStart}>
-                            <span>{workspaceText(locale, "Создать Shorts из идеи", "Create a Short from an idea")}</span>
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                              <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                          </button>
                         </div>
                       </div>
                     ) : null}

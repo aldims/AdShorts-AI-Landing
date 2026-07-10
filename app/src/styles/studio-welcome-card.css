@@ -218,8 +218,11 @@
   color: inherit;
   font: inherit;
   text-align: left;
-  cursor: pointer;
   transition: border-color 180ms ease, background-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.studio-welcome-card__mode:not(.is-selected) {
+  cursor: pointer;
 }
 
 .studio-welcome-card__mode.is-primary {
@@ -232,17 +235,13 @@
     0 18px 42px -30px rgba(134, 157, 255, 0.7);
 }
 
-.studio-welcome-card__mode:hover {
+.studio-welcome-card__mode:not(.is-selected):hover {
   border-color: rgba(203, 213, 250, 0.2);
   background-color: rgba(255, 255, 255, 0.035);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.075),
     0 18px 42px -30px rgba(133, 155, 247, 0.68);
   transform: translateY(-2px);
-}
-
-.studio-welcome-card__mode.is-primary:hover {
-  border-color: rgba(188, 202, 255, 0.36);
 }
 
 .studio-welcome-card__mode-topline {
@@ -320,11 +319,28 @@
   line-height: 1;
 }
 
+.studio-welcome-card__mode-result {
+  display: inline-flex;
+  width: max-content;
+  max-width: 100%;
+  align-items: center;
+  gap: 7px;
+  color: rgba(204, 216, 255, 0.72);
+  font-size: 0.59rem;
+  font-weight: 720;
+  line-height: 1.15;
+}
+
+.studio-welcome-card__mode-result svg {
+  flex: 0 0 auto;
+  color: #aebeff;
+}
+
 .studio-welcome-card__mode-action svg {
   transition: transform 180ms ease;
 }
 
-.studio-welcome-card__mode:hover .studio-welcome-card__mode-action svg {
+.studio-welcome-card__mode:not(.is-selected):hover .studio-welcome-card__mode-action svg {
   transform: translateX(3px);
 }
 
@@ -464,7 +480,7 @@
   z-index: 2;
   display: grid;
   flex: 0 0 auto;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   align-items: stretch;
   gap: 12px;
 }
@@ -515,51 +531,8 @@
   text-wrap: balance;
 }
 
-.studio-welcome-card__start {
-  display: inline-flex;
-  min-width: 238px;
-  min-height: 52px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 0 17px 0 19px;
-  border: 1px solid rgba(232, 237, 255, 0.52);
-  border-radius: 15px;
-  background:
-    radial-gradient(circle at 22% 0%, rgba(255, 255, 255, 0.7), transparent 34%),
-    linear-gradient(135deg, #e3e9ff, #b7c7ff 56%, #d2c2ff);
-  color: #101521;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.75),
-    0 16px 34px -18px rgba(132, 154, 237, 0.72);
-  font: inherit;
-  font-size: 0.72rem;
-  font-weight: 820;
-  letter-spacing: -0.01em;
-  cursor: pointer;
-  transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease;
-}
-
-.studio-welcome-card__start svg {
-  flex: 0 0 auto;
-  transition: transform 180ms ease;
-}
-
-.studio-welcome-card__start:hover {
-  filter: brightness(1.045);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.8),
-    0 20px 42px -18px rgba(132, 154, 237, 0.82);
-  transform: translateY(-1px);
-}
-
-.studio-welcome-card__start:hover svg {
-  transform: translateX(3px);
-}
-
 .studio-welcome-card__close:focus-visible,
-.studio-welcome-card__mode:focus-visible,
-.studio-welcome-card__start:focus-visible {
+.studio-welcome-card__mode:focus-visible {
   outline: 2px solid rgba(183, 198, 255, 0.85);
   outline-offset: 3px;
 }
@@ -621,8 +594,7 @@
   }
 
   .studio-welcome-card__footer,
-  .studio-welcome-card__note,
-  .studio-welcome-card__start {
+  .studio-welcome-card__note {
     min-height: 46px;
   }
 }
@@ -726,6 +698,10 @@
     font-size: 0.56rem;
   }
 
+  .studio-welcome-card__mode-result {
+    font-size: 0.55rem;
+  }
+
   .studio-welcome-card__guide {
     gap: 7px;
     padding-top: 8px;
@@ -803,14 +779,6 @@
   .studio-welcome-card__note {
     display: none;
   }
-
-  .studio-welcome-card__start {
-    width: 100%;
-    min-width: 0;
-    min-height: 43px;
-    border-radius: 12px;
-    font-size: 0.68rem;
-  }
 }
 
 @media (max-width: 420px) {
@@ -868,10 +836,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-
-  .studio-welcome-card__start {
-    min-height: 40px;
   }
 }
 
