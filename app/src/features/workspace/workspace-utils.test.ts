@@ -1,12 +1,43 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  resolveWorkspaceSegmentVoiceTimelineState,
   shouldDisplayWorkspaceSegmentGeneratedVoiceoverEdited,
   shouldDisplayWorkspaceSegmentSubtitleCellEdited,
   shouldDisplayWorkspaceSegmentVoiceCellEdited,
 } from "./workspace-utils";
 
 describe("workspace voice timeline edit display", () => {
+  it("keeps voice undo available while a reverted text change can be restored", () => {
+    expect(
+      resolveWorkspaceSegmentVoiceTimelineState({
+        canForwardText: true,
+        canForwardVoice: false,
+        isGeneratedVoiceoverEdited: false,
+        isTextEdited: false,
+        isVoiceSettingsEdited: true,
+      }),
+    ).toMatchObject({
+      canBack: true,
+      historyKind: "voice",
+    });
+  });
+
+  it("prefers undoing current text edits before voice history", () => {
+    expect(
+      resolveWorkspaceSegmentVoiceTimelineState({
+        canForwardText: false,
+        canForwardVoice: true,
+        isGeneratedVoiceoverEdited: false,
+        isTextEdited: true,
+        isVoiceSettingsEdited: false,
+      }),
+    ).toMatchObject({
+      canBack: true,
+      historyKind: "text",
+    });
+  });
+
   it("does not mark every inherited scene voice as edited after a global voice change", () => {
     expect(
       shouldDisplayWorkspaceSegmentGeneratedVoiceoverEdited({
