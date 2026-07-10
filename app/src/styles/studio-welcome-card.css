@@ -356,7 +356,7 @@
   content: "AI";
   position: absolute;
   top: -6px;
-  left: 8px;
+  right: 8px;
   display: inline-flex;
   height: 11px;
   align-items: center;
@@ -531,7 +531,7 @@
 
   .studio-welcome-card__mode-capabilities > span::before {
     top: -5px;
-    left: 6px;
+    right: 6px;
     height: 9px;
     font-size: 0.34rem;
   }
@@ -651,7 +651,7 @@
 
   .studio-welcome-card__mode-capabilities > span::before {
     top: -5px;
-    left: 6px;
+    right: 6px;
     height: 9px;
     font-size: 0.34rem;
   }
