@@ -23756,6 +23756,7 @@ export function WorkspacePage({
     const explicitVoiceoverDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(
       options?.voiceoverDurationSeconds,
     );
+    const voiceSourceDurationSeconds = getWorkspaceSegmentVoiceSourceDurationSeconds(segment);
     const voiceoverDurationInfo =
       hasExplicitVoiceoverDurationSeconds
         ? explicitVoiceoverDurationSeconds !== null
@@ -23764,7 +23765,14 @@ export function WorkspacePage({
               source: options?.voiceoverDurationSource ?? ("actual" as const),
             }
           : null
-        : getSegmentTimelineEffectiveVoiceoverDurationInfo(segment, draft);
+        : getSegmentTimelineEffectiveVoiceoverDurationInfo(segment, draft, { includeSceneDurationEcho: true }) ??
+          (voiceSourceDurationSeconds !== null
+            ? {
+                durationSeconds: voiceSourceDurationSeconds,
+                source: "actual" as const,
+              }
+            : null) ??
+          getWorkspaceSegmentTimelineVoiceoverDurationInfo(segment, draft, { allowEstimated: false });
     const guard = resolveWorkspaceSegmentPhotoDurationVoiceoverGuard(
       requestedDurationSeconds,
       voiceoverDurationInfo?.durationSeconds,
@@ -23926,26 +23934,16 @@ export function WorkspacePage({
       currentSegment,
       requestedBoundaryTime - timing.segmentStartTime,
       currentDraft,
-      {
-        voiceoverDurationSeconds: effectiveVoiceoverDurationSeconds,
-        voiceoverDurationSource: effectiveVoiceoverDurationInfo?.source ?? null,
-      },
+      effectiveVoiceoverDurationInfo
+        ? {
+            voiceoverDurationSeconds: effectiveVoiceoverDurationInfo.durationSeconds,
+            voiceoverDurationSource: effectiveVoiceoverDurationInfo.source,
+          }
+        : undefined,
     );
     if (photoAudioGuard) {
-      if (photoAudioGuard.minimumDurationSeconds > timing.duration) {
-        const minimumTiming = resolveWorkspaceSegmentBoundaryTiming(
-          currentSegment,
-          timing.segmentStartTime + photoAudioGuard.minimumDurationSeconds,
-          currentDraft,
-          {
-            voiceoverDurationSeconds: effectiveVoiceoverDurationSeconds,
-          },
-        );
-        if (minimumTiming.status === "valid") {
-          timing = minimumTiming;
-        }
-      }
       showSegmentTimelinePhotoDurationAudioGuardWarning(photoAudioGuard);
+      return null;
     }
 
     if (!isWithinExplicitMaximumDuration(timing.duration)) {
@@ -23961,17 +23959,15 @@ export function WorkspacePage({
       formatWorkspaceSegmentDurationInputValue(timing.requestedDuration) ===
         formatWorkspaceSegmentDurationInputValue(timing.minimumDuration);
 
-    if (!photoAudioGuard) {
-      setSegmentEditorVideoError(
-        timing.clamped && !isDisplayedDurationClampedToMinimum
-          ? workspaceText(
-              locale,
-              `Для уменьшения длины сцены сократите длину озвучки. Минимум ${formatWorkspaceSegmentEditorTime(timing.minimumDuration)}.`,
-              `Shorten the voiceover to reduce the scene length. Minimum ${formatWorkspaceSegmentEditorTime(timing.minimumDuration)}.`,
-            )
-          : null,
-      );
-    }
+    setSegmentEditorVideoError(
+      timing.clamped && !isDisplayedDurationClampedToMinimum
+        ? workspaceText(
+            locale,
+            `Для уменьшения длины сцены сократите длину озвучки. Минимум ${formatWorkspaceSegmentEditorTime(timing.minimumDuration)}.`,
+            `Shorten the voiceover to reduce the scene length. Minimum ${formatWorkspaceSegmentEditorTime(timing.minimumDuration)}.`,
+          )
+        : null,
+    );
     const baselineSegment =
       segmentEditorChecklistBaseSession?.projectId === currentDraft.projectId
         ? segmentEditorChecklistBaseSession.segments.find((segment) => segment.index === segmentIndex) ?? null
@@ -24521,6 +24517,7 @@ export function WorkspacePage({
   const getSegmentTimelineEffectiveVoiceoverDurationInfo = (
     segment: WorkspaceSegmentEditorDraftSegment,
     draft: WorkspaceSegmentEditorDraftSession,
+    options?: { includeSceneDurationEcho?: boolean },
   ) => {
     const voiceOption = getSegmentTimelineVoiceOption(segment);
     const isPendingVoiceTextEdit =
@@ -24641,7 +24638,7 @@ export function WorkspacePage({
       fallbackVoiceoverDurationInfo?.source === "actual" &&
       areWorkspaceSegmentDurationValuesEqual(fallbackVoiceoverDurationSeconds, currentSlotDurationSeconds);
     if (shouldIgnoreSceneDurationEcho) {
-      return null;
+      return options?.includeSceneDurationEcho ? fallbackVoiceoverDurationInfo : null;
     }
 
     return fallbackVoiceoverDurationInfo;
@@ -29239,11 +29236,7 @@ export function WorkspacePage({
                         }}
                         onKeyDown={(event) => {
                           if (event.key === "Enter") {
-                            commitSegmentTimelineVisualDurationInput(event.currentTarget, {
-                              initialValue: segmentDurationInputInitialValue,
-                              segmentArrayIndex: index,
-                              segmentIndex: segment.index,
-                            });
+                            event.preventDefault();
                             event.currentTarget.blur();
                             return;
                           }
