@@ -28,7 +28,6 @@ import {
   getStudioPreviewDismissKey,
   normalizeWorkspaceEmail,
   persistDismissedStudioPreviewKey,
-  persistDismissedStudioWelcomeCard,
   persistHiddenMediaLibraryItemKeys,
   persistStudioCreateMode,
   persistStudioCreateSettings,
@@ -2693,19 +2692,6 @@ export function WorkspacePage({
   );
   const closeStudioWelcomeCard = useCallback(() => {
     setIsStudioWelcomeCardClosed(true);
-  }, []);
-  const openStudioWelcomeCard = useCallback(() => {
-    setIsStudioWelcomeCardClosed(false);
-    setIsStudioWelcomeCardDismissed(false);
-    persistDismissedStudioWelcomeCard(session.email, false);
-  }, [session.email]);
-  const handleStudioPromptSuggestionSelect = useCallback((suggestion: string) => {
-    setTopicInput(suggestion);
-    setComposerSourceIdea(null);
-    setSelectedContentPlanIdeaId(null);
-    window.requestAnimationFrame(() => {
-      promptTextareaRef.current?.focus();
-    });
   }, []);
   const handleStudioIdeaPromptImprove = async () => {
     const sourcePrompt = topicInput.trim();
@@ -5591,16 +5577,13 @@ export function WorkspacePage({
           video: visibleGeneratedVideo,
         }
       : null;
-  const isStudioCleanStart =
-    createMode === "default" &&
-    !studioInlinePreview &&
-    !isWorkspaceBootstrapPending &&
-    !isUserFacingGeneration &&
-    !shouldShowGenerateError &&
-    !shouldShowStudioWelcomeCard;
-  const shouldRenderStudioPreviewStage = createMode === "segment-editor" || !isStudioCleanStart;
-  const shouldShowStudioStarterHints =
-    isStudioCleanStart && !composerSourceIdea;
+  const shouldRenderStudioPreviewStage =
+    createMode === "segment-editor" ||
+    Boolean(studioInlinePreview) ||
+    isWorkspaceBootstrapPending ||
+    isUserFacingGeneration ||
+    shouldShowGenerateError ||
+    shouldShowStudioWelcomeCard;
   const previewModalPrimaryVideoUrl = isProjectPreviewModalOpen
     ? projectPreviewModal?.videoUrl ?? null
     : isPreviewModalOpen
@@ -33863,8 +33846,6 @@ export function WorkspacePage({
           shouldUseExpandedStudioPrompt ? " has-expanded-prompt" : ""
         }${
           composerSourceIdea ? " has-composer-source" : ""
-        }${
-          isStudioCleanStart ? " is-clean-start" : ""
         }`}
         hidden={!isStudioRouteVisible}
       >
@@ -34720,7 +34701,6 @@ export function WorkspacePage({
 
                         </div>
 
-
                       </div>
                     ) : null}
                     </div>
@@ -34739,59 +34719,12 @@ export function WorkspacePage({
                 >
                   <div
                     ref={promptInnerRef}
-                    className={`${studioPromptInnerClassName}${shouldShowStudioStarterHints ? " studio-canvas-prompt__inner--starter" : ""}`}
+                    className={studioPromptInnerClassName}
                     style={promptInnerStyle}
                   >
                   <div className="studio-canvas-prompt__editor-layout">
                     <div className="studio-canvas-prompt__editor-pane">
                       <>
-                          {shouldShowStudioStarterHints ? (
-                            <div
-                              className="studio-canvas-prompt__starter"
-                              role="group"
-                              aria-label={workspaceText(locale, "Примеры идей", "Idea examples")}
-                            >
-                              <span>{workspaceText(locale, "Попробуйте", "Try")}</span>
-                              <div className="studio-canvas-prompt__starter-examples">
-                                <button
-                                  type="button"
-                                  onClick={() => handleStudioPromptSuggestionSelect(
-                                    workspaceText(locale, "3 ошибки, из-за которых реклама не окупается", "3 mistakes that make ads unprofitable"),
-                                  )}
-                                >
-                                  {workspaceText(locale, "3 ошибки в рекламе", "3 ad mistakes")}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleStudioPromptSuggestionSelect(
-                                    workspaceText(locale, "Почему мы откладываем важные дела и как начать действовать", "Why we procrastinate and how to start taking action"),
-                                  )}
-                                >
-                                  {workspaceText(locale, "Почему мы откладываем", "Why we procrastinate")}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleStudioPromptSuggestionSelect(
-                                    workspaceText(locale, "Пять привычек, которые незаметно меняют качество жизни", "Five habits that quietly improve your quality of life"),
-                                  )}
-                                >
-                                  {workspaceText(locale, "5 полезных привычек", "5 useful habits")}
-                                </button>
-                              </div>
-                              <button
-                                className="studio-canvas-prompt__starter-help"
-                                type="button"
-                                onClick={openStudioWelcomeCard}
-                              >
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                  <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.7" />
-                                  <path d="M9.8 9.2a2.4 2.4 0 0 1 4.64.86c0 1.7-2.44 1.9-2.44 3.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-                                  <circle cx="12" cy="17" r="1" fill="currentColor" />
-                                </svg>
-                                {workspaceText(locale, "Как это работает", "How it works")}
-                              </button>
-                            </div>
-                          ) : null}
                           {composerSourceIdea ? (
                             <div className="studio-canvas-prompt__head">
                               <div className="studio-canvas-prompt__source">
