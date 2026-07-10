@@ -34600,17 +34600,6 @@ export function WorkspacePage({
                         role="region"
                         aria-label={workspaceText(locale, "Добро пожаловать в студию AdShorts AI", "Welcome to AdShorts AI Studio")}
                       >
-                        <button
-                          className="studio-welcome-card__close"
-                          type="button"
-                          aria-label={workspaceText(locale, "Закрыть приветствие", "Close welcome")}
-                          onClick={closeStudioWelcomeCard}
-                        >
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                            <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                          </svg>
-                        </button>
-
                         <div className="studio-welcome-card__hero">
                           <div className="studio-welcome-card__hero-copy">
                             <div className="studio-welcome-card__eyebrow">
