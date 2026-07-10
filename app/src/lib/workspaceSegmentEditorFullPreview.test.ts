@@ -12,6 +12,7 @@ import {
   getWorkspaceSegmentEditorFullPreviewTimeRatio,
   getWorkspaceSegmentEditorFullPreviewTimelineTimeFromAudioSourceTime,
   getWorkspaceSegmentEditorFullPreviewVoiceDuckingStrength,
+  getWorkspaceSegmentEditorFullPreviewAudioPreloadUrls,
   getWorkspaceSegmentTimelineAudioPreviewEndWatchdogDelayMs,
   isWorkspaceSegmentEditorFullPreviewAudioPlaybackComplete,
   isWorkspaceSegmentEditorFullPreviewAudioPlaybackStartConfirmed,
@@ -1487,5 +1488,18 @@ describe("workspace segment editor full preview", () => {
         isVoiceTrack: true,
       }),
     ).toBe(false);
+  });
+
+  it("selects unique fetchable voice sources for preview preloading", () => {
+    expect(
+      getWorkspaceSegmentEditorFullPreviewAudioPreloadUrls([
+        { kind: "voice", url: "/voice/1" },
+        { kind: "voice", url: "/voice/1" },
+        { kind: "voice", url: "/voice/2" },
+        { kind: "embedded_voice", mediaKind: "video", url: "/video/voice" },
+        { kind: "music", loop: true, url: "/music" },
+        { kind: "voice", url: "blob:already-local" },
+      ]),
+    ).toEqual(["/voice/1", "/voice/2"]);
   });
 });

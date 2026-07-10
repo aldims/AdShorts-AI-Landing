@@ -151,6 +151,13 @@ export type WorkspaceSegmentEditorFullPreviewAudioCompletionOptions = {
   timelineTailToleranceSeconds: number;
 };
 
+export type WorkspaceSegmentEditorFullPreviewPreloadTrack = {
+  kind: string;
+  loop?: boolean;
+  mediaKind?: string;
+  url: string;
+};
+
 export type WorkspaceSegmentEditorFullPreviewVoiceQueueTrack = {
   key: string;
   kind: string;
@@ -1411,6 +1418,21 @@ export const shouldPauseWorkspaceSegmentEditorFullPreviewCompanionTrack = (optio
   hasVoiceClockHold: boolean;
   isVoiceTrack: boolean;
 }) => options.hasVoiceClockHold && !options.isVoiceTrack;
+
+export const getWorkspaceSegmentEditorFullPreviewAudioPreloadUrls = (
+  tracks: WorkspaceSegmentEditorFullPreviewPreloadTrack[],
+) => Array.from(
+  new Set(
+    tracks.flatMap((track) => {
+      const url = track.url.trim();
+      const isVoiceTrack = track.kind === "voice" || track.kind === "embedded_voice";
+      const isFetchableUrl = Boolean(url) && !url.startsWith("blob:") && !url.startsWith("data:");
+      return isVoiceTrack && track.mediaKind !== "video" && track.loop !== true && isFetchableUrl
+        ? [url]
+        : [];
+    }),
+  ),
+);
 
 export const resolveWorkspaceSegmentEditorFullPreviewSegment = (
   segments: WorkspaceSegmentEditorFullPreviewSegment[],
