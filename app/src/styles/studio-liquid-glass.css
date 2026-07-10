@@ -1983,7 +1983,7 @@
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle.is-last {
-  right: 60px;
+  right: 10px;
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle {
@@ -2550,8 +2550,8 @@
   }
 
   .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle.is-last {
-    right: 46px !important;
-    width: 18px !important;
+    right: 16px !important;
+    width: 20px !important;
   }
 
   .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle::before {

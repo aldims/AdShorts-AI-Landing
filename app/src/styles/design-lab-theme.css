@@ -28102,8 +28102,10 @@ button.studio-segment-editor__timeline-label:focus-visible {
 }
 
 .studio-segment-editor__timeline-timecode-boundary--end {
-  margin-right: -7px;
-  text-align: right;
+  position: absolute;
+  left: calc(100% - 7px);
+  margin: -3px 0 0;
+  text-align: left;
 }
 
 .studio-segment-editor__timeline-timecode-boundary.is-manual {
@@ -28141,7 +28143,7 @@ button.studio-segment-editor__timeline-label:focus-visible {
 }
 
 .studio-segment-editor__timeline-drag-handle.is-last {
-  right: 42px;
+  right: 10px;
 }
 
 .studio-segment-editor__timeline-drag-handle:hover:not(:disabled),
