@@ -30299,36 +30299,6 @@ export function WorkspacePage({
                 segmentEditorGeneratingVoiceoverRunIds,
                 segment.index,
               );
-              const segmentTimelineVoiceBaselineSegment = segmentEditorChecklistBaseSession?.segments.find(
-                (baselineSegment) => baselineSegment.index === segment.index,
-              ) ?? null;
-              const segmentTimelineVoiceVisualDurationSeconds = getWorkspaceSegmentVideoVisualDurationSeconds(
-                segment,
-                {
-                  baselineSegment: segmentTimelineVoiceBaselineSegment,
-                  measuredVisualDurationSeconds: getSegmentEditorMeasuredVisualDurationSeconds(segment),
-                  session: segmentEditorDraft,
-                },
-              );
-              const segmentTimelineVoiceVisualAudioDurationMismatchSession = getSegmentTimelineVoiceDurationSession(
-                segment,
-                segmentEditorDraft,
-              );
-              const segmentTimelineVoiceVisualAudioDurationMismatch =
-                resolveWorkspaceSegmentTimelineVisualAudioMismatchInfo(
-                  segment,
-                  segmentTimelineVoiceVisualAudioDurationMismatchSession,
-                  {
-                    baselineSegment: segmentTimelineVoiceBaselineSegment,
-                    includeAnyVideoVisual: true,
-                    isGlobalVoiceEdited: isSegmentTimelineGlobalVoiceEdited,
-                    isVoiceSpanEdited: span.isEdited,
-                    visualDurationSeconds: segmentTimelineVoiceVisualDurationSeconds,
-                  },
-                );
-              const segmentTimelineVoiceVisualAudioDurationWarning = getSegmentTimelineVisualAudioDurationMismatchWarning(
-                segmentTimelineVoiceVisualAudioDurationMismatch,
-              );
               const voiceDisplayLabel = isVoiceoverGenerationPending
                 ? workspaceText(locale, "Озвучка", "Voiceover")
                 : usesEmbeddedTalkingPhotoAudio
@@ -30467,17 +30437,6 @@ export function WorkspacePage({
                         <small>{workspaceText(locale, "Создаём озвучку", "Generating voiceover")}</small>
                       ) : voiceStatusLabel ? (
                         <small>{voiceStatusLabel}</small>
-                      ) : null}
-                      {segmentTimelineVoiceVisualAudioDurationWarning ? (
-                        <small>
-                          <span
-                            className="studio-segment-editor__timeline-duration-warning"
-                            aria-hidden="true"
-                          >
-                            !
-                          </span>
-                          <span>{segmentTimelineVoiceVisualAudioDurationWarning}</span>
-                        </small>
                       ) : null}
                     </span>
                   </button>
