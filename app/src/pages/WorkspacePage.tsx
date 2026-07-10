@@ -11412,9 +11412,10 @@ export function WorkspacePage({
       return;
     }
 
-    if (segmentEditorDraft) {
+    const currentScenesDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+    if (currentScenesDraft) {
       lockSegmentEditorPromptHeight();
-      const segment = segmentEditorDraft.segments[activeSegmentIndex];
+      const segment = currentScenesDraft.segments[activeSegmentIndex];
       setSegmentEditorPromptSceneMode("create");
       if (segment) {
         setSegmentAiPhotoModalTab(resolveWorkspaceSegmentVisualModalTab(segment, "ai_photo"));
@@ -11422,7 +11423,7 @@ export function WorkspacePage({
         setSegmentAiPhotoModalTab("ai_photo");
       }
       setCreateMode("segment-editor");
-      syncSegmentEditorRouteForArrayIndex(segmentEditorDraft, activeSegmentIndex, { replace: true });
+      syncSegmentEditorRouteForArrayIndex(currentScenesDraft, activeSegmentIndex, { replace: true });
       return;
     }
 
@@ -11438,15 +11439,20 @@ export function WorkspacePage({
 
   const handleStudioCreateScenesModeSelect = () => {
     suppressScratchSegmentEditorRouteOpenRef.current = false;
+    const currentScenesDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
     const target = resolveWorkspaceScenesModeSwitchTarget({
       hasDisplayedGeneratedProject: Boolean(studioInlinePreview?.video.adId),
+      hasRetainedScenesDraft: Boolean(currentScenesDraft),
       isSegmentEditorActive: createMode === "segment-editor",
     });
 
+    rememberStudioCreateMode("segment-editor");
     if (target === "current") {
+      if (createMode !== "segment-editor") {
+        void handleStudioCreateModeSwitch("segment-editor");
+      }
       return;
     }
-    rememberStudioCreateMode("segment-editor");
     if (target === "project") {
       void handleOpenSegmentEditor();
       return;

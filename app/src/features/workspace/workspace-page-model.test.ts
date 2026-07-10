@@ -24,6 +24,16 @@ describe("studio creation mode switching", () => {
     ).toBe("project");
   });
 
+  it("restores a retained scenes draft before the displayed video project", () => {
+    expect(
+      resolveWorkspaceScenesModeSwitchTarget({
+        hasDisplayedGeneratedProject: true,
+        hasRetainedScenesDraft: true,
+        isSegmentEditorActive: false,
+      }),
+    ).toBe("current");
+  });
+
   it("creates a fresh scenes project when Idea mode has no editable project", () => {
     expect(
       resolveWorkspaceScenesModeSwitchTarget({

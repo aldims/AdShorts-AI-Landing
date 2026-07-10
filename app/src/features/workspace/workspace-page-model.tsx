@@ -1239,9 +1239,10 @@ export type WorkspaceScenesModeSwitchTarget = "current" | "project" | "scratch";
 
 export const resolveWorkspaceScenesModeSwitchTarget = (options: {
   hasDisplayedGeneratedProject: boolean;
+  hasRetainedScenesDraft?: boolean;
   isSegmentEditorActive: boolean;
 }): WorkspaceScenesModeSwitchTarget => {
-  if (options.isSegmentEditorActive) {
+  if (options.isSegmentEditorActive || options.hasRetainedScenesDraft) {
     return "current";
   }
   if (options.hasDisplayedGeneratedProject) {
