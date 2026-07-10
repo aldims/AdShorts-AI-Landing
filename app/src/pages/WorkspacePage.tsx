@@ -30506,9 +30506,8 @@ export function WorkspacePage({
                 isVoiceSettingsEdited: isDisplayedVoiceSettingsEdited,
               });
               const isVoiceCellEdited = shouldDisplayWorkspaceSegmentVoiceCellEdited({
+                isEffectiveVoiceEdited: isVoiceSettingsEdited,
                 isGeneratedVoiceoverEdited: isDisplayedGeneratedVoiceoverEdited,
-                isGlobalVoiceEdited: isSegmentTimelineGlobalVoiceEdited,
-                isVoiceSettingsEdited: isDisplayedVoiceSettingsEdited,
               });
 
               return (

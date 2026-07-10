@@ -122,14 +122,22 @@ describe("workspace voice timeline edit display", () => {
     ).toBe(false);
   });
 
-  it("shows the voice timeline edited badge for global voice changes", () => {
+  it("shows the voice timeline edited badge when the scene's effective voice changed", () => {
     expect(
       shouldDisplayWorkspaceSegmentVoiceCellEdited({
+        isEffectiveVoiceEdited: true,
         isGeneratedVoiceoverEdited: false,
-        isGlobalVoiceEdited: true,
-        isVoiceSettingsEdited: false,
       }),
     ).toBe(true);
+  });
+
+  it("hides the edited badge when a scene override restores its effective baseline voice", () => {
+    expect(
+      shouldDisplayWorkspaceSegmentVoiceCellEdited({
+        isEffectiveVoiceEdited: false,
+        isGeneratedVoiceoverEdited: false,
+      }),
+    ).toBe(false);
   });
 
   it("shows the subtitle timeline edited badge for global subtitle changes", () => {
