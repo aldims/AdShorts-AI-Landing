@@ -4,7 +4,9 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   persistDismissedStudioWelcomeCard,
+  persistStudioCreateMode,
   readDismissedStudioWelcomeCard,
+  readStoredStudioCreateMode,
 } from "./workspace-browser-storage-helpers";
 
 let originalLocalStorage: PropertyDescriptor | undefined;
@@ -61,5 +63,34 @@ describe("studio welcome card dismiss storage", () => {
 
     expect(readDismissedStudioWelcomeCard("user@example.test")).toBe(true);
     expect(readDismissedStudioWelcomeCard("other@example.test")).toBe(false);
+  });
+});
+
+describe("studio create mode storage", () => {
+  beforeEach(() => {
+    originalLocalStorage = Object.getOwnPropertyDescriptor(window, "localStorage");
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: createMemoryStorage(),
+    });
+  });
+
+  afterEach(() => {
+    if (originalLocalStorage) {
+      Object.defineProperty(window, "localStorage", originalLocalStorage);
+    }
+  });
+
+  it("persists the last mode per normalized account", () => {
+    expect(readStoredStudioCreateMode("user@example.test")).toBeNull();
+
+    persistStudioCreateMode(" User@Example.Test ", "segment-editor");
+
+    expect(readStoredStudioCreateMode("user@example.test")).toBe("segment-editor");
+    expect(readStoredStudioCreateMode("other@example.test")).toBeNull();
+
+    persistStudioCreateMode("user@example.test", "default");
+
+    expect(readStoredStudioCreateMode("USER@EXAMPLE.TEST")).toBe("default");
   });
 });

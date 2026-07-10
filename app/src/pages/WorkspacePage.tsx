@@ -30,10 +30,12 @@ import {
   persistDismissedStudioPreviewKey,
   persistDismissedStudioWelcomeCard,
   persistHiddenMediaLibraryItemKeys,
+  persistStudioCreateMode,
   persistStudioCreateSettings,
   readDismissedStudioPreviewKey,
   readDismissedStudioWelcomeCard,
   readHiddenMediaLibraryItemKeys,
+  readStoredStudioCreateMode,
   readStoredStudioCreateSettings,
   type StoredStudioCreateSettings,
 } from "../features/workspace/workspace-browser-storage-helpers";
@@ -1645,7 +1647,20 @@ export function WorkspacePage({
   const [studioView, setStudioView] = useState<StudioView>(() =>
     defaultTab === "studio" ? getStudioViewFromRouteSection(getStudioRouteSection(location.search)) : "create",
   );
+  const [initialStudioCreateMode] = useState<StudioCreateMode>(() => {
+    if (defaultTab !== "studio" && !isStudioPathname) {
+      return readStoredStudioCreateMode(session.email) ?? "default";
+    }
+    if (routeStudioState.section === "edit" || routeStudioState.mode === "scenes") {
+      return "segment-editor";
+    }
+    if (routeStudioState.section === "projects" || routeStudioState.section === "media") {
+      return readStoredStudioCreateMode(session.email) ?? "default";
+    }
+    return "default";
+  });
   const [createMode, setCreateMode] = useState<StudioCreateMode>("default");
+  const lastStudioCreateModeRef = useRef<StudioCreateMode>(initialStudioCreateMode);
   const [topicInput, setTopicInput] = useState("");
   const previousActiveTabRef = useRef<WorkspaceTab>(defaultTab);
   const [contentPlanQueryInput, setContentPlanQueryInput] = useState("");
@@ -1765,6 +1780,15 @@ export function WorkspacePage({
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationUiSource, setGenerationUiSource] = useState<StudioGenerationUiSource>("idle");
   const studioCreateRestoreRouteKeyRef = useRef<string | null>(null);
+
+  const rememberStudioCreateMode = (mode: StudioCreateMode) => {
+    lastStudioCreateModeRef.current = mode;
+    persistStudioCreateMode(session.email, mode);
+  };
+
+  useEffect(() => {
+    persistStudioCreateMode(session.email, initialStudioCreateMode);
+  }, [initialStudioCreateMode, session.email]);
 
   const applyStudioCreateSettingsSnapshot = (settings: StudioCreateInitialSettings) => {
     setSelectedLanguage(settings.language);
@@ -10575,6 +10599,7 @@ export function WorkspacePage({
     } else {
       setSegmentAiPhotoModalTab("ai_photo");
     }
+    rememberStudioCreateMode("segment-editor");
     setCreateMode("segment-editor");
   };
 
@@ -11410,6 +11435,7 @@ export function WorkspacePage({
   };
 
   const handleStudioCreateIdeaModeSelect = () => {
+    rememberStudioCreateMode("default");
     suppressScratchSegmentEditorRouteOpenRef.current = true;
     void handleStudioCreateModeSwitch("default");
     syncStudioRouteSection("create", { replace: true });
@@ -11418,23 +11444,22 @@ export function WorkspacePage({
   const handleStudioCreateScenesModeSelect = () => {
     suppressScratchSegmentEditorRouteOpenRef.current = false;
     const target = resolveWorkspaceScenesModeSwitchTarget({
-      hasSegmentEditorDraft: Boolean(segmentEditorDraft),
-      hasVisibleGeneratedVideo: Boolean(studioInlinePreview),
+      hasDisplayedGeneratedProject: Boolean(studioInlinePreview?.video.adId),
       isSegmentEditorActive: createMode === "segment-editor",
     });
 
     if (target === "current") {
       return;
     }
+    rememberStudioCreateMode("segment-editor");
     if (target === "project") {
       void handleOpenSegmentEditor();
       return;
     }
-    if (target === "resume") {
-      void handleStudioCreateModeSwitch("segment-editor");
-      return;
+    if (segmentEditorDraft && !isWorkspaceSegmentEditorScratchDraft(segmentEditorDraft)) {
+      stashCurrentSegmentEditorDraft();
     }
-    openScratchSegmentEditor({ replaceRoute: true });
+    openScratchSegmentEditor({ emptyDescription: true, forceFreshDraft: true, replaceRoute: true });
   };
 
   const requestStartFreshSegmentEditor = () => {
@@ -11515,6 +11540,18 @@ export function WorkspacePage({
     if (section === "edit") {
       setStudioView("create");
       void handleStudioCreateModeSwitch("segment-editor");
+      return;
+    }
+
+    if (lastStudioCreateModeRef.current === "segment-editor") {
+      markPendingStudioRouteSection("create");
+      cancelPendingSegmentEditorLoad();
+      stashCurrentSegmentEditorDraft();
+      closeSegmentAiPhotoModal({ immediate: true });
+      resetSegmentEditorPreviewPlaybackState({ clearRefs: true });
+      setSegmentEditorVideoError(null);
+      setActiveSegmentIndex(0);
+      openScratchSegmentEditor({ replaceRoute: false });
       return;
     }
 

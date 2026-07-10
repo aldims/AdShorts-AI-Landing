@@ -1235,20 +1235,19 @@ export const workspaceCreditTopupPacks: Array<Record<Locale, WorkspaceCreditTopu
 
 export type StudioCreateMode = "default" | "segment-editor";
 
-export type WorkspaceScenesModeSwitchTarget = "current" | "project" | "resume" | "scratch";
+export type WorkspaceScenesModeSwitchTarget = "current" | "project" | "scratch";
 
 export const resolveWorkspaceScenesModeSwitchTarget = (options: {
-  hasSegmentEditorDraft: boolean;
-  hasVisibleGeneratedVideo: boolean;
+  hasDisplayedGeneratedProject: boolean;
   isSegmentEditorActive: boolean;
 }): WorkspaceScenesModeSwitchTarget => {
   if (options.isSegmentEditorActive) {
     return "current";
   }
-  if (options.hasVisibleGeneratedVideo) {
+  if (options.hasDisplayedGeneratedProject) {
     return "project";
   }
-  return options.hasSegmentEditorDraft ? "resume" : "scratch";
+  return "scratch";
 };
 
 export const shouldShowWorkspaceStartFreshScenesAction = (options: {

@@ -1,5 +1,6 @@
 const STUDIO_PREVIEW_DISMISS_STORAGE_KEY_PREFIX = "adshorts.studio-preview-dismiss:";
 const STUDIO_MEDIA_LIBRARY_HIDDEN_STORAGE_KEY_PREFIX = "adshorts.media-library-hidden:";
+const STUDIO_CREATE_MODE_STORAGE_KEY_PREFIX = "adshorts.studio-create-mode:";
 const STUDIO_CREATE_SETTINGS_STORAGE_KEY_PREFIX = "adshorts.studio-create-settings:";
 const STUDIO_WELCOME_CARD_DISMISS_STORAGE_KEY_PREFIX = "adshorts.studio-welcome-card-dismiss:";
 
@@ -7,6 +8,7 @@ export const normalizeWorkspaceEmail = (value: string | null | undefined) => Str
 
 const getStudioPreviewDismissStorageKey = (email: string) => `${STUDIO_PREVIEW_DISMISS_STORAGE_KEY_PREFIX}${email}`;
 const getStudioMediaLibraryHiddenStorageKey = (email: string) => `${STUDIO_MEDIA_LIBRARY_HIDDEN_STORAGE_KEY_PREFIX}${email}`;
+const getStudioCreateModeStorageKey = (email: string) => `${STUDIO_CREATE_MODE_STORAGE_KEY_PREFIX}${email}`;
 const getStudioCreateSettingsStorageKey = (email: string) => `${STUDIO_CREATE_SETTINGS_STORAGE_KEY_PREFIX}${email}`;
 const getStudioWelcomeCardDismissStorageOwner = (email: string | null | undefined) =>
   normalizeWorkspaceEmail(email) || "guest";
@@ -26,6 +28,48 @@ export type StoredStudioCreateSettings = {
   voiceEnabled?: boolean;
   voiceId?: string;
   voiceIdsByLanguage?: Partial<Record<"ru" | "en", string>>;
+};
+
+export type StoredStudioCreateMode = "default" | "segment-editor";
+
+export const readStoredStudioCreateMode = (
+  email: string | null | undefined,
+): StoredStudioCreateMode | null => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const normalizedEmail = normalizeWorkspaceEmail(email);
+  if (!normalizedEmail) {
+    return null;
+  }
+
+  try {
+    const storedMode = window.localStorage.getItem(getStudioCreateModeStorageKey(normalizedEmail));
+    return storedMode === "default" || storedMode === "segment-editor" ? storedMode : null;
+  } catch {
+    return null;
+  }
+};
+
+export const persistStudioCreateMode = (
+  email: string | null | undefined,
+  mode: StoredStudioCreateMode,
+) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const normalizedEmail = normalizeWorkspaceEmail(email);
+  if (!normalizedEmail) {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(getStudioCreateModeStorageKey(normalizedEmail), mode);
+  } catch {
+    // Ignore storage quota errors.
+  }
 };
 
 const normalizeStoredStudioCreateString = (value: unknown) => {

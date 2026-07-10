@@ -15,28 +15,19 @@ import {
 } from "./workspace-page-model";
 
 describe("studio creation mode switching", () => {
-  it("opens the displayed video project before restoring an older editor draft", () => {
+  it("opens the displayed video project before creating a scratch draft", () => {
     expect(
       resolveWorkspaceScenesModeSwitchTarget({
-        hasSegmentEditorDraft: true,
-        hasVisibleGeneratedVideo: true,
+        hasDisplayedGeneratedProject: true,
         isSegmentEditorActive: false,
       }),
     ).toBe("project");
   });
 
-  it("resumes an editor draft and only creates a scratch project when the studio is empty", () => {
+  it("creates a fresh scenes project when Idea mode has no editable project", () => {
     expect(
       resolveWorkspaceScenesModeSwitchTarget({
-        hasSegmentEditorDraft: true,
-        hasVisibleGeneratedVideo: false,
-        isSegmentEditorActive: false,
-      }),
-    ).toBe("resume");
-    expect(
-      resolveWorkspaceScenesModeSwitchTarget({
-        hasSegmentEditorDraft: false,
-        hasVisibleGeneratedVideo: false,
+        hasDisplayedGeneratedProject: false,
         isSegmentEditorActive: false,
       }),
     ).toBe("scratch");
