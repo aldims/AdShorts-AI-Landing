@@ -988,12 +988,13 @@ export const studioVideoOptions: StudioVideoOption[] = [
     id: "ai_photo",
     label: "AI фото",
     description: "AI фото для всех сцен",
-    duration: "3–5 мин",
+    duration: "1–2 минуты",
   },
   {
     id: "ai_video",
     label: "AI видео",
     description: "AI видео для всех сцен",
+    duration: "3–5 минут",
   },
 ];
 
@@ -1013,7 +1014,7 @@ export const getStudioVideoOptionCopy = (option: StudioVideoOption, locale: stri
     return {
       ...option,
       description: "AI photos for every scene",
-      duration: "3–5 min",
+      duration: "1–2 minutes",
       label: "AI photos",
     };
   }
@@ -1021,6 +1022,7 @@ export const getStudioVideoOptionCopy = (option: StudioVideoOption, locale: stri
   return {
     ...option,
     ...(studioVideoOptionEnglishCopy[option.id] ?? {}),
+    ...(option.id === "ai_video" ? { duration: "3–5 minutes" } : {}),
   };
 };
 

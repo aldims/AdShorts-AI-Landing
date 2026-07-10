@@ -1452,12 +1452,12 @@ export function StudioVideoSelectorChip({
                       <span className="studio-video-selector__option-row">
                         <span className="studio-video-selector__option-title">
                           <span>{optionCopy.label}</span>
+                          <span className="studio-video-selector__cost">{creditCost} ⚡</span>
                           {isComingSoon ? (
                             <span className="studio-video-selector__soon">
                               {locale === "en" ? "Soon" : "Скоро"}
                             </span>
                           ) : null}
-                          <span className="studio-video-selector__cost">{creditCost} ⚡</span>
                         </span>
                         {optionCopy.duration ? (
                           <span className="studio-video-selector__option-duration">{optionCopy.duration}</span>
@@ -1537,9 +1537,7 @@ export function StudioVideoSelectorChip({
                       <button className="studio-video-selector__brand-clear" type="button" onClick={onClearBrandText}>
                         {locale === "en" ? "Clear text" : "Очистить текст"}
                       </button>
-                    ) : (
-                      <span>{locale === "en" ? "Logo: .jpg, .png, .webp, .avif" : "Лого: .jpg, .png, .webp, .avif"}</span>
-                    )}
+                    ) : null}
                   </div>
                   <button
                     className="studio-video-selector__brand-apply"
@@ -1872,9 +1870,7 @@ export function StudioBrandSelectorChip({
                       <button className="studio-video-selector__brand-clear" type="button" onClick={onClearBrandText}>
                         {locale === "en" ? "Clear text" : "Очистить текст"}
                       </button>
-                    ) : (
-                      <span>{locale === "en" ? "Logo: .jpg, .png, .webp, .avif" : "Лого: .jpg, .png, .webp, .avif"}</span>
-                    )}
+                    ) : null}
                   </div>
                   {showSystemWatermarkControl ? (
                     <div className={`studio-brand-selector__watermark${systemWatermarkEnabled ? " is-enabled" : " is-disabled"}`}>
