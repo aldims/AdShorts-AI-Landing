@@ -55,8 +55,8 @@
   --studio-console-line: rgba(231, 238, 246, 0.12);
   --studio-console-surface: rgba(11, 13, 17, 0.9);
   --studio-header-reserve: 82px;
-  --studio-prompt-reserve: 190px;
-  --studio-prompt-panel-compact-height: 154px;
+  --studio-prompt-reserve: 267px;
+  --studio-prompt-panel-compact-height: 231px;
   --studio-prompt-panel-max-width: 1040px;
   background: #050607;
 }
@@ -1129,8 +1129,8 @@
 
 @media (min-width: 761px) and (max-width: 1180px) {
   .studio-canvas-route:not(.is-segment-editor) {
-    --studio-prompt-reserve: 190px !important;
-    --studio-prompt-panel-compact-height: 154px !important;
+    --studio-prompt-reserve: 267px !important;
+    --studio-prompt-panel-compact-height: 231px !important;
   }
 }
 
@@ -1159,8 +1159,8 @@
 @media (max-width: 760px) {
   .studio-canvas-route:not(.is-segment-editor) {
     --studio-header-reserve: 68px !important;
-    --studio-prompt-reserve: 242px !important;
-    --studio-prompt-panel-compact-height: 218px !important;
+    --studio-prompt-reserve: 351px !important;
+    --studio-prompt-panel-compact-height: 327px !important;
     --studio-stage-gap: 8px !important;
   }
 
@@ -1350,8 +1350,8 @@
 
 @media (max-width: 420px) {
   .studio-canvas-route:not(.is-segment-editor) {
-    --studio-prompt-reserve: 236px !important;
-    --studio-prompt-panel-compact-height: 212px !important;
+    --studio-prompt-reserve: 342px !important;
+    --studio-prompt-panel-compact-height: 318px !important;
   }
 
   .studio-canvas-route:not(.is-segment-editor) .studio-canvas-preview.is-creative-brief {
@@ -1407,8 +1407,8 @@
 @media (max-height: 760px) and (min-width: 761px) {
   .studio-canvas-route:not(.is-segment-editor) {
     --studio-header-reserve: 70px !important;
-    --studio-prompt-reserve: 160px !important;
-    --studio-prompt-panel-compact-height: 132px !important;
+    --studio-prompt-reserve: 226px !important;
+    --studio-prompt-panel-compact-height: 198px !important;
   }
 
   .studio-canvas-route:not(.is-segment-editor) .studio-canvas-preview.is-creative-brief {
