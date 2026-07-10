@@ -34048,6 +34048,14 @@ export function WorkspacePage({
                                       "Create from scratch or refine a finished video — scene by scene.",
                                     )}
                                   </small>
+                                  <span className="studio-welcome-card__mode-capabilities">
+                                    <span className="studio-welcome-card__mode-capabilities-label" aria-hidden="true">AI</span>
+                                    <span>{workspaceText(locale, "Оживление фото", "Photo animation")}</span>
+                                    <span>{workspaceText(locale, "Изменение фото", "Photo editing")}</span>
+                                    <span>{workspaceText(locale, "Продление видео", "Video extension")}</span>
+                                    <span>{workspaceText(locale, "Создание персонажа", "Character creation")}</span>
+                                    <span>{workspaceText(locale, "Говорящий персонаж", "Talking character")}</span>
+                                  </span>
                                 </span>
                                 <span className="studio-welcome-card__mode-action">
                                   {workspaceText(locale, "Открыть редактор", "Open editor")}
