@@ -63,4 +63,29 @@ describe("workspace segment timeline history buttons", () => {
     fireEvent.click(clearButton);
     expect(onClear).toHaveBeenCalledTimes(1);
   });
+
+  it("supports the cleanup action for non-voice timeline tracks", () => {
+    const onClear = vi.fn();
+
+    render(
+      renderWorkspaceSegmentTimelineHistoryButtons(
+        "ru",
+        false,
+        {
+          canBack: false,
+          canClear: true,
+          canForward: true,
+          kind: "visual",
+          label: "Визуал сцены 1",
+          onClear,
+          segmentIndex: 0,
+        },
+        { onBack: vi.fn(), onForward: vi.fn() },
+      ),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Очистить историю: Визуал сцены 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Нажмите ещё раз, чтобы очистить историю: Визуал сцены 1" }));
+    expect(onClear).toHaveBeenCalledTimes(1);
+  });
 });

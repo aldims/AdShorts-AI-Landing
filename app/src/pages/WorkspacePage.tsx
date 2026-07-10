@@ -2056,6 +2056,9 @@ export function WorkspacePage({
     Record<string, SegmentTimelineVoiceHistory>
   >({});
   const segmentTimelineVoiceHistoryRef = useRef<Record<string, SegmentTimelineVoiceHistory>>({});
+  const [dismissedSegmentTimelineVisualHistory, setDismissedSegmentTimelineVisualHistory] = useState<
+    Record<string, true>
+  >({});
   const setSegmentTimelineRedoSnapshots = useCallback((
     nextValue: SetStateAction<Record<string, WorkspaceSegmentTimelineRedoSnapshot>>,
   ) => {
@@ -2079,6 +2082,7 @@ export function WorkspacePage({
   useEffect(() => {
     setSegmentTimelineRedoSnapshots({});
     setSegmentTimelineVoiceHistory({});
+    setDismissedSegmentTimelineVisualHistory({});
   }, [
     segmentEditorLoadedSession?.projectId,
     setSegmentTimelineRedoSnapshots,
@@ -12742,6 +12746,7 @@ export function WorkspacePage({
     );
     setSegmentTimelineRedoSnapshots({});
     setSegmentTimelineVoiceHistory({});
+    setDismissedSegmentTimelineVisualHistory({});
     setSegmentTimelineGlobalControlOpen(null);
     setSegmentTimelineGlobalControlAnchorRect(null);
     setSegmentTimelineDurationMenuSegmentIndex(null);
@@ -14157,24 +14162,40 @@ export function WorkspacePage({
     }));
   };
 
-  const clearSegmentTimelineVoiceHistory = (segmentIndex: number) => {
-    const voiceHistoryKey = getWorkspaceSegmentTimelineHistoryKey("voice", segmentIndex);
-    const textHistoryKey = getWorkspaceSegmentTimelineHistoryKey("text", segmentIndex);
-    setSegmentTimelineVoiceHistory((current) => {
-      if (!current[voiceHistoryKey]) {
-        return current;
-      }
-      const next = { ...current };
-      delete next[voiceHistoryKey];
-      return next;
-    });
+  const clearSegmentTimelineHistory = (
+    kind: WorkspaceSegmentTimelineHistoryKind,
+    segmentIndex?: number | null,
+  ) => {
+    const historyKey = getWorkspaceSegmentTimelineHistoryKey(kind, segmentIndex);
+    if (kind === "voice") {
+      setSegmentTimelineVoiceHistory((current) => {
+        if (!current[historyKey]) {
+          return current;
+        }
+        const next = { ...current };
+        delete next[historyKey];
+        return next;
+      });
+    }
+    if (kind === "visual") {
+      setDismissedSegmentTimelineVisualHistory((current) => ({
+        ...current,
+        [historyKey]: true,
+      }));
+    }
+
+    const relatedTextHistoryKey = kind === "voice"
+      ? getWorkspaceSegmentTimelineHistoryKey("text", segmentIndex)
+      : null;
     setSegmentTimelineRedoSnapshots((current) => {
-      if (!current[voiceHistoryKey] && !current[textHistoryKey]) {
+      if (!current[historyKey] && (!relatedTextHistoryKey || !current[relatedTextHistoryKey])) {
         return current;
       }
       const next = { ...current };
-      delete next[voiceHistoryKey];
-      delete next[textHistoryKey];
+      delete next[historyKey];
+      if (relatedTextHistoryKey) {
+        delete next[relatedTextHistoryKey];
+      }
       return next;
     });
   };
@@ -14224,6 +14245,14 @@ export function WorkspacePage({
     }
 
     if (kind === "visual") {
+      setDismissedSegmentTimelineVisualHistory((current) => {
+        if (!current[historyKey]) {
+          return current;
+        }
+        const next = { ...current };
+        delete next[historyKey];
+        return next;
+      });
       const baselineSegment = segmentEditorChecklistBaseSession?.segments.find(
         (segment) => segment.index === safeSegmentIndex,
       );
@@ -30036,7 +30065,8 @@ export function WorkspacePage({
                 Boolean(segmentTimelineRedoSnapshots[visualHistoryKey]),
               );
               const canBackVisual = visualHistoryState.canBack;
-              const canForwardVisual = visualHistoryState.canForward;
+              const canForwardVisual =
+                visualHistoryState.canForward && !dismissedSegmentTimelineVisualHistory[visualHistoryKey];
               return (
                 <Fragment key={`segment-timeline-visual:${segment.index}`}>
                   <div
@@ -30258,9 +30288,11 @@ export function WorkspacePage({
                     )}
                     {renderSegmentTimelineHistoryButtons({
                       canBack: canBackVisual && !isThumbVisualGenerationPending,
+                      canClear: !canBackVisual && canForwardVisual,
                       canForward: canForwardVisual && !isThumbVisualGenerationPending,
                       kind: "visual",
                       label: workspaceText(locale, `Визуал сцены ${index + 1}`, `Scene ${index + 1} visual`),
+                      onClear: () => clearSegmentTimelineHistory("visual", segment.index),
                       segmentIndex: segment.index,
                     })}
                     {shouldShowSegmentDeleteButton ? (
@@ -30650,7 +30682,7 @@ export function WorkspacePage({
                     canForward: voiceTimelineState.canForward && !isVoiceoverGenerationPending,
                     kind: voiceTimelineState.historyKind,
                     label: workspaceText(locale, `Озвучка сцены ${index + 1}`, `Scene ${index + 1} voiceover`),
-                    onClear: () => clearSegmentTimelineVoiceHistory(segmentTimelineHistorySegmentIndex),
+                    onClear: () => clearSegmentTimelineHistory("voice", segmentTimelineHistorySegmentIndex),
                     segmentIndex: segmentTimelineHistorySegmentIndex,
                     withPlay: true,
                   })}
@@ -30755,9 +30787,11 @@ export function WorkspacePage({
                   </button>
                   {renderSegmentTimelineHistoryButtons({
                     canBack: span.isEdited,
+                    canClear: !span.isEdited && canForwardSubtitle,
                     canForward: canForwardSubtitle,
                     kind: "subtitle",
                     label: workspaceText(locale, `Субтитры сцены ${index + 1}`, `Scene ${index + 1} subtitles`),
+                    onClear: () => clearSegmentTimelineHistory("subtitle", segment.index),
                     segmentIndex: segment.index,
                   })}
                 </div>
@@ -30843,9 +30877,11 @@ export function WorkspacePage({
                   </button>
                   {renderSegmentTimelineHistoryButtons({
                     canBack: span.isEdited && !isSoundGenerationPending,
+                    canClear: !span.isEdited && canForwardSound,
                     canForward: canForwardSound && !isSoundGenerationPending,
                     kind: "sound",
                     label: workspaceText(locale, `Звуки сцены ${index + 1}`, `Scene ${index + 1} sounds`),
+                    onClear: () => clearSegmentTimelineHistory("sound", segment.index),
                     segmentIndex: segment.index,
                     withPlay: true,
                   })}
@@ -30931,9 +30967,11 @@ export function WorkspacePage({
                 </button>
                 {renderSegmentTimelineHistoryButtons({
                   canBack: isMusicEdited,
+                  canClear: !isMusicEdited && canForwardMusicHistory,
                   canForward: canForwardMusicHistory,
                   kind: "music",
                   label: workspaceText(locale, "Музыка", "Music"),
+                  onClear: () => clearSegmentTimelineHistory("music"),
                   withPlay: true,
                 })}
                 {renderSegmentTimelineAudioButton({
