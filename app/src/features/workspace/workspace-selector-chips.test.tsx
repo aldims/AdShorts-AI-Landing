@@ -49,6 +49,9 @@ describe("StudioVoiceSelectorChip", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: /Озвучка\s*Борис/ }));
+    expect(screen.getByText("Стоимость озвучки")).toBeTruthy();
+    expect(screen.getAllByText("1 ⚡")).toHaveLength(2);
+    expect(screen.queryByText("5 ⚡")).toBeNull();
     fireEvent.click(await screen.findByRole("button", { name: "Сгенерировать озвучку" }));
 
     expect(onGenerateVoiceover).toHaveBeenCalledWith({
@@ -56,6 +59,35 @@ describe("StudioVoiceSelectorChip", () => {
       language: "ru",
       voiceId: "Bys_24000",
     });
+  });
+
+  it("shows an unknown cost when bulk text cannot be split into scenes", () => {
+    render(
+      <LocaleProvider locale="ru">
+        <StudioVoiceSelectorChip
+          bulkTextError="Не удалось распределить текст по сценам"
+          bulkTextValue="Текст для озвучки"
+          generateVoiceoverCostLabel="2 ⚡"
+          isEnabled
+          onBulkTextChange={vi.fn()}
+          onGenerateVoiceover={vi.fn()}
+          onSelect={vi.fn()}
+          onToggleEnabled={vi.fn()}
+          selectedVoiceId="Bys_24000"
+          voiceOptions={[
+            {
+              description: "Базовый мужской голос",
+              id: "Bys_24000",
+              label: "Борис",
+            },
+          ]}
+        />
+      </LocaleProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Озвучка\s*Борис/ }));
+    expect(screen.getByText("Стоимость озвучки")).toBeTruthy();
+    expect(screen.getByText("—")).toBeTruthy();
   });
 
   it("shows English voice copy for Russian voice options in the English UI", () => {

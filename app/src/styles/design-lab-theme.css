@@ -31824,6 +31824,24 @@ html.platform-windows .studio-voice-selector__menu {
   line-height: 1.32;
 }
 
+.studio-voice-selector__bulk-cost {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-start;
+  gap: 7px;
+  min-height: 18px;
+  margin: 0;
+  color: rgba(148, 163, 184, 0.72);
+  font-size: 0.66rem;
+  line-height: 1.3;
+}
+
+.studio-voice-selector__bulk-cost strong {
+  color: rgba(204, 251, 241, 0.9);
+  font-size: 0.68rem;
+  font-weight: 850;
+}
+
 .studio-voice-selector__bulk-actions {
   display: flex;
   gap: 8px;

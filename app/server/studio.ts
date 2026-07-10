@@ -18,12 +18,14 @@ import {
   STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST,
   STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST,
   STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST,
+  buildStudioBatchVoiceoverBillingRuns,
+  buildStudioVoiceoverProviderText,
+  getStudioBatchVoiceoverCreditCost,
   getStudioSegmentPhotoAnimationCreditCost,
   getStudioSegmentTalkingPhotoCreditCost,
-  getStudioSegmentVoiceoverCreditCost,
+  getStudioVoiceoverCreditCostForText,
   normalizeStudioSegmentPhotoAnimationDurationSeconds,
   STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST,
-  STUDIO_SEGMENT_VOICEOVER_CREDIT_COST,
   STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS,
   STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST,
   STUDIO_WORKSPACE_CHARACTER_REFERENCE_CREDIT_COST,
@@ -362,6 +364,7 @@ type AdsflowSegmentVoiceoverSpeechWordPayload = {
 };
 
 type AdsflowSegmentAiVideoJobCreateResponse = {
+  credit_cost?: number | string | null;
   job_id?: string;
   status?: string;
   user?: AdsflowWebUserPayload | null;
@@ -643,6 +646,7 @@ export type StudioSegmentVoiceoverSpeechWord = {
 };
 
 export type StudioSegmentVoiceoverJob = {
+  creditCost: number;
   jobId: string;
   profile: WorkspaceProfile;
   status: string;
@@ -8086,7 +8090,7 @@ export async function createStudioSegmentVoiceoverJob(
   const normalizedProjectId = normalizePositiveInteger(options?.projectId);
   const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
   const normalizedVoiceType = normalizeStudioVoiceIdForLanguage(options?.voiceType, normalizedLanguage);
-  const requiredCredits = getStudioSegmentVoiceoverCreditCost(normalizedVoiceType);
+  const requiredCredits = getStudioVoiceoverCreditCostForText(normalizedText);
   const studioVoiceModelPath = getStudioVoiceModelPath(normalizedVoiceType);
 
   if (normalizedSegmentIndex === null) {
@@ -8132,6 +8136,7 @@ export async function createStudioSegmentVoiceoverJob(
   }
 
   return {
+    creditCost: normalizeNonNegativeInteger(payload.credit_cost) ?? requiredCredits,
     jobId,
     profile: await enrichWorkspaceProfileAfterAdsflowWebMutation(
       payload.user ?? undefined,
@@ -8162,7 +8167,7 @@ export async function createStudioProjectVoiceoverJob(
   const normalizedLanguage = normalizeStudioLanguage(options?.language);
   const normalizedProjectId = normalizePositiveInteger(options?.projectId);
   const normalizedVoiceType = normalizeStudioVoiceIdForLanguage(options?.voiceType, normalizedLanguage);
-  const requiredCredits = getStudioSegmentVoiceoverCreditCost(normalizedVoiceType);
+  const requiredCredits = getStudioVoiceoverCreditCostForText(normalizedText);
   const studioVoiceModelPath = getStudioVoiceModelPath(normalizedVoiceType);
   const segments = (options?.segments ?? [])
     .map((segment, index) => {
@@ -8233,6 +8238,7 @@ export async function createStudioProjectVoiceoverJob(
   }
 
   return {
+    creditCost: normalizeNonNegativeInteger(payload.credit_cost) ?? requiredCredits,
     jobId,
     profile: await enrichWorkspaceProfileAfterAdsflowWebMutation(
       payload.user ?? undefined,
@@ -8360,7 +8366,7 @@ const normalizeStudioBatchVoiceoverGroups = (
       }
 
       return {
-        creditCost: getStudioSegmentVoiceoverCreditCost(voiceType) || STUDIO_SEGMENT_VOICEOVER_CREDIT_COST,
+        creditCost: getStudioVoiceoverCreditCostForText(buildStudioVoiceoverProviderText(segments.map((segment) => segment.text))),
         language,
         segments,
         voiceType,
@@ -8385,9 +8391,6 @@ const normalizeStudioBatchVoiceoverGroups = (
 
   return [...mergedGroups.values()];
 };
-
-const getStudioBatchVoiceoverCreditCost = (groups: NormalizedStudioBatchVoiceoverGroup[]) =>
-  groups.reduce((total, group) => total + Math.max(0, group.creditCost), 0);
 
 const STUDIO_BATCH_VOICEOVER_JOB_STORE_SCHEMA_VERSION = 1;
 const STUDIO_BATCH_VOICEOVER_JOB_STORE_DIR_NAME = "studio-batch-voiceover-jobs";
@@ -8463,8 +8466,7 @@ const normalizeStudioBatchVoiceoverStoredGroup = (value: unknown): NormalizedStu
   return {
     creditCost:
       Math.max(0, normalizeNumber(value.creditCost ?? value.credit_cost) ?? 0) ||
-      getStudioSegmentVoiceoverCreditCost(voiceType) ||
-      STUDIO_SEGMENT_VOICEOVER_CREDIT_COST,
+      getStudioVoiceoverCreditCostForText(buildStudioVoiceoverProviderText(segments.map((segment) => segment.text))),
     language,
     segments,
     voiceType,
@@ -8823,16 +8825,17 @@ export async function createStudioBatchVoiceoverJob(
       throw new Error("AdsFlow did not return a batch voiceover job id.");
     }
 
+    const actualCreditCost = normalizeNonNegativeInteger(payload.credit_cost) ?? creditCost;
     const metadata: StudioBatchVoiceoverJobMetadata = {
       createdAt: Date.now(),
-      creditCost,
+      creditCost: actualCreditCost,
       groups: normalizedGroups,
     };
     studioBatchVoiceoverJobMetadata.set(jobId, metadata);
     await persistStudioBatchVoiceoverJob(jobId, user, { metadata });
 
     return {
-      creditCost,
+      creditCost: actualCreditCost,
       jobId,
       profile: await enrichWorkspaceProfileAfterAdsflowWebMutation(
         payload.user ?? undefined,
@@ -8849,30 +8852,40 @@ export async function createStudioBatchVoiceoverJob(
 
   const children: StudioBatchVoiceoverFallbackChildJob[] = [];
   const projectGroups: StudioBatchVoiceoverFallbackProjectGroupJob[] = [];
+  const billingRuns = buildStudioBatchVoiceoverBillingRuns(normalizedGroups);
   let fallbackProfile = buildWorkspaceProfile();
 
   try {
     if (normalizedProjectId) {
-      for (const group of normalizedGroups) {
-        const groupText = group.segments.map((segment) => segment.text).join(" ").trim();
+      for (const run of billingRuns) {
+        const runSegmentIndexes = new Set(run.segmentIndexes);
+        const runGroup = normalizedGroups.find(
+          (group) =>
+            group.language === run.language &&
+            group.voiceType.toLowerCase() === run.voiceType.toLowerCase(),
+        );
+        const runSegments = runGroup?.segments.filter((segment) => runSegmentIndexes.has(segment.segmentIndex)) ?? [];
+        if (!runGroup || runSegments.length === 0) {
+          continue;
+        }
         const payload = await postAdsflowJson<AdsflowSegmentAiVideoJobCreateResponse>("/api/web/project-voiceover/jobs", {
           admin_token: env.adsflowAdminToken,
-          credit_cost: group.creditCost,
+          credit_cost: run.creditCost,
           external_user_id: externalUserId,
-          language: group.language,
+          language: runGroup.language,
           persist_as_segment_assets: true,
           project_id: normalizedProjectId,
-          segments: group.segments.map((segment) => ({
+          segments: runSegments.map((segment) => ({
             duration: segment.targetDurationSeconds,
             segment_index: segment.segmentIndex,
             target_duration: segment.targetDurationSeconds,
             text: segment.text,
           })),
-          text: groupText,
+          text: run.text,
           user_email: user.email ?? undefined,
           user_name: user.name ?? undefined,
-          voice_type: group.voiceType,
-          ...(getStudioVoiceModelPath(group.voiceType) ? { model_path: getStudioVoiceModelPath(group.voiceType) } : {}),
+          voice_type: runGroup.voiceType,
+          ...(getStudioVoiceModelPath(runGroup.voiceType) ? { model_path: getStudioVoiceModelPath(runGroup.voiceType) } : {}),
         }, {
           retryDelaysMs: [],
           timeoutMs: ADSFLOW_MUTATION_TIMEOUT_MS,
@@ -8884,8 +8897,10 @@ export async function createStudioBatchVoiceoverJob(
         }
 
         projectGroups.push({
-          ...group,
+          ...runGroup,
+          creditCost: run.creditCost,
           jobId: groupJobId,
+          segments: runSegments,
         });
         fallbackProfile = await enrichWorkspaceProfileAfterAdsflowWebMutation(
           payload.user ?? undefined,
@@ -8898,7 +8913,7 @@ export async function createStudioBatchVoiceoverJob(
         for (const segment of group.segments) {
           const payload = await postAdsflowJson<AdsflowSegmentAiVideoJobCreateResponse>("/api/web/segment-voiceover/jobs", {
             admin_token: env.adsflowAdminToken,
-            credit_cost: group.creditCost,
+            credit_cost: getStudioVoiceoverCreditCostForText(segment.text),
             external_user_id: externalUserId,
             language: group.language,
             project_id: normalizedProjectId ?? undefined,

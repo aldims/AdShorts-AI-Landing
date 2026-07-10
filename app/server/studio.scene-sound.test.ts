@@ -240,7 +240,7 @@ describe("studio segment voiceover jobs", () => {
         language: "en",
         segment_index: 0,
         text: "Subscribe to the channel",
-        credit_cost: 2,
+        credit_cost: 1,
         voice_type: "Liam_Timing",
       }),
     );
@@ -322,7 +322,8 @@ describe("studio segment voiceover jobs", () => {
       }),
     );
 
-    const job = await createStudioSegmentVoiceoverJob("Subscribe to the channel", {
+    const voiceoverText = "x".repeat(157);
+    const job = await createStudioSegmentVoiceoverJob(voiceoverText, {
       email: "alex@example.test",
       name: "Alex",
     }, {
@@ -344,7 +345,7 @@ describe("studio segment voiceover jobs", () => {
         language: "ru",
         project_id: 3576,
         segment_index: 4,
-        text: "Subscribe to the channel",
+        text: voiceoverText,
         voice_type: "Liam_Timing",
       }),
     );
@@ -401,7 +402,7 @@ describe("studio segment voiceover jobs", () => {
     expect(calls.find((call) => call.pathname === "/api/web/project-voiceover/jobs")?.body).toEqual(
       expect.objectContaining({
         admin_token: "admin-token",
-        credit_cost: 2,
+        credit_cost: 1,
         external_user_id: "email:alex@example.test",
         language: "ru",
         persist_as_segment_assets: true,

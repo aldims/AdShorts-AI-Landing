@@ -1151,9 +1151,6 @@ export function StudioVoiceSelectorChip({
                             {voice.badgeLabel ? (
                               <span className="studio-voice-selector__badge">{voice.badgeLabel}</span>
                             ) : null}
-                            {voice.creditCost ? (
-                              <span className="studio-voice-selector__cost">{voice.creditCost} ⚡</span>
-                            ) : null}
                           </span>
                           <small>{voiceCopy.description}</small>
                         </button>
@@ -1210,7 +1207,12 @@ export function StudioVoiceSelectorChip({
                   />
                   {bulkTextError ? <p className="studio-voice-selector__bulk-error">{bulkTextError}</p> : null}
                   {hasVoiceoverGenerator ? (
-                    <div className="studio-voice-selector__bulk-actions">
+                    <>
+                      <p className="studio-voice-selector__bulk-cost" aria-live="polite">
+                        <span>{locale === "en" ? "Voiceover cost" : "Стоимость озвучки"}</span>
+                        <strong>{bulkTextError ? "—" : generateVoiceoverCostLabel ?? "0 ⚡"}</strong>
+                      </p>
+                      <div className="studio-voice-selector__bulk-actions">
                       <button
                         className="studio-voice-selector__bulk-save"
                         type="button"
@@ -1268,7 +1270,8 @@ export function StudioVoiceSelectorChip({
                         <span>{resolvedGenerateVoiceoverLabel}</span>
                         {generateVoiceoverCostLabel ? <small>{generateVoiceoverCostLabel}</small> : null}
                       </button>
-                    </div>
+                      </div>
+                    </>
                   ) : null}
                 </div>
               ) : null}

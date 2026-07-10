@@ -917,11 +917,11 @@ import {
 import {
   STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST,
   STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST,
+  getStudioBatchVoiceoverCreditCost,
   getStudioSegmentTalkingPhotoCreditCost,
-  getStudioSegmentVoiceoverCreditCost,
+  getStudioVoiceoverCreditCostForText,
   normalizeStudioSegmentPhotoAnimationDurationSeconds,
   STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST,
-  STUDIO_SEGMENT_VOICEOVER_CREDIT_COST,
   STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS,
   STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST,
   STUDIO_WORKSPACE_CHARACTER_REFERENCE_CREDIT_COST,
@@ -17777,7 +17777,7 @@ export function WorkspacePage({
       return true;
     }
 
-    const requiredCredits = getStudioSegmentVoiceoverCreditCost(voiceType) || STUDIO_SEGMENT_VOICEOVER_CREDIT_COST;
+    const requiredCredits = getStudioVoiceoverCreditCostForText(text);
     if (workspaceBalance !== null && workspaceBalance < requiredCredits) {
       setSegmentEditorVideoError(null);
       clearSegmentEditorVoiceoverError(targetSegmentIndex);
@@ -18866,8 +18866,10 @@ export function WorkspacePage({
       return;
     }
 
-    const voiceoverRequiredCredits =
-      getSegmentTimelineVoiceoverGenerationCreditCost(voiceoverTargetsToGenerateOnCreate);
+    const voiceoverRequiredCredits = getSegmentTimelineVoiceoverGenerationCreditCost(
+      voiceoverTargetsToGenerateOnCreate,
+      draftForVoiceoverGeneration,
+    );
     if (
       workspaceBalance !== null &&
       voiceoverRequiredCredits > 0 &&
@@ -23151,23 +23153,10 @@ export function WorkspacePage({
     return [...groups.values()];
   };
 
-  const getSegmentTimelineVoiceoverGenerationCreditCost = (targets: SegmentTimelineVoiceoverGenerationTarget[]) => {
-    const groupCosts = new Map<string, number>();
-
-    targets.forEach((target) => {
-      const key = `${target.language}:${target.voiceType.toLowerCase()}`;
-      if (groupCosts.has(key)) {
-        return;
-      }
-
-      groupCosts.set(
-        key,
-        getStudioSegmentVoiceoverCreditCost(target.voiceType) || STUDIO_SEGMENT_VOICEOVER_CREDIT_COST,
-      );
-    });
-
-    return [...groupCosts.values()].reduce((total, cost) => total + cost, 0);
-  };
+  const getSegmentTimelineVoiceoverGenerationCreditCost = (
+    targets: SegmentTimelineVoiceoverGenerationTarget[],
+    draft: WorkspaceSegmentEditorDraftSession,
+  ) => getStudioBatchVoiceoverCreditCost(getSegmentTimelineVoiceoverGenerationGroups(targets, draft));
 
   const handleSegmentTimelineGlobalVoiceoverGenerate = async (
     selection?: StudioVoiceSelectorGenerationSelection | null,
@@ -23222,7 +23211,7 @@ export function WorkspacePage({
       return;
     }
 
-    const requiredCredits = getSegmentTimelineVoiceoverGenerationCreditCost(targetsToGenerate);
+    const requiredCredits = getSegmentTimelineVoiceoverGenerationCreditCost(targetsToGenerate, draftForGeneration);
     if (workspaceBalance !== null && requiredCredits > 0 && workspaceBalance < requiredCredits) {
       shouldStartSegmentEditorFullPreviewAfterVoiceoverRef.current = false;
       setSegmentEditorVideoError(null);
@@ -28529,11 +28518,11 @@ export function WorkspacePage({
             ? workspaceText(locale, "Озвучка сцены уже создаётся.", "Scene voiceover is already generating.")
             : null;
   const segmentTimelineVoiceMenuVoiceoverCost = segmentTimelineVoiceMenuGenerationVoiceId
-    ? getStudioSegmentVoiceoverCreditCost(segmentTimelineVoiceMenuGenerationVoiceId)
+    ? getStudioVoiceoverCreditCostForText(segmentTimelineVoiceMenuTextNormalized)
     : 0;
   const segmentTimelineVoiceMenuGenerateCostLabel =
     !isSegmentTimelineVoiceMenuVoiceoverFresh && segmentTimelineVoiceMenuGenerationVoiceId
-      ? `${segmentTimelineVoiceMenuVoiceoverCost || STUDIO_SEGMENT_VOICEOVER_CREDIT_COST} ⚡`
+      ? `${segmentTimelineVoiceMenuVoiceoverCost} ⚡`
       : null;
   const segmentTimelineVoiceMenuBaselineSegment = segmentTimelineVoiceMenuSegment
     ? segmentEditorChecklistBaseSession?.segments.find(
@@ -31902,16 +31891,13 @@ export function WorkspacePage({
         voiceId: segmentTimelineGlobalVoiceId,
       })
     : [];
-  const segmentTimelineGlobalSelectedVoiceCost =
-    effectiveSegmentTimelineGlobalVoiceDraft.isEnabled && segmentTimelineGlobalVoiceId
-      ? getStudioSegmentVoiceoverCreditCost(segmentTimelineGlobalVoiceId) || STUDIO_SEGMENT_VOICEOVER_CREDIT_COST
-      : 0;
   const segmentTimelineGlobalVoiceoverCost =
-    segmentTimelineGlobalVoiceTargetsToGenerate.length > 0
-      ? getSegmentTimelineVoiceoverGenerationCreditCost(segmentTimelineGlobalVoiceTargetsToGenerate)
-      : segmentTimelineGlobalVoiceTargets.length > 0
-        ? segmentTimelineGlobalSelectedVoiceCost
-        : 0;
+    segmentTimelineGlobalVoiceTargetsToGenerate.length > 0 && segmentEditorDraft
+      ? getSegmentTimelineVoiceoverGenerationCreditCost(
+          segmentTimelineGlobalVoiceTargetsToGenerate,
+          segmentEditorDraft,
+        )
+      : 0;
   const isSegmentTimelineGlobalVoiceoverBusy = segmentTimelineGlobalVoiceTargets.some((segment) =>
     hasWorkspaceSegmentVisualRun(segmentEditorGeneratingVoiceoverRunIds, segment.index),
   );
@@ -31940,7 +31926,18 @@ export function WorkspacePage({
     "Generate voiceover",
   );
   const segmentTimelineGlobalVoiceCostLabel =
-    segmentTimelineGlobalVoiceoverCost > 0 ? `${segmentTimelineGlobalVoiceoverCost} ⚡` : undefined;
+    segmentTimelineGlobalVoiceTargets.length > 0 ? `${segmentTimelineGlobalVoiceoverCost} ⚡` : undefined;
+  const segmentEditorCreateShortsVoiceoverTargets = segmentEditorDraft
+    ? getSegmentTimelineVoiceoverGenerationTargets(segmentEditorDraft)
+    : [];
+  const segmentEditorCreateShortsVoiceoverRequiredCredits = segmentEditorDraft
+    ? getSegmentTimelineVoiceoverGenerationCreditCost(
+        segmentEditorCreateShortsVoiceoverTargets,
+        segmentEditorDraft,
+      )
+    : 0;
+  const segmentEditorCreateShortsTotalRequiredCredits =
+    segmentEditorCreateShortsRequiredCredits + segmentEditorCreateShortsVoiceoverRequiredCredits;
   const appliedSegmentEditorBrandLogoPreviewUrl = getStudioCustomAssetPreviewUrl(
     appliedSegmentEditorBrandSnapshot.brandLogoFile,
   );
@@ -31972,7 +31969,7 @@ export function WorkspacePage({
   const activeSegmentEffectiveVoiceIdForGeneration =
     activeSegment && segmentEditorDraft ? getWorkspaceSegmentEffectiveVoiceId(activeSegment, segmentEditorDraft) : null;
   const activeSegmentVoiceoverCost = activeSegmentEffectiveVoiceIdForGeneration
-    ? getStudioSegmentVoiceoverCreditCost(activeSegmentEffectiveVoiceIdForGeneration)
+    ? getStudioVoiceoverCreditCostForText(activeSegment?.text)
     : 0;
   const promptVisualPanelTitle = isPromptAiPhotoMode
     ? workspaceText(locale, "Новый кадр по описанию", "New shot from prompt")
@@ -32240,14 +32237,14 @@ export function WorkspacePage({
 	          : hasSegmentEditorPendingVisualDurationMeasurements
 	          ? "Измеряем длительность видео"
 	          : hasSegmentEditorCreateShortsInput
-	          ? `Создать Shorts за ${formatCreditsCountLabel(segmentEditorCreateShortsRequiredCredits, locale)}`
+	          ? `Создать Shorts за ${formatCreditsCountLabel(segmentEditorCreateShortsTotalRequiredCredits, locale)}`
 	          : segmentEditorCreateShortsEmptyTitle,
 	        isSegmentEditorBrandDirty
 	          ? "Apply brand to video"
 	          : hasSegmentEditorPendingVisualDurationMeasurements
 	          ? "Measuring video duration"
 	          : hasSegmentEditorCreateShortsInput
-	          ? `Create Shorts for ${formatCreditsCountLabel(segmentEditorCreateShortsRequiredCredits, locale)}`
+	          ? `Create Shorts for ${formatCreditsCountLabel(segmentEditorCreateShortsTotalRequiredCredits, locale)}`
 	          : segmentEditorCreateShortsEmptyTitle,
 	      )}
 	      title={workspaceText(
@@ -32257,14 +32254,14 @@ export function WorkspacePage({
 	          : hasSegmentEditorPendingVisualDurationMeasurements
 	          ? "Измеряем длительность видео"
 	          : hasSegmentEditorCreateShortsInput
-	          ? `Создать Shorts за ${formatCreditsCountLabel(segmentEditorCreateShortsRequiredCredits, locale)}`
+	          ? `Создать Shorts за ${formatCreditsCountLabel(segmentEditorCreateShortsTotalRequiredCredits, locale)}`
 	          : segmentEditorCreateShortsEmptyTitle,
 	        isSegmentEditorBrandDirty
 	          ? "Apply brand to video"
 	          : hasSegmentEditorPendingVisualDurationMeasurements
 	          ? "Measuring video duration"
 	          : hasSegmentEditorCreateShortsInput
-	          ? `Create Shorts for ${formatCreditsCountLabel(segmentEditorCreateShortsRequiredCredits, locale)}`
+	          ? `Create Shorts for ${formatCreditsCountLabel(segmentEditorCreateShortsTotalRequiredCredits, locale)}`
 	          : segmentEditorCreateShortsEmptyTitle,
 	      )}
       disabled={isSegmentEditorCreateShortsDisabled}
@@ -32284,7 +32281,7 @@ export function WorkspacePage({
 	          ) : hasSegmentEditorCreateShortsInput ? (
 	            <>
 	              <span>{workspaceText(locale, "Создать Shorts", "Create Shorts")}</span>
-	              <span className="studio-canvas-prompt__btn-cost">{segmentEditorCreateShortsRequiredCredits}</span>
+	              <span className="studio-canvas-prompt__btn-cost">{segmentEditorCreateShortsTotalRequiredCredits}</span>
 	              <span className="studio-canvas-prompt__btn-bolt" aria-hidden="true">⚡</span>
 	            </>
 	          ) : (
@@ -32728,7 +32725,6 @@ export function WorkspacePage({
                                 <small>{voiceCopy.description}</small>
                               </span>
                               {voice.badgeLabel ? <em>{voice.badgeLabel}</em> : null}
-                              {voice.creditCost ? <b>{voice.creditCost} ⚡</b> : null}
                             </button>
                           );
                         })}
@@ -32752,7 +32748,7 @@ export function WorkspacePage({
                           <span className="studio-segment-editor__prompt-action-spinner" aria-hidden="true"></span>
                         ) : null}
                         <span>{workspaceText(locale, "Сгенерировать озвучку", "Generate voiceover")}</span>
-                        <small>{activeSegmentVoiceoverCost || STUDIO_SEGMENT_VOICEOVER_CREDIT_COST} ⚡</small>
+                        <small>{activeSegmentVoiceoverCost} ⚡</small>
                       </button>
                     </div>
                   ) : isPromptUploadMode || isPromptUpscaleMode ? (

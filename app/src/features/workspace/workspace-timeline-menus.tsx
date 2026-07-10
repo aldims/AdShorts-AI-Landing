@@ -676,9 +676,6 @@ export function WorkspaceSegmentTimelineVoiceMenu({
                   {voice.badgeLabel ? (
                     <span className="studio-voice-selector__badge">{voice.badgeLabel}</span>
                   ) : null}
-                  {voice.creditCost ? (
-                    <span className="studio-voice-selector__cost">{voice.creditCost} ⚡</span>
-                  ) : null}
                 </span>
                 <small>{voiceCopy.description}</small>
               </button>

@@ -8,9 +8,14 @@ import {
   STUDIO_VIDEO_GENERATION_CREDIT_COST,
   STUDIO_SEGMENT_AI_PHOTO_PREMIUM_CREDIT_COST,
   STUDIO_SEGMENT_AI_VIDEO_PREMIUM_CREDIT_COST,
+  buildStudioBatchVoiceoverBillingRuns,
+  buildStudioVoiceoverProviderText,
+  getStudioBatchVoiceoverCreditCost,
   getStudioSegmentTalkingPhotoCreditCost,
   getStudioSegmentTalkingPhotoCreditCostForDuration,
   getStudioSegmentVoiceoverCreditCost,
+  getStudioVoiceoverCharacterCount,
+  getStudioVoiceoverCreditCostForText,
   getStudioSegmentPhotoAnimationCreditCost,
   getStudioSegmentPhotoAnimationDurationOptions,
   normalizeStudioSegmentPhotoAnimationDurationSeconds,
@@ -49,15 +54,76 @@ describe("photo animation credit costs", () => {
 });
 
 describe("segment voiceover credit costs", () => {
-  it("prices every enabled scene voiceover at two credits", () => {
-    expect(getStudioSegmentVoiceoverCreditCost("Bys_24000")).toBe(2);
-    expect(getStudioSegmentVoiceoverCreditCost("Liam")).toBe(2);
-    expect(getStudioSegmentVoiceoverCreditCost("Liam_Timing")).toBe(2);
-    expect(getStudioSegmentVoiceoverCreditCost("Elena")).toBe(2);
-    expect(getStudioSegmentVoiceoverCreditCost("English_ManWithDeepVoice")).toBe(2);
-    expect(getStudioSegmentVoiceoverCreditCost("Russian_BrightHeroine")).toBe(2);
+  it("exposes one credit as the minimum enabled voiceover price", () => {
+    expect(getStudioSegmentVoiceoverCreditCost("Bys_24000")).toBe(1);
+    expect(getStudioSegmentVoiceoverCreditCost("Liam")).toBe(1);
+    expect(getStudioSegmentVoiceoverCreditCost("Liam_Timing")).toBe(1);
+    expect(getStudioSegmentVoiceoverCreditCost("Elena")).toBe(1);
+    expect(getStudioSegmentVoiceoverCreditCost("English_ManWithDeepVoice")).toBe(1);
+    expect(getStudioSegmentVoiceoverCreditCost("Russian_BrightHeroine")).toBe(1);
     expect(getStudioSegmentVoiceoverCreditCost("none")).toBe(0);
     expect(getStudioSegmentVoiceoverCreditCost(null)).toBe(0);
+  });
+
+  it("prices normalized provider text by each started one hundred Unicode characters", () => {
+    expect(getStudioVoiceoverCreditCostForText("")).toBe(0);
+    expect(getStudioVoiceoverCreditCostForText("я")).toBe(1);
+    expect(getStudioVoiceoverCreditCostForText("я".repeat(100))).toBe(1);
+    expect(getStudioVoiceoverCreditCostForText("я".repeat(101))).toBe(2);
+    expect(getStudioVoiceoverCreditCostForText("я".repeat(157))).toBe(2);
+    expect(getStudioVoiceoverCharacterCount("  Привет\n\nмир!  ")).toBe(11);
+    expect(getStudioVoiceoverCharacterCount("😀".repeat(100))).toBe(100);
+  });
+
+  it("prices the exact text sent for adjacent batch targets", () => {
+    const providerText = buildStudioVoiceoverProviderText(["а".repeat(59), "б".repeat(59)]);
+    expect(getStudioVoiceoverCharacterCount(providerText)).toBe(121);
+    expect(getStudioBatchVoiceoverCreditCost([
+      {
+        language: "ru",
+        voiceType: "Liam_Timing",
+        segments: [
+          { segmentIndex: 0, text: "а".repeat(59) },
+          { segmentIndex: 1, text: "б".repeat(59) },
+        ],
+      },
+    ])).toBe(2);
+  });
+
+  it("rounds separate provider runs independently", () => {
+    const runs = buildStudioBatchVoiceoverBillingRuns([
+      {
+        language: "ru",
+        voiceType: "Liam_Timing",
+        segments: [
+          { segmentIndex: 0, text: "а".repeat(40) },
+          { segmentIndex: 2, text: "в".repeat(40) },
+        ],
+      },
+      {
+        language: "ru",
+        voiceType: "Elena",
+        segments: [{ segmentIndex: 1, text: "б".repeat(40) }],
+      },
+    ]);
+
+    expect(runs.map((run) => run.creditCost)).toEqual([1, 1, 1]);
+    expect(runs.map((run) => run.segmentIndexes)).toEqual([[0], [1], [2]]);
+    expect(getStudioBatchVoiceoverCreditCost([
+      {
+        language: "ru",
+        voiceType: "Liam_Timing",
+        segments: [
+          { segmentIndex: 0, text: "а".repeat(40) },
+          { segmentIndex: 2, text: "в".repeat(40) },
+        ],
+      },
+      {
+        language: "ru",
+        voiceType: "Elena",
+        segments: [{ segmentIndex: 1, text: "б".repeat(40) }],
+      },
+    ])).toBe(3);
   });
 });
 
