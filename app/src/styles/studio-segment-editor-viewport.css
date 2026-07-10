@@ -244,7 +244,7 @@
     grid-column: 1 !important;
     grid-row: 2 !important;
     display: grid !important;
-    grid-template-columns: 44px minmax(0, 1fr) !important;
+    grid-template-columns: 132px minmax(0, 1fr) !important;
     order: 2 !important;
     width: 100% !important;
     min-height: 58px !important;
@@ -268,12 +268,59 @@
   #app .studio-canvas-main.is-segment-editor
     .studio-segment-editor__timeline-submit-row
     .studio-segment-editor__timeline-preview-toggle {
-    width: 44px !important;
-    min-width: 44px !important;
     height: 44px !important;
     min-height: 44px !important;
-    padding: 0 !important;
     border-radius: 14px !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__timeline-submit-row
+    > .studio-segment-editor__timeline-preview-toggle {
+    width: 132px !important;
+    min-width: 132px !important;
+    padding: 0 10px !important;
+    gap: 7px !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__timeline-submit-row
+    > .studio-segment-editor__timeline-preview-toggle
+    span {
+    display: inline !important;
+    min-width: 0;
+    overflow: hidden;
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #app .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__timeline-submit-row
+    > .studio-segment-editor__timeline-preview-toggle
+    svg {
+    flex: 0 0 auto;
+    width: 15px;
+    height: 15px;
+  }
+
+  #app .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__timeline-submit-row
+    .studio-segment-editor__timeline-preview-controls {
+    display: grid !important;
+    grid-template-columns: 36px minmax(0, 1fr) !important;
+    width: 132px !important;
+    min-width: 132px !important;
+    height: 44px !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__timeline-submit-row
+    .studio-segment-editor__timeline-preview-controls
+    .studio-segment-editor__timeline-preview-toggle {
+    width: auto !important;
+    min-width: 0 !important;
+    padding: 0 !important;
   }
 
   #app .studio-canvas-main.is-segment-editor
@@ -349,18 +396,60 @@
     z-index: 36 !important;
     justify-content: center !important;
     padding: 0 !important;
-    border-right: 1px solid rgba(190, 204, 255, 0.1) !important;
-    background: rgba(10, 15, 27, 0.9) !important;
+    border-right: 0 !important;
+    background: transparent !important;
     color: transparent !important;
     font-size: 0 !important;
-    backdrop-filter: blur(18px) saturate(130%);
-    -webkit-backdrop-filter: blur(18px) saturate(130%);
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
   }
 
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-label-icon {
     width: 18px !important;
     height: 18px !important;
     color: rgba(204, 216, 245, 0.8) !important;
+    filter: drop-shadow(0 2px 5px rgba(2, 6, 14, 0.9));
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__carousel > .studio-segment-editor__arrow {
+    top: 50% !important;
+    z-index: 72 !important;
+    display: inline-flex !important;
+    width: 40px !important;
+    min-width: 40px !important;
+    height: 40px !important;
+    min-height: 40px !important;
+    border-color: rgba(205, 216, 249, 0.2) !important;
+    border-radius: 999px !important;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.025)),
+      rgba(7, 11, 20, 0.78) !important;
+    color: rgba(245, 248, 255, 0.94) !important;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.12),
+      0 14px 30px -18px rgba(0, 0, 0, 0.96) !important;
+    backdrop-filter: blur(18px) saturate(135%) !important;
+    -webkit-backdrop-filter: blur(18px) saturate(135%) !important;
+    transform: translateY(-50%) !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__carousel
+    > .studio-segment-editor__arrow:first-of-type {
+    left: -50px !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__carousel
+    > .studio-segment-editor__arrow:last-of-type {
+    right: -50px !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__carousel
+    > .studio-segment-editor__arrow:disabled {
+    opacity: 0.28 !important;
   }
 
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-ruler,
@@ -402,5 +491,14 @@
     top: 9px !important;
     right: 9px !important;
     z-index: 65 !important;
+  }
+}
+
+@media (max-width: 340px) {
+  #app .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__timeline-submit-row
+    .studio-segment-editor__prompt-submit {
+    padding-inline: 8px !important;
+    font-size: 0.78rem !important;
   }
 }
