@@ -7,6 +7,20 @@
   gap: 6px;
 }
 
+.studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__actions-row {
+  display: flex;
+  width: 100%;
+  min-height: 31px;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__input-row,
+.studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__input-main {
+  width: 100%;
+}
+
 .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__chip--improve {
   display: inline-flex;
   align-items: center;
