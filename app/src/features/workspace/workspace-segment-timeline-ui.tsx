@@ -51,11 +51,14 @@ export type WorkspaceSegmentTimelineAudioPreviewHandler = (
 
 export type WorkspaceSegmentTimelineHistoryButtonsOptions = {
   canBack: boolean;
+  canClear?: boolean;
   canDelete?: boolean;
   canForward: boolean;
+  clearLabel?: string;
   deleteLabel?: string;
   kind: WorkspaceSegmentTimelineHistoryKind;
   label: string;
+  onClear?: () => void;
   onDelete?: () => void;
   segmentIndex?: number | null;
   withPlay?: boolean;
@@ -175,7 +178,13 @@ export const renderWorkspaceSegmentTimelineHistoryButtons = (
 
   const backLabel = workspaceText(locale, `Откатить: ${options.label}`, `Revert: ${options.label}`);
   const forwardLabel = workspaceText(locale, `Вернуть: ${options.label}`, `Restore: ${options.label}`);
+  const clearLabel = options.clearLabel ?? workspaceText(
+    locale,
+    `Очистить историю: ${options.label}`,
+    `Clear history: ${options.label}`,
+  );
   const deleteLabel = options.deleteLabel ?? workspaceText(locale, `Удалить: ${options.label}`, `Delete: ${options.label}`);
+  const shouldShowClear = Boolean(options.canClear && options.onClear && !options.canBack && options.canForward);
   return (
     <span
       className={`studio-segment-editor__timeline-history${
@@ -204,28 +213,50 @@ export const renderWorkspaceSegmentTimelineHistoryButtons = (
           </svg>
         </button>
       ) : null}
-      <button
-        className="studio-segment-editor__timeline-history-button"
-        type="button"
-        disabled={isActionDisabled || !options.canBack}
-        aria-label={backLabel}
-        title={backLabel}
-        onPointerDown={(event) => {
-          event.stopPropagation();
-        }}
-        onClick={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          if (!isActionDisabled && options.canBack) {
-            handlers.onBack(options.kind, options.segmentIndex);
-          }
-        }}
-      >
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M10 7 5 12l5 5" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M5.5 12H19" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" />
-        </svg>
-      </button>
+      {shouldShowClear ? (
+        <button
+          className="studio-segment-editor__timeline-history-button studio-segment-editor__timeline-history-button--clear"
+          type="button"
+          disabled={isActionDisabled}
+          aria-label={clearLabel}
+          title={clearLabel}
+          onPointerDown={(event) => {
+            event.stopPropagation();
+          }}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (!isActionDisabled) {
+              options.onClear?.();
+            }
+          }}
+        >
+          <span aria-hidden="true">🧹</span>
+        </button>
+      ) : (
+        <button
+          className="studio-segment-editor__timeline-history-button"
+          type="button"
+          disabled={isActionDisabled || !options.canBack}
+          aria-label={backLabel}
+          title={backLabel}
+          onPointerDown={(event) => {
+            event.stopPropagation();
+          }}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (!isActionDisabled && options.canBack) {
+              handlers.onBack(options.kind, options.segmentIndex);
+            }
+          }}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M10 7 5 12l5 5" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M5.5 12H19" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" />
+          </svg>
+        </button>
+      )}
       <button
         className="studio-segment-editor__timeline-history-button"
         type="button"

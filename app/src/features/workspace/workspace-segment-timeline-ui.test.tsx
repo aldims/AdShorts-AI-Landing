@@ -31,4 +31,31 @@ describe("workspace segment timeline history buttons", () => {
     expect(onBack).toHaveBeenCalledTimes(1);
     expect(onBack).toHaveBeenCalledWith("voice", 0);
   });
+
+  it("shows a history cleanup emoji at the beginning of the undo chain", () => {
+    const onClear = vi.fn();
+
+    render(
+      renderWorkspaceSegmentTimelineHistoryButtons(
+        "ru",
+        false,
+        {
+          canBack: false,
+          canClear: true,
+          canForward: true,
+          kind: "voice",
+          label: "Озвучка сцены 1",
+          onClear,
+          segmentIndex: 0,
+        },
+        { onBack: vi.fn(), onForward: vi.fn() },
+      ),
+    );
+
+    expect(screen.queryByRole("button", { name: "Откатить: Озвучка сцены 1" })).toBeNull();
+    const clearButton = screen.getByRole("button", { name: "Очистить историю: Озвучка сцены 1" });
+    expect(clearButton.textContent).toBe("🧹");
+    fireEvent.click(clearButton);
+    expect(onClear).toHaveBeenCalledTimes(1);
+  });
 });

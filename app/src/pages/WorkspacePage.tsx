@@ -14112,6 +14112,28 @@ export function WorkspacePage({
     }));
   };
 
+  const clearSegmentTimelineVoiceHistory = (segmentIndex: number) => {
+    const voiceHistoryKey = getWorkspaceSegmentTimelineHistoryKey("voice", segmentIndex);
+    const textHistoryKey = getWorkspaceSegmentTimelineHistoryKey("text", segmentIndex);
+    setSegmentTimelineVoiceHistory((current) => {
+      if (!current[voiceHistoryKey]) {
+        return current;
+      }
+      const next = { ...current };
+      delete next[voiceHistoryKey];
+      return next;
+    });
+    setSegmentTimelineRedoSnapshots((current) => {
+      if (!current[voiceHistoryKey] && !current[textHistoryKey]) {
+        return current;
+      }
+      const next = { ...current };
+      delete next[voiceHistoryKey];
+      delete next[textHistoryKey];
+      return next;
+    });
+  };
+
   const handleSegmentTimelineHistoryBack = (
     kind: WorkspaceSegmentTimelineHistoryKind,
     segmentIndex?: number | null,
@@ -30571,9 +30593,11 @@ export function WorkspacePage({
                   ) : null}
                   {renderSegmentTimelineHistoryButtons({
                     canBack: voiceTimelineState.canBack && !isVoiceoverGenerationPending,
+                    canClear: !voiceTimelineState.canBack && voiceTimelineState.canForward,
                     canForward: voiceTimelineState.canForward && !isVoiceoverGenerationPending,
                     kind: voiceTimelineState.historyKind,
                     label: workspaceText(locale, `Озвучка сцены ${index + 1}`, `Scene ${index + 1} voiceover`),
+                    onClear: () => clearSegmentTimelineVoiceHistory(segmentTimelineHistorySegmentIndex),
                     segmentIndex: segmentTimelineHistorySegmentIndex,
                     withPlay: true,
                   })}

@@ -28529,6 +28529,16 @@ button.studio-segment-editor__timeline-label:focus-visible {
   opacity: 0.3;
 }
 
+.studio-segment-editor__timeline-history-button--clear {
+  font-size: 11px;
+  line-height: 1;
+}
+
+.studio-segment-editor__timeline-history-button--clear span {
+  display: block;
+  transform: translateY(-0.5px);
+}
+
 .studio-segment-editor__timeline-cell--visual {
   z-index: 2;
   min-height: 72px;
