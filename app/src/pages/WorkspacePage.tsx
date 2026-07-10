@@ -638,6 +638,8 @@ import {
   type WorkspaceSegmentPromptImprovementSnapshot,
   type WorkspaceSegmentAiPhotoPromptImproveRequest,
   type WorkspaceSegmentAiPhotoPromptImproveResponse,
+  type WorkspaceStudioPromptImproveRequest,
+  type WorkspaceStudioPromptImproveResponse,
   type WorkspaceSegmentTextTranslateRequest,
   type WorkspaceSegmentTextTranslateResponse,
   type WorkspaceSegmentAiPhotoJobCreateResponse,
@@ -1662,6 +1664,7 @@ export function WorkspacePage({
   const [createMode, setCreateMode] = useState<StudioCreateMode>("default");
   const lastStudioCreateModeRef = useRef<StudioCreateMode>(initialStudioCreateMode);
   const [topicInput, setTopicInput] = useState("");
+  const [isStudioIdeaPromptImproving, setIsStudioIdeaPromptImproving] = useState(false);
   const previousActiveTabRef = useRef<WorkspaceTab>(defaultTab);
   const [contentPlanQueryInput, setContentPlanQueryInput] = useState("");
   const [hasEditedContentPlanQueryInput, setHasEditedContentPlanQueryInput] = useState(false);
@@ -2230,6 +2233,7 @@ export function WorkspacePage({
   const segmentAiPhotoPromptHighlightTimerRef = useRef<number | null>(null);
   const segmentAiPhotoModalCloseTimerRef = useRef<number | null>(null);
   const segmentAiPhotoPromptImproveRunRef = useRef(0);
+  const studioIdeaPromptImproveRunRef = useRef(0);
   const segmentEditorLanguageTranslateRunRef = useRef(0);
   const resetTimerRef = useRef<number | null>(null);
   const generationRunRef = useRef(0);
@@ -2663,6 +2667,60 @@ export function WorkspacePage({
       promptTextareaRef.current?.focus();
     });
   }, []);
+  const handleStudioIdeaPromptImprove = async () => {
+    const sourcePrompt = topicInput.trim();
+    if (!sourcePrompt || isStudioIdeaPromptImproving) {
+      return;
+    }
+
+    if (isGuest) {
+      onAuthRequired?.();
+      return;
+    }
+
+    setSegmentEditorError(null);
+    setIsStudioIdeaPromptImproving(true);
+    const runId = studioIdeaPromptImproveRunRef.current + 1;
+    studioIdeaPromptImproveRunRef.current = runId;
+
+    try {
+      const response = await fetch("/api/studio/improve-prompt", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          language: selectedLanguage,
+          mode: "studio_idea",
+          prompt: sourcePrompt,
+        } satisfies WorkspaceStudioPromptImproveRequest),
+      });
+      const payload = (await response.json().catch(() => null)) as WorkspaceStudioPromptImproveResponse | null;
+
+      if (!response.ok || !payload?.data?.prompt) {
+        throw new Error(payload?.error ?? workspaceText(locale, "Не удалось улучшить идею.", "Failed to improve the idea."));
+      }
+
+      if (studioIdeaPromptImproveRunRef.current !== runId) {
+        return;
+      }
+
+      setTopicInput(payload.data.prompt);
+      window.requestAnimationFrame(() => {
+        promptTextareaRef.current?.focus();
+      });
+    } catch (error) {
+      if (studioIdeaPromptImproveRunRef.current === runId) {
+        setSegmentEditorError(
+          error instanceof Error ? error.message : workspaceText(locale, "Не удалось улучшить идею.", "Failed to improve the idea."),
+        );
+      }
+    } finally {
+      if (studioIdeaPromptImproveRunRef.current === runId) {
+        setIsStudioIdeaPromptImproving(false);
+      }
+    }
+  };
   const updateContentPlanVisibility = useCallback(
     (nextValue: boolean) => {
       setIsContentPlanVisible(nextValue);
@@ -33107,6 +33165,38 @@ export function WorkspacePage({
       ) : null}
     </div>
   ) : null;
+  const studioIdeaPromptActions = (
+    <>
+      <button
+        className="studio-canvas-prompt__chip studio-canvas-prompt__chip--improve"
+        type="button"
+        aria-label={workspaceText(locale, "Улучшить идею", "Improve idea")}
+        title={workspaceText(locale, "Улучшить идею", "Improve idea")}
+        disabled={!topicInput.trim() || isStudioIdeaPromptImproving}
+        onClick={() => {
+          void handleStudioIdeaPromptImprove();
+        }}
+      >
+        {isStudioIdeaPromptImproving ? (
+          <span className="studio-canvas-prompt__improve-spinner" aria-hidden="true"></span>
+        ) : (
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M12 3.7 13.3 8l4.3 1.3-4.3 1.3L12 14.9l-1.3-4.3-4.3-1.3L10.7 8 12 3.7Z" fill="currentColor" />
+            <path d="M18.4 14.3 19.1 16.4l2.1.7-2.1.7-.7 2.1-.7-2.1-2.1-.7 2.1-.7.7-2.1Z" fill="currentColor" />
+          </svg>
+        )}
+        <span>{workspaceText(locale, isStudioIdeaPromptImproving ? "Улучшаем…" : "Улучшить", isStudioIdeaPromptImproving ? "Improving…" : "Improve")}</span>
+      </button>
+      <button
+        className={`studio-canvas-prompt__chip studio-canvas-prompt__chip--toggle${isStudioContentPlanRailVisible ? " is-active" : ""}`}
+        type="button"
+        data-studio-content-plan-toggle="true"
+        onClick={handleToggleContentPlanVisibility}
+      >
+        {workspaceText(locale, "План", "Plan")}
+      </button>
+    </>
+  );
 
   return (
     <>
@@ -34053,14 +34143,7 @@ export function WorkspacePage({
                                 </button>
                               </div>
                               <div className="studio-canvas-prompt__topbar">
-                                <button
-                                  className={`studio-canvas-prompt__chip studio-canvas-prompt__chip--toggle${isStudioContentPlanRailVisible ? " is-active" : ""}`}
-                                  type="button"
-                                  data-studio-content-plan-toggle="true"
-                                  onClick={handleToggleContentPlanVisibility}
-                                >
-                                  {workspaceText(locale, "План", "Plan")}
-                                </button>
+                                {studioIdeaPromptActions}
                               </div>
                             </div>
                           ) : null}
@@ -34087,14 +34170,7 @@ export function WorkspacePage({
                           </div>
                           {!composerSourceIdea ? (
                             <div className="studio-canvas-prompt__topbar">
-                              <button
-                                className={`studio-canvas-prompt__chip studio-canvas-prompt__chip--toggle${isStudioContentPlanRailVisible ? " is-active" : ""}`}
-                                type="button"
-                                data-studio-content-plan-toggle="true"
-                                onClick={handleToggleContentPlanVisibility}
-                              >
-                                {workspaceText(locale, "План", "Plan")}
-                              </button>
+                              {studioIdeaPromptActions}
                             </div>
                           ) : null}
                         </div>

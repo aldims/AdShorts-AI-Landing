@@ -499,6 +499,8 @@ export type WorkspaceSegmentImageEditRequest = WorkspaceSegmentImageUpscaleReque
 
 export type WorkspaceSegmentAiPhotoPromptImproveMode = "ai_photo" | "ai_video" | "photo_animation" | "image_edit";
 
+export type WorkspaceStudioPromptImproveMode = WorkspaceSegmentAiPhotoPromptImproveMode | "studio_idea";
+
 export type WorkspaceSegmentPromptImprovementSnapshot = {
   mode: WorkspaceSegmentAiPhotoPromptImproveMode;
   prompt: string;
@@ -511,6 +513,12 @@ export type WorkspaceSegmentAiPhotoPromptImproveRequest = {
   prompt: string;
 };
 
+export type WorkspaceStudioPromptImproveRequest = {
+  language: StudioLanguage;
+  mode: WorkspaceStudioPromptImproveMode;
+  prompt: string;
+};
+
 export type WorkspaceSegmentAiPhotoPromptImprovePayload = {
   prompt: string;
 };
@@ -519,6 +527,8 @@ export type WorkspaceSegmentAiPhotoPromptImproveResponse = {
   data?: WorkspaceSegmentAiPhotoPromptImprovePayload;
   error?: string;
 };
+
+export type WorkspaceStudioPromptImproveResponse = WorkspaceSegmentAiPhotoPromptImproveResponse;
 
 export type WorkspaceSegmentTextTranslateRequest = {
   sourceLanguage: StudioLanguage;

@@ -723,7 +723,7 @@ export type StudioBatchVoiceoverJobStatus = {
   status: string;
 };
 
-type StudioSegmentPromptImproveMode = "ai_photo" | "ai_video" | "photo_animation" | "image_edit";
+type StudioSegmentPromptImproveMode = "ai_photo" | "ai_video" | "photo_animation" | "image_edit" | "studio_idea";
 
 export type StudioSegmentAiPhotoPromptImproveResult = {
   prompt: string;
@@ -983,6 +983,7 @@ const studioSupportedPromptImproveModes = new Set([
   "ai_video",
   "photo_animation",
   "image_edit",
+  "studio_idea",
 ]);
 
 const studioSupportedSegmentVisualQualities = new Set(["standard", "premium"]);
@@ -3225,7 +3226,14 @@ const buildStudioSegmentPromptEnhancementFallback = (
 
   const descriptors =
     language === "en"
-      ? mode === "ai_video"
+      ? mode === "studio_idea"
+        ? [
+            "clear Shorts topic",
+            "strong opening hook",
+            "specific audience benefit",
+            "one focused takeaway",
+          ]
+        : mode === "ai_video"
         ? [
             "cinematic vertical 9:16 video",
             "natural subject motion",
@@ -3255,7 +3263,14 @@ const buildStudioSegmentPromptEnhancementFallback = (
                 "clear focal subject",
                 "high detail",
               ]
-      : mode === "ai_video"
+      : mode === "studio_idea"
+        ? [
+            "четкая тема для Shorts",
+            "сильный стартовый хук",
+            "понятная польза для аудитории",
+            "одна сфокусированная мысль",
+          ]
+        : mode === "ai_video"
         ? [
             "кинематографичное вертикальное видео 9:16",
             "естественное движение объекта",
@@ -3295,6 +3310,15 @@ const buildStudioSegmentPromptEnhancementSystemPrompt = (
 ) => {
   if (language === "en") {
     switch (mode) {
+      case "studio_idea":
+        return [
+          "You are a short-form video strategist for vertical Shorts.",
+          "Rewrite the user's rough idea into one clear, compelling production brief for a complete short video.",
+          "Return exactly one concise prompt in English with no quotes, labels, markdown, or explanations.",
+          "Keep the original topic and intent, then clarify the target audience, a strong opening hook, the central message, and the concrete takeaway or desired result.",
+          "Do not turn it into a visual scene prompt, screenplay, shot list, voiceover script, captions, or a list of options.",
+          "Keep it focused and actionable: one or two sentences, under 420 characters.",
+        ].join(" ");
       case "ai_video":
         return [
           "You are an expert prompt engineer for text-to-video generation.",
@@ -3340,6 +3364,15 @@ const buildStudioSegmentPromptEnhancementSystemPrompt = (
   }
 
   switch (mode) {
+    case "studio_idea":
+      return [
+        "Ты стратег по коротким вертикальным видео Shorts.",
+        "Преобразуй черновую идею пользователя в один ясный, убедительный бриф для создания цельного короткого ролика.",
+        "Верни ровно один компактный промт на русском языке без кавычек, меток, markdown и пояснений.",
+        "Сохрани исходную тему и намерение, затем уточни целевую аудиторию, сильный стартовый хук, главную мысль и конкретную пользу или результат для зрителя.",
+        "Не превращай идею в промт для одного кадра, сценарий, раскадровку, текст озвучки, субтитры или список вариантов.",
+        "Промт должен быть сфокусированным и применимым: одно или два предложения до 420 символов.",
+      ].join(" ");
     case "ai_video":
       return [
         "Ты эксперт по созданию промтов для text-to-video генерации.",
@@ -3391,14 +3424,18 @@ const buildStudioSegmentPromptEnhancementUserPrompt = (
 ) => {
   const label =
     language === "en"
-      ? mode === "ai_video"
+      ? mode === "studio_idea"
+        ? "Raw Shorts idea:"
+        : mode === "ai_video"
         ? "Raw video scene description:"
         : mode === "photo_animation"
           ? "Raw photo animation instruction:"
           : mode === "image_edit"
             ? "Raw image edit request:"
             : "Raw scene description:"
-      : mode === "ai_video"
+      : mode === "studio_idea"
+        ? "Черновая идея для Shorts:"
+        : mode === "ai_video"
         ? "Черновое описание видео-сцены:"
         : mode === "photo_animation"
           ? "Черновое описание анимации фото:"

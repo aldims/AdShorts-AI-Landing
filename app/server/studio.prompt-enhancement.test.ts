@@ -12,6 +12,19 @@ afterEach(() => {
 });
 
 describe("studio prompt enhancement", () => {
+  it("uses Shorts-brief fallback guidance for studio idea mode", async () => {
+    env.openrouterApiKey = undefined;
+
+    const result = await improveStudioSegmentAiPhotoPrompt("советы по продвижению кофейни", {
+      language: "ru",
+      mode: "studio_idea",
+    });
+
+    expect(result.prompt).toContain("четкая тема для Shorts");
+    expect(result.prompt).toContain("сильный стартовый хук");
+    expect(result.prompt).not.toContain("фотореализм");
+  });
+
   it("uses ai photo fallback guidance for ai_photo mode", async () => {
     env.openrouterApiKey = undefined;
 
