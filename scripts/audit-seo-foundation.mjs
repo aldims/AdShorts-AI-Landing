@@ -93,6 +93,7 @@ for (const pathname of indexPaths) {
   assert(h1s.length === 1, `${relativePath}: expected exactly one H1, got ${h1s.length}`);
   assert(!/"@type"\s*:\s*"FAQPage"/i.test(html), `${relativePath}: template FAQPage JSON-LD is not allowed`);
   assert(!/"aggregateRating"\s*:/i.test(html), `${relativePath}: unverified aggregateRating is not allowed`);
+  assert(!/<!-- seo-(?:index-boost|action-plan):start -->/i.test(html), `${relativePath}: deprecated SEO block is not allowed`);
 
   for (const pattern of forbiddenVisibleText) {
     assert(!pattern.test(visibleText), `${relativePath}: forbidden internal SEO copy matches ${pattern}`);

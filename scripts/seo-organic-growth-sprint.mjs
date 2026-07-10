@@ -4,7 +4,9 @@ import path from "node:path";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const siteOrigin = "https://adshortsai.com";
-const dateModified = "2026-06-17";
+const dateModified = "2026-07-10";
+const indexPolicy = JSON.parse(await readFile(path.join(rootDir, "seo-index-policy.json"), "utf8"));
+const indexPaths = new Set(indexPolicy.index.map((entry) => entry.url));
 
 const priorityRoutes = [
   "/en/faceless-youtube-shorts/",
@@ -57,7 +59,7 @@ const priorityRoutes = [
   "/kak-zagruzit-shorts/",
   "/shorts-ne-otobrazhayutsya-na-kanale/",
   "/shorts-net-zvuka/",
-];
+].filter((route) => indexPaths.has(route));
 
 const metaOverrides = {
   "/en/faceless-youtube-shorts/": {
@@ -699,46 +701,23 @@ const processPage = async (route) => {
   html = stripBlock(html, "seo-sprint-faq");
   html = stripBlock(html, "seo-index-boost");
   html = stripBlock(html, "seo-action-plan");
-  html = addBeforeReadAlso(html, renderBoostBlock({ locale, h1, category, canonical }));
-  html = addBeforeReadAlso(html, renderActionPlanBlock({ locale, category }));
+  html = html.replace(/\n[ \t]*\n(?:[ \t]*\n)+/g, "\n\n");
   html = addBeforeReadAlso(html, renderFaqBlock({ locale, faq }));
+  html = html.replace(/\n[ \t]*\n(?:[ \t]*\n)+/g, "\n\n");
 
   await writeFile(filePath, html);
   return path.relative(rootDir, filePath);
-};
-
-const updateSitemapLastmod = async (routes) => {
-  const sitemapPath = path.join(rootDir, "sitemap.xml");
-  let sitemap = await readFile(sitemapPath, "utf8");
-  let updated = 0;
-
-  for (const route of routes) {
-    const canonical = routeToCanonical(route);
-    const pattern = new RegExp(`(<loc>${escapeRegExp(canonical)}<\\/loc>[\\s\\S]*?<lastmod>)([^<]+)(<\\/lastmod>)`);
-    if (!pattern.test(sitemap)) {
-      throw new Error(`sitemap.xml: missing lastmod block for ${canonical}`);
-    }
-    sitemap = sitemap.replace(pattern, (_match, before, current, after) => {
-      if (current === dateModified) return `${before}${current}${after}`;
-      updated += 1;
-      return `${before}${dateModified}${after}`;
-    });
-  }
-
-  await writeFile(sitemapPath, sitemap);
-  return updated;
 };
 
 const changed = [];
 for (const route of priorityRoutes) {
   changed.push(await processPage(route));
 }
-const updatedSitemapLastmods = await updateSitemapLastmod(priorityRoutes);
 
 console.log(
   [
     `SEO organic growth sprint updated ${changed.length} priority pages.`,
-    `Updated ${updatedSitemapLastmods} sitemap lastmod values to ${dateModified}.`,
+    "Run apply-seo-index-policy.mjs to update sitemap and index controls.",
     ...changed.map((file) => `- ${file}`),
   ].join("\n"),
 );
