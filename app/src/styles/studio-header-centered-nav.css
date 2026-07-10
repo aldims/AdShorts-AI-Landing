@@ -7,7 +7,7 @@
 #app .studio-canvas-route {
   --studio-header-reserve: 78px !important;
   --studio-header-height: 74px;
-  --studio-header-control-height: 40px;
+  --studio-header-control-height: 48px;
   --studio-header-line: rgba(216, 224, 244, 0.115);
   --studio-header-line-strong: rgba(224, 231, 250, 0.2);
   --studio-header-text: rgba(244, 247, 255, 0.96);
@@ -16,7 +16,7 @@
 }
 
 #app .studio-canvas-route .site-header--workspace {
-  --studio-header-control-height: 40px !important;
+  --studio-header-control-height: 48px !important;
   height: var(--studio-header-height) !important;
   border: 0 !important;
   background: transparent !important;
@@ -89,11 +89,11 @@
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  flex: 0 0 40px !important;
-  width: 40px !important;
-  min-width: 40px !important;
-  max-width: 40px !important;
-  height: 40px !important;
+  flex: 0 0 var(--studio-header-control-height) !important;
+  width: var(--studio-header-control-height) !important;
+  min-width: var(--studio-header-control-height) !important;
+  max-width: var(--studio-header-control-height) !important;
+  height: var(--studio-header-control-height) !important;
   padding: 0 !important;
   gap: 0 !important;
   border: 0 !important;
@@ -114,10 +114,10 @@
 }
 
 #app .studio-canvas-route .site-header--workspace .brand img {
-  width: 36px !important;
-  min-width: 36px !important;
-  height: 36px !important;
-  min-height: 36px !important;
+  width: calc(var(--studio-header-control-height) - 4px) !important;
+  min-width: calc(var(--studio-header-control-height) - 4px) !important;
+  height: calc(var(--studio-header-control-height) - 4px) !important;
+  min-height: calc(var(--studio-header-control-height) - 4px) !important;
   border: 0 !important;
   border-radius: 0 !important;
   box-shadow: none !important;
@@ -171,8 +171,8 @@
   justify-content: center !important;
   width: auto !important;
   min-width: 78px !important;
-  height: 32px !important;
-  min-height: 32px !important;
+  height: calc(var(--studio-header-control-height) - 8px) !important;
+  min-height: calc(var(--studio-header-control-height) - 8px) !important;
   padding: 0 12px !important;
   border: 1px solid transparent !important;
   border-radius: 10px !important;
@@ -233,9 +233,9 @@
   position: relative !important;
   inset: auto !important;
   display: flex !important;
-  width: 380px !important;
+  width: 382px !important;
   min-width: 0 !important;
-  max-width: 380px !important;
+  max-width: 382px !important;
   height: var(--studio-header-control-height) !important;
   min-height: var(--studio-header-control-height) !important;
   margin: 0 !important;
@@ -265,8 +265,8 @@
   justify-content: stretch !important;
   width: 100% !important;
   max-width: none !important;
-  height: 32px !important;
-  min-height: 32px !important;
+  height: calc(var(--studio-header-control-height) - 8px) !important;
+  min-height: calc(var(--studio-header-control-height) - 8px) !important;
   padding: 0 !important;
   gap: 0 !important;
   overflow: visible !important;
@@ -283,8 +283,8 @@
   inset: 0 auto 0 0 !important;
   z-index: 0 !important;
   width: var(--site-nav-selection-width, 0px) !important;
-  height: 32px !important;
-  min-height: 32px !important;
+  height: calc(var(--studio-header-control-height) - 8px) !important;
+  min-height: calc(var(--studio-header-control-height) - 8px) !important;
   border: 0 !important;
   border-radius: 0 !important;
   background: transparent !important;
@@ -323,8 +323,8 @@
   width: auto !important;
   min-width: 0 !important;
   max-width: none !important;
-  height: 32px !important;
-  min-height: 32px !important;
+  height: calc(var(--studio-header-control-height) - 8px) !important;
+  min-height: calc(var(--studio-header-control-height) - 8px) !important;
   padding: 0 13px !important;
   gap: 7px !important;
   overflow: hidden !important;
@@ -498,12 +498,12 @@
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  flex: 0 0 40px !important;
-  width: 40px !important;
-  min-width: 40px !important;
-  max-width: 40px !important;
-  height: 40px !important;
-  min-height: 40px !important;
+  flex: 0 0 var(--studio-header-control-height) !important;
+  width: var(--studio-header-control-height) !important;
+  min-width: var(--studio-header-control-height) !important;
+  max-width: var(--studio-header-control-height) !important;
+  height: var(--studio-header-control-height) !important;
+  min-height: var(--studio-header-control-height) !important;
   margin: 0 !important;
   padding: 0 !important;
   border: 1px solid rgba(222, 226, 255, 0.22) !important;
@@ -525,6 +525,49 @@
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.31),
     0 13px 25px -13px rgba(112, 108, 235, 0.94) !important;
+}
+
+@media (min-width: 961px) {
+  #app .studio-canvas-route .site-header--workspace .studio-create-mode-switch,
+  #app .studio-canvas-route .site-header--workspace .site-nav--studio-tabs {
+    padding: 4px !important;
+    border-radius: 15px !important;
+  }
+
+  #app .studio-canvas-route .site-header--workspace .studio-create-mode-switch__btn,
+  #app .studio-canvas-route .site-header--workspace .site-nav--studio-tabs .site-nav__content > .site-nav__item {
+    border-radius: 11px !important;
+  }
+
+  #app .studio-canvas-route .site-header--workspace .studio-create-mode-switch__btn {
+    font-size: 0.8rem !important;
+  }
+
+  #app .studio-canvas-route .site-header--workspace .site-nav--studio-tabs .site-nav__content > .site-nav__item {
+    padding-inline: 6px !important;
+    font-size: 0.9rem !important;
+  }
+
+  #app .studio-canvas-route .site-header--workspace .site-nav--studio-tabs .site-nav__selection::after {
+    right: 28px;
+    bottom: 4px;
+    left: 28px;
+  }
+
+  #app .studio-canvas-route .site-header--workspace .site-header__actions {
+    gap: 6px !important;
+  }
+
+  #app .studio-canvas-route .site-header--workspace .language-switcher__trigger,
+  #app .studio-canvas-route .site-header--workspace .site-header__billing,
+  #app .studio-canvas-route .site-header--workspace .site-header__account {
+    border-radius: 14px !important;
+    font-size: 0.8rem !important;
+  }
+
+  #app .studio-canvas-route .site-header--workspace .site-header__billing {
+    padding-inline: 13px !important;
+  }
 }
 
 @media (min-width: 1181px) {
@@ -566,17 +609,17 @@
   #app .studio-canvas-route .site-header--workspace .studio-create-mode-switch__btn {
     min-width: 70px !important;
     padding-inline: 9px !important;
-    font-size: 0.71rem !important;
+    font-size: 0.8rem !important;
   }
 
   #app .studio-canvas-route .site-header--workspace .site-nav--studio-tabs {
-    width: 348px !important;
-    max-width: 348px !important;
+    width: 382px !important;
+    max-width: 382px !important;
   }
 
   #app .studio-canvas-route .site-header--workspace .site-nav--studio-tabs .site-nav__content > .site-nav__item {
-    padding-inline: 10px !important;
-    font-size: 0.73rem !important;
+    padding-inline: 6px !important;
+    font-size: 0.9rem !important;
   }
 
   #app .studio-canvas-route .site-header--workspace .site-header__billing-plan,
@@ -585,7 +628,7 @@
   }
 
   #app .studio-canvas-route .site-header--workspace .site-header__billing {
-    padding-inline: 10px !important;
+    padding-inline: 13px !important;
   }
 }
 
@@ -607,6 +650,10 @@
     min-height: 106px !important;
     padding: 7px 10px !important;
     row-gap: 2px !important;
+  }
+
+  #app .studio-canvas-route .site-header--workspace {
+    --studio-header-control-height: 40px !important;
   }
 
   #app .studio-canvas-route .site-header--workspace .site-header__studio-nav-cluster {
@@ -658,11 +705,11 @@
   }
 
   #app .studio-canvas-route .site-header--workspace .brand {
-    flex-basis: 34px !important;
-    width: 34px !important;
-    min-width: 34px !important;
-    max-width: 34px !important;
-    height: 34px !important;
+    flex-basis: var(--studio-header-control-height) !important;
+    width: var(--studio-header-control-height) !important;
+    min-width: var(--studio-header-control-height) !important;
+    max-width: var(--studio-header-control-height) !important;
+    height: var(--studio-header-control-height) !important;
   }
 
   #app .studio-canvas-route .site-header--workspace .brand img {
