@@ -56,7 +56,7 @@ describe("getWorkspaceSegmentTimelineVoiceLabel", () => {
     expect(getWorkspaceSegmentTimelineVoiceOption(segment, fallbackSettings)?.id).toBe("Bys_24000");
   });
 
-  it("shows sidebar voice label even when sidebar voice is disabled", () => {
+  it("does not show a fallback voice when voiceover is disabled", () => {
     const segment = {
       voiceType: null,
       voiceoverVoiceType: null,
@@ -66,8 +66,8 @@ describe("getWorkspaceSegmentTimelineVoiceLabel", () => {
       studioSidebarVoiceEnabled: false,
     };
 
-    expect(getWorkspaceSegmentTimelineVoiceLabel("ru", segment, disabledSettings)).toBe("Борис");
-    expect(getWorkspaceSegmentTimelineVoiceOption(segment, disabledSettings)?.id).toBe("Bys_24000");
+    expect(getWorkspaceSegmentTimelineVoiceLabel("ru", segment, disabledSettings)).toBe("Добавить озвучку");
+    expect(getWorkspaceSegmentTimelineVoiceOption(segment, disabledSettings)).toBeNull();
   });
 
   it("shows 'Добавить озвучку' in the full timeline label when text is empty", () => {

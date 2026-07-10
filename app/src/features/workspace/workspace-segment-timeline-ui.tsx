@@ -176,17 +176,6 @@ export const renderWorkspaceSegmentTimelineHistoryButtons = (
   const backLabel = workspaceText(locale, `Откатить: ${options.label}`, `Revert: ${options.label}`);
   const forwardLabel = workspaceText(locale, `Вернуть: ${options.label}`, `Restore: ${options.label}`);
   const deleteLabel = options.deleteLabel ?? workspaceText(locale, `Удалить: ${options.label}`, `Delete: ${options.label}`);
-  const runHistoryButtonActionOnce = (button: HTMLButtonElement, action: () => void) => {
-    const now = Date.now();
-    const lastHandledAt = Number(button.dataset.timelineHistoryHandledAt ?? 0);
-    if (Number.isFinite(lastHandledAt) && now - lastHandledAt < 350) {
-      return;
-    }
-
-    button.dataset.timelineHistoryHandledAt = String(now);
-    action();
-  };
-
   return (
     <span
       className={`studio-segment-editor__timeline-history${
@@ -222,33 +211,13 @@ export const renderWorkspaceSegmentTimelineHistoryButtons = (
         aria-label={backLabel}
         title={backLabel}
         onPointerDown={(event) => {
-          event.preventDefault();
           event.stopPropagation();
-          if (!isActionDisabled && options.canBack) {
-            runHistoryButtonActionOnce(event.currentTarget, () =>
-              handlers.onBack(options.kind, options.segmentIndex),
-            );
-          }
-        }}
-        onKeyDown={(event) => {
-          if (event.key !== "Enter" && event.key !== " ") {
-            return;
-          }
-          event.preventDefault();
-          event.stopPropagation();
-          if (!isActionDisabled && options.canBack) {
-            runHistoryButtonActionOnce(event.currentTarget, () =>
-              handlers.onBack(options.kind, options.segmentIndex),
-            );
-          }
         }}
         onClick={(event) => {
           event.preventDefault();
           event.stopPropagation();
           if (!isActionDisabled && options.canBack) {
-            runHistoryButtonActionOnce(event.currentTarget, () =>
-              handlers.onBack(options.kind, options.segmentIndex),
-            );
+            handlers.onBack(options.kind, options.segmentIndex);
           }
         }}
       >
@@ -264,33 +233,13 @@ export const renderWorkspaceSegmentTimelineHistoryButtons = (
         aria-label={forwardLabel}
         title={forwardLabel}
         onPointerDown={(event) => {
-          event.preventDefault();
           event.stopPropagation();
-          if (!isActionDisabled && options.canForward) {
-            runHistoryButtonActionOnce(event.currentTarget, () =>
-              handlers.onForward(options.kind, options.segmentIndex),
-            );
-          }
-        }}
-        onKeyDown={(event) => {
-          if (event.key !== "Enter" && event.key !== " ") {
-            return;
-          }
-          event.preventDefault();
-          event.stopPropagation();
-          if (!isActionDisabled && options.canForward) {
-            runHistoryButtonActionOnce(event.currentTarget, () =>
-              handlers.onForward(options.kind, options.segmentIndex),
-            );
-          }
         }}
         onClick={(event) => {
           event.preventDefault();
           event.stopPropagation();
           if (!isActionDisabled && options.canForward) {
-            runHistoryButtonActionOnce(event.currentTarget, () =>
-              handlers.onForward(options.kind, options.segmentIndex),
-            );
+            handlers.onForward(options.kind, options.segmentIndex);
           }
         }}
       >

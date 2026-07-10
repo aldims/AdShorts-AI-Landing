@@ -7968,8 +7968,8 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(restoreWorkspaceSegmentTimelineSnapshot(currentSegment, baselineSegment, "voice")).toEqual(
       expect.objectContaining({
         speechDuration: 6.5,
-        text: baselineText,
-        textByLanguage: { ru: baselineText },
+        text: generatedText,
+        textByLanguage: { ru: generatedText },
         voiceType: null,
         voice_type: null,
         voiceoverAsset: expect.objectContaining({ assetId: 777 }),

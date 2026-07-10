@@ -245,7 +245,6 @@ import {
   hasStudioBranding,
   hasWorkspaceSegmentExplicitDraftVisual,
   hasWorkspaceSegmentPersistedMediaReference,
-  inferWorkspaceSegmentEditorUniformVoiceType,
   isWorkspaceSegmentPersistedForVisualJobBinding,
   isWorkspaceSegmentCachedLanguageTextUsable,
   isWorkspaceSegmentDraftTextEdited,
@@ -290,6 +289,7 @@ import {
   restoreWorkspaceSegmentDraftVisualFromBaseline,
   restoreWorkspaceSegmentSceneSoundState,
   restoreWorkspaceSegmentStaleMeasuredRenderedPhotoDuration,
+  restoreWorkspaceSegmentEffectiveVoiceFromBaseline,
   restoreWorkspaceSegmentTimelineSnapshot,
   restoreWorkspaceSegmentVoiceTextDraftSessionSnapshot,
   restoreWorkspaceSegmentVoiceTextDraftSnapshot,
@@ -321,6 +321,7 @@ import {
   isWorkspaceSegmentDraftSceneSoundEdited,
   isWorkspaceSegmentDraftSubtitleEdited,
   isWorkspaceSegmentDraftVoiceEdited,
+  isWorkspaceSegmentEffectiveVoiceEdited,
   reorderWorkspaceSegmentEditorSegmentsByIndex,
   resolveWorkspaceSegmentEditorChangeDisplayBaselineSession,
 } from "../features/workspace/workspace-segment-editor-checklist";
@@ -1368,6 +1369,7 @@ const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_UNTIMED_PROJECT_VOICE_END_GRACE_SECO
 const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_PREFLIGHT_CONCURRENCY = 3;
 const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_PREFLIGHT_MAX_SOURCE_BYTES = 24 * 1024 * 1024;
 const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_PREFLIGHT_MAX_TOTAL_BYTES = 64 * 1024 * 1024;
+const WORKSPACE_SEGMENT_TIMELINE_VOICE_HISTORY_LIMIT = 50;
 
 type SegmentEditorFullPreviewPreparedAudioSource = {
   byteLength: number;
@@ -1390,6 +1392,16 @@ type SegmentTimelineGlobalVoiceDraft = {
 type SegmentTimelineBulkVoiceTextEditSnapshot = {
   segments: WorkspaceSegmentEditorDraftSegment[];
   ttsAssetId: WorkspaceSegmentEditorDraftSession["ttsAssetId"];
+};
+
+type SegmentTimelineVoiceHistoryEntry = {
+  segment: WorkspaceSegmentEditorDraftSegment;
+  segmentIndex: number;
+};
+
+type SegmentTimelineVoiceHistory = {
+  future: SegmentTimelineVoiceHistoryEntry[];
+  past: SegmentTimelineVoiceHistoryEntry[];
 };
 
 type StudioCreateInitialSettings = {
@@ -2038,6 +2050,10 @@ export function WorkspacePage({
     Record<string, WorkspaceSegmentTimelineRedoSnapshot>
   >({});
   const segmentTimelineRedoSnapshotsRef = useRef<Record<string, WorkspaceSegmentTimelineRedoSnapshot>>({});
+  const [segmentTimelineVoiceHistory, setSegmentTimelineVoiceHistoryState] = useState<
+    Record<string, SegmentTimelineVoiceHistory>
+  >({});
+  const segmentTimelineVoiceHistoryRef = useRef<Record<string, SegmentTimelineVoiceHistory>>({});
   const setSegmentTimelineRedoSnapshots = useCallback((
     nextValue: SetStateAction<Record<string, WorkspaceSegmentTimelineRedoSnapshot>>,
   ) => {
@@ -2048,9 +2064,24 @@ export function WorkspacePage({
     segmentTimelineRedoSnapshotsRef.current = nextSnapshots;
     setSegmentTimelineRedoSnapshotsState(nextSnapshots);
   }, []);
+  const setSegmentTimelineVoiceHistory = useCallback((
+    nextValue: SetStateAction<Record<string, SegmentTimelineVoiceHistory>>,
+  ) => {
+    const nextHistory =
+      typeof nextValue === "function"
+        ? nextValue(segmentTimelineVoiceHistoryRef.current)
+        : nextValue;
+    segmentTimelineVoiceHistoryRef.current = nextHistory;
+    setSegmentTimelineVoiceHistoryState(nextHistory);
+  }, []);
   useEffect(() => {
     setSegmentTimelineRedoSnapshots({});
-  }, [segmentEditorLoadedSession?.projectId, setSegmentTimelineRedoSnapshots]);
+    setSegmentTimelineVoiceHistory({});
+  }, [
+    segmentEditorLoadedSession?.projectId,
+    setSegmentTimelineRedoSnapshots,
+    setSegmentTimelineVoiceHistory,
+  ]);
   useEffect(() => {
     setSegmentTimelineVisualDurationInputDraft(null);
   }, [segmentEditorLoadedSession?.projectId]);
@@ -7651,9 +7682,6 @@ export function WorkspacePage({
         return draftSubtitleStyleId !== baselineSubtitleStyleId || draftSubtitleColorId !== baselineSubtitleColorId;
       })(),
   );
-  const uniformSegmentEditorVoiceOverrideId = segmentEditorDraft
-    ? inferWorkspaceSegmentEditorUniformVoiceType(segmentEditorDraft)
-    : null;
   const activeSegmentVoiceRawOverrideId = getWorkspaceSegmentVoiceOverrideId(activeSegment);
   const activeSegmentVoiceDisabled = activeSegmentVoiceRawOverrideId === "none";
   const activeSegmentVoiceOverrideOption = getStudioVoiceOptionById(activeSegmentVoiceRawOverrideId);
@@ -12668,6 +12696,7 @@ export function WorkspacePage({
       currentSession?.projectId === nextDraft.projectId ? null : currentSession,
     );
     setSegmentTimelineRedoSnapshots({});
+    setSegmentTimelineVoiceHistory({});
     setSegmentTimelineGlobalControlOpen(null);
     setSegmentTimelineGlobalControlAnchorRect(null);
     setSegmentTimelineDurationMenuSegmentIndex(null);
@@ -13994,42 +14023,22 @@ export function WorkspacePage({
   };
 
   const resetSegmentEditorVoiceByIndex = (targetSegmentIndex: number) => {
-    const baselineSegment = segmentEditorChecklistBaseSession?.segments.find(
+    const baselineSegment = segmentEditorChangeBaselineSession?.segments.find(
       (segment) => segment.index === targetSegmentIndex,
     );
 
     setSegmentEditorVideoError(null);
-    updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => {
-      if (baselineSegment) {
-        return restoreWorkspaceSegmentTimelineSnapshot(segment, baselineSegment, "voice");
-      }
-
-      const nextText = segment.originalText;
-      const nextTextByLanguage = {
-        ...segment.originalTextByLanguage,
-        [selectedLanguage]: segment.originalText,
-      };
-
-      return {
-        ...segment,
-        speechDuration: null,
-        speechDurationSource: null,
-        speechEndTime: null,
-        speechStartTime: null,
-        speechWords: [],
-        text: nextText,
-        textByLanguage: nextTextByLanguage,
-        voiceSourceDuration: null,
-        voiceSourceEndTime: null,
-        voiceSourceStartTime: null,
-        voiceoverAsset: null,
-        voiceoverLanguage: null,
-        voiceoverTextHash: null,
-        voiceoverVoiceType: null,
-        voiceType: null,
-        voice_type: null,
-      };
-    });
+    updateSegmentEditorDraft((currentDraft) => ({
+      ...currentDraft,
+      segments: currentDraft.segments.map((segment) =>
+        segment.index === targetSegmentIndex
+          ? restoreWorkspaceSegmentEffectiveVoiceFromBaseline(segment, baselineSegment, {
+              baselineSession: segmentEditorChangeBaselineSession,
+              draftSession: currentDraft,
+            })
+          : segment,
+      ),
+    }));
   };
 
   const resetSegmentEditorSubtitleByIndex = (targetSegmentIndex: number) => {
@@ -14057,6 +14066,35 @@ export function WorkspacePage({
     musicType: normalizeWorkspaceSegmentEditorSetting(draft.musicType) ?? "ai",
     selectedCustomMusic: cloneStudioCustomMusicFile(selectedCustomMusic),
   });
+
+  const pushSegmentTimelineVoiceHistory = (
+    segmentIndex: number,
+    segment: WorkspaceSegmentEditorDraftSegment,
+  ) => {
+    const historyKey = getWorkspaceSegmentTimelineHistoryKey("voice", segmentIndex);
+    const entry: SegmentTimelineVoiceHistoryEntry = {
+      segment: cloneWorkspaceSegmentEditorDraftSegment(segment, selectedLanguage),
+      segmentIndex,
+    };
+    setSegmentTimelineVoiceHistory((current) => {
+      const history = current[historyKey] ?? { future: [], past: [] };
+      return {
+        ...current,
+        [historyKey]: {
+          future: [],
+          past: [...history.past, entry].slice(-WORKSPACE_SEGMENT_TIMELINE_VOICE_HISTORY_LIMIT),
+        },
+      };
+    });
+    setSegmentTimelineRedoSnapshots((current) => {
+      if (!current[historyKey]) {
+        return current;
+      }
+      const next = { ...current };
+      delete next[historyKey];
+      return next;
+    });
+  };
 
   const applySegmentTimelineMusicSnapshot = (
     snapshot: Extract<WorkspaceSegmentTimelineRedoSnapshot, { kind: "music" }>,
@@ -14138,6 +14176,38 @@ export function WorkspacePage({
       return;
     }
 
+    if (kind === "voice") {
+      const history = segmentTimelineVoiceHistoryRef.current[historyKey] ?? { future: [], past: [] };
+      const previousEntry = history.past.at(-1) ?? null;
+      const currentEntry: SegmentTimelineVoiceHistoryEntry = {
+        segment: cloneWorkspaceSegmentEditorDraftSegment(currentSegment, selectedLanguage),
+        segmentIndex: safeSegmentIndex,
+      };
+      if (previousEntry) {
+        updateSegmentEditorDraftSegmentByIndex(safeSegmentIndex, (segment) =>
+          restoreWorkspaceSegmentTimelineSnapshot(segment, previousEntry.segment, "voice"),
+        );
+        setSegmentTimelineVoiceHistory((current) => ({
+          ...current,
+          [historyKey]: {
+            future: [...history.future, currentEntry].slice(-WORKSPACE_SEGMENT_TIMELINE_VOICE_HISTORY_LIMIT),
+            past: history.past.slice(0, -1),
+          },
+        }));
+        return;
+      }
+
+      setSegmentTimelineVoiceHistory((current) => ({
+        ...current,
+        [historyKey]: {
+          future: [...history.future, currentEntry].slice(-WORKSPACE_SEGMENT_TIMELINE_VOICE_HISTORY_LIMIT),
+          past: [],
+        },
+      }));
+      resetSegmentEditorVoiceByIndex(safeSegmentIndex);
+      return;
+    }
+
     setSegmentTimelineRedoSnapshots((current) => ({
       ...current,
       [historyKey]: {
@@ -14149,11 +14219,6 @@ export function WorkspacePage({
 
     if (kind === "sound") {
       resetSegmentEditorSceneSoundByIndex(safeSegmentIndex);
-      return;
-    }
-
-    if (kind === "voice") {
-      resetSegmentEditorVoiceByIndex(safeSegmentIndex);
       return;
     }
 
@@ -14174,6 +14239,36 @@ export function WorkspacePage({
     }
 
     const historyKey = getWorkspaceSegmentTimelineHistoryKey(kind, segmentIndex);
+    if (kind === "voice") {
+      const safeSegmentIndex = Number(segmentIndex);
+      const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+      const currentSegment =
+        currentDraft && Number.isInteger(safeSegmentIndex)
+          ? getSegmentEditorDraftSegmentByIndex(currentDraft, safeSegmentIndex)
+          : null;
+      const history = segmentTimelineVoiceHistoryRef.current[historyKey] ?? { future: [], past: [] };
+      const nextEntry = history.future.at(-1) ?? null;
+      if (!currentSegment || !nextEntry) {
+        return;
+      }
+
+      const currentEntry: SegmentTimelineVoiceHistoryEntry = {
+        segment: cloneWorkspaceSegmentEditorDraftSegment(currentSegment, selectedLanguage),
+        segmentIndex: safeSegmentIndex,
+      };
+      updateSegmentEditorDraftSegmentByIndex(safeSegmentIndex, (segment) =>
+        restoreWorkspaceSegmentTimelineSnapshot(segment, nextEntry.segment, "voice"),
+      );
+      setSegmentTimelineVoiceHistory((current) => ({
+        ...current,
+        [historyKey]: {
+          future: history.future.slice(0, -1),
+          past: [...history.past, currentEntry].slice(-WORKSPACE_SEGMENT_TIMELINE_VOICE_HISTORY_LIMIT),
+        },
+      }));
+      return;
+    }
+
     const snapshot = segmentTimelineRedoSnapshotsRef.current[historyKey];
     if (!snapshot || snapshot.kind !== kind) {
       if (kind === "visual") {
@@ -14258,16 +14353,10 @@ export function WorkspacePage({
       return;
     }
 
-    setSegmentTimelineRedoSnapshots((current) => ({
-      ...current,
-      [historyKey]: {
-        kind,
-        segment: cloneWorkspaceSegmentEditorDraftSegment(currentSegment, selectedLanguage),
-        segmentIndex: safeSegmentIndex,
-      },
-    }));
-
     if (kind === "voice") {
+      if (getWorkspaceSegmentVoiceOverrideId(currentSegment) !== "none") {
+        pushSegmentTimelineVoiceHistory(safeSegmentIndex, currentSegment);
+      }
       updateSegmentEditorDraft((currentDraft) =>
         applyWorkspaceSegmentEditorSceneVoiceOverride(currentDraft, safeSegmentIndex, "none", {
           subtitleType: "none",
@@ -14276,6 +14365,15 @@ export function WorkspacePage({
       setSegmentTimelineVoiceMenuSegmentIndex(null);
       return;
     }
+
+    setSegmentTimelineRedoSnapshots((current) => ({
+      ...current,
+      [historyKey]: {
+        kind,
+        segment: cloneWorkspaceSegmentEditorDraftSegment(currentSegment, selectedLanguage),
+        segmentIndex: safeSegmentIndex,
+      },
+    }));
 
     if (kind === "sound") {
       cancelPendingSegmentSceneSoundRun(safeSegmentIndex);
@@ -23877,8 +23975,15 @@ export function WorkspacePage({
     stopSegmentTimelineVoicePreview();
     setSegmentEditorVideoError(null);
     clearSegmentEditorVoiceoverError(segmentIndex);
-    updateSegmentEditorDraft((currentDraft) =>
-      applyWorkspaceSegmentEditorSceneVoiceOverride(currentDraft, segmentIndex, "none", {
+    const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+    const currentSegment = currentDraft
+      ? getSegmentEditorDraftSegmentByIndex(currentDraft, segmentIndex)
+      : null;
+    if (currentSegment && getWorkspaceSegmentVoiceOverrideId(currentSegment) !== "none") {
+      pushSegmentTimelineVoiceHistory(segmentIndex, currentSegment);
+    }
+    updateSegmentEditorDraft((draft) =>
+      applyWorkspaceSegmentEditorSceneVoiceOverride(draft, segmentIndex, "none", {
         subtitleType: "none",
       }),
     );
@@ -23897,12 +24002,23 @@ export function WorkspacePage({
     stopSegmentTimelineVoicePreview();
     setSegmentEditorVideoError(null);
     clearSegmentEditorVoiceoverError(segmentIndex);
-    updateSegmentEditorDraft((currentDraft) => {
-      const inheritedProjectVoiceId = normalizeWorkspaceSegmentEditorSetting(currentDraft.voiceType);
+    const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+    const inheritedProjectVoiceId = normalizeWorkspaceSegmentEditorSetting(currentDraft?.voiceType);
+    const nextVoiceOverrideId = inheritedProjectVoiceId && nextVoiceId === inheritedProjectVoiceId ? null : nextVoiceId;
+    const currentSegment = currentDraft
+      ? getSegmentEditorDraftSegmentByIndex(currentDraft, segmentIndex)
+      : null;
+    if (
+      currentSegment &&
+      getWorkspaceSegmentVoiceOverrideId(currentSegment) !== nextVoiceOverrideId
+    ) {
+      pushSegmentTimelineVoiceHistory(segmentIndex, currentSegment);
+    }
+    updateSegmentEditorDraft((draft) => {
       return applyWorkspaceSegmentEditorSceneVoiceOverride(
-        currentDraft,
+        draft,
         segmentIndex,
-        inheritedProjectVoiceId && nextVoiceId === inheritedProjectVoiceId ? null : nextVoiceId,
+        nextVoiceOverrideId,
       );
     });
   };
@@ -24799,13 +24915,13 @@ export function WorkspacePage({
     const isVoiceTextEdited =
       isWorkspaceSegmentDraftTextEdited(segment) && !isPendingVoiceTextEdit;
     const isSceneVoiceoverFresh = isWorkspaceSegmentVoiceoverPlaybackFresh(segment, draft);
-    const hasVoiceoverBaseline = segmentEditorChangeDisplayBaseSession?.projectId === draft.projectId;
+    const hasVoiceoverBaseline = segmentEditorChangeBaselineSession?.projectId === draft.projectId;
     const baselineVoiceSegment = hasVoiceoverBaseline
-      ? segmentEditorChangeDisplayBaseSession.segments.find((baselineSegment) => baselineSegment.index === segment.index) ?? null
+      ? segmentEditorChangeBaselineSession.segments.find((baselineSegment) => baselineSegment.index === segment.index) ?? null
       : null;
     const isVoiceSettingsEdited = hasVoiceoverBaseline
-      ? isWorkspaceSegmentDraftVoiceEdited(segment, baselineVoiceSegment, {
-          baselineSession: segmentEditorChangeDisplayBaseSession,
+      ? isWorkspaceSegmentEffectiveVoiceEdited(segment, baselineVoiceSegment, {
+          baselineSession: segmentEditorChangeBaselineSession,
           draftSession: draft,
         })
       : false;
@@ -24827,7 +24943,7 @@ export function WorkspacePage({
     const isDisplayedVoiceSettingsEdited =
       isVoiceSettingsEdited && !isFreshLoadedVoiceoverAssetOnly && hasExplicitSegmentVoiceOverride;
     const hasProjectTimelineVoiceover = canReuseWorkspaceSegmentProjectTimelineVoiceover(segment, draft, {
-      baselineSession: segmentEditorChangeDisplayBaseSession,
+      baselineSession: segmentEditorChangeBaselineSession,
       isGlobalVoiceEdited: isSegmentTimelineGlobalVoiceEdited,
     });
     const isVoiceAudioStale =
@@ -30139,13 +30255,13 @@ export function WorkspacePage({
               const isVoiceTextEdited =
                 isWorkspaceSegmentDraftTextEdited(segment) && !isPendingVoiceTextEdit;
               const isSceneVoiceoverFresh = isWorkspaceSegmentVoiceoverPlaybackFresh(segment, segmentEditorDraft);
-              const hasVoiceoverBaseline = segmentEditorChangeDisplayBaseSession?.projectId === segmentEditorDraft.projectId;
+              const hasVoiceoverBaseline = segmentEditorChangeBaselineSession?.projectId === segmentEditorDraft.projectId;
               const baselineVoiceSegment = hasVoiceoverBaseline
-                ? segmentEditorChangeDisplayBaseSession.segments.find((baselineSegment) => baselineSegment.index === segment.index) ?? null
+                ? segmentEditorChangeBaselineSession.segments.find((baselineSegment) => baselineSegment.index === segment.index) ?? null
                 : null;
               const isVoiceSettingsEdited = hasVoiceoverBaseline
-                ? isWorkspaceSegmentDraftVoiceEdited(segment, baselineVoiceSegment, {
-                    baselineSession: segmentEditorChangeDisplayBaseSession,
+                ? isWorkspaceSegmentEffectiveVoiceEdited(segment, baselineVoiceSegment, {
+                    baselineSession: segmentEditorChangeBaselineSession,
                     draftSession: segmentEditorDraft,
                   })
                 : span.isEdited;
@@ -30153,8 +30269,8 @@ export function WorkspacePage({
                 ? ""
                 : getStudioCustomVideoFileIdentityKey(segment.voiceoverAsset);
               const baselineVoiceoverAssetKey =
-                baselineVoiceSegment && segmentEditorChangeDisplayBaseSession &&
-                isWorkspaceSegmentProjectVoiceoverAsset(baselineVoiceSegment, segmentEditorChangeDisplayBaseSession)
+                baselineVoiceSegment && segmentEditorChangeBaselineSession &&
+                isWorkspaceSegmentProjectVoiceoverAsset(baselineVoiceSegment, segmentEditorChangeBaselineSession)
                   ? ""
                   : getStudioCustomVideoFileIdentityKey(baselineVoiceSegment?.voiceoverAsset);
               const isGeneratedVoiceoverTrackEdited = resolveWorkspaceSegmentGeneratedVoiceoverEdited({
@@ -30171,14 +30287,8 @@ export function WorkspacePage({
               });
               const segmentVoiceOverrideId = getWorkspaceSegmentVoiceOverrideId(segment);
               const inheritedProjectVoiceId = normalizeWorkspaceSegmentEditorSetting(segmentEditorDraft.voiceType);
-              const isUniformProjectVoiceOverride = Boolean(
-                segmentVoiceOverrideId &&
-                  uniformSegmentEditorVoiceOverrideId &&
-                  segmentVoiceOverrideId === uniformSegmentEditorVoiceOverrideId,
-              );
               const hasExplicitSegmentVoiceOverride = Boolean(
                 segmentVoiceOverrideId &&
-                  !isUniformProjectVoiceOverride &&
                   (!inheritedProjectVoiceId || segmentVoiceOverrideId !== inheritedProjectVoiceId),
               );
               const isFreshLoadedVoiceoverAssetOnly = Boolean(
@@ -30205,7 +30315,7 @@ export function WorkspacePage({
                 isUnrenderedSceneVoiceoverAsset,
               });
               const hasProjectTimelineVoiceover = canReuseWorkspaceSegmentProjectTimelineVoiceover(segment, segmentEditorDraft, {
-                baselineSession: segmentEditorChangeDisplayBaseSession,
+                baselineSession: segmentEditorChangeBaselineSession,
                 isGlobalVoiceEdited: isSegmentTimelineGlobalVoiceEdited,
               });
               const allowFinalVideoStaleProjectTimelineFallback = hasProjectTimelineVoiceover;
@@ -30383,11 +30493,13 @@ export function WorkspacePage({
                 : undefined;
               const voiceHistoryKey = getWorkspaceSegmentTimelineHistoryKey("voice", segmentTimelineHistorySegmentIndex);
               const voiceTextHistoryKey = getWorkspaceSegmentTimelineHistoryKey("text", segmentTimelineHistorySegmentIndex);
-              const canForwardVoice = Boolean(segmentTimelineRedoSnapshots[voiceHistoryKey]);
+              const voiceHistory = segmentTimelineVoiceHistory[voiceHistoryKey] ?? { future: [], past: [] };
+              const canForwardVoice = voiceHistory.future.length > 0;
               const canForwardVoiceText = Boolean(segmentTimelineRedoSnapshots[voiceTextHistoryKey]);
               const voiceTimelineState = resolveWorkspaceSegmentVoiceTimelineState({
                 canForwardText: canForwardVoiceText,
                 canForwardVoice,
+                hasVoiceUndoSnapshot: voiceHistory.past.length > 0,
                 isGeneratedVoiceoverEdited: isDisplayedGeneratedVoiceoverEdited,
                 isTextEdited: isVoiceTextEdited,
                 isVoiceHistoryDisabled: usesEmbeddedTalkingPhotoAudio,

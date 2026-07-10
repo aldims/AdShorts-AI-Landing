@@ -39,6 +39,7 @@ import {
   refreshWorkspaceSegmentEditorDraftWithFreshSession,
   restoreWorkspaceSegmentStaleMeasuredRenderedPhotoDuration,
   restoreWorkspaceSegmentEditorDraftProjectTtsAsset,
+  restoreWorkspaceSegmentEffectiveVoiceFromBaseline,
   resetWorkspaceSegmentDraftVisualToOriginal,
   resolveWorkspaceSegmentEditorSegmentsAfterDelete,
   resolveWorkspaceSegmentBoundaryTiming,
@@ -712,6 +713,34 @@ describe("workspace segment editor subtitle availability", () => {
     };
 
     expect(getWorkspaceSegmentEffectiveVoiceId(segment, session)).toBe(DEFAULT_STUDIO_VOICE_ID.ru);
+  });
+
+  it("restores a scene to disabled voice when the current global voice was enabled later", () => {
+    const currentSegment = createProjectVoiceoverSegment({
+      text: "Текст сцены сохраняется",
+      textByLanguage: { ru: "Текст сцены сохраняется" },
+      voiceType: null,
+    });
+    const baselineSegment = {
+      ...createProjectVoiceoverSegment({
+        text: "",
+        textByLanguage: { ru: "" },
+        voiceType: null,
+      }),
+      voiceoverVoiceType: null,
+    };
+
+    expect(
+      restoreWorkspaceSegmentEffectiveVoiceFromBaseline(currentSegment, baselineSegment, {
+        baselineSession: { voiceType: "none" },
+        draftSession: { voiceType: "Misha" },
+      }),
+    ).toMatchObject({
+      text: "Текст сцены сохраняется",
+      textByLanguage: { ru: "Текст сцены сохраняется" },
+      voiceType: "none",
+      voice_type: "none",
+    });
   });
 });
 

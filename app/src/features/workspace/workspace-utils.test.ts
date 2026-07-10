@@ -6,8 +6,27 @@ import {
   shouldDisplayWorkspaceSegmentSubtitleCellEdited,
   shouldDisplayWorkspaceSegmentVoiceCellEdited,
 } from "./workspace-utils";
+import { isWorkspaceSegmentEffectiveVoiceEdited } from "./workspace-segment-editor-checklist";
 
 describe("workspace voice timeline edit display", () => {
+  it("detects an inherited global voice change against a disabled baseline", () => {
+    const segment = { voiceType: null, voice_type: null, voiceoverVoiceType: null } as any;
+    const baselineSegment = { voiceType: null, voice_type: null, voiceoverVoiceType: null } as any;
+
+    expect(
+      isWorkspaceSegmentEffectiveVoiceEdited(segment, baselineSegment, {
+        baselineSession: { voiceType: "none" },
+        draftSession: { voiceType: "Misha" },
+      }),
+    ).toBe(true);
+    expect(
+      isWorkspaceSegmentEffectiveVoiceEdited({ ...segment, voiceType: "none" }, baselineSegment, {
+        baselineSession: { voiceType: "none" },
+        draftSession: { voiceType: "Misha" },
+      }),
+    ).toBe(false);
+  });
+
   it("keeps voice undo available while a reverted text change can be restored", () => {
     expect(
       resolveWorkspaceSegmentVoiceTimelineState({
@@ -19,6 +38,23 @@ describe("workspace voice timeline edit display", () => {
       }),
     ).toMatchObject({
       canBack: true,
+      historyKind: "voice",
+    });
+  });
+
+  it("keeps one-step voice undo available when the previous state matches the display baseline", () => {
+    expect(
+      resolveWorkspaceSegmentVoiceTimelineState({
+        canForwardText: false,
+        canForwardVoice: false,
+        hasVoiceUndoSnapshot: true,
+        isGeneratedVoiceoverEdited: false,
+        isTextEdited: false,
+        isVoiceSettingsEdited: false,
+      }),
+    ).toMatchObject({
+      canBack: true,
+      hasHistory: true,
       historyKind: "voice",
     });
   });

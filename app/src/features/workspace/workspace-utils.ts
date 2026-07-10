@@ -261,13 +261,17 @@ export const shouldDisplayWorkspaceSegmentSubtitleCellEdited = (options: {
 export const resolveWorkspaceSegmentVoiceTimelineState = (options: {
   canForwardText: boolean;
   canForwardVoice: boolean;
+  hasVoiceUndoSnapshot?: boolean;
   isGeneratedVoiceoverEdited: boolean;
   isVoiceHistoryDisabled?: boolean;
   isTextEdited: boolean;
   isVoiceSettingsEdited: boolean;
 }): WorkspaceSegmentVoiceTimelineState => {
   const canBackText = options.isTextEdited;
-  const canBackVoice = options.isVoiceSettingsEdited || options.isGeneratedVoiceoverEdited;
+  const canBackVoice =
+    options.hasVoiceUndoSnapshot === true ||
+    options.isVoiceSettingsEdited ||
+    options.isGeneratedVoiceoverEdited;
   const historyKind: WorkspaceSegmentVoiceTimelineHistoryKind = canBackText
     ? "text"
     : canBackVoice

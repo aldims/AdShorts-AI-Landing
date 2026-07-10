@@ -5,6 +5,8 @@ import {
   getWorkspaceSegmentCurrentVisualIdentityKey,
   getWorkspaceSegmentCustomAssetId,
   getWorkspaceSegmentEditorProjectVoiceType,
+  getWorkspaceSegmentEffectiveVoiceEnabled,
+  getWorkspaceSegmentEffectiveVoiceId,
   getWorkspaceSegmentLatestVisualAction,
   getWorkspaceSegmentSubtitleColorOverrideId,
   getWorkspaceSegmentSubtitleStyleOverrideId,
@@ -538,6 +540,33 @@ export const isWorkspaceSegmentDraftVoiceEdited = (
     segment.voiceoverVoiceType !== baselineSegment?.voiceoverVoiceType ||
     segment.voiceoverLanguage !== baselineSegment?.voiceoverLanguage
   );
+};
+
+export const isWorkspaceSegmentEffectiveVoiceEdited = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  baselineSegment: WorkspaceSegmentEditorDraftSegment | null | undefined,
+  options: {
+    baselineSession: Pick<WorkspaceSegmentEditorDraftSession, "voiceType"> | null | undefined;
+    draftSession: Pick<WorkspaceSegmentEditorDraftSession, "voiceType">;
+  },
+) => {
+  const currentVoiceEnabled = getWorkspaceSegmentEffectiveVoiceEnabled(segment, options.draftSession);
+  const baselineProjectVoiceId = normalizeWorkspaceSegmentEditorSetting(options.baselineSession?.voiceType);
+  const baselineVoiceEnabled = baselineSegment
+    ? getWorkspaceSegmentEffectiveVoiceEnabled(baselineSegment, options.baselineSession)
+    : Boolean(baselineProjectVoiceId && baselineProjectVoiceId !== "none");
+  if (currentVoiceEnabled !== baselineVoiceEnabled) {
+    return true;
+  }
+  if (!currentVoiceEnabled) {
+    return false;
+  }
+
+  const currentVoiceId = getWorkspaceSegmentEffectiveVoiceId(segment, options.draftSession);
+  const baselineVoiceId = baselineSegment
+    ? getWorkspaceSegmentEffectiveVoiceId(baselineSegment, options.baselineSession)
+    : baselineProjectVoiceId;
+  return currentVoiceId !== baselineVoiceId;
 };
 
 export const canReuseWorkspaceSegmentProjectTimelineVoiceover = (

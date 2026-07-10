@@ -2699,8 +2699,6 @@ export const restoreWorkspaceSegmentTimelineSnapshot = (
   if (kind === "voice") {
     return restoreVoiceoverState({
       ...segment,
-      text: snapshot.text,
-      textByLanguage: { ...snapshot.textByLanguage },
       voiceType: getWorkspaceSegmentVoiceOverrideId(snapshot),
       voice_type: getWorkspaceSegmentVoiceOverrideId(snapshot),
     }, snapshot);
@@ -3989,6 +3987,56 @@ export const getWorkspaceSegmentEffectiveVoiceId = (
 
   const voiceoverVoiceType = normalizeWorkspaceSegmentEditorSetting(segment.voiceoverVoiceType);
   return voiceoverVoiceType && voiceoverVoiceType !== "none" ? voiceoverVoiceType : null;
+};
+
+export const restoreWorkspaceSegmentEffectiveVoiceFromBaseline = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  baselineSegment: WorkspaceSegmentEditorDraftSegment | null | undefined,
+  options: {
+    baselineSession: Pick<WorkspaceSegmentEditorDraftSession, "voiceType"> | null | undefined;
+    draftSession: Pick<WorkspaceSegmentEditorDraftSession, "voiceType">;
+  },
+): WorkspaceSegmentEditorDraftSegment => {
+  const restoredSegment = baselineSegment
+    ? restoreWorkspaceSegmentTimelineSnapshot(segment, baselineSegment, "voice")
+    : {
+        ...segment,
+        speechDuration: null,
+        speechDurationSource: null,
+        speechEndTime: null,
+        speechStartTime: null,
+        speechWords: [],
+        voiceSourceDuration: null,
+        voiceSourceEndTime: null,
+        voiceSourceStartTime: null,
+        voiceoverAsset: null,
+        voiceoverLanguage: null,
+        voiceoverTextHash: null,
+        voiceoverVoiceType: null,
+      };
+  const draftProjectVoiceId = normalizeWorkspaceSegmentEditorSetting(options.draftSession.voiceType);
+  const baselineProjectVoiceId = normalizeWorkspaceSegmentEditorSetting(options.baselineSession?.voiceType);
+  const baselineVoiceEnabled = baselineSegment
+    ? getWorkspaceSegmentEffectiveVoiceEnabled(baselineSegment, options.baselineSession)
+    : Boolean(baselineProjectVoiceId && baselineProjectVoiceId !== "none");
+  const baselineVoiceId = baselineSegment
+    ? getWorkspaceSegmentEffectiveVoiceId(baselineSegment, options.baselineSession)
+    : baselineVoiceEnabled
+      ? baselineProjectVoiceId
+      : null;
+  const nextVoiceOverrideId = !baselineVoiceEnabled
+    ? draftProjectVoiceId && draftProjectVoiceId !== "none"
+      ? "none"
+      : null
+    : baselineVoiceId && baselineVoiceId !== draftProjectVoiceId
+      ? baselineVoiceId
+      : null;
+
+  return {
+    ...restoredSegment,
+    voiceType: nextVoiceOverrideId,
+    voice_type: nextVoiceOverrideId,
+  };
 };
 
 export const isWorkspaceSegmentVoiceoverAssetFresh = (

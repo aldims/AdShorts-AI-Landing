@@ -40,9 +40,10 @@ export const getWorkspaceSegmentTimelineVoiceLabel = (
 
   const voiceOverrideOption = settings.getVoiceOptionById(voiceOverrideId);
   const voiceoverVoiceOption = settings.getVoiceOptionById(segment.voiceoverVoiceType);
-  const fallbackStudioVoiceOption =
-    settings.selectedVoiceOptions.find((option) => option.id === settings.studioSidebarVoiceId) ??
-    settings.getVoiceOptionById(settings.studioSidebarVoiceId);
+  const fallbackStudioVoiceOption = settings.studioSidebarVoiceEnabled
+    ? settings.selectedVoiceOptions.find((option) => option.id === settings.studioSidebarVoiceId) ??
+      settings.getVoiceOptionById(settings.studioSidebarVoiceId)
+    : null;
   if (!voiceOverrideOption && !voiceoverVoiceOption && !fallbackStudioVoiceOption) {
     return workspaceText(locale, "Добавить озвучку", "Add voiceover");
   }
@@ -69,9 +70,10 @@ export const getWorkspaceSegmentTimelineVoiceOption = (
 
   const voiceOverrideOption = settings.getVoiceOptionById(voiceOverrideId);
   const voiceoverVoiceOption = settings.getVoiceOptionById(segment.voiceoverVoiceType);
-  const fallbackStudioVoiceOption =
-    settings.selectedVoiceOptions.find((option) => option.id === settings.studioSidebarVoiceId) ??
-    settings.getVoiceOptionById(settings.studioSidebarVoiceId);
+  const fallbackStudioVoiceOption = settings.studioSidebarVoiceEnabled
+    ? settings.selectedVoiceOptions.find((option) => option.id === settings.studioSidebarVoiceId) ??
+      settings.getVoiceOptionById(settings.studioSidebarVoiceId)
+    : null;
   if (!voiceOverrideOption && !voiceoverVoiceOption && !fallbackStudioVoiceOption) {
     return null;
   }
