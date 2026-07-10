@@ -27652,6 +27652,8 @@ textarea {
 
 .studio-segment-editor__timeline {
   --studio-segment-editor-timeline-slot-count: 6;
+  --studio-segment-editor-timeline-add-rail-offset: 10px;
+  --studio-segment-editor-timeline-add-rail-width: 64px;
   --studio-segment-editor-timeline-row-gap: 0px;
   --studio-segment-editor-timeline-scene-gap: 3px;
   --studio-segment-editor-timeline-visual-track-height: 72px;
@@ -27677,7 +27679,12 @@ textarea {
   justify-self: center;
   width: min(100%, max(var(--studio-segment-editor-segment-area-width, 520px), 620px));
   max-width: 100%;
-  padding: 10px 64px 10px 10px;
+  padding: 10px
+    calc(
+      var(--studio-segment-editor-timeline-add-rail-offset) +
+        var(--studio-segment-editor-timeline-add-rail-width)
+    )
+    10px 10px;
   box-sizing: border-box;
   overflow-x: auto;
   overflow-y: visible;
@@ -29185,13 +29192,13 @@ button.studio-segment-editor__timeline-label:focus-visible {
 
 .studio-segment-editor__timeline-add-rail {
   position: absolute;
-  right: 10px;
+  right: var(--studio-segment-editor-timeline-add-rail-offset);
   top: 36px;
   bottom: 10px;
   z-index: 11;
   display: grid;
   place-items: center;
-  width: 54px;
+  width: var(--studio-segment-editor-timeline-add-rail-width);
   padding: 0;
   border: 1px dashed rgba(45, 212, 191, 0.42);
   border-radius: 13px;
@@ -30705,13 +30712,20 @@ button.studio-segment-editor__timeline-label:focus-visible {
   }
 
   .studio-segment-editor__timeline {
+    --studio-segment-editor-timeline-add-rail-offset: 8px;
+    --studio-segment-editor-timeline-add-rail-width: 50px;
     --studio-segment-editor-timeline-visual-track-height: 62px;
     --studio-segment-editor-timeline-track-width: max(
       520px,
       calc(var(--studio-segment-editor-timeline-slot-count) * 96px)
     );
     width: 100%;
-    padding: 8px 54px 8px 8px;
+    padding: 8px
+      calc(
+        var(--studio-segment-editor-timeline-add-rail-offset) +
+          var(--studio-segment-editor-timeline-add-rail-width)
+      )
+      8px 8px;
     border-radius: 16px;
   }
 
@@ -30738,10 +30752,10 @@ button.studio-segment-editor__timeline-label:focus-visible {
   }
 
   .studio-segment-editor__timeline-add-rail {
-    right: 8px;
+    right: var(--studio-segment-editor-timeline-add-rail-offset);
     top: 32px;
     bottom: 8px;
-    width: 46px;
+    width: var(--studio-segment-editor-timeline-add-rail-width);
   }
 
   .studio-segment-editor__timeline-scene-number {
