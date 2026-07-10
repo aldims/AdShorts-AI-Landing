@@ -54,8 +54,8 @@
   padding: 0 10px !important;
   gap: 12px !important;
   overflow: visible !important;
-  border: 1px solid rgba(216, 224, 244, 0.1) !important;
-  border-radius: 18px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
   backdrop-filter: none !important;
@@ -63,32 +63,11 @@
 }
 
 #app .studio-canvas-route .site-header--workspace .site-header__inner::before {
-  content: "" !important;
-  position: absolute !important;
-  inset: 0 22px auto !important;
-  z-index: 0 !important;
-  display: block !important;
-  height: 1px !important;
-  border: 0 !important;
-  border-radius: 999px !important;
-  background: linear-gradient(90deg, transparent, rgba(240, 245, 255, 0.26) 48%, transparent) !important;
-  box-shadow: none !important;
-  opacity: 0.34 !important;
-  pointer-events: none !important;
+  display: none !important;
 }
 
 #app .studio-canvas-route .site-header--workspace .site-header__inner::after {
-  content: "" !important;
-  position: absolute !important;
-  inset: 1px 28% auto !important;
-  z-index: 0 !important;
-  display: block !important;
-  width: auto !important;
-  height: 14px !important;
-  border-radius: 999px !important;
-  background: transparent !important;
-  filter: blur(12px) !important;
-  pointer-events: none !important;
+  display: none !important;
 }
 
 #app .studio-canvas-route .site-header--workspace .site-header__inner > * {
@@ -233,7 +212,7 @@
   outline-offset: 2px !important;
 }
 
-/* Centre zone: deliberately quieter than the creation-mode switch. */
+/* Centre zone: the navigation owns the header's only shared frame. */
 #app .studio-canvas-route .site-header--workspace .site-header__studio-nav-cluster {
   position: static !important;
   inset: auto !important;
@@ -260,13 +239,15 @@
   height: var(--studio-header-control-height) !important;
   min-height: var(--studio-header-control-height) !important;
   margin: 0 !important;
-  padding: 0 !important;
+  padding: 3px !important;
   gap: 0 !important;
   overflow: visible !important;
-  border: 0 !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-  box-shadow: none !important;
+  border: 1px solid rgba(215, 224, 247, 0.085) !important;
+  border-radius: 13px !important;
+  background: rgba(0, 3, 9, 0.26) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.025),
+    0 1px 0 rgba(255, 255, 255, 0.018) !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
   transform: none !important;
@@ -284,8 +265,8 @@
   justify-content: stretch !important;
   width: 100% !important;
   max-width: none !important;
-  height: 40px !important;
-  min-height: 40px !important;
+  height: 32px !important;
+  min-height: 32px !important;
   padding: 0 !important;
   gap: 0 !important;
   overflow: visible !important;
@@ -302,8 +283,8 @@
   inset: 0 auto 0 0 !important;
   z-index: 0 !important;
   width: var(--site-nav-selection-width, 0px) !important;
-  height: 40px !important;
-  min-height: 40px !important;
+  height: 32px !important;
+  min-height: 32px !important;
   border: 0 !important;
   border-radius: 0 !important;
   background: transparent !important;
@@ -342,8 +323,8 @@
   width: auto !important;
   min-width: 0 !important;
   max-width: none !important;
-  height: 40px !important;
-  min-height: 40px !important;
+  height: 32px !important;
+  min-height: 32px !important;
   padding: 0 13px !important;
   gap: 7px !important;
   overflow: hidden !important;
