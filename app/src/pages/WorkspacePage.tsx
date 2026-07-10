@@ -33112,9 +33112,9 @@ export function WorkspacePage({
           onClick={requestStartFreshSegmentEditor}
           disabled={isSegmentEditorStructureActionBusy}
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
-            <path d="M7 3.75h7.6L19 8.15v12.1H7z" strokeLinejoin="round" />
-            <path d="M14.5 3.75v4.5H19M9.7 14h6.6M13 10.7v6.6" strokeLinecap="round" strokeLinejoin="round" />
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+            <rect x="4.25" y="4.25" width="15.5" height="15.5" rx="2.5" />
+            <path d="M12 8.25v7.5M8.25 12h7.5" strokeLinecap="round" />
           </svg>
         </button>
       ) : null}
