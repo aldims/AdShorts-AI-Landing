@@ -1,4 +1,4 @@
-import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import type { Locale } from "../../lib/i18n";
 import {
   type WorkspaceSegmentEditorFullPreviewStatus,
@@ -68,6 +68,63 @@ export type WorkspaceSegmentTimelineHistoryMoveHandler = (
   kind: WorkspaceSegmentTimelineHistoryKind,
   segmentIndex?: number | null,
 ) => void;
+
+const WORKSPACE_SEGMENT_TIMELINE_HISTORY_CLEAR_CONFIRM_MS = 2_000;
+
+function WorkspaceSegmentTimelineHistoryClearButton({
+  clearLabel,
+  confirmLabel,
+  disabled,
+  onClear,
+}: {
+  clearLabel: string;
+  confirmLabel: string;
+  disabled: boolean;
+  onClear: () => void;
+}) {
+  const [isConfirming, setIsConfirming] = useState(false);
+
+  useEffect(() => {
+    if (!isConfirming) {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(
+      () => setIsConfirming(false),
+      WORKSPACE_SEGMENT_TIMELINE_HISTORY_CLEAR_CONFIRM_MS,
+    );
+    return () => window.clearTimeout(timeoutId);
+  }, [isConfirming]);
+
+  return (
+    <button
+      className={`studio-segment-editor__timeline-history-button studio-segment-editor__timeline-history-button--clear${
+        isConfirming ? " is-confirming" : ""
+      }`}
+      type="button"
+      disabled={disabled}
+      aria-label={isConfirming ? confirmLabel : clearLabel}
+      title={isConfirming ? confirmLabel : clearLabel}
+      onPointerDown={(event) => {
+        event.stopPropagation();
+      }}
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (disabled) {
+          return;
+        }
+        if (isConfirming) {
+          onClear();
+          return;
+        }
+        setIsConfirming(true);
+      }}
+    >
+      <span aria-hidden="true">🧹</span>
+    </button>
+  );
+}
 
 export type WorkspaceSegmentEditorFullPreviewPlayheadOptions = {
   bubbleTranslate: string;
@@ -183,6 +240,11 @@ export const renderWorkspaceSegmentTimelineHistoryButtons = (
     `Очистить историю: ${options.label}`,
     `Clear history: ${options.label}`,
   );
+  const clearConfirmLabel = workspaceText(
+    locale,
+    `Нажмите ещё раз, чтобы очистить историю: ${options.label}`,
+    `Press again to clear history: ${options.label}`,
+  );
   const deleteLabel = options.deleteLabel ?? workspaceText(locale, `Удалить: ${options.label}`, `Delete: ${options.label}`);
   const shouldShowClear = Boolean(options.canClear && options.onClear && !options.canBack && options.canForward);
   return (
@@ -214,25 +276,12 @@ export const renderWorkspaceSegmentTimelineHistoryButtons = (
         </button>
       ) : null}
       {shouldShowClear ? (
-        <button
-          className="studio-segment-editor__timeline-history-button studio-segment-editor__timeline-history-button--clear"
-          type="button"
+        <WorkspaceSegmentTimelineHistoryClearButton
+          clearLabel={clearLabel}
+          confirmLabel={clearConfirmLabel}
           disabled={isActionDisabled}
-          aria-label={clearLabel}
-          title={clearLabel}
-          onPointerDown={(event) => {
-            event.stopPropagation();
-          }}
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            if (!isActionDisabled) {
-              options.onClear?.();
-            }
-          }}
-        >
-          <span aria-hidden="true">🧹</span>
-        </button>
+          onClear={() => options.onClear?.()}
+        />
       ) : (
         <button
           className="studio-segment-editor__timeline-history-button"

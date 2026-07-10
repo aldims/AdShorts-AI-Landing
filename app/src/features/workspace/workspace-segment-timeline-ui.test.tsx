@@ -56,6 +56,11 @@ describe("workspace segment timeline history buttons", () => {
     const clearButton = screen.getByRole("button", { name: "Очистить историю: Озвучка сцены 1" });
     expect(clearButton.textContent).toBe("🧹");
     fireEvent.click(clearButton);
+    expect(onClear).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("button", { name: "Нажмите ещё раз, чтобы очистить историю: Озвучка сцены 1" }),
+    ).toBe(clearButton);
+    fireEvent.click(clearButton);
     expect(onClear).toHaveBeenCalledTimes(1);
   });
 });
