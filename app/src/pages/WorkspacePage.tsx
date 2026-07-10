@@ -388,11 +388,13 @@ import {
   resolveWorkspaceSegmentVisualModalTab,
 } from "../features/workspace/workspace-segment-visual-helpers";
 import {
+  buildWorkspaceSegmentDragPreviewLayout,
   doesWorkspaceSegmentEditorPayloadMatchSessionStructure,
   getWorkspaceSegmentEditorBaselineSegmentIndexes,
   getVisibleInsertIndexForDraggedItem,
   getWorkspaceSegmentEditorDisplayNumber,
   moveArrayItemToInsertIndex,
+  resolveWorkspaceSegmentDragInsertIndex,
   resolveWorkspaceSegmentEditorStructureChangePermission,
   shouldRecoverWorkspaceSegmentEditorExplicitStructureChange,
 } from "../features/workspace/workspace-segment-structure-helpers";
@@ -2433,7 +2435,6 @@ export function WorkspacePage({
   const segmentTimelineAudioObjectUrlsRef = useRef<string[]>([]);
   const segmentTimelineVoicePreviewAudioRef = useRef<HTMLAudioElement | null>(null);
   const segmentTimelineScrollRef = useRef<HTMLDivElement | null>(null);
-  const segmentThumbStripRef = useRef<HTMLDivElement | null>(null);
   const segmentThumbButtonRefs = useRef<Record<number, HTMLButtonElement | null>>({});
   const segmentTimelineDurationButtonRefs = useRef<Record<number, HTMLButtonElement | null>>({});
   const segmentTimelineDurationMenuRef = useRef<HTMLDivElement | null>(null);
@@ -7520,10 +7521,9 @@ export function WorkspacePage({
   );
   const segmentThumbDragSegment =
     segmentEditorDraft && segmentThumbDragState ? segmentEditorDraft.segments[segmentThumbDragState.draggedIndex] ?? null : null;
-  const segmentThumbVisibleSlotCount = Math.max(
-    1,
-    segmentEditorSegmentCount + (visibleSegmentThumbInsertIndex === null ? 0 : 1),
-  );
+  const segmentThumbPreviewInsertIndex =
+    draggedSegmentThumbIndex === null ? null : visibleSegmentThumbInsertIndex ?? draggedSegmentThumbIndex;
+  const segmentThumbVisibleSlotCount = Math.max(1, segmentEditorSegmentCount);
   const isSegmentEditorTimelineStandardFit =
     segmentThumbVisibleSlotCount <= SEGMENT_EDITOR_TIMELINE_STANDARD_FIT_SLOTS;
   const segmentEditorTimelineAddGutterPx = 0;
@@ -7540,6 +7540,7 @@ export function WorkspacePage({
     ? {
         left: `${segmentThumbDragState.x - segmentThumbDragState.offsetX}px`,
         top: `${segmentThumbDragState.y - segmentThumbDragState.offsetY}px`,
+        height: `${segmentThumbDragState.height}px`,
         width: `${segmentThumbDragState.width}px`,
       }
     : null;
@@ -7749,6 +7750,22 @@ export function WorkspacePage({
   const segmentEditorTimelineVoiceRow = segmentEditorTimelineRowsByKind.get("voice") ?? null;
   const segmentEditorTimelineSoundRow = segmentEditorTimelineRowsByKind.get("sound") ?? null;
   const segmentEditorTimelineTextRow = segmentEditorTimelineRowsByKind.get("text") ?? null;
+  const segmentEditorTimelineDragPreviewLayout =
+    segmentEditorTimelineVisualRow &&
+    draggedSegmentThumbIndex !== null &&
+    segmentThumbPreviewInsertIndex !== null
+      ? buildWorkspaceSegmentDragPreviewLayout(
+          segmentEditorTimelineVisualRow.spans,
+          draggedSegmentThumbIndex,
+          segmentThumbPreviewInsertIndex,
+        )
+      : [];
+  const segmentEditorTimelineDragPreviewBySegmentIndex = new Map(
+    segmentEditorTimelineDragPreviewLayout.flatMap((item) =>
+      item.segmentIndex === null ? [] : [[item.segmentIndex, item] as const],
+    ),
+  );
+  const draggedSegmentStableIndex = segmentThumbDragSegment?.index ?? null;
   const segmentTimelineMusicLabel =
     studioSidebarMusicType === "custom"
       ? segmentEditorDraft?.customMusicFileName ||
@@ -8940,12 +8957,12 @@ export function WorkspacePage({
     [],
   );
   const scrollSegmentThumbStripForPointer = (clientX: number) => {
-    const stripElement = segmentThumbStripRef.current;
-    if (!stripElement) {
+    const scrollContainer = segmentTimelineScrollRef.current;
+    if (!scrollContainer) {
       return;
     }
 
-    const bounds = stripElement.getBoundingClientRect();
+    const bounds = scrollContainer.getBoundingClientRect();
     const edgeThreshold = 56;
     let scrollDelta = 0;
 
@@ -8956,12 +8973,27 @@ export function WorkspacePage({
     }
 
     if (scrollDelta !== 0) {
-      stripElement.scrollLeft += scrollDelta;
+      scrollContainer.scrollLeft += scrollDelta;
     }
   };
   const resolveSegmentThumbInsertIndexFromClientX = (clientX: number, draggedIndex: number) => {
     if (!segmentEditorDraft) {
       return 0;
+    }
+
+    const dragState = segmentThumbDragStateRef.current;
+    const scrollContainer = segmentTimelineScrollRef.current;
+    if (
+      dragState?.draggedIndex === draggedIndex &&
+      dragState.dropTargetCenters.length === Math.max(0, segmentEditorDraft.segments.length - 1)
+    ) {
+      return resolveWorkspaceSegmentDragInsertIndex({
+        clientX,
+        currentScrollLeft: scrollContainer?.scrollLeft ?? dragState.initialScrollLeft,
+        draggedIndex,
+        initialScrollLeft: dragState.initialScrollLeft,
+        targetCenters: dragState.dropTargetCenters,
+      });
     }
 
     const visibleIndices = segmentEditorDraft.segments
@@ -9008,9 +9040,23 @@ export function WorkspacePage({
     const bounds = dragSourceElement.getBoundingClientRect();
     const offsetX = Math.min(Math.max(pointer.clientX - bounds.left, 0), bounds.width);
     const offsetY = Math.min(Math.max(pointer.clientY - bounds.top, 0), bounds.height);
+    scrollSegmentThumbStripForPointer(pointer.clientX);
+    const scrollContainer = segmentTimelineScrollRef.current;
+    const dropTargetCenters = segmentEditorDraft?.segments
+      .map((segment, index) => {
+        if (index === draggedIndex) {
+          return null;
+        }
+
+        const targetBounds = segmentThumbButtonRefs.current[segment.index]?.getBoundingClientRect();
+        return targetBounds && targetBounds.width > 0 ? targetBounds.left + targetBounds.width / 2 : null;
+      })
+      .filter((center): center is number => center !== null) ?? [];
     const nextDragState: WorkspaceSegmentThumbDragState = {
       draggedIndex,
+      dropTargetCenters,
       height: bounds.height,
+      initialScrollLeft: scrollContainer?.scrollLeft ?? 0,
       offsetX,
       offsetY,
       pointerId: pointer.pointerId,
@@ -9019,7 +9065,6 @@ export function WorkspacePage({
       y: pointer.clientY,
     };
 
-    scrollSegmentThumbStripForPointer(pointer.clientX);
     segmentThumbDragStateRef.current = nextDragState;
     setSegmentThumbDragState(nextDragState);
     setResolvedSegmentThumbDropInsertIndex(resolveSegmentThumbInsertIndexFromClientX(pointer.clientX, draggedIndex));
@@ -24131,21 +24176,34 @@ export function WorkspacePage({
     span: {
       duration: number;
       leftRatio: number;
+      segmentIndex?: number | null;
       widthRatio: number;
     },
-  ): CSSProperties =>
-    ({
-      "--studio-segment-editor-timeline-span-grow": Math.max(0.6, span.duration),
-      "--studio-segment-editor-timeline-span-left": getSegmentEditorTimelineScaledValue(span.leftRatio),
-      "--studio-segment-editor-timeline-span-width": getSegmentEditorTimelineScaledValue(span.widthRatio),
-    }) as CSSProperties;
-  const getSegmentEditorTimelineInsertGapStyle = (insertIndex: number): CSSProperties => {
-    const spans = segmentEditorTimelineVisualRow?.spans ?? [];
-    const previousSpan = spans[insertIndex - 1] ?? null;
-    const leftRatio = insertIndex <= 0 ? 0 : previousSpan ? previousSpan.leftRatio + previousSpan.widthRatio : 1;
+  ): CSSProperties => {
+    const previewSpan =
+      typeof span.segmentIndex === "number"
+        ? segmentEditorTimelineDragPreviewBySegmentIndex.get(span.segmentIndex) ?? null
+        : null;
 
     return {
-      "--studio-segment-editor-timeline-drop-left": getSegmentEditorTimelineScaledValue(leftRatio),
+      "--studio-segment-editor-timeline-span-grow": Math.max(0.6, span.duration),
+      "--studio-segment-editor-timeline-span-left": getSegmentEditorTimelineScaledValue(
+        previewSpan?.leftRatio ?? span.leftRatio,
+      ),
+      "--studio-segment-editor-timeline-span-width": getSegmentEditorTimelineScaledValue(
+        previewSpan?.widthRatio ?? span.widthRatio,
+      ),
+    } as CSSProperties;
+  };
+  const getSegmentEditorTimelineInsertGapStyle = (): CSSProperties => {
+    const previewSpan =
+      draggedSegmentStableIndex === null
+        ? null
+        : segmentEditorTimelineDragPreviewBySegmentIndex.get(draggedSegmentStableIndex) ?? null;
+
+    return {
+      "--studio-segment-editor-timeline-drop-left": getSegmentEditorTimelineScaledValue(previewSpan?.leftRatio ?? 0),
+      "--studio-segment-editor-timeline-drop-width": getSegmentEditorTimelineScaledValue(previewSpan?.widthRatio ?? 0),
     } as CSSProperties;
   };
   const resolveSegmentTimelinePhotoDurationAudioGuard = (
@@ -29811,20 +29869,20 @@ export function WorkspacePage({
             <span>{workspaceText(locale, "Визуал", "Visual")}</span>
           </div>
           <div
-            ref={segmentThumbStripRef}
             className="studio-segment-editor__timeline-track studio-segment-editor__timeline-track--visual"
             role="list"
             aria-label={workspaceText(locale, "Визуальные сегменты", "Visual segments")}
           >
             {renderSegmentEditorFullPreviewPlayhead()}
-            {visibleSegmentThumbInsertIndex === 0 ? (
+            {draggedSegmentStableIndex !== null ? (
               <div
                 className="studio-segment-editor__timeline-drop-gap"
-                style={getSegmentEditorTimelineInsertGapStyle(0)}
+                style={getSegmentEditorTimelineInsertGapStyle()}
                 aria-hidden="true"
               ></div>
             ) : null}
-            {segmentEditorTimelineActiveSceneSpanForRender ? (
+            {segmentEditorTimelineActiveSceneSpanForRender &&
+            segmentEditorTimelineActiveSceneSpanForRender.segmentIndex !== draggedSegmentStableIndex ? (
               <span
                 className="studio-segment-editor__timeline-scene-selection-frame"
                 style={getSegmentEditorTimelineSpanStyle(segmentEditorTimelineActiveSceneSpanForRender)}
@@ -30230,13 +30288,6 @@ export function WorkspacePage({
                       </button>
                     ) : null}
                   </div>
-                  {visibleSegmentThumbInsertIndex === index + 1 ? (
-                    <div
-                      className="studio-segment-editor__timeline-drop-gap"
-                      style={getSegmentEditorTimelineInsertGapStyle(index + 1)}
-                      aria-hidden="true"
-                    ></div>
-                  ) : null}
                 </Fragment>
               );
             })}
@@ -30534,7 +30585,9 @@ export function WorkspacePage({
 
               return (
                 <div
-                  className="studio-segment-editor__timeline-cell-shell studio-segment-editor__timeline-cell-shell--audio"
+                  className={`studio-segment-editor__timeline-cell-shell studio-segment-editor__timeline-cell-shell--audio${
+                    span.segmentIndex === draggedSegmentStableIndex ? " is-dragging" : ""
+                  }`}
                   key={span.key}
                   style={getSegmentEditorTimelineSpanStyle(span)}
                 >
@@ -30661,7 +30714,9 @@ export function WorkspacePage({
 
               return (
                 <div
-                  className="studio-segment-editor__timeline-cell-shell"
+                  className={`studio-segment-editor__timeline-cell-shell${
+                    span.segmentIndex === draggedSegmentStableIndex ? " is-dragging" : ""
+                  }`}
                   key={span.key}
                   style={getSegmentEditorTimelineSpanStyle(span)}
                 >
@@ -30747,7 +30802,9 @@ export function WorkspacePage({
 
               return (
                 <div
-                  className="studio-segment-editor__timeline-cell-shell studio-segment-editor__timeline-cell-shell--audio"
+                  className={`studio-segment-editor__timeline-cell-shell studio-segment-editor__timeline-cell-shell--audio${
+                    span.segmentIndex === draggedSegmentStableIndex ? " is-dragging" : ""
+                  }`}
                   key={span.key}
                   style={getSegmentEditorTimelineSpanStyle(span)}
                 >
@@ -35425,6 +35482,9 @@ export function WorkspacePage({
         {segmentThumbDragState && segmentThumbDragSegment && segmentThumbDragGhostStyle && typeof document !== "undefined"
           ? createPortal(
               <div className="studio-segment-editor__thumb-ghost" aria-hidden="true" style={segmentThumbDragGhostStyle}>
+                <span className="studio-segment-editor__thumb-ghost-number">
+                  {getWorkspaceSegmentEditorDisplayNumber(segmentEditorDraft?.segments ?? [], segmentThumbDragSegment.index)}
+                </span>
                 {(() => {
                   const ghostMediaSurface = getWorkspaceSegmentResolvedMediaSurface(
                     segmentThumbDragSegment,

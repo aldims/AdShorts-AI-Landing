@@ -27616,11 +27616,49 @@ textarea {
   position: fixed;
   z-index: 220;
   display: grid;
-  gap: 4px;
   pointer-events: none;
-  opacity: 0.96;
-  transform: rotate(-2deg) scale(1.03);
-  filter: drop-shadow(0 20px 34px rgba(0, 0, 0, 0.34));
+  overflow: hidden;
+  border: 1px solid rgba(126, 249, 230, 0.58);
+  border-radius: 14px;
+  background: rgba(6, 11, 18, 0.9);
+  opacity: 0.98;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 18px 44px -16px rgba(0, 0, 0, 0.86),
+    0 0 28px -12px rgba(45, 212, 191, 0.72);
+  transform: rotate(-1.5deg) scale(1.025);
+  transform-origin: 50% 50%;
+  will-change: left, top, transform;
+}
+
+.studio-segment-editor__thumb-ghost .studio-segment-editor__thumb-media {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  border-radius: inherit;
+  box-shadow: none;
+}
+
+.studio-segment-editor__thumb-ghost-number {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 999px;
+  background: rgba(9, 13, 22, 0.78);
+  color: rgba(248, 250, 252, 0.98);
+  font-size: 0.72rem;
+  font-weight: 900;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 8px 20px -10px rgba(0, 0, 0, 0.9);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 .studio-segment-editor__thumb-placeholder {
@@ -28207,10 +28245,11 @@ button.studio-segment-editor__timeline-label:focus-visible {
   display: grid;
   width: var(--studio-segment-editor-timeline-span-width, 100%);
   transition:
-    left 0.18s ease,
-    width 0.18s ease,
-    opacity 0.18s ease,
-    transform 0.18s ease;
+    left 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+    width 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.16s ease,
+    transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: left, width;
 }
 
 .studio-segment-editor__timeline-row--visual .studio-segment-editor__timeline-cell-shell {
@@ -29175,19 +29214,35 @@ button.studio-segment-editor__timeline-label:focus-visible {
   left: var(--studio-segment-editor-timeline-drop-left, 0);
   top: 0;
   z-index: 9;
-  width: 18px;
+  width: var(--studio-segment-editor-timeline-drop-width, 0);
   height: var(--studio-segment-editor-timeline-scene-backdrop-height);
   min-width: 0;
-  border-radius: 10px;
+  border-radius: 14px;
   background:
-    linear-gradient(180deg, rgba(251, 191, 36, 0.14), rgba(251, 191, 36, 0.06)),
-    rgba(255, 255, 255, 0.02);
+    linear-gradient(180deg, rgba(94, 234, 212, 0.12), rgba(139, 92, 246, 0.08)),
+    rgba(255, 255, 255, 0.025);
   box-shadow:
-    inset 0 0 0 1px rgba(251, 191, 36, 0.42),
-    inset 0 0 0 4px rgba(251, 191, 36, 0.08);
-  animation: studio-segment-editor-thumb-gap-in 0.18s ease;
+    inset 0 0 0 1px rgba(94, 234, 212, 0.42),
+    inset 0 0 0 5px rgba(94, 234, 212, 0.055),
+    0 0 24px -14px rgba(45, 212, 191, 0.72);
+  animation: studio-segment-editor-thumb-gap-in 0.2s cubic-bezier(0.22, 1, 0.36, 1);
   pointer-events: none;
-  transform: translateX(-50%);
+  transition:
+    left 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+    width 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: left, width;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-segment-editor__timeline-cell-shell,
+  .studio-segment-editor__timeline-drop-gap {
+    animation: none;
+    transition: none;
+  }
+
+  .studio-segment-editor__thumb-ghost {
+    transform: none;
+  }
 }
 
 .studio-segment-editor__timeline-add-icon {

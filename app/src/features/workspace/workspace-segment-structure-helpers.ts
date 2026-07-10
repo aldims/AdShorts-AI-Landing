@@ -36,6 +36,55 @@ export const getVisibleInsertIndexForDraggedItem = (
   return adjustedInsertIndex === draggedIndex ? null : boundedInsertIndex;
 };
 
+export type WorkspaceSegmentDragPreviewItem = {
+  leftRatio: number;
+  segmentIndex: number | null;
+  widthRatio: number;
+};
+
+export const buildWorkspaceSegmentDragPreviewLayout = <T extends Pick<
+  WorkspaceSegmentDragPreviewItem,
+  "segmentIndex" | "widthRatio"
+>>(
+  items: T[],
+  draggedIndex: number,
+  insertIndex: number,
+): WorkspaceSegmentDragPreviewItem[] => {
+  const reorderedItems = moveArrayItemToInsertIndex(items, draggedIndex, insertIndex);
+  let leftRatio = 0;
+
+  return reorderedItems.map((item) => {
+    const widthRatio = Number.isFinite(item.widthRatio) ? Math.max(0, Math.min(1, item.widthRatio)) : 0;
+    const previewItem = {
+      leftRatio: Math.max(0, Math.min(1, leftRatio)),
+      segmentIndex: item.segmentIndex,
+      widthRatio,
+    };
+    leftRatio += widthRatio;
+    return previewItem;
+  });
+};
+
+export const resolveWorkspaceSegmentDragInsertIndex = (options: {
+  clientX: number;
+  currentScrollLeft: number;
+  draggedIndex: number;
+  initialScrollLeft: number;
+  targetCenters: number[];
+}) => {
+  const scrollDelta = options.currentScrollLeft - options.initialScrollLeft;
+  let visibleInsertIndex = 0;
+
+  for (const targetCenter of options.targetCenters) {
+    if (options.clientX < targetCenter - scrollDelta) {
+      break;
+    }
+    visibleInsertIndex += 1;
+  }
+
+  return visibleInsertIndex >= options.draggedIndex ? visibleInsertIndex + 1 : visibleInsertIndex;
+};
+
 export type WorkspaceSegmentEditorStructureSnapshot = Pick<WorkspaceSegmentEditorDraftSession, "segments">;
 
 const normalizeWorkspaceSegmentEditorStructureBaselines = (
