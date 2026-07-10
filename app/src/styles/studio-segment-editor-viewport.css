@@ -117,3 +117,290 @@
     overflow: visible !important;
   }
 }
+
+/* Mobile scene editor: a focused preview, persistent actions and a touch-first timeline. */
+@media (max-width: 640px) {
+  #app .studio-canvas-route.is-segment-editor {
+    overflow-x: hidden !important;
+    overflow-y: hidden !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor {
+    min-height: 100dvh !important;
+    height: 100dvh !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior-y: contain;
+    scroll-padding-bottom: calc(76px + env(safe-area-inset-bottom));
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-canvas-shell,
+  #app .studio-canvas-main.is-segment-editor .studio-canvas-shell.is-sidebar-hidden,
+  #app .studio-canvas-main.is-segment-editor .studio-canvas-stage,
+  #app .studio-canvas-main.is-segment-editor .studio-canvas-create.is-segment-editor,
+  #app .studio-canvas-main.is-segment-editor .studio-canvas-content.is-segment-editor,
+  #app .studio-canvas-main.is-segment-editor .studio-canvas-create-layout,
+  #app .studio-canvas-main.is-segment-editor .studio-canvas-preview.is-segment-editor,
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor {
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-canvas-shell.is-sidebar-hidden {
+    padding: 0 10px calc(14px + env(safe-area-inset-bottom)) !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__layout {
+    --studio-segment-editor-carousel-width: clamp(212px, 61vw, 248px) !important;
+    --studio-segment-editor-carousel-height: calc(var(--studio-segment-editor-carousel-width) * 16 / 9) !important;
+    --studio-segment-editor-timeline-track-width: max(
+      540px,
+      calc(var(--studio-segment-editor-timeline-slot-count) * 100px)
+    );
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: auto auto auto auto !important;
+    grid-auto-rows: auto !important;
+    gap: 12px !important;
+    width: 100% !important;
+    min-height: calc(100dvh - var(--studio-header-reserve) - 12px) !important;
+    height: auto !important;
+    max-height: none !important;
+    padding-bottom: 2px;
+    align-items: start !important;
+    justify-items: stretch !important;
+    overflow: visible !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout.is-visual-panel-closed
+    .studio-segment-editor__preview-column,
+  #app .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout.is-visual-panel-open
+    .studio-segment-editor__preview-column {
+    --studio-segment-editor-carousel-width: clamp(212px, 61vw, 248px) !important;
+    --studio-segment-editor-carousel-height: calc(var(--studio-segment-editor-carousel-width) * 16 / 9) !important;
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+    order: 1 !important;
+    width: 100% !important;
+    min-height: var(--studio-segment-editor-carousel-height) !important;
+    height: var(--studio-segment-editor-carousel-height) !important;
+    max-height: var(--studio-segment-editor-carousel-height) !important;
+    padding: 0 !important;
+    align-content: start !important;
+    align-items: start !important;
+    justify-content: center !important;
+    justify-items: center !important;
+    overflow: clip !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout.is-visual-panel-closed
+    .studio-segment-editor__stage,
+  #app .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout.is-visual-panel-open
+    .studio-segment-editor__stage {
+    width: 100% !important;
+    min-width: 0 !important;
+    height: var(--studio-segment-editor-carousel-height) !important;
+    max-height: var(--studio-segment-editor-carousel-height) !important;
+    margin: 0 !important;
+    align-self: start !important;
+    justify-self: stretch !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout.is-visual-panel-closed
+    .studio-segment-editor__carousel,
+  #app .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout.is-visual-panel-open
+    .studio-segment-editor__carousel {
+    width: var(--studio-segment-editor-carousel-width) !important;
+    min-width: 0 !important;
+    max-width: calc(100vw - 72px) !important;
+    height: var(--studio-segment-editor-carousel-height) !important;
+    max-height: var(--studio-segment-editor-carousel-height) !important;
+    aspect-ratio: auto !important;
+    justify-self: center !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__layout .studio-segment-editor__card,
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__layout .studio-segment-editor__card.is-side,
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__layout .studio-segment-editor__card-media {
+    width: var(--studio-segment-editor-carousel-width) !important;
+    min-width: var(--studio-segment-editor-carousel-width) !important;
+    height: var(--studio-segment-editor-carousel-height) !important;
+    min-height: var(--studio-segment-editor-carousel-height) !important;
+    max-height: var(--studio-segment-editor-carousel-height) !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-submit-row {
+    position: sticky !important;
+    bottom: max(8px, env(safe-area-inset-bottom)) !important;
+    z-index: 280 !important;
+    grid-column: 1 !important;
+    grid-row: 2 !important;
+    display: grid !important;
+    grid-template-columns: 44px minmax(0, 1fr) !important;
+    order: 2 !important;
+    width: 100% !important;
+    min-height: 58px !important;
+    height: 58px !important;
+    padding: 6px !important;
+    gap: 8px !important;
+    border: 1px solid rgba(190, 204, 255, 0.16) !important;
+    border-radius: 19px !important;
+    background:
+      linear-gradient(145deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.018)),
+      rgba(8, 12, 22, 0.88) !important;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.1),
+      0 18px 44px -24px rgba(0, 0, 0, 0.94),
+      0 0 32px -24px rgba(118, 102, 238, 0.72) !important;
+    backdrop-filter: blur(26px) saturate(138%) !important;
+    -webkit-backdrop-filter: blur(26px) saturate(138%) !important;
+    transform: none !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__timeline-submit-row
+    .studio-segment-editor__timeline-preview-toggle {
+    width: 44px !important;
+    min-width: 44px !important;
+    height: 44px !important;
+    min-height: 44px !important;
+    padding: 0 !important;
+    border-radius: 14px !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__timeline-submit-row
+    .studio-segment-editor__prompt-submit {
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 44px !important;
+    min-height: 44px !important;
+    padding-inline: 14px !important;
+    border-radius: 14px !important;
+    font-size: 0.84rem !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__layout.is-visual-panel-closed .studio-segment-editor__timeline {
+    grid-column: 1 !important;
+    grid-row: 3 !important;
+    order: 3 !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__layout.is-visual-panel-open .studio-segment-editor__prompt-column {
+    grid-column: 1 !important;
+    grid-row: 3 !important;
+    order: 3 !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__layout.is-visual-panel-open .studio-segment-editor__timeline {
+    grid-column: 1 !important;
+    grid-row: 4 !important;
+    order: 4 !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline {
+    position: relative !important;
+    isolation: isolate;
+    display: grid !important;
+    width: 100% !important;
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    padding: 8px !important;
+    border-radius: 20px !important;
+    overflow: hidden !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-scroll {
+    grid-area: 1 / 1 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    touch-action: pan-x pan-y;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-scroll::-webkit-scrollbar {
+    display: none;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-ruler,
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-row {
+    grid-template-columns: 42px minmax(var(--studio-segment-editor-timeline-track-width), 1fr) !important;
+    min-width: calc(42px + var(--studio-segment-editor-timeline-track-width)) !important;
+    column-gap: 0 !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-label {
+    position: sticky !important;
+    left: 0 !important;
+    z-index: 36 !important;
+    justify-content: center !important;
+    padding: 0 !important;
+    border-right: 1px solid rgba(190, 204, 255, 0.1) !important;
+    background: rgba(10, 15, 27, 0.9) !important;
+    color: transparent !important;
+    font-size: 0 !important;
+    backdrop-filter: blur(18px) saturate(130%);
+    -webkit-backdrop-filter: blur(18px) saturate(130%);
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-label-icon {
+    width: 18px !important;
+    height: 18px !important;
+    color: rgba(204, 216, 245, 0.8) !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-ruler,
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-ruler .studio-segment-editor__timeline-track {
+    min-height: 26px !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-track--visual,
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-cell--visual {
+    min-height: 72px !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-track {
+    min-height: 44px !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-row--visual .studio-segment-editor__timeline-cell-shell {
+    scroll-snap-align: start;
+    scroll-margin-left: 42px;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-add-rail {
+    top: auto !important;
+    right: 10px !important;
+    bottom: 10px !important;
+    z-index: 64 !important;
+    display: inline-grid !important;
+    width: 42px !important;
+    min-width: 42px !important;
+    height: 42px !important;
+    min-height: 42px !important;
+    border-radius: 14px !important;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.12),
+      0 14px 30px -18px rgba(41, 182, 246, 0.72) !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-reset {
+    top: 9px !important;
+    right: 9px !important;
+    z-index: 65 !important;
+  }
+}
