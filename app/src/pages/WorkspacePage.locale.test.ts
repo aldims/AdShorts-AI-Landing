@@ -404,6 +404,7 @@ describe("WorkspacePage generation credits", () => {
         voiceId: DEFAULT_STUDIO_VOICE_ID.ru,
       }),
     ).toBe(STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST + getStudioVoiceCreditCost("Liam"));
+    expect(STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST + getStudioVoiceCreditCost("Liam")).toBe(5);
   });
 });
 
@@ -900,6 +901,14 @@ describe("WorkspacePage example prefill settings", () => {
       voiceEnabled: true,
       voiceId: "Liam_Timing",
     });
+  });
+
+  it("uses AI photos as the default visual mode", () => {
+    expect(
+      resolveWorkspaceExamplePrefillInitialStudioState({
+        routeDefaults: getWorkspaceInitialStudioDefaults("ru"),
+      }).videoMode,
+    ).toBe("ai_photo");
   });
 
   it("turns subtitles off when example voiceover is disabled", () => {
@@ -2969,7 +2978,7 @@ describe("WorkspacePage studio locale defaults", () => {
 
   it("keeps voice ids inside the selected Studio language", () => {
     expect(getStudioLanguageForVoiceId(DEFAULT_STUDIO_VOICE_ID.ru)).toBe("ru");
-    expect(getStudioLanguageForVoiceId(DEFAULT_STUDIO_VOICE_ID.en)).toBe("en");
+    expect(getStudioLanguageForVoiceId(DEFAULT_STUDIO_VOICE_ID.en, "en")).toBe("en");
     expect(getStudioLanguageForVoiceId("Liam")).toBe("ru");
     expect(getStudioLanguageForVoiceId("liam")).toBe("ru");
     expect(getStudioLanguageForVoiceId("Александр")).toBe("ru");
@@ -2989,8 +2998,8 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(getStudioLanguageForVoiceId("Russian_HandsomeChildhoodFriend")).toBeNull();
     expect(getStudioLanguageForVoiceId("Rma_24000")).toBeNull();
     expect(getStudioLanguageForVoiceId("Rnu_24000")).toBeNull();
-    expect(resolveStudioVoiceIdForLanguage("en", DEFAULT_STUDIO_VOICE_ID.ru)).toBe(DEFAULT_STUDIO_VOICE_ID.en);
-    expect(resolveStudioVoiceIdForLanguage("ru", DEFAULT_STUDIO_VOICE_ID.en)).toBe(DEFAULT_STUDIO_VOICE_ID.ru);
+    expect(resolveStudioVoiceIdForLanguage("en", DEFAULT_STUDIO_VOICE_ID.ru)).toBe("Liam_Timing");
+    expect(resolveStudioVoiceIdForLanguage("ru", DEFAULT_STUDIO_VOICE_ID.en)).toBe("Liam_Timing");
     expect(resolveStudioVoiceIdForLanguage("ru", "Liam")).toBe("Liam_Timing");
     expect(resolveStudioVoiceIdForLanguage("ru", "liam")).toBe("Liam_Timing");
     expect(resolveStudioVoiceIdForLanguage("ru", "Александр")).toBe("Liam_Timing");
@@ -3012,27 +3021,27 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(resolveStudioVoiceIdForLanguage("ru", "Стас")).toBe("Stas");
     expect(resolveStudioVoiceIdForLanguage("ru", "Michael C. Vincent - Confident, Expressive")).toBe("Misha");
     expect(resolveStudioVoiceIdForLanguage("ru", "Миша")).toBe("Misha");
-    expect(resolveStudioVoiceIdForLanguage("ru", "Russian_BrightHeroine")).toBe("Russian_BrightHeroine");
-    expect(getStudioVoiceCreditCost("Liam")).toBe(5);
-    expect(getStudioVoiceCreditCost("liam")).toBe(5);
-    expect(getStudioVoiceCreditCost("Liam_Timing")).toBe(5);
-    expect(getStudioVoiceCreditCost("liam_timing")).toBe(5);
-    expect(getStudioVoiceCreditCost("Elena")).toBe(5);
-    expect(getStudioVoiceCreditCost("Adam")).toBe(5);
-    expect(getStudioVoiceCreditCost("Maxim")).toBe(5);
-    expect(getStudioVoiceCreditCost("Vika")).toBe(5);
-    expect(getStudioVoiceCreditCost("Alisa")).toBe(5);
-    expect(getStudioVoiceCreditCost("Anastasia")).toBe(5);
-    expect(getStudioVoiceCreditCost("Lesha")).toBe(5);
-    expect(getStudioVoiceCreditCost("Stas")).toBe(5);
-    expect(getStudioVoiceCreditCost("Misha")).toBe(5);
-    expect(getStudioVoiceCreditCost("English_ManWithDeepVoice")).toBe(5);
-    expect(getStudioVoiceCreditCost("Russian_BrightHeroine")).toBe(5);
+    expect(resolveStudioVoiceIdForLanguage("ru", "Russian_BrightHeroine")).toBe(DEFAULT_STUDIO_VOICE_ID.ru);
+    expect(getStudioVoiceCreditCost("Liam")).toBe(0);
+    expect(getStudioVoiceCreditCost("liam")).toBe(0);
+    expect(getStudioVoiceCreditCost("Liam_Timing")).toBe(0);
+    expect(getStudioVoiceCreditCost("liam_timing")).toBe(0);
+    expect(getStudioVoiceCreditCost("Elena")).toBe(0);
+    expect(getStudioVoiceCreditCost("Adam")).toBe(0);
+    expect(getStudioVoiceCreditCost("Maxim")).toBe(0);
+    expect(getStudioVoiceCreditCost("Vika")).toBe(0);
+    expect(getStudioVoiceCreditCost("Alisa")).toBe(0);
+    expect(getStudioVoiceCreditCost("Anastasia")).toBe(0);
+    expect(getStudioVoiceCreditCost("Lesha")).toBe(0);
+    expect(getStudioVoiceCreditCost("Stas")).toBe(0);
+    expect(getStudioVoiceCreditCost("Misha")).toBe(0);
+    expect(getStudioVoiceCreditCost("English_ManWithDeepVoice")).toBe(0);
+    expect(getStudioVoiceCreditCost("Russian_BrightHeroine")).toBe(0);
     expect(getStudioVoiceCreditCost("Russian_HandsomeChildhoodFriend")).toBe(0);
   });
 
   it("restores the last valid voice for the target Studio language", () => {
-    expect(resolveStudioVoiceIdForLanguage("en", DEFAULT_STUDIO_VOICE_ID.ru, "Ryan")).toBe("Ryan");
+    expect(resolveStudioVoiceIdForLanguage("en", "invalid", "Elena")).toBe("Elena");
     expect(resolveStudioVoiceIdForLanguage("ru", DEFAULT_STUDIO_VOICE_ID.en, "Rma_24000")).toBe(
       DEFAULT_STUDIO_VOICE_ID.ru,
     );
@@ -3045,7 +3054,7 @@ describe("WorkspacePage studio locale defaults", () => {
     const voiceRequest = resolveWorkspaceGenerationVoiceRequest({
       currentLanguage: "ru",
       currentVoiceEnabled: false,
-      explicitVoiceSelection: { language: "ru", voiceId: "male-qn-jingying" },
+      explicitVoiceSelection: { language: "ru", voiceId: "Elena" },
       generationLanguage: "ru",
       selectedVoiceId: DEFAULT_STUDIO_VOICE_ID.ru,
       selectedVoiceIdForLanguage: DEFAULT_STUDIO_VOICE_ID.ru,
@@ -3053,7 +3062,7 @@ describe("WorkspacePage studio locale defaults", () => {
 
     expect(voiceRequest).toEqual({
       voiceEnabled: true,
-      voiceId: "male-qn-jingying",
+      voiceId: "Elena",
     });
   });
 
@@ -3093,7 +3102,21 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(voicesById.get("Misha")?.previewSampleUrl).toContain("/voice-previews/misha.wav?v=");
 
     for (const voiceOptions of Object.values(studioVoiceOptionsByLanguage)) {
+      expect(voiceOptions.map((voice) => voice.id)).toEqual([
+        "Liam_Timing",
+        "Elena",
+        "Adam",
+        "Maxim",
+        "Vika",
+        "Alisa",
+        "Anastasia",
+        "Lesha",
+        "Stas",
+        "Misha",
+      ]);
       for (const voice of voiceOptions) {
+        expect(voice.badgeLabel).toBeUndefined();
+        expect(voice.creditCost).toBeUndefined();
         if (!voice.previewSampleUrl) {
           continue;
         }

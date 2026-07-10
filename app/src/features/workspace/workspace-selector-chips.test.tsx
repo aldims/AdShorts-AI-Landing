@@ -8,7 +8,7 @@ import {
   fallbackStudioSubtitleColorOption,
   fallbackStudioSubtitleStyleOption,
 } from "./workspace-segment-editor";
-import { StudioSubtitleSelectorChip, StudioVoiceSelectorChip } from "./workspace-selector-chips";
+import { StudioSubtitleSelectorChip, StudioVideoSelectorChip, StudioVoiceSelectorChip } from "./workspace-selector-chips";
 
 describe("StudioVoiceSelectorChip", () => {
   it("passes the selected visible voice to whole-video generation", async () => {
@@ -86,6 +86,36 @@ describe("StudioVoiceSelectorChip", () => {
 
     expect(screen.getByText("Basic male voice")).toBeTruthy();
     expect(screen.queryByText("Базовый мужской голос")).toBeNull();
+  });
+});
+
+describe("StudioVideoSelectorChip", () => {
+  it("shows the two AI creation modes without premium or custom visual controls", () => {
+    render(
+      <LocaleProvider locale="ru">
+        <StudioVideoSelectorChip
+          brandLogoFile={null}
+          brandText=""
+          brandUploadError={null}
+          customVideoFile={null}
+          isPreparingBrandLogo={false}
+          onBrandLogoSelect={vi.fn()}
+          onBrandTextChange={vi.fn()}
+          onClearBrandText={vi.fn()}
+          onRemoveBrandLogo={vi.fn()}
+          onSelectVideoMode={vi.fn()}
+          selectedVideoMode="ai_photo"
+        />
+      </LocaleProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Визуал\s*AI фото/ }));
+
+    expect(screen.getByRole("menuitemradio", { name: /AI фото.*10 ⚡/ })).toBeTruthy();
+    const aiVideoOption = screen.getByRole("menuitemradio", { name: /AI видео.*Скоро.*80 ⚡/ }) as HTMLButtonElement;
+    expect(aiVideoOption.disabled).toBe(true);
+    expect(screen.queryByText("Premium")).toBeNull();
+    expect(screen.queryByText("Загрузить свой визуал")).toBeNull();
   });
 });
 

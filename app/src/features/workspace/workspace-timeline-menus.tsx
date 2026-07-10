@@ -5,6 +5,7 @@ import type {
   RefObject,
 } from "react";
 import { createPortal } from "react-dom";
+import { STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS } from "../../../shared/studio-credit-costs";
 import type { Locale } from "../../lib/i18n";
 import { workspaceText } from "./workspace-page-model";
 import { getStudioVoiceOptionCopy } from "./workspace-segment-editor";
@@ -725,8 +726,8 @@ export function WorkspaceSegmentTimelineVoiceMenu({
           <small>
             {workspaceText(
               locale,
-              `Сцена ${segmentArrayIndex + 1}`,
-              `Scene ${segmentArrayIndex + 1}`,
+              `Сцена ${segmentArrayIndex + 1} · ${segment.text.length}/${STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS}`,
+              `Scene ${segmentArrayIndex + 1} · ${segment.text.length}/${STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS}`,
             )}
           </small>
         </div>
@@ -743,6 +744,7 @@ export function WorkspaceSegmentTimelineVoiceMenu({
           className="studio-voice-selector__bulk-textarea studio-segment-editor__timeline-voice-textarea"
           value={segment.text}
           rows={5}
+          maxLength={STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS}
           placeholder={workspaceText(locale, "Введите текст для этой сцены", "Enter text for this scene")}
           onChange={(event) => onTextChange(segment.index, event)}
           onKeyDown={(event) => {

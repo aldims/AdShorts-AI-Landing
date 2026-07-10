@@ -448,7 +448,7 @@ describe("studio generation worker availability", () => {
         targetDurationSeconds: 10,
         target_duration_seconds: 10,
         timeline_duration_seconds: 10,
-        effective_voice_type: "Aiden",
+        effective_voice_type: "Liam_Timing",
       }),
     );
     expect(segmentEditor?.segments?.[0]).not.toHaveProperty("voice_type");
@@ -463,7 +463,7 @@ describe("studio generation worker availability", () => {
         start_time: 10,
         target_duration_seconds: 4,
         timeline_duration_seconds: 4,
-        effective_voice_type: "Aiden",
+        effective_voice_type: "Liam_Timing",
       }),
     );
     expect(segmentEditor?.segments?.[1]).not.toHaveProperty("voice_type");

@@ -94,6 +94,14 @@ describe("WorkspaceSegmentTimelineVoiceMenu", () => {
 
     expect(button.getAttribute("aria-busy")).toBe("true");
   });
+
+  it("limits scene voiceover text to 200 characters", () => {
+    render(<WorkspaceSegmentTimelineVoiceMenu {...baseProps} />);
+
+    const textarea = screen.getByRole("textbox", { name: "Текст озвучки" }) as HTMLTextAreaElement;
+    expect(textarea.maxLength).toBe(200);
+    expect(screen.getByText("Сцена 1 · 11/200")).toBeTruthy();
+  });
 });
 
 describe("WorkspaceSegmentTimelineDurationMenu", () => {

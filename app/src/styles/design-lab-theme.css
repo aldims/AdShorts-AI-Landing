@@ -32303,6 +32303,21 @@ html.platform-windows .studio-voice-selector__menu {
   white-space: nowrap;
 }
 
+.studio-video-selector__option-row .studio-video-selector__soon {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 0 8px;
+  border: 1px solid rgba(129, 140, 248, 0.3);
+  border-radius: 999px;
+  background: rgba(99, 102, 241, 0.14);
+  color: rgba(199, 210, 254, 0.95);
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
 .studio-video-selector__option-row .studio-video-selector__option-duration {
   flex: 0 0 auto;
   color: rgba(255, 255, 255, 0.68);

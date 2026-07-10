@@ -318,8 +318,8 @@ const pricingFaqCopy: Array<{ question: Record<Locale, string>; answer: Record<L
   {
     question: { ru: "Как списываются кредиты", en: "How credits are charged" },
     answer: {
-      ru: "Стандартный Shorts — 10 кредитов, Премиум Shorts — 20 кредитов. Озвучка и каждое AI-улучшение списываются отдельно и показывают стоимость на кнопке.",
-      en: "Credits are the usage unit inside AdShorts AI. Standard Shorts use 10 credits, Premium Shorts use 20 credits, and voiceover plus each AI improvement show their own button cost.",
+      ru: "Shorts с AI-фото — 10 кредитов, создание Shorts из редактора — 5 кредитов, озвучка сцены — 2 кредита. AI-видео для всех сцен будет стоить 80 кредитов после запуска.",
+      en: "Shorts with AI photos use 10 credits, creating Shorts from the editor uses 5 credits, and scene voiceover uses 2 credits. Full-scene AI video will use 80 credits after launch.",
     },
   },
   {

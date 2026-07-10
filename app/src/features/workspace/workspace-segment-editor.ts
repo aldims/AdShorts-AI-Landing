@@ -1,8 +1,8 @@
 import {
+  STUDIO_AI_PHOTO_VIDEO_GENERATION_CREDIT_COST,
+  STUDIO_AI_VIDEO_GENERATION_CREDIT_COST,
   getStudioSegmentPhotoAnimationCreditCost,
   STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST,
-  STUDIO_PREMIUM_VIDEO_GENERATION_CREDIT_COST,
-  STUDIO_PREMIUM_VOICE_CREDIT_COST,
   STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST,
   STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST_BY_QUALITY,
   STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST,
@@ -604,102 +604,78 @@ export const studioVoicePreviewAssetVersion = "20260708-4";
 export const getStudioVoicePreviewSampleUrl = (fileName: string) =>
   `/voice-previews/${fileName}?v=${studioVoicePreviewAssetVersion}`;
 
-export const studioVoiceOptionsByLanguage: Record<StudioLanguage, StudioVoiceOption[]> = {
+export const studioSupportedVoiceOptionsByLanguage: Record<StudioLanguage, StudioVoiceOption[]> = {
   ru: [
     {
       id: "Liam_Timing",
       label: "Александр",
-      description: "Premium-голос с точными таймингами",
-      badgeLabel: "Premium",
-      creditCost: STUDIO_PREMIUM_VOICE_CREDIT_COST,
+      description: "Выразительный голос с точными таймингами",
       previewSampleUrl: getStudioVoicePreviewSampleUrl("alexander-premium.wav"),
     },
     {
       id: "Elena",
       label: "Елена",
-      description: "Серьёзный, прямой и уверенный premium-голос",
-      badgeLabel: "Premium",
-      creditCost: STUDIO_PREMIUM_VOICE_CREDIT_COST,
+      description: "Серьёзный, прямой и уверенный голос",
       previewSampleUrl: getStudioVoicePreviewSampleUrl("elena.wav"),
     },
     {
       id: "Adam",
       label: "Адам",
-      description: "Тёмный, уверенный premium-голос",
-      badgeLabel: "Premium",
-      creditCost: STUDIO_PREMIUM_VOICE_CREDIT_COST,
+      description: "Тёмный и уверенный голос",
       previewSampleUrl: getStudioVoicePreviewSampleUrl("adam.wav"),
     },
     {
       id: "Maxim",
       label: "Максим",
-      description: "Естественный разговорный premium-голос",
-      badgeLabel: "Premium",
-      creditCost: STUDIO_PREMIUM_VOICE_CREDIT_COST,
+      description: "Естественный разговорный голос",
       previewSampleUrl: getStudioVoicePreviewSampleUrl("maxim.wav"),
     },
     {
       id: "Vika",
       label: "Вика",
-      description: "Естественный, ясный и дружелюбный premium-голос",
-      badgeLabel: "Premium",
-      creditCost: STUDIO_PREMIUM_VOICE_CREDIT_COST,
+      description: "Естественный, ясный и дружелюбный голос",
       previewSampleUrl: getStudioVoicePreviewSampleUrl("vika.wav"),
     },
     {
       id: "Alisa",
       label: "Алиса",
-      description: "Таинственный и эмоциональный premium-голос",
-      badgeLabel: "Premium",
-      creditCost: STUDIO_PREMIUM_VOICE_CREDIT_COST,
+      description: "Таинственный и эмоциональный голос",
       previewSampleUrl: getStudioVoicePreviewSampleUrl("alisa.wav"),
     },
     {
       id: "Anastasia",
       label: "Анастасия",
-      description: "Бодрый и ясный premium-голос",
-      badgeLabel: "Premium",
-      creditCost: STUDIO_PREMIUM_VOICE_CREDIT_COST,
+      description: "Бодрый и ясный голос",
       previewSampleUrl: getStudioVoicePreviewSampleUrl("anastasia.wav"),
     },
     {
       id: "Lesha",
       label: "Леша",
-      description: "Мягкий, уверенный и убедительный premium-голос",
-      badgeLabel: "Premium",
-      creditCost: STUDIO_PREMIUM_VOICE_CREDIT_COST,
+      description: "Мягкий, уверенный и убедительный голос",
       previewSampleUrl: getStudioVoicePreviewSampleUrl("lesha.wav"),
     },
     {
       id: "Stas",
       label: "Стас",
-      description: "Мудрый и располагающий premium-голос",
-      badgeLabel: "Premium",
-      creditCost: STUDIO_PREMIUM_VOICE_CREDIT_COST,
+      description: "Мудрый и располагающий голос",
       previewSampleUrl: getStudioVoicePreviewSampleUrl("stas.wav"),
     },
     {
       id: "Misha",
       label: "Миша",
-      description: "Уверенный и выразительный premium-голос",
-      badgeLabel: "Premium",
-      creditCost: STUDIO_PREMIUM_VOICE_CREDIT_COST,
+      description: "Уверенный и выразительный голос",
       previewSampleUrl: getStudioVoicePreviewSampleUrl("misha.wav"),
     },
     {
       id: "English_ManWithDeepVoice",
       label: "Глеб",
-      description: "Глубокий premium-голос",
-      badgeLabel: "Premium",
-      creditCost: STUDIO_PREMIUM_VOICE_CREDIT_COST,
+      description: "Глубокий голос",
       previewSampleUrl: getStudioVoicePreviewSampleUrl("gleb-premium.wav"),
     },
     {
       id: "Russian_BrightHeroine",
       label: "Тим",
-      description: "Яркий premium-голос",
-      badgeLabel: "Premium",
-      creditCost: STUDIO_PREMIUM_VOICE_CREDIT_COST,
+      description: "Яркий голос",
       previewSampleUrl: getStudioVoicePreviewSampleUrl("tim-premium.wav"),
     },
     {
@@ -809,21 +785,44 @@ export const studioVoiceOptionsByLanguage: Record<StudioLanguage, StudioVoiceOpt
   ],
 };
 
+export const STUDIO_ELEVENLABS_VOICE_IDS = [
+  "Liam_Timing",
+  "Elena",
+  "Adam",
+  "Maxim",
+  "Vika",
+  "Alisa",
+  "Anastasia",
+  "Lesha",
+  "Stas",
+  "Misha",
+] as const;
+
+const studioElevenLabsVoiceIds = new Set<string>(STUDIO_ELEVENLABS_VOICE_IDS);
+const studioElevenLabsVoiceOptions = studioSupportedVoiceOptionsByLanguage.ru.filter((voice) =>
+  studioElevenLabsVoiceIds.has(voice.id),
+);
+
+export const studioVoiceOptionsByLanguage: Record<StudioLanguage, StudioVoiceOption[]> = {
+  en: studioElevenLabsVoiceOptions,
+  ru: studioElevenLabsVoiceOptions,
+};
+
 const studioVoiceOptionEnglishCopy: Record<string, Partial<Pick<StudioVoiceOption, "description" | "label">>> = {
   Bys_24000: { label: "Boris", description: "Basic male voice" },
   Dylan: { description: "Young male voice with a Beijing accent" },
-  English_ManWithDeepVoice: { label: "Gleb", description: "Deep premium voice" },
+  English_ManWithDeepVoice: { label: "Gleb", description: "Deep voice" },
   Eric: { description: "Lively male voice with a slight rasp" },
-  Elena: { label: "Elena", description: "Serious, direct, confident premium voice" },
-  Adam: { label: "Adam", description: "Dark, confident premium voice" },
-  Maxim: { label: "Maxim", description: "Natural conversational premium voice" },
-  Vika: { label: "Vika", description: "Natural, clear, friendly premium voice" },
-  Alisa: { label: "Alisa", description: "Mysterious, emotive premium voice" },
-  Anastasia: { label: "Anastasia", description: "Upbeat, clear premium voice" },
-  Lesha: { label: "Lesha", description: "Smooth, confident, persuasive premium voice" },
-  Stas: { label: "Stas", description: "Wise, approachable premium voice" },
-  Misha: { label: "Misha", description: "Confident, expressive premium voice" },
-  Liam_Timing: { label: "Alexander", description: "Premium voice with provider timings" },
+  Elena: { label: "Elena", description: "Serious, direct, confident voice" },
+  Adam: { label: "Adam", description: "Dark, confident voice" },
+  Maxim: { label: "Maxim", description: "Natural conversational voice" },
+  Vika: { label: "Vika", description: "Natural, clear, friendly voice" },
+  Alisa: { label: "Alisa", description: "Mysterious, emotive voice" },
+  Anastasia: { label: "Anastasia", description: "Upbeat, clear voice" },
+  Lesha: { label: "Lesha", description: "Smooth, confident, persuasive voice" },
+  Stas: { label: "Stas", description: "Wise, approachable voice" },
+  Misha: { label: "Misha", description: "Confident, expressive voice" },
+  Liam_Timing: { label: "Alexander", description: "Expressive voice with provider timings" },
   May_24000: { label: "Ekaterina", description: "Female voice" },
   Nec_24000: { label: "Natalia", description: "Female voice" },
   Ono_Anna: { description: "Light Japanese female tone" },
@@ -949,15 +948,25 @@ export const getStudioVoiceOptionCopy = (voice: StudioVoiceOption, locale: strin
   };
 };
 
-export const getStudioLanguageForVoiceId = (voiceId: string | null | undefined): StudioLanguage | null => {
+export const getStudioLanguageForVoiceId = (
+  voiceId: string | null | undefined,
+  preferredLanguage?: StudioLanguage | null,
+): StudioLanguage | null => {
   const canonicalVoiceId = getCanonicalStudioVoiceOptionId(voiceId);
   if (!canonicalVoiceId) {
     return null;
   }
 
   const normalizedVoiceKey = canonicalVoiceId.toLowerCase();
-  for (const language of Object.keys(studioVoiceOptionsByLanguage) as StudioLanguage[]) {
-    if (studioVoiceOptionsByLanguage[language].some((voice) => voice.id.toLowerCase() === normalizedVoiceKey)) {
+  if (
+    preferredLanguage &&
+    studioVoiceOptionsByLanguage[preferredLanguage].some((voice) => voice.id.toLowerCase() === normalizedVoiceKey)
+  ) {
+    return preferredLanguage;
+  }
+
+  for (const language of Object.keys(studioSupportedVoiceOptionsByLanguage) as StudioLanguage[]) {
+    if (studioSupportedVoiceOptionsByLanguage[language].some((voice) => voice.id.toLowerCase() === normalizedVoiceKey)) {
       return language;
     }
   }
@@ -976,29 +985,21 @@ export const getWorkspaceSegmentEditorSessionLanguage = (
 
 export const studioVideoOptions: StudioVideoOption[] = [
   {
-    id: "standard",
-    label: "Стандартный",
-    description: "Стоки + AI фото",
-    detail: "Быстрый результат для обычных Shorts",
-    duration: "1–2 мин",
-  },
-  {
     id: "ai_photo",
-    label: "Премиум",
+    label: "AI фото",
     description: "AI фото для всех сцен",
-    detail: "Продвинутые AI-модели, больше деталей и реализма",
     duration: "3–5 мин",
   },
   {
-    id: "custom",
-    label: "Свой визуал",
-    description: "Загрузите свое фото или видео",
+    id: "ai_video",
+    label: "AI видео",
+    description: "AI видео для всех сцен",
   },
 ];
 
 export const studioVideoOptionEnglishCopy: Record<StudioVideoMode, Pick<StudioVideoOption, "description" | "label">> = {
-  ai_photo: { label: "Premium", description: "AI photos for every scene" },
-  ai_video: { label: "AI video", description: "Full AI mode for every scene" },
+  ai_photo: { label: "AI photos", description: "AI photos for every scene" },
+  ai_video: { label: "AI video", description: "AI video for every scene" },
   custom: { label: "Custom visual", description: "Upload your own photo or video" },
   standard: { label: "Standard", description: "Stock assets + AI photos" },
 };
@@ -1008,23 +1009,12 @@ export const getStudioVideoOptionCopy = (option: StudioVideoOption, locale: stri
     return option;
   }
 
-  if (option.id === "standard") {
-    return {
-      ...option,
-      description: "Stock assets + AI photos",
-      detail: "Fast result for regular Shorts",
-      duration: "1–2 min",
-      label: "Standard",
-    };
-  }
-
   if (option.id === "ai_photo") {
     return {
       ...option,
       description: "AI photos for every scene",
-      detail: "Advanced AI models, more detail and realism",
       duration: "3–5 min",
-      label: "Premium",
+      label: "AI photos",
     };
   }
 
@@ -2392,27 +2382,16 @@ export const getStudioVideoChipValue = (
 };
 
 export const getRequiredCreditsForVideoMode = (videoMode: StudioVideoMode) => {
+  if (videoMode === "ai_video") {
+    return STUDIO_AI_VIDEO_GENERATION_CREDIT_COST;
+  }
+
   return videoMode === "ai_photo"
-    ? STUDIO_PREMIUM_VIDEO_GENERATION_CREDIT_COST
+    ? STUDIO_AI_PHOTO_VIDEO_GENERATION_CREDIT_COST
     : STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST;
 };
 
-export const getStudioVoiceCreditCost = (voiceId: string | null | undefined) => {
-  const canonicalVoiceId = getCanonicalStudioVoiceOptionId(voiceId);
-  if (!canonicalVoiceId) {
-    return 0;
-  }
-
-  const normalizedVoiceKey = canonicalVoiceId.toLowerCase();
-  for (const voiceOptions of Object.values(studioVoiceOptionsByLanguage)) {
-    const voice = voiceOptions.find((option) => option.id.toLowerCase() === normalizedVoiceKey);
-    if (voice) {
-      return voice.creditCost ?? 0;
-    }
-  }
-
-  return 0;
-};
+export const getStudioVoiceCreditCost = (_voiceId: string | null | undefined) => 0;
 
 export const getStudioGenerationRequiredCredits = (
   videoMode: StudioVideoMode,

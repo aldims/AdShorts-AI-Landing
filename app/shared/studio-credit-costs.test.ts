@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  STUDIO_AI_PHOTO_VIDEO_GENERATION_CREDIT_COST,
+  STUDIO_AI_VIDEO_GENERATION_CREDIT_COST,
   STUDIO_CREDIT_COST_BY_ACTION,
   STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST,
   STUDIO_VIDEO_GENERATION_CREDIT_COST,
+  STUDIO_SEGMENT_AI_PHOTO_PREMIUM_CREDIT_COST,
+  STUDIO_SEGMENT_AI_VIDEO_PREMIUM_CREDIT_COST,
   getStudioSegmentTalkingPhotoCreditCost,
   getStudioSegmentTalkingPhotoCreditCostForDuration,
   getStudioSegmentVoiceoverCreditCost,
@@ -17,6 +21,10 @@ describe("video generation credit costs", () => {
     expect(STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST).toBe(10);
     expect(STUDIO_VIDEO_GENERATION_CREDIT_COST).toBe(10);
     expect(STUDIO_CREDIT_COST_BY_ACTION.video_generation).toBe(10);
+    expect(STUDIO_AI_PHOTO_VIDEO_GENERATION_CREDIT_COST).toBe(10);
+    expect(STUDIO_AI_VIDEO_GENERATION_CREDIT_COST).toBe(80);
+    expect(STUDIO_SEGMENT_AI_PHOTO_PREMIUM_CREDIT_COST).toBe(2);
+    expect(STUDIO_SEGMENT_AI_VIDEO_PREMIUM_CREDIT_COST).toBe(15);
   });
 });
 
@@ -41,13 +49,13 @@ describe("photo animation credit costs", () => {
 });
 
 describe("segment voiceover credit costs", () => {
-  it("prices standard, premium, and disabled scene voiceover generation", () => {
-    expect(getStudioSegmentVoiceoverCreditCost("Bys_24000")).toBe(1);
-    expect(getStudioSegmentVoiceoverCreditCost("Liam")).toBe(5);
-    expect(getStudioSegmentVoiceoverCreditCost("Liam_Timing")).toBe(5);
-    expect(getStudioSegmentVoiceoverCreditCost("Elena")).toBe(5);
-    expect(getStudioSegmentVoiceoverCreditCost("English_ManWithDeepVoice")).toBe(5);
-    expect(getStudioSegmentVoiceoverCreditCost("Russian_BrightHeroine")).toBe(5);
+  it("prices every enabled scene voiceover at two credits", () => {
+    expect(getStudioSegmentVoiceoverCreditCost("Bys_24000")).toBe(2);
+    expect(getStudioSegmentVoiceoverCreditCost("Liam")).toBe(2);
+    expect(getStudioSegmentVoiceoverCreditCost("Liam_Timing")).toBe(2);
+    expect(getStudioSegmentVoiceoverCreditCost("Elena")).toBe(2);
+    expect(getStudioSegmentVoiceoverCreditCost("English_ManWithDeepVoice")).toBe(2);
+    expect(getStudioSegmentVoiceoverCreditCost("Russian_BrightHeroine")).toBe(2);
     expect(getStudioSegmentVoiceoverCreditCost("none")).toBe(0);
     expect(getStudioSegmentVoiceoverCreditCost(null)).toBe(0);
   });

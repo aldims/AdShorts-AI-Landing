@@ -240,7 +240,8 @@ describe("studio segment voiceover jobs", () => {
         language: "en",
         segment_index: 0,
         text: "Subscribe to the channel",
-        voice_type: "Aiden",
+        credit_cost: 2,
+        voice_type: "Liam_Timing",
       }),
     );
     expect(calls.find((call) => call.pathname === "/api/web/segment-voiceover/jobs")?.body).not.toHaveProperty("project_id");
@@ -274,6 +275,18 @@ describe("studio segment voiceover jobs", () => {
         voiceType: "none",
       }),
     ).rejects.toThrow("Voice type is required for segment voiceover generation.");
+
+    await expect(
+      createStudioSegmentVoiceoverJob("x".repeat(201), {
+        email: "alex@example.test",
+        name: "Alex",
+      }, {
+        language: "ru",
+        projectId: 3576,
+        segmentIndex: 0,
+        voiceType: "Liam_Timing",
+      }),
+    ).rejects.toThrow("must not exceed 200 characters");
 
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -326,13 +339,13 @@ describe("studio segment voiceover jobs", () => {
     expect(calls.find((call) => call.pathname === "/api/web/segment-voiceover/jobs")?.body).toEqual(
       expect.objectContaining({
         admin_token: "admin-token",
-        credit_cost: 5,
+        credit_cost: 2,
         external_user_id: "email:alex@example.test",
         language: "ru",
         project_id: 3576,
         segment_index: 4,
         text: "Subscribe to the channel",
-        voice_type: "Liam",
+        voice_type: "Liam_Timing",
       }),
     );
   });
@@ -388,13 +401,13 @@ describe("studio segment voiceover jobs", () => {
     expect(calls.find((call) => call.pathname === "/api/web/project-voiceover/jobs")?.body).toEqual(
       expect.objectContaining({
         admin_token: "admin-token",
-        credit_cost: 5,
+        credit_cost: 2,
         external_user_id: "email:alex@example.test",
         language: "ru",
         persist_as_segment_assets: true,
         project_id: 3657,
         text: "First scene Second scene",
-        voice_type: "Liam",
+        voice_type: "Liam_Timing",
       }),
     );
     expect(calls.find((call) => call.pathname === "/api/web/project-voiceover/jobs")?.body.segments).toEqual([

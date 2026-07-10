@@ -15,8 +15,8 @@ export const LOCALE_LABELS: Record<Locale, string> = {
 };
 
 export const DEFAULT_STUDIO_VOICE_ID: Record<Locale, string> = {
-  ru: "Bys_24000",
-  en: "Aiden",
+  ru: "Liam_Timing",
+  en: "Liam_Timing",
 };
 
 const supportedLocaleSet = new Set<string>(SUPPORTED_LOCALES);

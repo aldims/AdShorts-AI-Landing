@@ -9,8 +9,8 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import {
-  STUDIO_PREMIUM_VIDEO_GENERATION_CREDIT_COST,
-  STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST,
+  STUDIO_AI_PHOTO_VIDEO_GENERATION_CREDIT_COST,
+  STUDIO_AI_VIDEO_GENERATION_CREDIT_COST,
 } from "../../../shared/studio-credit-costs";
 import { useLocale } from "../../lib/i18n";
 import {
@@ -77,9 +77,6 @@ export const studioLanguageOptions: StudioLanguageOption[] = [
     description: "Англоязычные голоса",
   },
 ];
-
-const STUDIO_PREMIUM_VIDEO_EXTRA_CREDIT_COST =
-  STUDIO_PREMIUM_VIDEO_GENERATION_CREDIT_COST - STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST;
 
 export type StudioMenuAnchorRect = Pick<DOMRect, "left" | "right" | "top" | "bottom" | "width" | "height">;
 
@@ -219,15 +216,12 @@ type StudioVideoSelectorChipProps = {
   brandUploadError: string | null;
   customVideoFile: StudioCustomVideoFile | null;
   isPreparingBrandLogo: boolean;
-  isPreparingCustomVideo: boolean;
   onBrandLogoSelect: (file: File) => Promise<void>;
   onBrandTextChange: (value: string) => void;
   onClearBrandText: () => void;
   onRemoveBrandLogo: () => void;
-  onSelectCustomFile: (file: File) => Promise<void>;
   onSelectVideoMode: (videoMode: StudioVideoMode) => void;
   selectedVideoMode: StudioVideoMode;
-  uploadError: string | null;
 };
 
 type StudioBrandSelectorChipProps = {
@@ -1292,15 +1286,12 @@ export function StudioVideoSelectorChip({
   brandUploadError,
   customVideoFile,
   isPreparingBrandLogo,
-  isPreparingCustomVideo,
   onBrandLogoSelect,
   onBrandTextChange,
   onClearBrandText,
   onRemoveBrandLogo,
-  onSelectCustomFile,
   onSelectVideoMode,
   selectedVideoMode,
-  uploadError,
 }: StudioVideoSelectorChipProps) {
   const { locale } = useLocale();
   const [isOpen, setIsOpen] = useState(false);
@@ -1309,7 +1300,6 @@ export function StudioVideoSelectorChip({
   const rootRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const brandLogoInputRef = useRef<HTMLInputElement | null>(null);
   const selectedVideoLabel = getStudioVideoChipValue(selectedVideoMode, customVideoFile, {
     brandLogoFile,
@@ -1322,7 +1312,6 @@ export function StudioVideoSelectorChip({
   ]
     .filter(Boolean)
     .join(" · ");
-  const customVideoFileLabel = customVideoFile ? truncateStudioCustomAssetName(customVideoFile.fileName) : null;
   const brandLogoPreviewUrl = getStudioCustomAssetPreviewUrl(brandLogoFile);
   const brandTextLength = brandText.length;
 
@@ -1383,21 +1372,8 @@ export function StudioVideoSelectorChip({
     };
   }, [isOpen]);
 
-  const openCustomVideoPicker = () => {
-    fileInputRef.current?.click();
-  };
-
   const openBrandLogoPicker = () => {
     brandLogoInputRef.current?.click();
-  };
-
-  const handleCustomVideoChange = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0] ?? null;
-    event.target.value = "";
-
-    if (!file) return;
-
-    await onSelectCustomFile(file);
   };
 
   const handleBrandLogoChange = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -1409,27 +1385,8 @@ export function StudioVideoSelectorChip({
     await onBrandLogoSelect(file);
   };
 
-  const handleCustomVideoSelect = () => {
-    if (customVideoFile) {
-      onSelectVideoMode("custom");
-      setIsOpen(false);
-      return;
-    }
-
-    openCustomVideoPicker();
-  };
-
   return (
     <div className="studio-video-selector" ref={rootRef}>
-      <input
-        ref={fileInputRef}
-        className="studio-video-selector__file-input"
-        type="file"
-        accept=".jpg,.jpeg,.png,.webp,.avif,.mp4,.mov,.webm,.m4v,image/*,video/*"
-        onChange={(event) => {
-          void handleCustomVideoChange(event);
-        }}
-      />
       <input
         ref={brandLogoInputRef}
         className="studio-video-selector__file-input"
@@ -1470,73 +1427,47 @@ export function StudioVideoSelectorChip({
             >
               <span className="studio-video-selector__menu-title">{locale === "en" ? "Creation mode" : "Режим создания"}</span>
               <div className="studio-video-selector__options">
-                {studioVideoOptions
-                  .filter((option) => option.id !== "custom")
-                  .map((option) => {
-                    const optionCopy = getStudioVideoOptionCopy(option, locale);
-                    const isPremiumVisualOption = option.id === "ai_photo";
-                    return (
-                      <button
-                        key={option.id}
-                        className={`studio-video-selector__option${selectedVideoMode === option.id ? " is-selected" : ""}`}
-                        type="button"
-                        role="menuitemradio"
-                        aria-checked={selectedVideoMode === option.id}
-                        onClick={() => {
-                          onSelectVideoMode(option.id);
-                          setIsOpen(false);
-                        }}
-                      >
-                        <span className="studio-video-selector__option-row">
-                          <span className="studio-video-selector__option-title">
-                            <span>{isPremiumVisualOption ? "Premium" : optionCopy.label}</span>
-                            {isPremiumVisualOption ? (
-                              <span className="studio-video-selector__cost">
-                                {STUDIO_PREMIUM_VIDEO_EXTRA_CREDIT_COST} ⚡
-                              </span>
-                            ) : null}
-                          </span>
-                          {optionCopy.duration ? (
-                            <span className="studio-video-selector__option-duration">{optionCopy.duration}</span>
+                {studioVideoOptions.map((option) => {
+                  const optionCopy = getStudioVideoOptionCopy(option, locale);
+                  const isComingSoon = option.id === "ai_video";
+                  const creditCost = isComingSoon
+                    ? STUDIO_AI_VIDEO_GENERATION_CREDIT_COST
+                    : STUDIO_AI_PHOTO_VIDEO_GENERATION_CREDIT_COST;
+                  return (
+                    <button
+                      key={option.id}
+                      className={`studio-video-selector__option${selectedVideoMode === option.id ? " is-selected" : ""}`}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={selectedVideoMode === option.id}
+                      disabled={isComingSoon}
+                      onClick={() => {
+                        if (isComingSoon) {
+                          return;
+                        }
+                        onSelectVideoMode(option.id);
+                        setIsOpen(false);
+                      }}
+                    >
+                      <span className="studio-video-selector__option-row">
+                        <span className="studio-video-selector__option-title">
+                          <span>{optionCopy.label}</span>
+                          {isComingSoon ? (
+                            <span className="studio-video-selector__soon">
+                              {locale === "en" ? "Soon" : "Скоро"}
+                            </span>
                           ) : null}
+                          <span className="studio-video-selector__cost">{creditCost} ⚡</span>
                         </span>
-                        <small>{optionCopy.description}</small>
-                        {optionCopy.detail ? <small className="studio-video-selector__option-detail">{optionCopy.detail}</small> : null}
-                      </button>
-                    );
-                  })}
-              </div>
-
-              <div className="studio-video-selector__section">
-                <span className="studio-video-selector__menu-title">{locale === "en" ? "Upload custom visual" : "Загрузить свой визуал"}</span>
-                <div className={`studio-video-selector__custom${selectedVideoMode === "custom" ? " is-selected" : ""}`}>
-                  <button
-                    className="studio-video-selector__custom-main"
-                    type="button"
-                    onClick={handleCustomVideoSelect}
-                  >
-                    <span>{locale === "en" ? "Upload custom visual" : "Загрузить свой визуал"}</span>
-                    <small title={customVideoFile?.fileName}>
-                      {customVideoFileLabel ?? (locale === "en" ? "Supports .jpg, .png, .webp, .avif, .mp4, .mov, .webm, .m4v" : "Поддерживаются .jpg, .png, .webp, .avif, .mp4, .mov, .webm, .m4v")}
-                    </small>
-                  </button>
-                  <button
-                    className="studio-video-selector__custom-action"
-                    type="button"
-                    aria-label={customVideoFile ? (locale === "en" ? "Replace visual" : "Заменить визуал") : (locale === "en" ? "Upload visual" : "Загрузить визуал")}
-                    title={customVideoFile ? (locale === "en" ? "Replace visual" : "Заменить визуал") : (locale === "en" ? "Upload visual" : "Загрузить визуал")}
-                    onClick={openCustomVideoPicker}
-                  >
-                    {isPreparingCustomVideo ? (
-                      <span className="studio-video-selector__spinner" aria-hidden="true"></span>
-                    ) : (
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <path d="M12 4v11m0 0 4-4m-4 4-4-4M5 18.5h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    )}
-                  </button>
-                </div>
-                {uploadError ? <p className="studio-video-selector__error">{uploadError}</p> : null}
+                        {optionCopy.duration ? (
+                          <span className="studio-video-selector__option-duration">{optionCopy.duration}</span>
+                        ) : null}
+                      </span>
+                      <small>{optionCopy.description}</small>
+                      {optionCopy.detail ? <small className="studio-video-selector__option-detail">{optionCopy.detail}</small> : null}
+                    </button>
+                  );
+                })}
               </div>
 
               <div className="studio-video-selector__section">

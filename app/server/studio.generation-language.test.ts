@@ -69,8 +69,8 @@ describe("studio generation language resolution", () => {
   });
 
   it("replaces a mismatched voice with the default voice for the requested language", () => {
-    expect(normalizeStudioVoiceIdForLanguage("Bys_24000", "en")).toBe("Aiden");
-    expect(normalizeStudioVoiceIdForLanguage("Aiden", "ru")).toBe("Bys_24000");
+    expect(normalizeStudioVoiceIdForLanguage("Bys_24000", "en")).toBe("Liam_Timing");
+    expect(normalizeStudioVoiceIdForLanguage("Aiden", "ru")).toBe("Liam_Timing");
   });
 
   it("routes the legacy Alexander voice to the provider-timed ElevenLabs voice", () => {
@@ -99,28 +99,28 @@ describe("studio generation language resolution", () => {
     expect(normalizeStudioVoiceIdForLanguage("Стас", "ru")).toBe("Stas");
     expect(normalizeStudioVoiceIdForLanguage("Michael C. Vincent - Confident, Expressive", "ru")).toBe("Misha");
     expect(normalizeStudioVoiceIdForLanguage("Миша", "ru")).toBe("Misha");
-    expect(getStudioVoiceCreditCost("Liam")).toBe(5);
-    expect(getStudioVoiceCreditCost("liam")).toBe(5);
-    expect(getStudioVoiceCreditCost("Liam_Timing")).toBe(5);
-    expect(getStudioVoiceCreditCost("liam_timing")).toBe(5);
-    expect(getStudioVoiceCreditCost("Elena")).toBe(5);
-    expect(getStudioVoiceCreditCost("Adam")).toBe(5);
-    expect(getStudioVoiceCreditCost("Maxim")).toBe(5);
-    expect(getStudioVoiceCreditCost("Vika")).toBe(5);
-    expect(getStudioVoiceCreditCost("Alisa")).toBe(5);
-    expect(getStudioVoiceCreditCost("Anastasia")).toBe(5);
-    expect(getStudioVoiceCreditCost("Lesha")).toBe(5);
-    expect(getStudioVoiceCreditCost("Stas")).toBe(5);
-    expect(getStudioVoiceCreditCost("Misha")).toBe(5);
+    expect(getStudioVoiceCreditCost("Liam")).toBe(0);
+    expect(getStudioVoiceCreditCost("liam")).toBe(0);
+    expect(getStudioVoiceCreditCost("Liam_Timing")).toBe(0);
+    expect(getStudioVoiceCreditCost("liam_timing")).toBe(0);
+    expect(getStudioVoiceCreditCost("Elena")).toBe(0);
+    expect(getStudioVoiceCreditCost("Adam")).toBe(0);
+    expect(getStudioVoiceCreditCost("Maxim")).toBe(0);
+    expect(getStudioVoiceCreditCost("Vika")).toBe(0);
+    expect(getStudioVoiceCreditCost("Alisa")).toBe(0);
+    expect(getStudioVoiceCreditCost("Anastasia")).toBe(0);
+    expect(getStudioVoiceCreditCost("Lesha")).toBe(0);
+    expect(getStudioVoiceCreditCost("Stas")).toBe(0);
+    expect(getStudioVoiceCreditCost("Misha")).toBe(0);
   });
 
   it("keeps explicit MiniMax premium voices for Russian generation", () => {
     expect(normalizeStudioVoiceIdForLanguage("English_ManWithDeepVoice", "ru")).toBe("English_ManWithDeepVoice");
     expect(normalizeStudioVoiceIdForLanguage("Russian_BrightHeroine", "ru")).toBe("Russian_BrightHeroine");
-    expect(normalizeStudioVoiceIdForLanguage("Russian_HandsomeChildhoodFriend", "ru")).toBe("Bys_24000");
-    expect(normalizeStudioVoiceIdForLanguage("Russian_BrightHeroine", "en")).toBe("Aiden");
-    expect(getStudioVoiceCreditCost("English_ManWithDeepVoice")).toBe(5);
-    expect(getStudioVoiceCreditCost("Russian_BrightHeroine")).toBe(5);
+    expect(normalizeStudioVoiceIdForLanguage("Russian_HandsomeChildhoodFriend", "ru")).toBe("Liam_Timing");
+    expect(normalizeStudioVoiceIdForLanguage("Russian_BrightHeroine", "en")).toBe("Liam_Timing");
+    expect(getStudioVoiceCreditCost("English_ManWithDeepVoice")).toBe(0);
+    expect(getStudioVoiceCreditCost("Russian_BrightHeroine")).toBe(0);
     expect(getStudioVoiceCreditCost("Russian_HandsomeChildhoodFriend")).toBe(0);
   });
 
@@ -164,7 +164,7 @@ describe("studio generation language resolution", () => {
         language: "ru",
         segmentVoiceType: null,
       }),
-    ).toBe("Bys_24000");
+    ).toBe("Liam_Timing");
   });
 
   it("keeps generation media enabled when segment editor scenes carry voice overrides", () => {

@@ -6,7 +6,7 @@ import {
   getCanonicalStudioVoiceOptionId,
   getStudioLanguageForVoiceId,
   normalizeStudioLanguageValue,
-  studioVideoOptions,
+  studioSupportedVoiceOptionsByLanguage,
   studioVoiceOptionsByLanguage,
 } from "./workspace-segment-editor";
 import { studioMusicOptions, type StudioMusicType } from "./workspace-studio-options";
@@ -25,7 +25,7 @@ export const getStudioVoiceOptionById = (voiceId: string | null | undefined): St
   }
 
   const normalizedVoiceKey = canonicalVoiceId.toLowerCase();
-  for (const voiceOptions of Object.values(studioVoiceOptionsByLanguage)) {
+  for (const voiceOptions of Object.values(studioSupportedVoiceOptionsByLanguage)) {
     const voice = voiceOptions.find((option) => option.id.toLowerCase() === normalizedVoiceKey);
     if (voice) {
       return voice;
@@ -36,7 +36,7 @@ export const getStudioVoiceOptionById = (voiceId: string | null | undefined): St
 };
 
 export const getDefaultStudioVoiceId = (language: StudioLanguage): StudioVoiceOption["id"] =>
-  DEFAULT_STUDIO_VOICE_ID[language] ?? studioVoiceOptionsByLanguage[language][0]?.id ?? "Bys_24000";
+  DEFAULT_STUDIO_VOICE_ID[language] ?? studioVoiceOptionsByLanguage[language][0]?.id ?? "Liam_Timing";
 
 export const resolveStudioVoiceIdForLanguage = (
   language: StudioLanguage,
@@ -69,7 +69,9 @@ export const resolveWorkspaceGenerationVoiceRequest = (options: {
 }): { voiceEnabled: boolean; voiceId?: StudioVoiceOption["id"] } => {
   const explicitVoiceSelection =
     options.explicitVoiceSelection?.language === options.generationLanguage &&
-    getStudioLanguageForVoiceId(options.explicitVoiceSelection.voiceId) === options.generationLanguage
+    studioVoiceOptionsByLanguage[options.generationLanguage].some(
+      (voice) => voice.id === options.explicitVoiceSelection?.voiceId,
+    )
       ? options.explicitVoiceSelection
       : null;
   const voiceEnabled =
@@ -133,11 +135,11 @@ const resolveWorkspaceExamplePrefillInitialVideoMode = (
   settings: ExamplePrefillStudioSettings | null | undefined,
 ): StudioVideoMode => {
   const requestedVideoMode = normalizeWorkspaceExamplePrefillString(settings?.videoMode);
-  if (requestedVideoMode && requestedVideoMode !== "custom") {
-    return studioVideoOptions.find((option) => option.id === requestedVideoMode)?.id ?? "standard";
+  if (requestedVideoMode === "ai_photo") {
+    return "ai_photo";
   }
 
-  return "standard";
+  return "ai_photo";
 };
 
 export const resolveWorkspaceExamplePrefillInitialStudioState = (options: {

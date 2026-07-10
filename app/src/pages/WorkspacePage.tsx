@@ -19,7 +19,6 @@ import {
   getStudioCustomVisualTooLargeMessage,
   getWorkspaceSegmentCustomVisualMimeType,
   isSupportedStudioMusicFile,
-  isSupportedStudioVideoFile,
   isSupportedWorkspaceSegmentVisualFile,
   revokeStudioObjectUrl,
   STUDIO_CUSTOM_IMAGE_MAX_BYTES,
@@ -300,7 +299,6 @@ import {
   shouldIgnoreWorkspaceSegmentMeasuredVoiceoverDuration,
   shouldShowWorkspaceSegmentAiDurationExtensionVoiceoverTrim,
   shouldSuppressWorkspaceSegmentEditorEmptyDraftChanges,
-  studioVideoOptions,
   studioVoiceOptionsByLanguage,
   syncWorkspaceSegmentMeasuredVideoVisualDuration,
   truncateStudioCustomAssetName,
@@ -512,10 +510,7 @@ import {
   renderSegmentAiPhotoModalSourceButton,
   renderSegmentPaidActionContent,
   renderWorkspaceSegmentPhotoAnimationDurationSwitch,
-  renderWorkspaceSegmentVisualQualitySwitch,
   type WorkspaceSegmentPhotoAnimationDurationSwitchOptions,
-  type WorkspaceSegmentVisualQualitySwitchOptions,
-  type WorkspaceSegmentVisualQualityTooltip,
 } from "../features/workspace/workspace-segment-visual-ui";
 import { renderSegmentEditorPromptToolButtonContent } from "../features/workspace/workspace-segment-prompt-tool-ui";
 import {
@@ -923,6 +918,7 @@ import {
   normalizeStudioSegmentPhotoAnimationDurationSeconds,
   STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST,
   STUDIO_SEGMENT_VOICEOVER_CREDIT_COST,
+  STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS,
   STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST,
   STUDIO_WORKSPACE_CHARACTER_REFERENCE_CREDIT_COST,
   type StudioCreditAction,
@@ -1396,15 +1392,14 @@ const resolveStoredStudioCreateMusicType = (
 
 const resolveStoredStudioCreateVideoMode = (
   value: unknown,
-  fallbackVideoMode: StudioVideoMode,
+  _fallbackVideoMode: StudioVideoMode,
 ): StudioVideoMode => {
-  const fallbackNonCustomVideoMode = fallbackVideoMode === "custom" ? "standard" : fallbackVideoMode;
   const normalized = normalizeStoredStudioCreateTextValue(value);
-  if (normalized && normalized !== "custom") {
-    return studioVideoOptions.find((option) => option.id === normalized)?.id ?? fallbackNonCustomVideoMode;
+  if (normalized === "ai_photo") {
+    return "ai_photo";
   }
 
-  return fallbackNonCustomVideoMode;
+  return "ai_photo";
 };
 
 const resolveStudioCreateInitialSettings = (
@@ -1412,9 +1407,9 @@ const resolveStudioCreateInitialSettings = (
   fallbackSettings: Omit<StudioCreateInitialSettings, "musicName" | "voiceIdsByLanguage">,
 ): StudioCreateInitialSettings => {
   const storedVoiceId = normalizeStoredStudioCreateTextValue(storedSettings?.voiceId);
-  const storedVoiceLanguage = getStudioLanguageForVoiceId(storedVoiceId);
-  const language =
-    normalizeStudioLanguageValue(storedSettings?.language) ?? storedVoiceLanguage ?? fallbackSettings.language;
+  const storedLanguage = normalizeStudioLanguageValue(storedSettings?.language);
+  const storedVoiceLanguage = getStudioLanguageForVoiceId(storedVoiceId, storedLanguage ?? fallbackSettings.language);
+  const language = storedLanguage ?? storedVoiceLanguage ?? fallbackSettings.language;
   const fallbackVoiceIdForLanguage = (targetLanguage: StudioLanguage) =>
     fallbackSettings.language === targetLanguage ? fallbackSettings.voiceId : getDefaultStudioVoiceId(targetLanguage);
   const voiceIdsByLanguage: Record<StudioLanguage, StudioVoiceOption["id"]> = {
@@ -1683,12 +1678,9 @@ export function WorkspacePage({
   });
   const [selectedVideoMode, setSelectedVideoMode] = useState<StudioVideoMode>(initialStudioCreateSettings.videoMode);
   const selectedVideoModeExplicitlyChangedRef = useRef(false);
-  const [selectedSegmentAiPhotoQuality, setSelectedSegmentAiPhotoQuality] =
-    useState<StudioSegmentVisualQuality>("standard");
-  const [selectedSegmentAiVideoQuality, setSelectedSegmentAiVideoQuality] =
-    useState<StudioSegmentVisualQuality>("standard");
-  const [selectedSegmentPhotoAnimationQuality, setSelectedSegmentPhotoAnimationQuality] =
-    useState<StudioSegmentVisualQuality>("standard");
+  const selectedSegmentAiPhotoQuality: StudioSegmentVisualQuality = "premium";
+  const selectedSegmentAiVideoQuality: StudioSegmentVisualQuality = "premium";
+  const selectedSegmentPhotoAnimationQuality: StudioSegmentVisualQuality = "premium";
   const [selectedSegmentPhotoAnimationDurationSeconds, setSelectedSegmentPhotoAnimationDurationSeconds] =
     useState<StudioSegmentPhotoAnimationDurationSeconds>(5);
   const [selectedSegmentReferenceCharacterIds, setSelectedSegmentReferenceCharacterIds] = useState<number[]>([]);
@@ -1704,11 +1696,6 @@ export function WorkspacePage({
   const [isSavedWorkspaceReferencesLoading, setIsSavedWorkspaceReferencesLoading] = useState(false);
   const [savedWorkspaceReferencesError, setSavedWorkspaceReferencesError] = useState<string | null>(null);
   const [savedWorkspaceReferencesNotice, setSavedWorkspaceReferencesNotice] = useState<string | null>(null);
-  useEffect(() => {
-    setSelectedSegmentPhotoAnimationDurationSeconds((current) =>
-      normalizeStudioSegmentPhotoAnimationDurationSeconds(selectedSegmentPhotoAnimationQuality, current),
-    );
-  }, [selectedSegmentPhotoAnimationQuality]);
   const [isWorkspaceReferenceCreatorOpen, setIsWorkspaceReferenceCreatorOpen] = useState(false);
   const [referenceCreationSource, setReferenceCreationSource] = useState<WorkspaceReferenceCreationSource>("ai");
   const [referenceCreationPrompt, setReferenceCreationPrompt] = useState("");
@@ -1735,11 +1722,9 @@ export function WorkspacePage({
   const [savingReferenceNameId, setSavingReferenceNameId] = useState<string | null>(null);
   const segmentReferenceFrameAssetIdsRef = useRef<Map<string, number>>(new Map());
   const referenceCreationFileInputRef = useRef<HTMLInputElement | null>(null);
-  const [segmentVisualQualityTooltip, setSegmentVisualQualityTooltip] =
-    useState<WorkspaceSegmentVisualQualityTooltip | null>(null);
   const [selectedCustomVideo, setSelectedCustomVideo] = useState<StudioCustomVideoFile | null>(null);
   const [isPreparingCustomVideo, setIsPreparingCustomVideo] = useState(false);
-  const [videoSelectionError, setVideoSelectionError] = useState<string | null>(null);
+  const [, setVideoSelectionError] = useState<string | null>(null);
   const initialBrandSettingsRef = useRef<StudioBrandSettingsSnapshot | null>(null);
   if (!initialBrandSettingsRef.current) {
     initialBrandSettingsRef.current = readStoredStudioBrandSettings(session.email);
@@ -1789,7 +1774,7 @@ export function WorkspacePage({
     setSelectedSubtitleColorId(settings.subtitleColorId);
     selectedVoiceIdByLanguageRef.current = { ...settings.voiceIdsByLanguage };
     setSelectedVoiceId(settings.voiceId);
-    selectedVideoModeExplicitlyChangedRef.current = settings.videoMode !== "standard";
+    selectedVideoModeExplicitlyChangedRef.current = settings.videoMode !== "ai_photo";
     setSelectedVideoMode(settings.videoMode);
     if (settings.videoMode !== "custom") {
       setSelectedCustomVideo(null);
@@ -1857,7 +1842,7 @@ export function WorkspacePage({
 
     setSelectedLanguage((current) => (current === previousRouteLanguage ? routeLocaleLanguage : current));
     setSelectedVoiceId((currentVoiceId) => {
-      const currentVoiceLanguage = getStudioLanguageForVoiceId(currentVoiceId);
+      const currentVoiceLanguage = getStudioLanguageForVoiceId(currentVoiceId, previousRouteLanguage);
       if (currentVoiceLanguage !== previousRouteLanguage && currentVoiceLanguage) {
         return currentVoiceId;
       }
@@ -3922,14 +3907,11 @@ export function WorkspacePage({
     if (!preserveExamplePrefillRef.current && !isGuestAuthHandoff) {
       const didRestoreCreateSettings = restoreStoredStudioCreateSettings();
       if (!didRestoreCreateSettings) {
-        setSelectedVideoMode("standard");
+        setSelectedVideoMode("ai_photo");
         selectedVideoModeExplicitlyChangedRef.current = false;
         setSelectedMusicType("ai");
         setSelectedMusicName(null);
       }
-      setSelectedSegmentAiPhotoQuality("standard");
-      setSelectedSegmentAiVideoQuality("standard");
-      setSelectedSegmentPhotoAnimationQuality("standard");
       setSelectedSegmentReferenceCharacterIds([]);
       setSelectedSegmentReferenceCharacterAssetKeys([]);
       setSegmentTalkingCharacterTargets({});
@@ -5591,13 +5573,6 @@ export function WorkspacePage({
   const mediaLibraryPreviewModalTitle = mediaLibraryPreviewModal
     ? getWorkspaceMediaLibraryItemKindLabel(mediaLibraryPreviewModal.kind, mediaLibraryPreviewModal.assetKind, locale)
     : "";
-  const renderSegmentVisualQualitySwitch = (options: WorkspaceSegmentVisualQualitySwitchOptions) =>
-    renderWorkspaceSegmentVisualQualitySwitch(
-      locale,
-      segmentVisualQualityTooltip,
-      setSegmentVisualQualityTooltip,
-      options,
-    );
   const renderSegmentPhotoAnimationDurationSwitch = (options: WorkspaceSegmentPhotoAnimationDurationSwitchOptions) =>
     renderWorkspaceSegmentPhotoAnimationDurationSwitch(locale, options);
   const hasPreviewModalDescription = Boolean(previewModalDescription);
@@ -5658,8 +5633,8 @@ export function WorkspacePage({
         ? studioMusicOptions.find((option) => option.id === settings.musicType)?.id ?? null
         : null;
     const nextVideoMode =
-      typeof settings.videoMode === "string" && settings.videoMode !== "custom"
-        ? studioVideoOptions.find((option) => option.id === settings.videoMode)?.id ?? null
+      settings.videoMode === "ai_photo"
+        ? "ai_photo"
         : null;
     const nextSubtitleStyleId = typeof settings.subtitleStyleId === "string" ? settings.subtitleStyleId.trim() : "";
     const nextSubtitleColorId = typeof settings.subtitleColorId === "string" ? settings.subtitleColorId.trim() : "";
@@ -9994,7 +9969,7 @@ export function WorkspacePage({
   }, [activeSegment, activeSegmentIndex, activeSegmentMediaIdentityKey, createMode, queuedSegmentEditorPlaybackIndex]);
 
   useEffect(() => {
-    const currentVoiceLanguage = getStudioLanguageForVoiceId(selectedVoiceId);
+    const currentVoiceLanguage = getStudioLanguageForVoiceId(selectedVoiceId, selectedLanguage);
     const normalizedVoiceId = String(selectedVoiceId ?? "").trim();
     if (!currentVoiceLanguage || !normalizedVoiceId || normalizedVoiceId === "none") {
       return;
@@ -10016,7 +9991,7 @@ export function WorkspacePage({
       subtitleColorId: selectedSubtitleColorId,
       subtitleEnabled: isVoiceoverEnabled && areSubtitlesEnabled,
       subtitleStyleId: selectedSubtitleStyleId,
-      videoMode: selectedVideoMode === "custom" ? "standard" : selectedVideoMode,
+      videoMode: selectedVideoMode === "custom" ? "ai_photo" : selectedVideoMode,
       voiceEnabled: isVoiceoverEnabled,
       voiceId: persistedVoiceId,
       voiceIdsByLanguage: { ...selectedVoiceIdByLanguageRef.current, [selectedLanguage]: persistedVoiceId },
@@ -10178,7 +10153,7 @@ export function WorkspacePage({
   };
 
   const handleVoiceSelect = (voiceId: StudioVoiceOption["id"]) => {
-    const voiceLanguage = getStudioLanguageForVoiceId(voiceId) ?? selectedLanguage;
+    const voiceLanguage = getStudioLanguageForVoiceId(voiceId, selectedLanguage) ?? selectedLanguage;
     latestExplicitStudioVoiceSelectionRef.current = { language: voiceLanguage, voiceId };
     setIsVoiceoverEnabled(true);
     selectedVoiceIdByLanguageRef.current[voiceLanguage] = voiceId;
@@ -10189,41 +10164,6 @@ export function WorkspacePage({
     selectedVideoModeExplicitlyChangedRef.current = true;
     setSelectedVideoMode(videoMode);
     setVideoSelectionError(null);
-  };
-
-  const handleCustomVideoSelect = async (file: File) => {
-    if (!isSupportedStudioVideoFile(file.name)) {
-      setVideoSelectionError("Поддерживаются .jpg, .jpeg, .png, .webp, .avif, .mp4, .mov, .webm и .m4v.");
-      return;
-    }
-
-    if (file.size > getStudioCustomVisualMaxBytes(file.name)) {
-      setVideoSelectionError(getStudioCustomVisualTooLargeMessage(file.name));
-      return;
-    }
-
-    setIsPreparingCustomVideo(true);
-    setVideoSelectionError(null);
-
-    try {
-      const mimeType = getWorkspaceSegmentCustomVisualMimeType(file);
-      const objectUrl = createStudioObjectUrl(file);
-      const durationSeconds = mimeType.startsWith("video/") ? await readWorkspaceVideoDurationSeconds(objectUrl) : null;
-      setSelectedCustomVideo({
-        durationSeconds: durationSeconds ?? undefined,
-        file,
-        fileName: file.name,
-        fileSize: file.size,
-        mimeType,
-        objectUrl,
-      });
-      selectedVideoModeExplicitlyChangedRef.current = true;
-      setSelectedVideoMode("custom");
-    } catch (error) {
-      setVideoSelectionError(error instanceof Error ? error.message : "Не удалось подготовить визуал.");
-    } finally {
-      setIsPreparingCustomVideo(false);
-    }
   };
 
   const handleBrandLogoSelect = async (file: File) => {
@@ -10504,8 +10444,7 @@ export function WorkspacePage({
 
     if (
       typeof projectSettings?.videoMode === "string" &&
-      projectSettings.videoMode !== "custom" &&
-      studioVideoOptions.some((option) => option.id === projectSettings.videoMode)
+      projectSettings.videoMode === "ai_photo"
     ) {
       selectedVideoModeExplicitlyChangedRef.current = false;
       setSelectedVideoMode(projectSettings.videoMode);
@@ -12176,8 +12115,9 @@ export function WorkspacePage({
 
     const segmentTimelineVoiceDurationSession = getSegmentTimelineVoiceDurationSession(segment, draft);
     const segmentTimelineVoiceType = getWorkspaceSegmentEffectiveVoiceId(segment, segmentTimelineVoiceDurationSession);
+    const draftLanguage = getWorkspaceSegmentEditorSessionLanguage(draft);
     const segmentTimelineVoiceGenerationLanguage =
-      getStudioLanguageForVoiceId(segmentTimelineVoiceType) ?? getWorkspaceSegmentEditorSessionLanguage(draft);
+      getStudioLanguageForVoiceId(segmentTimelineVoiceType, draftLanguage) ?? draftLanguage;
     const segmentTimelineVoiceTextNormalized = normalizeWorkspaceSegmentEditorTextForCompare(segment.text);
     if (!segmentTimelineVoiceGenerationLanguage || !segmentTimelineVoiceTextNormalized || !segmentTimelineVoiceType) {
       return false;
@@ -12748,13 +12688,13 @@ export function WorkspacePage({
   const handleSegmentEditorVoiceToggle = (enabled: boolean) => {
     const nextVoiceType = enabled ? studioSidebarVoiceId || resolvedSelectedVoiceId : "none";
     latestExplicitStudioVoiceSelectionRef.current = enabled
-      ? { language: getStudioLanguageForVoiceId(nextVoiceType) ?? selectedLanguage, voiceId: nextVoiceType }
+      ? { language: getStudioLanguageForVoiceId(nextVoiceType, selectedLanguage) ?? selectedLanguage, voiceId: nextVoiceType }
       : null;
     updateSegmentEditorDraft((currentDraft) => applySegmentEditorGlobalVoiceToAllSegments(currentDraft, nextVoiceType));
   };
 
   const handleSegmentEditorVoiceSelect = (voiceId: StudioVoiceOption["id"]) => {
-    const voiceLanguage = getStudioLanguageForVoiceId(voiceId) ?? selectedLanguage;
+    const voiceLanguage = getStudioLanguageForVoiceId(voiceId, selectedLanguage) ?? selectedLanguage;
     latestExplicitStudioVoiceSelectionRef.current = { language: voiceLanguage, voiceId };
     selectedVoiceIdByLanguageRef.current[voiceLanguage] = voiceId;
     setSelectedVoiceId(voiceId);
@@ -12781,7 +12721,7 @@ export function WorkspacePage({
 
     const nextVoiceId =
       getStudioVoiceOptionById(voiceId)?.id ?? resolveStudioVoiceIdForLanguage(selectedLanguage, voiceId, studioSidebarVoiceId);
-    selectedVoiceIdByLanguageRef.current[getStudioLanguageForVoiceId(nextVoiceId) ?? selectedLanguage] = nextVoiceId;
+    selectedVoiceIdByLanguageRef.current[getStudioLanguageForVoiceId(nextVoiceId, selectedLanguage) ?? selectedLanguage] = nextVoiceId;
     setSegmentEditorVideoError(null);
     updateSegmentEditorDraft((currentDraft) => {
       const inheritedProjectVoiceId = normalizeWorkspaceSegmentEditorSetting(currentDraft.voiceType);
@@ -13469,7 +13409,7 @@ export function WorkspacePage({
   };
 
   const handleSegmentTimelineGlobalVoiceBulkTextSave = () => {
-    const fallbackVoiceLanguage = getStudioLanguageForVoiceId(studioSidebarVoiceId) ?? selectedLanguage;
+    const fallbackVoiceLanguage = getStudioLanguageForVoiceId(studioSidebarVoiceId, selectedLanguage) ?? selectedLanguage;
     const voiceDraft =
       segmentTimelineGlobalVoiceDraftRef.current ??
       segmentTimelineGlobalVoiceDraft ??
@@ -17677,6 +17617,17 @@ export function WorkspacePage({
       setSegmentEditorVideoError("Введите текст озвучки сцены.");
       return false;
     }
+    if (text.length > STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS) {
+      clearSegmentEditorVoiceoverError(targetSegmentIndex);
+      setSegmentEditorVideoError(
+        workspaceText(
+          locale,
+          `Сократите текст сцены до ${STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS} символов.`,
+          `Shorten the scene text to ${STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS} characters.`,
+        ),
+      );
+      return false;
+    }
 
     const requestedVoiceType = normalizeWorkspaceSegmentEditorSetting(options?.voiceType);
     const effectiveVoiceType = getWorkspaceSegmentEffectiveVoiceId(targetSegment, currentDraft);
@@ -18766,6 +18717,16 @@ export function WorkspacePage({
 
     const voiceoverTargetsToGenerateOnCreate =
       getSegmentTimelineVoiceoverGenerationTargets(draftForVoiceoverGeneration);
+    if (voiceoverTargetsToGenerateOnCreate.some((target) => target.text.length > STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS)) {
+      setSegmentEditorVideoError(
+        workspaceText(
+          locale,
+          `Текст каждой сцены должен быть не длиннее ${STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS} символов.`,
+          `Each scene text must be no longer than ${STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS} characters.`,
+        ),
+      );
+      return;
+    }
     if (voiceoverTargetsToGenerateOnCreate.some((target) => isWorkspaceSegmentVisualJobBusy(target.segment.index))) {
       logSegmentEditorDiagnostics(
         "client.segment-editor.create-shorts.blocked",
@@ -22814,7 +22775,7 @@ export function WorkspacePage({
     });
   };
   const getCurrentSegmentTimelineGlobalVoiceDraft = (): SegmentTimelineGlobalVoiceDraft => {
-    const language = getStudioLanguageForVoiceId(studioSidebarVoiceId) ?? selectedLanguage;
+    const language = getStudioLanguageForVoiceId(studioSidebarVoiceId, selectedLanguage) ?? selectedLanguage;
     const voiceId =
       resolveStudioVoiceIdForLanguage(
         language,
@@ -22851,7 +22812,10 @@ export function WorkspacePage({
 
       return {
         isEnabled: true,
-        language: getStudioLanguageForVoiceId(segmentVoiceOption.id) ?? getWorkspaceSegmentEditorSessionLanguage(draft) ?? selectedLanguage,
+        language:
+          getStudioLanguageForVoiceId(segmentVoiceOption.id, getWorkspaceSegmentEditorSessionLanguage(draft)) ??
+          getWorkspaceSegmentEditorSessionLanguage(draft) ??
+          selectedLanguage,
         voiceId: segmentVoiceOption.id,
       };
     }
@@ -22882,7 +22846,7 @@ export function WorkspacePage({
       );
     }
 
-    const language = selection.language ?? getStudioLanguageForVoiceId(selection.voiceId) ?? selectedLanguage;
+    const language = selection.language ?? getStudioLanguageForVoiceId(selection.voiceId, selectedLanguage) ?? selectedLanguage;
     const voiceId =
       resolveStudioVoiceIdForLanguage(
         language,
@@ -22909,7 +22873,10 @@ export function WorkspacePage({
     }));
   };
   const handleSegmentTimelineGlobalVoiceSelect = (voiceId: StudioVoiceOption["id"]) => {
-    const nextLanguage = getStudioLanguageForVoiceId(voiceId) ?? segmentTimelineGlobalVoiceDraft?.language ?? selectedLanguage;
+    const nextLanguage =
+      getStudioLanguageForVoiceId(voiceId, segmentTimelineGlobalVoiceDraft?.language ?? selectedLanguage) ??
+      segmentTimelineGlobalVoiceDraft?.language ??
+      selectedLanguage;
     latestExplicitStudioVoiceSelectionRef.current = { language: nextLanguage, voiceId };
     updateSegmentTimelineGlobalVoiceDraft((current) => ({
       ...(current ?? getCurrentSegmentTimelineGlobalVoiceDraft()),
@@ -22978,7 +22945,7 @@ export function WorkspacePage({
         }
 
         const language =
-          getStudioLanguageForVoiceId(voiceType) ??
+          getStudioLanguageForVoiceId(voiceType, voiceDraft?.language ?? getWorkspaceSegmentEditorSessionLanguage(draft)) ??
           voiceDraft?.language ??
           getWorkspaceSegmentEditorSessionLanguage(draft) ??
           selectedLanguage;
@@ -23098,6 +23065,17 @@ export function WorkspacePage({
     if (targets.length === 0) {
       shouldStartSegmentEditorFullPreviewAfterVoiceoverRef.current = false;
       setSegmentEditorVideoError(workspaceText(locale, "Добавьте текст озвучки хотя бы в одну сцену.", "Add voiceover text to at least one scene."));
+      return;
+    }
+    if (targets.some((target) => target.text.length > STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS)) {
+      shouldStartSegmentEditorFullPreviewAfterVoiceoverRef.current = false;
+      setSegmentEditorVideoError(
+        workspaceText(
+          locale,
+          `Текст каждой сцены должен быть не длиннее ${STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS} символов.`,
+          `Each scene text must be no longer than ${STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS} characters.`,
+        ),
+      );
       return;
     }
 
@@ -23460,7 +23438,7 @@ export function WorkspacePage({
     setSegmentTimelineTextMenuSegmentIndex((current) => (current === targetSegment.index ? null : targetSegment.index));
   };
   const handleSegmentTimelineTextChange = (segmentIndex: number, event: ChangeEvent<HTMLTextAreaElement>) => {
-    const nextValue = event.target.value;
+    const nextValue = event.target.value.slice(0, STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS);
     const currentSegment =
       segmentEditorDraftRef.current?.segments.find((segment) => segment.index === segmentIndex) ??
       segmentEditorDraft?.segments.find((segment) => segment.index === segmentIndex) ??
@@ -23611,7 +23589,7 @@ export function WorkspacePage({
   };
   const handleSegmentTimelineVoiceSelect = (segmentIndex: number, voiceId: StudioVoiceOption["id"]) => {
     const voiceOption = getStudioVoiceOptionById(voiceId);
-    const voiceLanguage = getStudioLanguageForVoiceId(voiceOption?.id ?? voiceId) ?? selectedLanguage;
+    const voiceLanguage = getStudioLanguageForVoiceId(voiceOption?.id ?? voiceId, selectedLanguage) ?? selectedLanguage;
     const nextVoiceId =
       voiceOption?.id ??
       resolveStudioVoiceIdForLanguage(
@@ -28213,25 +28191,7 @@ export function WorkspacePage({
           : null
       }
       onTrimToVoiceoverToggle={(trimToVoiceover) => setSegmentTimelineDurationTrimToVoiceover(trimToVoiceover)}
-      qualitySwitch={
-        segmentTimelineDurationMenuExtensionPlan
-          ? renderSegmentVisualQualitySwitch({
-              ariaLabel: workspaceText(locale, "Качество продления видео", "Video extension quality"),
-              className: "studio-segment-visual-quality--duration-extension",
-              costForQuality: (quality) =>
-                getSegmentPhotoAnimationCreditCost(
-                  quality,
-                  normalizeStudioSegmentPhotoAnimationDurationSeconds(
-                    quality,
-                    segmentTimelineDurationSelectedExtensionDurationSeconds,
-                  ),
-                ),
-              disabled: isSegmentTimelineDurationAiExtensionPending,
-              onChange: setSelectedSegmentPhotoAnimationQuality,
-              value: segmentTimelineDurationSelectedExtensionQuality,
-            })
-          : null
-      }
+      qualitySwitch={null}
       segment={segmentTimelineDurationMenuSegment}
       segmentArrayIndex={segmentTimelineDurationMenuArrayIndex}
       shouldShowManualDurationInput={shouldShowSegmentTimelineManualDurationInput}
@@ -28370,9 +28330,15 @@ export function WorkspacePage({
       ? getWorkspaceSegmentEffectiveVoiceId(segmentTimelineVoiceMenuSegment, segmentEditorDraft)
       : null;
   const segmentTimelineVoiceMenuLanguage =
-    getStudioLanguageForVoiceId(segmentTimelineVoiceMenuOverrideOption?.id) ??
-    getStudioLanguageForVoiceId(segmentTimelineVoiceMenuEffectiveDraftVoiceId) ??
-    getStudioLanguageForVoiceId(studioSidebarVoiceId) ??
+    getStudioLanguageForVoiceId(
+      segmentTimelineVoiceMenuOverrideOption?.id,
+      segmentEditorDraft ? getWorkspaceSegmentEditorSessionLanguage(segmentEditorDraft) : selectedLanguage,
+    ) ??
+    getStudioLanguageForVoiceId(
+      segmentTimelineVoiceMenuEffectiveDraftVoiceId,
+      segmentEditorDraft ? getWorkspaceSegmentEditorSessionLanguage(segmentEditorDraft) : selectedLanguage,
+    ) ??
+    getStudioLanguageForVoiceId(studioSidebarVoiceId, selectedLanguage) ??
     selectedLanguage;
   const segmentTimelineVoiceMenuVoiceOptions = studioVoiceOptionsByLanguage[segmentTimelineVoiceMenuLanguage];
   const segmentTimelineVoiceMenuEffectiveVoiceId = segmentTimelineVoiceMenuOverrideOption
@@ -28427,6 +28393,12 @@ export function WorkspacePage({
       ? workspaceText(locale, "Выберите голос для сцены.", "Choose a voice for the scene.")
       : !segmentTimelineVoiceMenuTextNormalized
         ? workspaceText(locale, "Введите текст озвучки.", "Enter voiceover text.")
+        : segmentTimelineVoiceMenuTextNormalized.length > STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS
+          ? workspaceText(
+              locale,
+              `Сократите текст сцены до ${STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS} символов.`,
+              `Shorten the scene text to ${STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS} characters.`,
+            )
         : isSegmentTimelineVoiceMenuVoiceoverFresh
           ? workspaceText(locale, "Актуальная озвучка уже готова.", "Current voiceover is already ready.")
           : isSegmentTimelineVoiceMenuGeneratingVoiceover
@@ -31310,17 +31282,6 @@ export function WorkspacePage({
     segmentAiVideoModalPrompt,
     selectedSegmentAiVideoQuality,
   );
-  const isSegmentAiPhotoPremiumBillingForced =
-    selectedSegmentAiPhotoQuality !== "premium" && segmentAiPhotoBillingQuality === "premium";
-  const isSegmentAiVideoPremiumBillingForced =
-    selectedSegmentAiVideoQuality !== "premium" && segmentAiVideoBillingQuality === "premium";
-  const segmentCharacterPremiumBillingDescription = workspaceText(
-    locale,
-    "Персонаж в описании считается Premium по стоимости.",
-    "Characters in the prompt are billed as Premium.",
-  );
-  const segmentAiPhotoDisplayQuality = isSegmentAiPhotoPremiumBillingForced ? "premium" : selectedSegmentAiPhotoQuality;
-  const segmentAiVideoDisplayQuality = isSegmentAiVideoPremiumBillingForced ? "premium" : selectedSegmentAiVideoQuality;
   const segmentAiPhotoRequiredCredits = getSegmentAiPhotoCreditCost(segmentAiPhotoBillingQuality);
   const segmentAiVideoRequiredCredits = getSegmentAiVideoCreditCost(segmentAiVideoBillingQuality);
   const segmentPhotoAnimationRequiredCredits = getSegmentPhotoAnimationCreditCost(
@@ -32655,6 +32616,8 @@ export function WorkspacePage({
                           !activeSegment ||
                           !activeSegmentEffectiveVoiceIdForGeneration ||
                           !normalizeWorkspaceSegmentEditorTextForCompare(activeSegment.text) ||
+                          normalizeWorkspaceSegmentEditorTextForCompare(activeSegment.text).length >
+                            STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS ||
                           isActiveSegmentVoiceoverCurrent
                         }
                         onClick={() => {
@@ -32802,40 +32765,6 @@ export function WorkspacePage({
                       {canPromptUseVisualReferences
                         ? renderSegmentVisualReferencesPanel("editor")
                         : null}
-                      {isPromptAiPhotoMode
-                        ? renderSegmentVisualQualitySwitch({
-                            ariaLabel: workspaceText(locale, "Качество ИИ фото", "AI photo quality"),
-                            className: "studio-segment-visual-quality--action-row",
-                            costForQuality: getSegmentAiPhotoCreditCost,
-                            disabled: isPromptVisualBaseDisabled,
-                            forcedPremiumDescription: isSegmentAiPhotoPremiumBillingForced
-                              ? segmentCharacterPremiumBillingDescription
-                              : undefined,
-                            onChange: setSelectedSegmentAiPhotoQuality,
-                            value: segmentAiPhotoDisplayQuality,
-                          })
-                          : isPromptAiVideoMode
-                            ? renderSegmentVisualQualitySwitch({
-                                ariaLabel: workspaceText(locale, "Качество ИИ видео", "AI video quality"),
-                                className: "studio-segment-visual-quality--action-row",
-                                costForQuality: getSegmentAiVideoCreditCost,
-                              disabled: isPromptVisualBaseDisabled,
-                              forcedPremiumDescription: isSegmentAiVideoPremiumBillingForced
-                                ? segmentCharacterPremiumBillingDescription
-                                : undefined,
-                                onChange: setSelectedSegmentAiVideoQuality,
-                                value: segmentAiVideoDisplayQuality,
-                              })
-                            : isPromptPhotoAnimationMode
-                              ? renderSegmentVisualQualitySwitch({
-                                  ariaLabel: workspaceText(locale, "Качество ИИ анимации", "AI animation quality"),
-                                  className: "studio-segment-visual-quality--action-row",
-                                  costForQuality: getSegmentPhotoAnimationCreditCost,
-                                  disabled: isPromptVisualBaseDisabled,
-                                  onChange: setSelectedSegmentPhotoAnimationQuality,
-                                  value: selectedSegmentPhotoAnimationQuality,
-                                })
-                              : null}
                       {isPromptTalkingPhotoMode && activeSegment ? (
                         <div className="studio-segment-editor__prompt-voice-picker">
                           <StudioVoiceSelectorChip
@@ -34199,15 +34128,12 @@ export function WorkspacePage({
                                   brandUploadError={brandSelectionError}
                                   customVideoFile={selectedCustomVideo}
                                   isPreparingBrandLogo={isPreparingBrandLogo}
-                                  isPreparingCustomVideo={isPreparingCustomVideo}
                                   onBrandLogoSelect={handleBrandLogoSelect}
                                   onBrandTextChange={handleBrandTextChange}
                                   onClearBrandText={handleClearBrandText}
                                   onRemoveBrandLogo={handleRemoveBrandLogo}
-                                  onSelectCustomFile={handleCustomVideoSelect}
                                   onSelectVideoMode={handleVideoModeSelect}
                                   selectedVideoMode={selectedVideoMode}
-                                  uploadError={videoSelectionError}
                                 />
                               ) : chip === "Субтитры" ? (
                                 <StudioSubtitleSelectorChip
@@ -35153,21 +35079,6 @@ export function WorkspacePage({
                             <p>{workspaceText(locale, "Короткое точное описание сцены и движения работает лучше.", "A short precise scene and motion description works best.")}</p>
                           </div>
 
-                          {renderSegmentVisualQualitySwitch({
-                            ariaLabel: workspaceText(locale, "Качество ИИ видео", "AI video quality"),
-                            costForQuality: getSegmentAiVideoCreditCost,
-                            disabled:
-                              isSegmentAiPhotoModalSegmentVisualJobBusy ||
-                              isSegmentAiPhotoModalPreparingCustomVideo ||
-                              isSegmentAiPhotoPromptImproving,
-                            forcedPremiumDescription: isSegmentAiVideoPremiumBillingForced
-                              ? segmentCharacterPremiumBillingDescription
-                              : undefined,
-                            label: workspaceText(locale, "Качество AI видео", "AI video quality"),
-                            onChange: setSelectedSegmentAiVideoQuality,
-                            value: segmentAiVideoDisplayQuality,
-                          })}
-
                           <div className={`studio-ai-photo-modal__prompt-field${isSegmentAiPhotoPromptHighlighted ? " is-highlighted" : ""}`}>
                             <textarea
                               ref={segmentAiPhotoModalTextareaRef}
@@ -35250,18 +35161,6 @@ export function WorkspacePage({
                             <strong>{workspaceText(locale, "ИИ анимация кадра", "AI frame animation")}</strong>
                             <p>{workspaceText(locale, "Добавляет движение к текущему кадру сегмента.", "Adds motion to the current segment frame.")}</p>
                           </div>
-
-                          {renderSegmentVisualQualitySwitch({
-                            ariaLabel: workspaceText(locale, "Качество ИИ анимации", "AI animation quality"),
-                            costForQuality: getSegmentPhotoAnimationCreditCost,
-                            disabled:
-                              isSegmentAiPhotoModalSegmentVisualJobBusy ||
-                              isSegmentAiPhotoModalPreparingCustomVideo ||
-                              isSegmentAiPhotoPromptImproving,
-                            label: workspaceText(locale, "Качество AI анимации", "AI animation quality"),
-                            onChange: setSelectedSegmentPhotoAnimationQuality,
-                            value: selectedSegmentPhotoAnimationQuality,
-                          })}
 
                           <div className={`studio-ai-photo-modal__prompt-field${isSegmentAiPhotoPromptHighlighted ? " is-highlighted" : ""}`}>
                             <textarea
@@ -35534,21 +35433,6 @@ export function WorkspacePage({
                             <strong>{workspaceText(locale, "ИИ фото", "AI photo")}</strong>
                             <p>{workspaceText(locale, "Короткое точное описание работает лучше.", "A short precise description works best.")}</p>
                           </div>
-
-                          {renderSegmentVisualQualitySwitch({
-                            ariaLabel: workspaceText(locale, "Качество ИИ фото", "AI photo quality"),
-                            costForQuality: getSegmentAiPhotoCreditCost,
-                            disabled:
-                              isSegmentAiPhotoModalSegmentVisualJobBusy ||
-                              isSegmentAiPhotoModalPreparingCustomVideo ||
-                              isSegmentAiPhotoPromptImproving,
-                            forcedPremiumDescription: isSegmentAiPhotoPremiumBillingForced
-                              ? segmentCharacterPremiumBillingDescription
-                              : undefined,
-                            label: workspaceText(locale, "Качество AI фото", "AI photo quality"),
-                            onChange: setSelectedSegmentAiPhotoQuality,
-                            value: segmentAiPhotoDisplayQuality,
-                          })}
 
                           <div className={`studio-ai-photo-modal__prompt-field${isSegmentAiPhotoPromptHighlighted ? " is-highlighted" : ""}`}>
                             <textarea

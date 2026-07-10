@@ -9,8 +9,8 @@ export const LOCALE_LABELS = {
     en: "English",
 };
 export const DEFAULT_STUDIO_VOICE_ID = {
-    ru: "Bys_24000",
-    en: "Aiden",
+    ru: "Liam_Timing",
+    en: "Liam_Timing",
 };
 const supportedLocaleSet = new Set(SUPPORTED_LOCALES);
 export const isSupportedLocale = (value) => supportedLocaleSet.has(String(value ?? "").trim().toLowerCase());

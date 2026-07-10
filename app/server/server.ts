@@ -143,6 +143,7 @@ import {
   getStudioVideoProxyTargetByPath,
   getStudioVideoProxyTarget,
   invalidateWorkspaceBootstrapCacheByIdentityFragments,
+  StudioVoiceoverTextLimitError,
   invalidateWorkspaceBootstrapCache,
   improveStudioSegmentAiPhotoPrompt,
   normalizeStudioMediaSegmentIndexForScope,
@@ -5210,7 +5211,11 @@ app.post("/api/studio/voiceover/batch-jobs", async (req, res) => {
     res.json({ data: job });
   } catch (error) {
     console.error("[studio] Failed to create batch voiceover job", error);
-    const statusCode = error instanceof WorkspaceCreditLimitError ? 402 : 500;
+    const statusCode = error instanceof WorkspaceCreditLimitError
+      ? 402
+      : error instanceof StudioVoiceoverTextLimitError
+        ? 400
+        : 500;
 
     res.status(statusCode).json({
       error: error instanceof Error ? error.message : "Failed to create batch voiceover job.",
@@ -5286,7 +5291,11 @@ app.post("/api/studio/segment-voiceover/jobs", async (req, res) => {
     res.json({ data: job });
   } catch (error) {
     console.error("[studio] Failed to create segment voiceover job", error);
-    const statusCode = error instanceof WorkspaceCreditLimitError ? 402 : 500;
+    const statusCode = error instanceof WorkspaceCreditLimitError
+      ? 402
+      : error instanceof StudioVoiceoverTextLimitError
+        ? 400
+        : 500;
 
     res.status(statusCode).json({
       error: error instanceof Error ? error.message : "Failed to create segment voiceover job.",
@@ -5378,7 +5387,11 @@ app.post("/api/studio/project-voiceover/jobs", async (req, res) => {
     res.json({ data: job });
   } catch (error) {
     console.error("[studio] Failed to create project voiceover job", error);
-    const statusCode = error instanceof WorkspaceCreditLimitError ? 402 : 500;
+    const statusCode = error instanceof WorkspaceCreditLimitError
+      ? 402
+      : error instanceof StudioVoiceoverTextLimitError
+        ? 400
+        : 500;
 
     res.status(statusCode).json({
       error: error instanceof Error ? error.message : "Failed to create project voiceover job.",

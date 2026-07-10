@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { env } from "./env.js";
 import { buildAuthScopedCacheKey, buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
 import { buildWorkspaceMediaAssetRef, mergeWorkspaceMediaAssetRefs, } from "./media-assets.js";
-import { STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST, STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST_BY_QUALITY, STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST, STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST_BY_QUALITY, STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST, STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST, STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST, getStudioSegmentPhotoAnimationCreditCost, getStudioSegmentTalkingPhotoCreditCost, getStudioSegmentVoiceoverCreditCost, normalizeStudioSegmentPhotoAnimationDurationSeconds, STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST, STUDIO_SEGMENT_VOICEOVER_CREDIT_COST, STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST, STUDIO_WORKSPACE_CHARACTER_REFERENCE_CREDIT_COST, STUDIO_PREMIUM_VOICE_CREDIT_COST, STUDIO_PREMIUM_VIDEO_GENERATION_CREDIT_COST, STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST, } from "../shared/studio-credit-costs.js";
+import { STUDIO_AI_PHOTO_VIDEO_GENERATION_CREDIT_COST, STUDIO_AI_VIDEO_GENERATION_CREDIT_COST, STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST, STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST_BY_QUALITY, STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST, STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST_BY_QUALITY, STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST, STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST, STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST, getStudioSegmentPhotoAnimationCreditCost, getStudioSegmentTalkingPhotoCreditCost, getStudioSegmentVoiceoverCreditCost, normalizeStudioSegmentPhotoAnimationDurationSeconds, STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST, STUDIO_SEGMENT_VOICEOVER_CREDIT_COST, STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS, STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST, STUDIO_WORKSPACE_CHARACTER_REFERENCE_CREDIT_COST, STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST, } from "../shared/studio-credit-costs.js";
 import { normalizeExamplePrefillStudioSettings, } from "../shared/example-prefill.js";
 import { DEFAULT_LOCALE, DEFAULT_STUDIO_VOICE_ID, SUPPORTED_LOCALES, isSupportedLocale, } from "../shared/locales.js";
 import { ensureWorkspaceProjectPlayback, getWorkspaceProjectPlaybackCacheKey, warmWorkspaceProjectPlayback, } from "./project-playback.js";
@@ -76,6 +76,12 @@ export const resolveWorkspaceSubscriptionDetailsFromAdminPayload = (payload, opt
         userId,
     };
 };
+export class StudioVoiceoverTextLimitError extends Error {
+    constructor() {
+        super(`Voiceover text for a scene must not exceed ${STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS} characters.`);
+        this.name = "StudioVoiceoverTextLimitError";
+    }
+}
 export class WorkspaceCreditLimitError extends Error {
     constructor(message = "На тарифе FREE доступна 1 бесплатная генерация. Обновите тариф, чтобы продолжить.") {
         super(message);
@@ -428,6 +434,13 @@ const sanitizeStudioContentPlanIdeaPrompt = (value) => {
     return normalized || fallbackPrompt;
 };
 const normalizeGenerationText = (value) => String(value ?? "").replace(/\s+/g, " ").trim();
+const normalizeStudioSegmentVoiceoverText = (value) => {
+    const text = normalizeGenerationText(value);
+    if (text.length > STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS) {
+        throw new StudioVoiceoverTextLimitError();
+    }
+    return text;
+};
 const normalizeStudioMusicType = (value) => {
     const normalized = String(value ?? "").trim().toLowerCase();
     return studioSupportedMusicTypes.has(normalized) ? normalized : "ai";
@@ -468,7 +481,7 @@ const normalizeStudioSegmentVisualQuality = (value) => {
 const getStudioSegmentAiPhotoCreditCost = (quality) => STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST_BY_QUALITY[quality] ?? STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST;
 const getStudioSegmentAiVideoCreditCost = (quality) => STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST_BY_QUALITY[quality] ?? STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST;
 const getStudioSegmentPhotoAnimationRequiredCredits = (quality, durationSeconds) => getStudioSegmentPhotoAnimationCreditCost(quality, durationSeconds);
-const studioPremiumVoiceIds = new Set([
+const studioMultilingualVoiceIds = new Set([
     "Liam_Timing",
     "Elena",
     "Adam",
@@ -479,8 +492,6 @@ const studioPremiumVoiceIds = new Set([
     "Lesha",
     "Stas",
     "Misha",
-    "English_ManWithDeepVoice",
-    "Russian_BrightHeroine",
 ]);
 const getCanonicalStudioVoiceId = (voiceId) => {
     const normalizedVoiceId = normalizeGenerationText(voiceId);
@@ -499,10 +510,7 @@ const getCanonicalStudioVoiceId = (voiceId) => {
     }
     return null;
 };
-export const getStudioVoiceCreditCost = (voiceId) => {
-    const canonicalVoiceId = getCanonicalStudioVoiceId(voiceId);
-    return canonicalVoiceId && studioPremiumVoiceIds.has(canonicalVoiceId) ? STUDIO_PREMIUM_VOICE_CREDIT_COST : 0;
-};
+export const getStudioVoiceCreditCost = (_voiceId) => 0;
 const buildStudioSegmentVisualQualityPayload = (quality) => quality === "premium"
     ? {
         generation_quality: quality,
@@ -565,9 +573,11 @@ const normalizeWaveSpeedSegmentTalkingPhotoFileName = (jobId) => `segment-talkin
 const getStudioGenerationCreditCost = (videoMode, options) => {
     const baseCredits = options?.isSegmentEditorGeneration
         ? STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST
-        : videoMode === "ai_photo"
-            ? STUDIO_PREMIUM_VIDEO_GENERATION_CREDIT_COST
-            : STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST;
+        : videoMode === "ai_video"
+            ? STUDIO_AI_VIDEO_GENERATION_CREDIT_COST
+            : videoMode === "ai_photo"
+                ? STUDIO_AI_PHOTO_VIDEO_GENERATION_CREDIT_COST
+                : STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST;
     const voiceCredits = options?.voiceEnabled === false ? 0 : getStudioVoiceCreditCost(options?.voiceId);
     return baseCredits + voiceCredits;
 };
@@ -589,9 +599,14 @@ const getStudioVoiceLanguage = (voiceId) => {
     }
     return null;
 };
+const isStudioVoiceSupportedForLanguage = (voiceId, language) => {
+    const canonicalVoiceId = getCanonicalStudioVoiceId(voiceId);
+    return Boolean(canonicalVoiceId &&
+        (studioMultilingualVoiceIds.has(canonicalVoiceId) || getStudioVoiceLanguage(canonicalVoiceId) === language));
+};
 const getDefaultStudioVoiceId = (language) => DEFAULT_STUDIO_VOICE_ID[language];
 for (const language of SUPPORTED_LOCALES) {
-    if (getStudioVoiceLanguage(getDefaultStudioVoiceId(language)) !== language) {
+    if (!isStudioVoiceSupportedForLanguage(getDefaultStudioVoiceId(language), language)) {
         throw new Error(`Default studio voice is not configured for locale "${language}".`);
     }
 }
@@ -601,8 +616,9 @@ export const normalizeStudioVoiceIdForLanguage = (voiceId, language) => {
         return undefined;
     }
     const canonicalVoiceId = getCanonicalStudioVoiceId(normalizedVoiceId);
-    const voiceLanguage = getStudioVoiceLanguage(canonicalVoiceId);
-    return voiceLanguage === language && canonicalVoiceId ? canonicalVoiceId : getDefaultStudioVoiceId(language);
+    return canonicalVoiceId && isStudioVoiceSupportedForLanguage(canonicalVoiceId, language)
+        ? canonicalVoiceId
+        : getDefaultStudioVoiceId(language);
 };
 const getStudioVoiceModelPath = (voiceId) => {
     const canonicalVoiceId = getCanonicalStudioVoiceId(voiceId);
@@ -5479,7 +5495,7 @@ export async function createStudioSegmentSceneSoundJob(prompt, user, options) {
 }
 export async function createStudioSegmentVoiceoverJob(text, user, options) {
     assertAdsflowConfigured();
-    const normalizedText = normalizeGenerationText(text);
+    const normalizedText = normalizeStudioSegmentVoiceoverText(text);
     if (!normalizedText) {
         throw new Error("Voiceover text is required.");
     }
@@ -5545,7 +5561,7 @@ export async function createStudioProjectVoiceoverJob(text, user, options) {
     const studioVoiceModelPath = getStudioVoiceModelPath(normalizedVoiceType);
     const segments = (options?.segments ?? [])
         .map((segment, index) => {
-        const segmentText = normalizeGenerationText(segment.text);
+        const segmentText = normalizeStudioSegmentVoiceoverText(segment.text);
         if (!segmentText) {
             return null;
         }
@@ -5651,7 +5667,7 @@ const normalizeStudioBatchVoiceoverGroups = (groups) => {
         }
         const segments = (group.segments ?? [])
             .map((segment, index) => {
-            const text = normalizeGenerationText(segment.text);
+            const text = normalizeStudioSegmentVoiceoverText(segment.text);
             if (!text) {
                 return null;
             }
