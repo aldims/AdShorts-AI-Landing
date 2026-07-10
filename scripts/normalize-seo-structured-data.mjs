@@ -13,14 +13,14 @@ const localPathFor = (pathname) => {
   return `${pathname.slice(1)}index.html`;
 };
 
-const normalizeNode = (value, locale, contentModified) => {
-  if (Array.isArray(value)) return value.map((item) => normalizeNode(item, locale, contentModified));
+const normalizeNode = (value, locale, contentModified, offerUrl) => {
+  if (Array.isArray(value)) return value.map((item) => normalizeNode(item, locale, contentModified, offerUrl));
   if (!value || typeof value !== "object") return value;
 
   const normalized = {};
   for (const [key, child] of Object.entries(value)) {
     if (key === "aggregateRating") continue;
-    normalized[key] = normalizeNode(child, locale, contentModified);
+    normalized[key] = normalizeNode(child, locale, contentModified, offerUrl);
   }
 
   const types = Array.isArray(normalized["@type"]) ? normalized["@type"] : [normalized["@type"]];
@@ -32,7 +32,7 @@ const normalizeNode = (value, locale, contentModified) => {
   }
   if (types.includes("Offer")) {
     normalized.priceCurrency = locale === "en" ? "USD" : "RUB";
-    normalized.url = locale === "en" ? `${siteOrigin}/en/pricing/` : `${siteOrigin}/pricing/`;
+    normalized.url = offerUrl;
   }
   return normalized;
 };
@@ -60,7 +60,10 @@ for (const entry of policy.index) {
         return "";
       }
 
-      const normalized = normalizeNode(data, locale, entry.contentModified);
+      const offerUrl = entry.url === "/kalkulyator-stoimosti-shorts/"
+        ? `${siteOrigin}${entry.url}`
+        : locale === "en" ? `${siteOrigin}/en/pricing/` : `${siteOrigin}/pricing/`;
+      const normalized = normalizeNode(data, locale, entry.contentModified, offerUrl);
       if (JSON.stringify(normalized) === JSON.stringify(data)) return block;
       const nextBlock = `\n    <script type="application/ld+json">\n${JSON.stringify(normalized, null, 6).replace(/^/gm, "    ")}\n    </script>`;
       pageChanged = true;

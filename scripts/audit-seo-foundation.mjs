@@ -160,6 +160,15 @@ const redirectManifest = JSON.parse(await readRootFile("seo-redirects.json"));
 assert(redirectManifest.deployAutomatically === false, "seo-redirects.json: redirects must require separate approval");
 assert(redirectManifest.redirects.length === policy.redirect.length, "seo-redirects.json: redirect count must match policy");
 
+const calculatorHtml = await readRootFile("kalkulyator-stoimosti-shorts/index.html");
+const calculatorJs = await readRootFile("kalkulyator-stoimosti-shorts/calculator.js");
+for (const id of ["shorts-calculator", "manual-time", "manual-cost", "ai-time", "ai-cost", "share-result"]) {
+  assert(new RegExp(`id=["']${id}["']`).test(calculatorHtml), `calculator: missing #${id}`);
+}
+assert(/new URLSearchParams\(window\.location\.search\)/.test(calculatorJs), "calculator: shared URL state is missing");
+assert(/window\.history\.replaceState/.test(calculatorJs), "calculator: URL result update is missing");
+assert(!/\b(?:fetch|XMLHttpRequest)\b/.test(calculatorJs), "calculator: calculation must remain client-side without data submission");
+
 const seoDeploy = await readRootFile("deploy-seo-only.sh").catch(() => "");
 if (seoDeploy) {
   assert(!/(systemctl|caddy|backend|worker|app\/dist)/i.test(seoDeploy), "deploy-seo-only.sh: must not touch Caddy, services, backend, workers or React build");

@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://adshortsai.com/kalkulyator-stoimosti-shorts/" />
+    <title>Калькулятор стоимости Shorts: время и бюджет производства</title>
+    <meta name="description" content="Бесплатный калькулятор стоимости и времени производства Shorts: сравните ручной процесс и создание коротких видео с AI по своим параметрам." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://adshortsai.com/kalkulyator-stoimosti-shorts/" />
+    <meta property="og:title" content="Калькулятор стоимости и времени Shorts" />
+    <meta property="og:description" content="Сравните часы и бюджет ручного создания коротких видео со своим сценарием работы через AI." />
+    <meta property="og:image" content="https://adshortsai.com/background/guides.png" />
+    <meta property="og:site_name" content="AdShorts AI" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Калькулятор стоимости и времени Shorts" />
+    <meta name="twitter:description" content="Сравните часы и бюджет производства коротких видео по своим параметрам." />
+    <meta name="twitter:image" content="https://adshortsai.com/background/guides.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../styles.css?v=55" />
+    <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png" />
+    <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
+    <style>
+      .logo { display: inline-flex; align-items: center; gap: 12px; }
+      .logo__icon { display: inline-block; }
+      .calculator-page { padding-top: clamp(110px, 13vw, 170px); }
+      .calculator-intro { max-width: 820px; margin: 0 auto 36px; text-align: center; }
+      .calculator-intro h1 { margin: 14px 0 18px; font-size: clamp(2rem, 4.4vw, 3.6rem); line-height: 1.05; }
+      .calculator-intro .lead { max-width: 700px; margin: 0 auto; }
+      .calculator-kicker { color: #4ee0c1; font-size: .82rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+      .calculator-shell { display: grid; grid-template-columns: minmax(0, .92fr) minmax(0, 1.08fr); border: 1px solid var(--border); border-radius: 8px; background: rgba(7, 10, 21, .78); box-shadow: 0 28px 70px rgba(0, 0, 0, .28); overflow: hidden; }
+      .calculator-form, .calculator-result { min-width: 0; padding: clamp(24px, 4vw, 44px); }
+      .calculator-form { border-right: 1px solid var(--border); }
+      .calculator-form h2, .calculator-result h2 { margin: 0 0 8px; font-size: 1.35rem; }
+      .calculator-note { margin: 0 0 26px; color: var(--muted); font-size: .94rem; }
+      .calculator-fields { display: grid; gap: 18px; }
+      .calculator-field { display: grid; grid-template-columns: minmax(0, 1fr) 132px; align-items: center; gap: 18px; }
+      .calculator-field label { color: var(--text); font-weight: 600; }
+      .calculator-field small { display: block; margin-top: 4px; color: var(--muted); font-weight: 400; }
+      .calculator-field input { width: 100%; min-height: 46px; border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; background: rgba(255,255,255,.045); color: var(--text); font: inherit; text-align: right; }
+      .calculator-field input:focus { outline: 2px solid rgba(52, 211, 153, .45); outline-offset: 2px; border-color: #34d399; }
+      .calculator-result { background: linear-gradient(145deg, rgba(31, 41, 55, .58), rgba(10, 16, 30, .34)); }
+      .result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; margin: 24px 0 28px; border: 1px solid var(--border); background: var(--border); border-radius: 8px; overflow: hidden; }
+      .result-item { min-width: 0; padding: 18px; background: #0a0e1a; }
+      .result-item span { display: block; margin-bottom: 7px; color: var(--muted); font-size: .83rem; }
+      .result-item strong { display: block; font-size: clamp(1.25rem, 3vw, 2rem); line-height: 1.1; overflow-wrap: anywhere; }
+      .result-item--accent strong { color: #4ee0c1; }
+      .comparison { display: grid; gap: 18px; margin: 0 0 28px; }
+      .comparison-row { display: grid; gap: 8px; }
+      .comparison-label { display: flex; justify-content: space-between; gap: 16px; color: var(--muted); font-size: .88rem; }
+      .comparison-track { height: 10px; border-radius: 5px; background: rgba(255,255,255,.07); overflow: hidden; }
+      .comparison-bar { display: block; width: 0; height: 100%; border-radius: inherit; transition: width .3s ease; }
+      .comparison-bar--manual { background: #f59e0b; }
+      .comparison-bar--ai { background: #34d399; }
+      .calculator-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+      .share-status { min-height: 1.4em; margin: 10px 0 0; color: #4ee0c1; font-size: .88rem; }
+      .calculator-explainer { max-width: 840px; margin: 70px auto 0; }
+      .calculator-explainer h2 { margin-top: 34px; }
+      .calculator-faq { margin-top: 44px; padding: 28px; border: 1px solid var(--border); border-radius: 8px; background: rgba(255,255,255,.025); }
+      @media (max-width: 820px) {
+        .calculator-shell { grid-template-columns: 1fr; }
+        .calculator-form { border-right: 0; border-bottom: 1px solid var(--border); }
+      }
+      @media (max-width: 520px) {
+        .calculator-field { grid-template-columns: 1fr 112px; gap: 12px; }
+        .result-grid { grid-template-columns: 1fr; }
+        .calculator-actions .btn { width: 100%; justify-content: center; }
+      }
+    </style>
+    <script defer src="../script.js?v=8"></script>
+    <script defer src="./calculator.js?v=1"></script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebPage",
+        "name": "Калькулятор стоимости и времени Shorts",
+        "description": "Бесплатный калькулятор для сравнения времени и бюджета ручного создания Shorts и работы с AI.",
+        "inLanguage": "ru",
+        "url": "https://adshortsai.com/kalkulyator-stoimosti-shorts/",
+        "dateModified": "2026-07-10",
+        "isPartOf": {
+          "@type": "WebSite",
+          "name": "AdShorts AI",
+          "url": "https://adshortsai.com/"
+        }
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Калькулятор стоимости и времени Shorts",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Web",
+        "url": "https://adshortsai.com/kalkulyator-stoimosti-shorts/",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "RUB",
+          "url": "https://adshortsai.com/kalkulyator-stoimosti-shorts/"
+        }
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          { "@type": "ListItem", "position": 1, "name": "Главная", "item": "https://adshortsai.com/" },
+          { "@type": "ListItem", "position": 2, "name": "Гайды по Shorts", "item": "https://adshortsai.com/shorts-guides/" },
+          { "@type": "ListItem", "position": 3, "name": "Калькулятор стоимости Shorts", "item": "https://adshortsai.com/kalkulyator-stoimosti-shorts/" }
+        ]
+      }
+    </script>
+  </head>
+  <body>
+    <header class="header header--app-static">
+      <div class="container header__inner">
+        <a class="logo" href="../" aria-label="AdShorts AI">
+          <img class="logo__icon" src="../logo.png?v=2" alt="" role="presentation" width="46" height="46" />
+          <span class="logo__wordmark">AdShorts<span>AI</span></span>
+        </a>
+        <nav class="nav" aria-label="Главная навигация">
+          <button class="nav__toggle" aria-expanded="false" aria-controls="nav-menu">Меню</button>
+          <ul id="nav-menu" class="nav__list">
+            <li><a class="nav__home-link" href="../">Главная</a></li>
+            <li><a href="../examples/">Примеры</a></li>
+            <li><a href="../app/studio">Студия</a></li>
+            <li><a href="../pricing/">Тарифы</a></li>
+          </ul>
+        </nav>
+        <div class="header__actions">
+          <a class="header__signin-link" href="../app/studio">Войти</a>
+        </div>
+      </div>
+    </header>
+
+    <main class="calculator-page">
+      <section class="section">
+        <div class="container">
+          <div class="calculator-intro">
+            <a href="../shorts-guides/" class="article-back">Все гайды по Shorts</a>
+            <p class="calculator-kicker">Бесплатно · без регистрации</p>
+            <h1>Калькулятор стоимости и времени Shorts</h1>
+            <p class="lead">Сравните ручное создание коротких видео и работу с AI по собственным параметрам. Все исходные значения задаёте вы.</p>
+          </div>
+
+          <div class="calculator-shell">
+            <form class="calculator-form" id="shorts-calculator">
+              <h2>Ваш сценарий</h2>
+              <p class="calculator-note">Расчёт обновляется сразу и сохраняется в адресе страницы.</p>
+              <div class="calculator-fields">
+                <div class="calculator-field">
+                  <label for="videos">Видео в месяц<small>От 1 до 200</small></label>
+                  <input id="videos" name="videos" type="number" min="1" max="200" step="1" value="8" inputmode="numeric" />
+                </div>
+                <div class="calculator-field">
+                  <label for="manual-hours">Ручная работа на видео<small>Сценарий, монтаж, субтитры</small></label>
+                  <input id="manual-hours" name="manualHours" type="number" min="0.25" max="80" step="0.25" value="3" inputmode="decimal" />
+                </div>
+                <div class="calculator-field">
+                  <label for="hourly-rate">Стоимость часа, ₽<small>Ваша ставка или стоимость специалиста</small></label>
+                  <input id="hourly-rate" name="hourlyRate" type="number" min="0" max="100000" step="100" value="1000" inputmode="numeric" />
+                </div>
+                <div class="calculator-field">
+                  <label for="ai-minutes">Работа с AI на видео<small>Ваше ожидаемое время с проверкой</small></label>
+                  <input id="ai-minutes" name="aiMinutes" type="number" min="1" max="480" step="1" value="20" inputmode="numeric" />
+                </div>
+                <div class="calculator-field">
+                  <label for="subscription">Инструменты в месяц, ₽<small>Укажите стоимость своего тарифа</small></label>
+                  <input id="subscription" name="subscription" type="number" min="0" max="1000000" step="100" value="0" inputmode="numeric" />
+                </div>
+              </div>
+            </form>
+
+            <section class="calculator-result" aria-live="polite" aria-labelledby="result-heading">
+              <h2 id="result-heading">Результат за месяц</h2>
+              <p class="calculator-note">Сравнение учитывает одинаковую стоимость рабочего часа в обоих сценариях.</p>
+              <div class="result-grid">
+                <div class="result-item"><span>Ручное время</span><strong id="manual-time">24 ч</strong></div>
+                <div class="result-item"><span>Ручной бюджет</span><strong id="manual-cost">24 000 ₽</strong></div>
+                <div class="result-item result-item--accent"><span>Время с AI</span><strong id="ai-time">2 ч 40 мин</strong></div>
+                <div class="result-item result-item--accent"><span>Бюджет с AI</span><strong id="ai-cost">2 667 ₽</strong></div>
+                <div class="result-item result-item--accent"><span>Освобождается времени</span><strong id="saved-time">21 ч 20 мин</strong></div>
+                <div class="result-item result-item--accent"><span>Разница бюджета</span><strong id="saved-cost">21 333 ₽</strong></div>
+              </div>
+              <div class="comparison" aria-label="Сравнение сценариев">
+                <div class="comparison-row">
+                  <div class="comparison-label"><span>Ручное время</span><span id="manual-time-label">24 ч</span></div>
+                  <div class="comparison-track"><span class="comparison-bar comparison-bar--manual" id="manual-bar"></span></div>
+                </div>
+                <div class="comparison-row">
+                  <div class="comparison-label"><span>Время с AI</span><span id="ai-time-label">2 ч 40 мин</span></div>
+                  <div class="comparison-track"><span class="comparison-bar comparison-bar--ai" id="ai-bar"></span></div>
+                </div>
+              </div>
+              <div class="calculator-actions">
+                <button class="btn btn--ghost" id="share-result" type="button">Поделиться расчётом</button>
+                <a class="btn btn--primary" href="../app/studio?source=seo_calculator_shorts">Открыть студию</a>
+              </div>
+              <p class="share-status" id="share-status" role="status"></p>
+            </section>
+          </div>
+
+          <article class="calculator-explainer article">
+            <h2>Что входит в расчёт</h2>
+            <p>Ручной бюджет — это количество видео, умноженное на часы работы и стоимость часа. Бюджет с AI складывается из времени на проверку каждого видео по той же ставке и указанной вами месячной стоимости инструментов.</p>
+            <h2>Как использовать результат</h2>
+            <ol>
+              <li>Подставьте фактическое время команды или подрядчика.</li>
+              <li>Укажите реалистичное время на проверку и правки результата AI.</li>
+              <li>Откройте ссылку на <a href="../pricing/">тарифы</a> и внесите подходящую стоимость в расчёт.</li>
+              <li>Сохраните ссылку на результат, чтобы сравнить сценарии с командой.</li>
+            </ol>
+            <section class="calculator-faq" aria-labelledby="calculator-faq-heading">
+              <h2 id="calculator-faq-heading">Короткий FAQ</h2>
+              <h3>Это оценка или точная смета?</h3>
+              <p>Это оценка по введённым вами параметрам. Калькулятор не учитывает съёмку, согласования, сложную графику и другие индивидуальные расходы.</p>
+              <h3>Данные отправляются на сервер?</h3>
+              <p>Нет. Расчёт выполняется в браузере. Параметры сохраняются только в ссылке, которой вы решите поделиться.</p>
+              <h3>AI полностью заменяет ручную работу?</h3>
+              <p>Нет. В сценарии с AI остаются проверка фактов, правки, контроль качества и решение о публикации.</p>
+            </section>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="container footer__inner">
+        <a class="logo" href="../">AdShorts<span>AI</span></a>
+        <div class="footer__links">
+          <span style="color: var(--muted);">Контакты: <a href="mailto:support@adshortsai.com" style="color: var(--muted);">support@adshortsai.com</a></span>
+          <a href="../contacts/">Контакты</a>
+          <a href="../privacy/">Политика конфиденциальности</a>
+          <a href="../terms/">Пользовательское соглашение</a>
+          <span style="color: var(--muted);">© <span id="year"></span> AdShorts AI</span>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>

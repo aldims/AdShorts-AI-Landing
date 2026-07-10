@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const siteOrigin = "https://adshortsai.com";
+const indexPolicy = JSON.parse(await readFile(path.join(rootDir, "seo-index-policy.json"), "utf8"));
+const indexPaths = new Set(indexPolicy.index.map((entry) => entry.url));
 const dateModified = "2026-07-10";
 const cssVersion = 55;
 const scriptVersion = 8;
@@ -2274,13 +2276,24 @@ ${renderRelated(page.related.slice(0, 4).map(([href, label]) => [href, publicCop
 };
 
 const renderGuidesBlock = (locale) => {
-  const pages = locale === "en"
+  const commercialHubPages = locale === "en"
     ? [...commercialPages, ...enBuyerGuidePages, ...enYandexExpansionPages]
     : [...ruCommercialPages, ...ruBuyerGuidePages, ...ruYandexExpansionPages];
+  const pages = commercialHubPages.filter((page) => {
+    const pathname = locale === "en" ? `/en/${page.slug}/` : `/${page.slug}/`;
+    return indexPaths.has(pathname);
+  });
+  if (locale === "ru" && indexPaths.has("/kalkulyator-stoimosti-shorts/")) {
+    pages.unshift({
+      slug: "kalkulyator-stoimosti-shorts",
+      h1: "Калькулятор стоимости и времени Shorts",
+      description: "Сравните часы и бюджет ручного создания коротких видео со своим сценарием работы через AI.",
+    });
+  }
   const title = locale === "en" ? "AI generators" : "AI-генераторы";
   const intro = locale === "en"
-    ? "High-intent generator, buyer-guide and use-case pages for users who are already looking for a short-form video workflow."
-    : "Коммерческие страницы, buyer-guide материалы и use case страницы для пользователей, которые уже ищут workflow создания short-form видео.";
+    ? "Product pages and practical guides for creating vertical videos with AI."
+    : "Инструменты и практические материалы для создания вертикальных видео с AI.";
 
   return `          <!-- seo-commercial-growth:start -->
           <div class="section-header guide-section" id="ai-generators">
