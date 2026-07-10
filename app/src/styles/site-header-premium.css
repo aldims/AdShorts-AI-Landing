@@ -428,6 +428,37 @@
   }
 }
 
+@media (min-width: 961px) {
+  #app .route-page:not(.studio-canvas-route) > .site-header {
+    --premium-control-height: 48px;
+  }
+
+  #app .route-page:not(.studio-canvas-route) > .site-header .site-nav {
+    padding: 4px !important;
+    border-radius: 15px !important;
+  }
+
+  #app .route-page:not(.studio-canvas-route) > .site-header .site-nav__content {
+    height: 40px !important;
+    min-height: 40px !important;
+    gap: 3px !important;
+  }
+
+  #app .route-page:not(.studio-canvas-route) > .site-header .site-nav__item {
+    height: 40px !important;
+    min-height: 40px !important;
+    padding: 0 17px !important;
+    border-radius: 11px !important;
+    font-size: 0.9rem !important;
+  }
+
+  #app .route-page:not(.studio-canvas-route) > .site-header .site-nav__item--active::after {
+    right: 28px;
+    bottom: 4px;
+    left: 28px;
+  }
+}
+
 @media (min-width: 641px) and (max-width: 960px) {
   #app .route-page:not(.studio-canvas-route) > .site-header {
     --premium-header-height: 116px;
