@@ -169,6 +169,14 @@ assert(/new URLSearchParams\(window\.location\.search\)/.test(calculatorJs), "ca
 assert(/window\.history\.replaceState/.test(calculatorJs), "calculator: URL result update is missing");
 assert(!/\b(?:fetch|XMLHttpRequest)\b/.test(calculatorJs), "calculator: calculation must remain client-side without data submission");
 
+const baseline = JSON.parse(await readRootFile("seo-measurement-baseline.json"));
+assert(baseline.baselineDate === "2026-07-10", "seo-measurement-baseline.json: baseline date must remain fixed");
+assert(baseline.marketPriority === "ru" && baseline.productSurface === "web", "seo-measurement-baseline.json: market and product scope mismatch");
+assert(baseline.googleSearchConsole?.clicks === 213, "seo-measurement-baseline.json: GSC baseline mismatch");
+assert(baseline.yandexWebmaster?.clicks === 210, "seo-measurement-baseline.json: Yandex baseline mismatch");
+assert(await exists("scripts/analyze-seo-exports.mjs"), "SEO export analyzer is missing");
+assert(await exists("scripts/analyze-seo-exports.test.mjs"), "SEO export analyzer tests are missing");
+
 const seoDeploy = await readRootFile("deploy-seo-only.sh").catch(() => "");
 if (seoDeploy) {
   assert(!/(systemctl|caddy|backend|worker|app\/dist)/i.test(seoDeploy), "deploy-seo-only.sh: must not touch Caddy, services, backend, workers or React build");

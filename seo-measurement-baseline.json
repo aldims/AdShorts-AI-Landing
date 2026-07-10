@@ -1,0 +1,59 @@
+{
+  "baselineDate": "2026-07-10",
+  "marketPriority": "ru",
+  "productSurface": "web",
+  "estimatedDailyUsers": 20,
+  "googleSearchConsole": {
+    "period": {
+      "from": "2026-04-09",
+      "to": "2026-07-08"
+    },
+    "clicks": 213,
+    "impressions": 6843,
+    "ctrPercent": 3.1,
+    "averagePosition": 10.2,
+    "indexedUrls": 54,
+    "notIndexedUrls": 232,
+    "notIndexedReasons": {
+      "discoveredNotIndexed": 143,
+      "crawledNotIndexed": 66,
+      "noindex": 10,
+      "redirect": 8,
+      "alternateCanonical": 4,
+      "notFound": 1
+    },
+    "externalLinks": 0
+  },
+  "yandexWebmaster": {
+    "period": {
+      "from": "2026-06-09",
+      "to": "2026-07-09"
+    },
+    "clicks": 210,
+    "impressions": 5367,
+    "ctrPercent": 3.91,
+    "inboundLinks": 5,
+    "referringDomains": 4
+  },
+  "targets": {
+    "day30": {
+      "sitemapNoindexConflicts": 0,
+      "rewrittenRuPages": 10,
+      "rewrittenEnPages": 6,
+      "externalEditorialMaterials": 2
+    },
+    "day90": {
+      "priorityIndexCoveragePercent": 70,
+      "nonBrandImpressionGrowthMultiplier": 2
+    },
+    "month6": {
+      "dailyUsersMin": 60,
+      "dailyUsersMax": 100,
+      "relevantReferringDomainsMin": 10
+    }
+  },
+  "notes": [
+    "Показатели зафиксированы по интерфейсам GSC и Яндекс Вебмастера на дату baseline.",
+    "Целевые значения являются ориентирами, а не гарантией результата."
+  ]
+}
