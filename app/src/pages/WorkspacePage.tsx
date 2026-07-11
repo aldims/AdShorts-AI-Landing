@@ -35362,10 +35362,10 @@ export function WorkspacePage({
                                     </svg>
                                   </span>
                                   <span className="studio-welcome-card__mode-kicker">
-                                    {workspaceText(locale, "МАКСИМУМ ВОЗМОЖНОСТЕЙ", "MAXIMUM CAPABILITY")}
+                                    {workspaceText(locale, "ПОЛНЫЙ КОНТРОЛЬ", "FULL CONTROL")}
                                   </span>
                                   <span className="studio-welcome-card__mode-state is-featured">
-                                    {workspaceText(locale, "САМЫЙ МОЩНЫЙ", "MOST POWERFUL")}
+                                    {workspaceText(locale, "МАКСИМУМ ВОЗМОЖНОСТЕЙ", "MAXIMUM CAPABILITY")}
                                   </span>
                                 </span>
                                 <span className="studio-welcome-card__mode-copy">
