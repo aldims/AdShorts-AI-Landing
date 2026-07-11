@@ -34142,6 +34142,10 @@ html.platform-windows .studio-voice-selector__menu {
   gap: 10px;
 }
 
+.studio-subtitle-selector__example:only-child {
+  grid-column: 1 / -1;
+}
+
 .studio-subtitle-selector__bulk-text {
   display: grid;
   gap: 8px;
