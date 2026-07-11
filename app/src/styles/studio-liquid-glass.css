@@ -2117,6 +2117,11 @@
   pointer-events: none;
 }
 
+.studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-reset {
+  left: 39px;
+  right: auto;
+}
+
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-label-icon {
   color: rgba(200, 216, 246, 0.86);
 }
@@ -2629,6 +2634,11 @@
 }
 
 @media (max-width: 980px) {
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-reset {
+    left: 17px;
+    right: auto;
+  }
+
   .studio-canvas-main.is-segment-editor
     .studio-segment-editor__timeline.is-standard-fit
     .studio-segment-editor__timeline-add-rail {

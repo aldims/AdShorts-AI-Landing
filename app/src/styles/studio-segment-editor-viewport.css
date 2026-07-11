@@ -822,8 +822,9 @@
   }
 
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-reset {
+    left: 17px !important;
     top: 9px !important;
-    right: 9px !important;
+    right: auto !important;
     z-index: 65 !important;
   }
 }
