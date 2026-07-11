@@ -34032,7 +34032,6 @@ export function WorkspacePage({
                   />
                   <StudioVoiceSelectorChip
                     bulkTextError={segmentSubtitleBulkTextError}
-                    bulkTextSegmentCount={segmentEditorSegmentCount}
                     bulkTextValue={segmentSubtitleBulkTextValue}
                     closeRequestId={segmentTimelineVoiceCloseRequestId}
                     generateVoiceoverCostLabel={segmentTimelineGlobalVoiceCostLabel}
@@ -34139,7 +34138,6 @@ export function WorkspacePage({
           />
         <StudioVoiceSelectorChip
           bulkTextError={segmentSubtitleBulkTextError}
-          bulkTextSegmentCount={segmentEditorSegmentCount}
           bulkTextValue={segmentSubtitleBulkTextValue}
           isEnabled={studioSidebarVoiceEnabled}
           variant="sidebar"

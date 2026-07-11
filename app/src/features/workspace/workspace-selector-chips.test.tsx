@@ -48,7 +48,6 @@ describe("StudioVoiceSelectorChip", () => {
     render(
       <LocaleProvider locale="ru">
         <StudioVoiceSelectorChip
-          bulkTextSegmentCount={5}
           bulkTextValue=""
           isEnabled={false}
           onBulkTextChange={vi.fn()}
@@ -63,6 +62,7 @@ describe("StudioVoiceSelectorChip", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: /Озвучка\s*Выкл/ }));
+    expect(screen.getByText("0 символов")).toBeTruthy();
     const saveButton = screen.getByRole("button", { name: "Сохранить" }) as HTMLButtonElement;
     expect(saveButton.disabled).toBe(false);
     fireEvent.click(saveButton);
@@ -75,7 +75,6 @@ describe("StudioVoiceSelectorChip", () => {
     render(
       <LocaleProvider locale="ru">
         <StudioVoiceSelectorChip
-          bulkTextSegmentCount={6}
           bulkTextValue="Текст для озвучки"
           generateVoiceoverCostLabel="1 ⚡"
           isEnabled
@@ -107,6 +106,7 @@ describe("StudioVoiceSelectorChip", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: /Озвучка\s*Борис/ }));
+    expect(screen.getByText("17 символов")).toBeTruthy();
     expect(screen.getByText("Стоимость озвучки")).toBeTruthy();
     expect(screen.getAllByText("1 ⚡")).toHaveLength(2);
     expect(screen.queryByText("5 ⚡")).toBeNull();

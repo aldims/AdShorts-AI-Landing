@@ -170,7 +170,6 @@ export type StudioVoiceSelectorGenerationSelection = {
 
 type StudioVoiceSelectorChipProps = {
   bulkTextError?: string | null;
-  bulkTextSegmentCount?: number;
   bulkTextValue?: string;
   closeRequestId?: number;
   disabledValueLabel?: string;
@@ -784,7 +783,6 @@ export function StudioLanguageSelectorChip({ onSelect, selectedLanguage, variant
 
 export function StudioVoiceSelectorChip({
   bulkTextError = null,
-  bulkTextSegmentCount,
   bulkTextValue,
   closeRequestId = 0,
   disabledValueLabel,
@@ -1188,9 +1186,7 @@ export function StudioVoiceSelectorChip({
                 <div className="studio-voice-selector__bulk-text">
                   <div className="studio-voice-selector__bulk-head">
                     <label htmlFor={bulkTextAreaId}>{locale === "en" ? "Voiceover text" : "Текст озвучки"}</label>
-                    {typeof bulkTextSegmentCount === "number" ? (
-                      <small>{locale === "en" ? `${bulkTextSegmentCount} segments` : `${bulkTextSegmentCount} сцен`}</small>
-                    ) : null}
+                    <small>{locale === "en" ? `${bulkTextValue.length} characters` : `${bulkTextValue.length} символов`}</small>
                   </div>
                   <textarea
                     id={bulkTextAreaId}
