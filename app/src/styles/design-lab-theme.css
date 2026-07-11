@@ -29980,7 +29980,7 @@ button.studio-segment-editor__timeline-label:focus-visible {
   top: 8px;
   z-index: 12;
   border-radius: 8px;
-  background: rgba(3, 7, 12, 0.64);
+  background: transparent;
 }
 
 .studio-segment-editor__timeline-delete:hover:not(:disabled),
