@@ -87,5 +87,6 @@ describe("PricingPage international pricing", () => {
     expect(container.textContent).toContain("1 490 ₽");
     expect(container.textContent).toContain("4 990 ₽");
     expect(screen.queryByText("International payments are coming soon.")).toBeNull();
+    expect(screen.getAllByText("Разовая оплата · Без подписки и автосписаний")).toHaveLength(3);
   });
 });

@@ -210,6 +210,10 @@ const pricingMessages = defineMessages({
     ru: "Этот тариф недоступен для текущего аккаунта.",
     en: "This plan is not available for the current account.",
   },
+  oneTimePayment: {
+    ru: "Разовая оплата · Без подписки и автосписаний",
+    en: "One-time payment · No subscription or recurring charges",
+  },
   unavailable: {
     ru: "Недоступно",
     en: "Unavailable",
@@ -1011,18 +1015,24 @@ export function PricingPage({
                           ))}
                         </ul>
 
-                        <button
-                          className="btn pricing-max-card__cta pricing-max-card__cta--primary route-button"
-                          type="button"
-                          onClick={() => handlePlanCheckout(plan.checkoutProductId)}
-                          disabled={isPlanRestricted || isPlanCheckoutPending}
-                        >
-                          {planRestrictionLabel
-                            ? planRestrictionLabel
-                            : isPlanCheckoutPending
-                              ? t(pricingMessages.checkoutOpening)
-                              : plan.ctaLabel}
-                        </button>
+                        <div className="pricing-max-card__action">
+                          <button
+                            className="btn pricing-max-card__cta pricing-max-card__cta--primary route-button"
+                            type="button"
+                            onClick={() => handlePlanCheckout(plan.checkoutProductId)}
+                            disabled={isPlanRestricted || isPlanCheckoutPending}
+                          >
+                            {planRestrictionLabel
+                              ? planRestrictionLabel
+                              : isPlanCheckoutPending
+                                ? t(pricingMessages.checkoutOpening)
+                                : plan.ctaLabel}
+                          </button>
+                          <p className="pricing-max-card__payment-note">
+                            <span aria-hidden="true">✓</span>
+                            {t(pricingMessages.oneTimePayment)}
+                          </p>
+                        </div>
                       </article>
                     );
                   })}
