@@ -7116,16 +7116,28 @@ export async function improveStudioSegmentAiPhotoPrompt(
   throw lastError ?? new Error("Failed to improve segment AI photo prompt.");
 }
 
+const STUDIO_VOICEOVER_TEXT_ADAPTATION_DURATION_RESERVE_RATIO = 0.85;
+const STUDIO_VOICEOVER_ESTIMATED_SECONDS_PER_WORD = 0.42;
+
+export const getStudioVoiceoverAdaptationTarget = (durationSecondsValue: number) => {
+  const visualDurationSeconds = Math.max(1, Math.min(60, Number(durationSecondsValue) || 0));
+  const targetDurationSeconds = visualDurationSeconds * STUDIO_VOICEOVER_TEXT_ADAPTATION_DURATION_RESERVE_RATIO;
+  return {
+    maxWords: Math.max(3, Math.floor(targetDurationSeconds / STUDIO_VOICEOVER_ESTIMATED_SECONDS_PER_WORD)),
+    targetDurationSeconds,
+    visualDurationSeconds,
+  };
+};
+
 export async function adaptStudioVoiceoverTextToDuration(
   text: string,
   options: { durationSeconds: number; language?: string },
 ): Promise<{ text: string }> {
   const normalizedText = normalizePrompt(text);
-  const durationSeconds = Math.max(1, Math.min(60, Number(options.durationSeconds) || 0));
+  const { maxWords, targetDurationSeconds, visualDurationSeconds } = getStudioVoiceoverAdaptationTarget(options.durationSeconds);
   if (!normalizedText) throw new Error("Voiceover text is required.");
 
   const language = resolveStudioGenerationLanguage(normalizedText, options.language);
-  const maxWords = Math.max(3, Math.floor(durationSeconds / 0.42));
   const models = requireStudioOpenRouterModels();
   let lastError: Error | null = null;
 
@@ -7145,7 +7157,7 @@ export async function adaptStudioVoiceoverTextToDuration(
           messages: [
             {
               role: "system",
-              content: `You edit voiceover scripts. Rewrite the text in ${getStudioLanguageLabel(language)} so it sounds natural when spoken and fits within ${durationSeconds.toFixed(1)} seconds. Use at most ${maxWords} words. Preserve the key meaning, names, facts, and tone. Return only the rewritten text without quotes, labels, markdown, or explanation.`,
+              content: `You edit voiceover scripts. Rewrite the text in ${getStudioLanguageLabel(language)} so it sounds natural when spoken and fits within ${targetDurationSeconds.toFixed(1)} seconds of a ${visualDurationSeconds.toFixed(1)}-second visual. Use at most ${maxWords} words. Preserve the key meaning, names, facts, and tone. Return only the rewritten text without quotes, labels, markdown, or explanation.`,
             },
             { role: "user", content: normalizedText },
           ],
