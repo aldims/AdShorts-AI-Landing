@@ -4997,6 +4997,73 @@ textarea {
   height: 18px;
 }
 
+.workspace-confirm-modal__icon--sound {
+  color: rgba(94, 234, 212, 0.9);
+}
+
+.workspace-confirm-modal__panel--bulk-sound {
+  width: min(430px, 100%);
+}
+
+.workspace-confirm-modal__bulk-sound-cost {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  padding: 10px 12px;
+  border: 1px solid rgba(45, 212, 191, 0.16);
+  border-radius: 12px;
+  background: rgba(20, 184, 166, 0.07);
+  color: rgba(203, 213, 225, 0.74);
+  font-size: 0.78rem;
+  font-weight: 680;
+}
+
+.workspace-confirm-modal__bulk-sound-cost strong {
+  color: rgba(254, 240, 138, 0.96);
+  font-size: 0.94rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.workspace-confirm-modal__bulk-sound-progress {
+  display: grid;
+  gap: 8px;
+}
+
+.workspace-confirm-modal__bulk-sound-progress > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: rgba(203, 213, 225, 0.76);
+  font-size: 0.75rem;
+  font-weight: 720;
+}
+
+.workspace-confirm-modal__bulk-sound-progress strong {
+  color: rgba(240, 253, 250, 0.96);
+  font-variant-numeric: tabular-nums;
+}
+
+.workspace-confirm-modal__bulk-sound-progress-track {
+  display: block;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.workspace-confirm-modal__bulk-sound-progress-track > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(20, 184, 166, 0.94), rgba(56, 189, 248, 0.92));
+  box-shadow: 0 0 14px rgba(45, 212, 191, 0.24);
+  transition: width 0.24s ease;
+}
+
 .workspace-confirm-modal__copy {
   display: grid;
   gap: 5px;
@@ -28622,6 +28689,37 @@ button.studio-segment-editor__timeline-label:focus-visible {
   width: 18px;
   height: 18px;
   color: rgba(203, 213, 225, 0.84);
+}
+
+.studio-segment-editor__timeline-label--bulk-sound {
+  gap: 4px;
+  padding-right: 2px;
+}
+
+.studio-segment-editor__timeline-label-bulk-mark {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  margin-left: 0;
+  border: 1px solid rgba(45, 212, 191, 0.24);
+  border-radius: 6px;
+  background: rgba(20, 184, 166, 0.1);
+  color: rgba(153, 246, 228, 0.94);
+  font-size: 0.68rem;
+  font-weight: 850;
+  line-height: 1;
+}
+
+.studio-segment-editor__timeline-label-spinner {
+  width: 9px;
+  height: 9px;
+  border: 1.5px solid rgba(153, 246, 228, 0.28);
+  border-top-color: rgba(153, 246, 228, 0.98);
+  border-radius: 999px;
+  animation: workspace-confirm-modal-spin 0.72s linear infinite;
 }
 
 .studio-segment-editor__timeline-track {

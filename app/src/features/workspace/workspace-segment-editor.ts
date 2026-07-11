@@ -7,6 +7,7 @@ import {
   STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST_BY_QUALITY,
   STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST,
   STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST_BY_QUALITY,
+  STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST,
   STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST,
   STUDIO_WORKSPACE_CHARACTER_REFERENCE_CREDIT_COST,
   type StudioSegmentVisualQuality,
@@ -2450,6 +2451,10 @@ export const getWorkspaceSegmentEditorVoiceCreditCost = (
 
   return Math.max(0, ...voiceCreditCosts);
 };
+
+export const getWorkspaceSegmentEditorBulkSceneSoundCreditCost = (segmentCount: number) =>
+  Math.max(0, Math.trunc(Number.isFinite(segmentCount) ? segmentCount : 0)) *
+  STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST;
 
 export const getWorkspaceSegmentEditorGenerationRequiredCredits = (
   session: WorkspaceSegmentEditorDraftSession | WorkspaceSegmentEditorSession | null | undefined,

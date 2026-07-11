@@ -12,6 +12,7 @@ import {
   getWorkspaceSegmentLatestVisualAction,
   getWorkspaceSegmentEditorProjectVoiceType,
   getWorkspaceSegmentEditorGenerationRequiredCredits,
+  getWorkspaceSegmentEditorBulkSceneSoundCreditCost,
   getWorkspaceSegmentEditorVisibleTimelineDisplayRange,
   getWorkspaceSegmentEstimatedVoiceoverLabelDurationSeconds,
   getStudioSceneSoundAssetPreviewUrl,
@@ -74,6 +75,17 @@ describe("resolveWorkspaceSegmentSceneSoundPrompt", () => {
 
   it("keeps a user-provided sound description", () => {
     expect(resolveWorkspaceSegmentSceneSoundPrompt("  rain   on glass ")).toBe("rain on glass");
+  });
+});
+
+describe("getWorkspaceSegmentEditorBulkSceneSoundCreditCost", () => {
+  it("charges one credit for every scene", () => {
+    expect(getWorkspaceSegmentEditorBulkSceneSoundCreditCost(5)).toBe(5);
+  });
+
+  it("does not return a negative or fractional charge", () => {
+    expect(getWorkspaceSegmentEditorBulkSceneSoundCreditCost(-2)).toBe(0);
+    expect(getWorkspaceSegmentEditorBulkSceneSoundCreditCost(3.9)).toBe(3);
   });
 });
 

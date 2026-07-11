@@ -206,6 +206,7 @@ import {
   getWorkspaceSegmentEmbeddedTalkingPhotoAudioDurationSeconds,
   getWorkspaceSegmentEditorCarouselNavigation,
   getWorkspaceSegmentEditorCarouselSlots,
+  getWorkspaceSegmentEditorBulkSceneSoundCreditCost,
   getWorkspaceSegmentEditorEffectiveSubtitleSelection,
   getWorkspaceSegmentEditorGenerationRequiredCredits,
   getWorkspaceSegmentEditorMissingVisualSceneNumbers,
@@ -463,6 +464,7 @@ import {
   WorkspaceLocalExampleModal,
   WorkspaceMediaLibraryDeleteConfirmModal,
   WorkspaceProjectDeleteModal,
+  WorkspaceSegmentEditorBulkSceneSoundModal,
   WorkspaceSegmentEditorDeleteConfirmModal,
   WorkspaceSegmentEditorVoiceoverGenerationRequiredModal,
   WorkspaceSegmentEditorResetConfirmModal,
@@ -2178,6 +2180,12 @@ export function WorkspacePage({
     useState<WorkspaceSegmentVisualRunState>({});
   const [segmentEditorGeneratingSceneSoundRunIds, setSegmentEditorGeneratingSceneSoundRunIds] =
     useState<WorkspaceSegmentVisualRunState>({});
+  const [isSegmentEditorBulkSceneSoundModalOpen, setIsSegmentEditorBulkSceneSoundModalOpen] = useState(false);
+  const [isSegmentEditorBulkSceneSoundGenerating, setIsSegmentEditorBulkSceneSoundGenerating] = useState(false);
+  const [segmentEditorBulkSceneSoundProgress, setSegmentEditorBulkSceneSoundProgress] = useState({
+    completedCount: 0,
+    failedCount: 0,
+  });
   const [segmentEditorGeneratingVoiceoverRunIds, setSegmentEditorGeneratingVoiceoverRunIds] =
     useState<WorkspaceSegmentVisualRunState>({});
   const [isSegmentEditorGeneratingGlobalVoiceover, setIsSegmentEditorGeneratingGlobalVoiceover] = useState(false);
@@ -3652,6 +3660,7 @@ export function WorkspacePage({
     isAnyPreviewModalOpen ||
     isSegmentAiPhotoModalOpen ||
     isSegmentEditorVoiceoverPreviewRequiredModalOpen ||
+    isSegmentEditorBulkSceneSoundModalOpen ||
     isLocalExampleModalOpen ||
     isSegmentEditorResetConfirmOpen ||
     isSegmentEditorStartFreshConfirmOpen ||
@@ -3893,6 +3902,10 @@ export function WorkspacePage({
           closeSegmentEditorVoiceoverPreviewRequiredModal();
           return;
         }
+        if (isSegmentEditorBulkSceneSoundModalOpen && !isSegmentEditorBulkSceneSoundGenerating) {
+          setIsSegmentEditorBulkSceneSoundModalOpen(false);
+          return;
+        }
         if (isLocalExampleModalOpen) {
           closeLocalExampleModal();
           return;
@@ -3918,6 +3931,8 @@ export function WorkspacePage({
     isPublishModalOpen,
     isSegmentEditorResetConfirmOpen,
     isSegmentEditorStartFreshConfirmOpen,
+    isSegmentEditorBulkSceneSoundGenerating,
+    isSegmentEditorBulkSceneSoundModalOpen,
     isSegmentAiPhotoModalOpen,
     mediaLibraryPendingDeleteItem,
     projectPendingDelete,
@@ -6640,6 +6655,9 @@ export function WorkspacePage({
       });
   }, [filteredVisibleMediaLibraryItems, isMediaLibraryVirtualGridReady, mediaLibraryVirtualLayout]);
   const segmentEditorSegmentCount = segmentEditorDraft?.segments.length ?? 0;
+  const segmentEditorBulkSceneSoundCreditCost = getWorkspaceSegmentEditorBulkSceneSoundCreditCost(
+    segmentEditorSegmentCount,
+  );
   const activeSegment = segmentEditorDraft?.segments[activeSegmentIndex] ?? null;
   const segmentReferenceSceneOptions = useMemo(
     () =>
@@ -18154,21 +18172,24 @@ export function WorkspacePage({
     options?: {
       prompt?: string;
       segmentIndex?: number;
+      silent?: boolean;
     },
-  ) => {
+  ): Promise<boolean> => {
     const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
     if (!currentDraft) {
-      return;
+      return false;
     }
 
     const targetSegmentIndex = options?.segmentIndex ?? activeSegment?.index;
     if (typeof targetSegmentIndex !== "number") {
-      return;
+      return false;
     }
 
     if (isWorkspaceSegmentSceneSoundJobBusy(targetSegmentIndex)) {
-      setSegmentEditorVideoError("Дождитесь завершения генерации звука текущего сегмента.");
-      return;
+      if (!options?.silent) {
+        setSegmentEditorVideoError("Дождитесь завершения генерации звука текущего сегмента.");
+      }
+      return false;
     }
 
     const targetSegment =
@@ -18179,24 +18200,28 @@ export function WorkspacePage({
     const sceneSoundSegmentIndex =
       typeof visualJobBinding.segmentIndex === "number" ? visualJobBinding.segmentIndex : targetSegmentIndex;
     if (typeof sceneSoundSegmentIndex !== "number") {
-      setSegmentEditorVideoError("Не удалось определить сегмент для звука сцены.");
-      return;
+      if (!options?.silent) {
+        setSegmentEditorVideoError("Не удалось определить сегмент для звука сцены.");
+      }
+      return false;
     }
 
     const durationSeconds = getWorkspaceSegmentVisualGenerationDurationSeconds(targetSegment);
     const nextPrompt = options?.prompt ?? targetSegment?.sceneSoundPrompt ?? segmentSceneSoundModalPrompt;
     const normalizedPrompt = resolveWorkspaceSegmentSceneSoundPrompt(nextPrompt);
 
-    updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => ({
-      ...segment,
-      sceneSoundPrompt: nextPrompt,
-      sceneSoundPromptInitialized: true,
-    }));
+    if (!options?.silent) {
+      updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => ({
+        ...segment,
+        sceneSoundPrompt: nextPrompt,
+        sceneSoundPromptInitialized: true,
+      }));
+    }
 
     if (workspaceBalance !== null && workspaceBalance < STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST) {
       setSegmentEditorVideoError(null);
       openInsufficientCreditsModal("scene_sound", STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST);
-      return;
+      return false;
     }
 
     const runId = startSegmentVisualRun(segmentSceneSoundRunRef, setSegmentEditorGeneratingSceneSoundRunIds, targetSegmentIndex);
@@ -18261,8 +18286,10 @@ export function WorkspacePage({
         if (isSegmentVisualRunCurrent(segmentSceneSoundRunRef, targetSegmentIndex, runId)) {
           clearSegmentVisualRun(segmentSceneSoundRunRef, setSegmentEditorGeneratingSceneSoundRunIds, targetSegmentIndex, runId);
         }
-        openInsufficientCreditsModal("scene_sound", STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST);
-        return;
+        if (!options?.silent) {
+          openInsufficientCreditsModal("scene_sound", STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST);
+        }
+        return false;
       }
 
       if (!response.ok || !payload?.data?.jobId) {
@@ -18270,7 +18297,7 @@ export function WorkspacePage({
       }
 
       if (!isSegmentVisualRunCurrent(segmentSceneSoundRunRef, targetSegmentIndex, runId)) {
-        return;
+        return false;
       }
 
       applyWorkspaceProfile(payload.data.profile);
@@ -18294,16 +18321,115 @@ export function WorkspacePage({
         runId,
         segmentIndex: targetSegmentIndex,
       });
+      return true;
     } catch (error) {
       if (!isSegmentVisualRunCurrent(segmentSceneSoundRunRef, targetSegmentIndex, runId)) {
-        return;
+        return false;
       }
 
-      setSegmentEditorVideoError(error instanceof Error ? error.message : "Не удалось сгенерировать звук сцены.");
+      if (!options?.silent) {
+        setSegmentEditorVideoError(error instanceof Error ? error.message : "Не удалось сгенерировать звук сцены.");
+      }
+      return false;
     } finally {
       if (!pollStarted && isSegmentVisualRunCurrent(segmentSceneSoundRunRef, targetSegmentIndex, runId)) {
         clearSegmentVisualRun(segmentSceneSoundRunRef, setSegmentEditorGeneratingSceneSoundRunIds, targetSegmentIndex, runId);
       }
+    }
+  };
+
+  const closeSegmentEditorBulkSceneSoundModal = () => {
+    if (isSegmentEditorBulkSceneSoundGenerating) {
+      return;
+    }
+    setIsSegmentEditorBulkSceneSoundModalOpen(false);
+  };
+
+  const handleSegmentEditorBulkSceneSoundGenerate = async () => {
+    const currentDraft = segmentEditorDraft ?? segmentEditorDraftRef.current;
+    const targetSegmentIndexes = currentDraft?.segments.map((segment) => segment.index) ?? [];
+    const requiredCredits = getWorkspaceSegmentEditorBulkSceneSoundCreditCost(targetSegmentIndexes.length);
+    if (!currentDraft || targetSegmentIndexes.length === 0 || isSegmentEditorBulkSceneSoundGenerating) {
+      return;
+    }
+
+    const hasBusyTarget = targetSegmentIndexes.some((segmentIndex) =>
+      hasWorkspaceSegmentVisualRun(segmentEditorGeneratingSceneSoundRunIds, segmentIndex),
+    );
+    if (hasBusyTarget) {
+      showStudioToast(
+        workspaceText(locale, "Дождитесь завершения текущей генерации звука.", "Wait for the current sound generation to finish."),
+        { kind: "warning" },
+      );
+      return;
+    }
+
+    if (workspaceBalance !== null && workspaceBalance < requiredCredits) {
+      setIsSegmentEditorBulkSceneSoundModalOpen(false);
+      openInsufficientCreditsModal("scene_sound", requiredCredits);
+      return;
+    }
+
+    setIsSegmentEditorBulkSceneSoundGenerating(true);
+    setSegmentEditorBulkSceneSoundProgress({ completedCount: 0, failedCount: 0 });
+
+    let cursor = 0;
+    let completedCount = 0;
+    let failedCount = 0;
+    const runWorker = async () => {
+      while (cursor < targetSegmentIndexes.length) {
+        const segmentIndex = targetSegmentIndexes[cursor];
+        cursor += 1;
+        if (typeof segmentIndex !== "number") {
+          continue;
+        }
+
+        const didGenerate = await handleSegmentEditorSceneSoundGenerate({
+          prompt: "",
+          segmentIndex,
+          silent: true,
+        });
+        if (didGenerate) {
+          completedCount += 1;
+        } else {
+          failedCount += 1;
+        }
+        setSegmentEditorBulkSceneSoundProgress({ completedCount, failedCount });
+      }
+    };
+
+    try {
+      const workerCount = Math.min(2, targetSegmentIndexes.length);
+      await Promise.all(Array.from({ length: workerCount }, () => runWorker()));
+
+      try {
+        const response = await fetch(buildWorkspaceBootstrapRequestUrl(location.search));
+        const payload = (await response.json().catch(() => null)) as WorkspaceBootstrapResponse | null;
+        if (response.ok && payload?.data?.profile) {
+          applyWorkspaceProfile(payload.data.profile);
+        }
+      } catch {
+        // Each sound job already returns a current profile; this refresh only resolves concurrent response ordering.
+      }
+
+      setIsSegmentEditorBulkSceneSoundModalOpen(false);
+      if (failedCount === 0) {
+        showStudioToast(
+          workspaceText(locale, `Звуки созданы для ${completedCount} сцен.`, `Sounds created for ${completedCount} scenes.`),
+          { durationMs: 4200 },
+        );
+      } else {
+        showStudioToast(
+          workspaceText(
+            locale,
+            `Готово ${completedCount} из ${targetSegmentIndexes.length}. Не удалось создать звуки для ${failedCount} сцен.`,
+            `Completed ${completedCount} of ${targetSegmentIndexes.length}. Failed to create sounds for ${failedCount} scenes.`,
+          ),
+          { durationMs: 6000, kind: "warning" },
+        );
+      }
+    } finally {
+      setIsSegmentEditorBulkSceneSoundGenerating(false);
     }
   };
 
@@ -31139,7 +31265,25 @@ export function WorkspacePage({
         </div>
 
         <div className="studio-segment-editor__timeline-row studio-segment-editor__timeline-row--sound">
-          <div className="studio-segment-editor__timeline-label">
+          <button
+            className="studio-segment-editor__timeline-label studio-segment-editor__timeline-label--bulk-sound"
+            type="button"
+            aria-busy={isSegmentEditorBulkSceneSoundGenerating ? "true" : undefined}
+            aria-controls="workspace-bulk-scene-sound-title"
+            aria-expanded={isSegmentEditorBulkSceneSoundModalOpen}
+            aria-label={workspaceText(locale, "Создать звуки для всех сцен", "Create sounds for all scenes")}
+            title={workspaceText(
+              locale,
+              `Создать звуки для всех сцен · ${segmentEditorBulkSceneSoundCreditCost} ⚡`,
+              `Create sounds for all scenes · ${segmentEditorBulkSceneSoundCreditCost} ⚡`,
+            )}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              setSegmentEditorBulkSceneSoundProgress({ completedCount: 0, failedCount: 0 });
+              setIsSegmentEditorBulkSceneSoundModalOpen(true);
+            }}
+          >
             <span className="studio-segment-editor__timeline-label-icon" aria-hidden="true">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                 <path d="M4 12h3l4-4v8l-4-4H4Z" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
@@ -31147,7 +31291,14 @@ export function WorkspacePage({
               </svg>
             </span>
             <span>{workspaceText(locale, "Звуки", "Sounds")}</span>
-          </div>
+            <span className="studio-segment-editor__timeline-label-bulk-mark" aria-hidden="true">
+              {isSegmentEditorBulkSceneSoundGenerating ? (
+                <span className="studio-segment-editor__timeline-label-spinner" />
+              ) : (
+                "+"
+              )}
+            </span>
+          </button>
           <div className="studio-segment-editor__timeline-track">
             {renderSegmentEditorFullPreviewPlayhead()}
             {segmentEditorTimelineSoundRow?.spans.map((span) => {
@@ -36007,6 +36158,18 @@ export function WorkspacePage({
           locale={locale}
           onClose={closeSegmentEditorVoiceoverPreviewRequiredModal}
           onGenerate={handleSegmentEditorVoiceoverPreviewRequiredGenerate}
+        />
+
+        <WorkspaceSegmentEditorBulkSceneSoundModal
+          completedCount={segmentEditorBulkSceneSoundProgress.completedCount}
+          failedCount={segmentEditorBulkSceneSoundProgress.failedCount}
+          isGenerating={isSegmentEditorBulkSceneSoundGenerating}
+          isOpen={isSegmentEditorBulkSceneSoundModalOpen}
+          locale={locale}
+          onClose={closeSegmentEditorBulkSceneSoundModal}
+          onGenerate={() => void handleSegmentEditorBulkSceneSoundGenerate()}
+          sceneCount={segmentEditorSegmentCount}
+          totalCredits={segmentEditorBulkSceneSoundCreditCost}
         />
 
         <WorkspaceSegmentEditorDeleteConfirmModal

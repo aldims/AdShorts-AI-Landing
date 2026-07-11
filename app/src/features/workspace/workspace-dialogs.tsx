@@ -773,3 +773,130 @@ export function WorkspaceSegmentEditorVoiceoverGenerationRequiredModal({
     document.body,
   );
 }
+
+type WorkspaceSegmentEditorBulkSceneSoundModalProps = {
+  completedCount: number;
+  failedCount: number;
+  isGenerating: boolean;
+  isOpen: boolean;
+  locale: Locale;
+  onClose: () => void;
+  onGenerate: () => void;
+  sceneCount: number;
+  totalCredits: number;
+};
+
+export function WorkspaceSegmentEditorBulkSceneSoundModal({
+  completedCount,
+  failedCount,
+  isGenerating,
+  isOpen,
+  locale,
+  onClose,
+  onGenerate,
+  sceneCount,
+  totalCredits,
+}: WorkspaceSegmentEditorBulkSceneSoundModalProps) {
+  if (!isOpen || typeof document === "undefined") {
+    return null;
+  }
+
+  const processedCount = completedCount + failedCount;
+  const progressPercent = sceneCount > 0 ? Math.min(100, (processedCount / sceneCount) * 100) : 0;
+
+  return createPortal(
+    <div
+      className="workspace-confirm-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="workspace-bulk-scene-sound-title"
+    >
+      <button
+        className="workspace-confirm-modal__backdrop route-close"
+        type="button"
+        aria-label={workspaceText(locale, "Закрыть массовую генерацию звуков", "Close bulk sound generation")}
+        onClick={onClose}
+        disabled={isGenerating}
+      />
+      <div className="workspace-confirm-modal__panel workspace-confirm-modal__panel--bulk-sound" role="document">
+        <button
+          className="workspace-confirm-modal__close route-close"
+          type="button"
+          aria-label={workspaceText(locale, "Закрыть массовую генерацию звуков", "Close bulk sound generation")}
+          onClick={onClose}
+          disabled={isGenerating}
+        >
+          ×
+        </button>
+
+        <div className="workspace-confirm-modal__header">
+          <div className="workspace-confirm-modal__icon workspace-confirm-modal__icon--sound" aria-hidden="true">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
+              <path d="M4 12h3l4-4v8l-4-4H4Z" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M15 9.5c.8.7 1.2 1.5 1.2 2.5s-.4 1.8-1.2 2.5M18 7c1.5 1.3 2.3 3 2.3 5s-.8 3.7-2.3 5" strokeLinecap="round" />
+            </svg>
+          </div>
+          <div className="workspace-confirm-modal__copy">
+            <h2 className="workspace-confirm-modal__title" id="workspace-bulk-scene-sound-title">
+              {workspaceText(locale, "Создать звуки для всех сцен?", "Create sounds for all scenes?")}
+            </h2>
+            <p className="workspace-confirm-modal__message">
+              {workspaceText(
+                locale,
+                "ИИ подберёт эффекты по визуалу каждой сцены — вводить описание не нужно. Уже добавленные звуки будут заменены.",
+                "AI will match effects to each scene visual — no description is needed. Existing sounds will be replaced.",
+              )}
+            </p>
+          </div>
+        </div>
+
+        <div
+          className="workspace-confirm-modal__bulk-sound-cost"
+          aria-label={workspaceText(locale, "Стоимость генерации", "Generation cost")}
+        >
+          <span>{workspaceText(locale, `${sceneCount} сцен × 1 кредит`, `${sceneCount} scenes × 1 credit`)}</span>
+          <strong>{totalCredits} ⚡</strong>
+        </div>
+
+        {isGenerating ? (
+          <div className="workspace-confirm-modal__bulk-sound-progress" role="status" aria-live="polite">
+            <div>
+              <span>{workspaceText(locale, "Создаём звуки", "Creating sounds")}</span>
+              <strong>{processedCount}/{sceneCount}</strong>
+            </div>
+            <span className="workspace-confirm-modal__bulk-sound-progress-track" aria-hidden="true">
+              <span style={{ width: `${progressPercent}%` }} />
+            </span>
+          </div>
+        ) : null}
+
+        <div className="workspace-confirm-modal__actions">
+          <button
+            className="workspace-confirm-modal__action workspace-confirm-modal__action--secondary"
+            type="button"
+            onClick={onClose}
+            disabled={isGenerating}
+          >
+            {workspaceText(locale, "Отмена", "Cancel")}
+          </button>
+          <button
+            className="workspace-confirm-modal__action workspace-confirm-modal__action--primary"
+            type="button"
+            onClick={onGenerate}
+            disabled={isGenerating || sceneCount === 0}
+          >
+            {isGenerating ? (
+              <>
+                <span className="workspace-confirm-modal__spinner" aria-hidden="true"></span>
+                {workspaceText(locale, "Генерируем...", "Generating...")}
+              </>
+            ) : (
+              workspaceText(locale, `Создать звуки · ${totalCredits} ⚡`, `Create sounds · ${totalCredits} ⚡`)
+            )}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
