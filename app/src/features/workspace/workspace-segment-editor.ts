@@ -1369,6 +1369,12 @@ export const normalizeWorkspaceSegmentMediaType = (value: unknown): WorkspaceSeg
 
 export const normalizeWorkspaceSegmentSceneSoundPrompt = normalizeWorkspaceSegmentAiPhotoPrompt;
 
+export const WORKSPACE_SEGMENT_SCENE_SOUND_DEFAULT_PROMPT =
+  "Generate realistic synchronized sound effects and ambient audio.\nNo speech, no narration, no vocals, no background music.";
+
+export const resolveWorkspaceSegmentSceneSoundPrompt = (value: unknown) =>
+  normalizeWorkspaceSegmentSceneSoundPrompt(value) || WORKSPACE_SEGMENT_SCENE_SOUND_DEFAULT_PROMPT;
+
 export const hasWorkspaceSegmentDisplayAiVideoAsset = (segment: Pick<
   WorkspaceSegmentEditorDraftSegment,
   "aiVideoAsset" | "aiVideoGeneratedMode" | "videoAction"

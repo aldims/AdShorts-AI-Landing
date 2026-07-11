@@ -270,6 +270,7 @@ import {
   normalizeWorkspaceSegmentEditorSetting,
   normalizeWorkspaceSegmentEditorTextForCompare,
   normalizeWorkspaceSegmentSceneSoundPrompt,
+  resolveWorkspaceSegmentSceneSoundPrompt,
   normalizeWorkspaceSegmentVoicePreviewTime,
   preserveWorkspaceSegmentEditorOriginalVisualReferences,
   clearWorkspaceSegmentEditorVoiceoverGenerationState,
@@ -18163,11 +18164,7 @@ export function WorkspacePage({
 
     const durationSeconds = getWorkspaceSegmentVisualGenerationDurationSeconds(targetSegment);
     const nextPrompt = options?.prompt ?? targetSegment?.sceneSoundPrompt ?? segmentSceneSoundModalPrompt;
-    const normalizedPrompt = normalizeWorkspaceSegmentSceneSoundPrompt(nextPrompt);
-    if (!normalizedPrompt) {
-      setSegmentEditorVideoError("Введите промт для звука сцены.");
-      return;
-    }
+    const normalizedPrompt = resolveWorkspaceSegmentSceneSoundPrompt(nextPrompt);
 
     updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => ({
       ...segment,
@@ -29817,7 +29814,6 @@ export function WorkspacePage({
     segmentTimelineSoundMenuPromptDraft.segmentIndex === segmentTimelineSoundMenuSegment.index
       ? segmentTimelineSoundMenuPromptDraft.prompt
       : segmentTimelineSoundMenuPersistedPrompt;
-  const segmentTimelineSoundMenuPromptNormalized = normalizeWorkspaceSegmentSceneSoundPrompt(segmentTimelineSoundMenuPrompt);
   const segmentTimelineSoundMenuAsset = segmentTimelineSoundMenuSegment
     ? createWorkspaceSegmentSceneSoundAsset(segmentTimelineSoundMenuSegment, segmentTimelineSoundMenuSegment.index)
     : null;
@@ -29833,7 +29829,6 @@ export function WorkspacePage({
   );
   const isSegmentTimelineSoundMenuActionDisabled = Boolean(
     !segmentTimelineSoundMenuSegment ||
-      !segmentTimelineSoundMenuPromptNormalized ||
       isSegmentTimelineSoundMenuPending ||
       isWorkspaceSegmentSceneSoundJobBusy(segmentTimelineSoundMenuSegment.index) ||
       isSegmentEditorPreparingCustomVideo,
@@ -32602,8 +32597,7 @@ export function WorkspacePage({
     isPromptAiVideoMode ||
     isPromptPhotoAnimationMode ||
     isPromptTalkingPhotoMode ||
-    isPromptImageEditMode ||
-    isPromptSceneSoundMode;
+    isPromptImageEditMode;
   const isPromptVisualPromptEmpty =
     isPromptVisualPromptRequired && !normalizeWorkspaceSegmentAiPhotoPrompt(promptVisualPromptForAction);
   const isSegmentAiPhotoModalAiPhotoPromptEmpty =

@@ -907,7 +907,7 @@ export function WorkspaceSegmentTimelineSoundMenu({
       </div>
       <div className="studio-segment-editor__timeline-text-menu-field">
         <label htmlFor={`studio-segment-editor-scene-sound-${segment.index}`}>
-          {workspaceText(locale, "Описание звука", "Sound prompt")}
+          {workspaceText(locale, "Описание звука (необязательно)", "Sound prompt (optional)")}
         </label>
         <textarea
           id={`studio-segment-editor-scene-sound-${segment.index}`}

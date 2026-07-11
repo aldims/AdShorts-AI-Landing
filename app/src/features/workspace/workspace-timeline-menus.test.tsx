@@ -398,5 +398,6 @@ describe("WorkspaceSegmentTimelineSoundMenu", () => {
 
     expect(screen.queryByRole("button", { name: "Удалить звук" })).toBeNull();
     expect(screen.getByRole("button", { name: /Добавить звук/ })).toBeTruthy();
+    expect(screen.getByText("Описание звука (необязательно)")).toBeTruthy();
   });
 });

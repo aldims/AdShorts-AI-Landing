@@ -42,6 +42,7 @@ import {
   restoreWorkspaceSegmentEffectiveVoiceFromBaseline,
   resetWorkspaceSegmentDraftVisualToOriginal,
   resolveWorkspaceSegmentEditorSegmentsAfterDelete,
+  resolveWorkspaceSegmentSceneSoundPrompt,
   resolveWorkspaceSegmentBoundaryTiming,
   resolveWorkspaceSegmentVideoExtensionMenuSourceDurationSeconds,
   restoreWorkspaceSegmentTimelineSnapshot,
@@ -63,6 +64,18 @@ import type {
 } from "./workspace-types";
 import { getWorkspaceSegmentVoiceoverTextHash } from "./workspace-utils";
 import { hydrateWorkspaceSegmentEditorDraftFromGeneratedMediaLibrary } from "./workspace-media-library-helpers";
+
+describe("resolveWorkspaceSegmentSceneSoundPrompt", () => {
+  it("uses the ambient sound prompt when the optional description is empty", () => {
+    expect(resolveWorkspaceSegmentSceneSoundPrompt("  ")).toBe(
+      "Generate realistic synchronized sound effects and ambient audio.\nNo speech, no narration, no vocals, no background music.",
+    );
+  });
+
+  it("keeps a user-provided sound description", () => {
+    expect(resolveWorkspaceSegmentSceneSoundPrompt("  rain   on glass ")).toBe("rain on glass");
+  });
+});
 
 const createProjectVoiceoverSegment = (
   overrides: Partial<WorkspaceSegmentEditorDraftSegment> = {},
