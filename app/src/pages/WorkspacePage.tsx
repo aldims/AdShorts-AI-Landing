@@ -353,6 +353,7 @@ import {
   getStudioVoiceOptionById,
   getWorkspaceInitialStudioDefaults,
   resolveWorkspaceGenerationVoiceRequest,
+  resolveStudioSceneVoiceIdOnSettingsOpen,
   resolveStudioVoiceIdForLanguage,
   resolveWorkspaceExamplePrefillInitialStudioState,
 } from "../features/workspace/workspace-studio-defaults-helpers";
@@ -23858,6 +23859,18 @@ export function WorkspacePage({
 
     const shouldCloseCurrentVoiceMenu = segmentTimelineVoiceMenuSegmentIndex === targetSegment.index;
     restorePendingSegmentTimelineVoiceTextEdit();
+    if (!shouldCloseCurrentVoiceMenu) {
+      const voiceLanguage = segmentEditorDraft
+        ? getWorkspaceSegmentEditorSessionLanguage(segmentEditorDraft) ?? selectedLanguage
+        : selectedLanguage;
+      const defaultVoiceId = resolveStudioSceneVoiceIdOnSettingsOpen(
+        voiceLanguage,
+        getWorkspaceSegmentEffectiveVoiceId(targetSegment, segmentEditorDraft),
+      );
+      if (defaultVoiceId) {
+        handleSegmentTimelineVoiceSelect(targetSegment.index, defaultVoiceId);
+      }
+    }
     setSegmentTimelineVoiceMenuSegmentIndex(shouldCloseCurrentVoiceMenu ? null : targetSegment.index);
     event.currentTarget.focus({ preventScroll: true });
   };

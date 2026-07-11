@@ -38,6 +38,12 @@ export const getStudioVoiceOptionById = (voiceId: string | null | undefined): St
 export const getDefaultStudioVoiceId = (language: StudioLanguage): StudioVoiceOption["id"] =>
   DEFAULT_STUDIO_VOICE_ID[language] ?? studioVoiceOptionsByLanguage[language][0]?.id ?? "Liam_Timing";
 
+export const resolveStudioSceneVoiceIdOnSettingsOpen = (
+  language: StudioLanguage,
+  effectiveVoiceId: string | null | undefined,
+): StudioVoiceOption["id"] | null =>
+  effectiveVoiceId ? null : getDefaultStudioVoiceId(language);
+
 export const resolveStudioVoiceIdForLanguage = (
   language: StudioLanguage,
   voiceId: string | null | undefined,

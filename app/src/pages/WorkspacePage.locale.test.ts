@@ -16,6 +16,7 @@ import {
   isWorkspaceSegmentVoiceoverPlaybackFresh,
   isWorkspaceSegmentPersistedForVisualJobBinding,
 } from "../features/workspace/workspace-segment-editor";
+import { resolveStudioSceneVoiceIdOnSettingsOpen } from "../features/workspace/workspace-studio-defaults-helpers";
 import {
   readStoredWorkspaceSegmentEditorDraft,
   readStoredWorkspaceSegmentEditorDrafts,
@@ -3040,6 +3041,11 @@ describe("WorkspacePage studio primary action input", () => {
 });
 
 describe("WorkspacePage studio locale defaults", () => {
+  it("selects Alexander when scene voice settings open without an effective voice", () => {
+    expect(resolveStudioSceneVoiceIdOnSettingsOpen("ru", null)).toBe(DEFAULT_STUDIO_VOICE_ID.ru);
+    expect(resolveStudioSceneVoiceIdOnSettingsOpen("ru", "Misha")).toBeNull();
+  });
+
   it("uses the current site locale for initial Studio language and voice", () => {
     expect(getWorkspaceInitialStudioDefaults("ru")).toEqual({
       language: "ru",
