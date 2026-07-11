@@ -7,6 +7,7 @@ import {
   isWorkspaceSegmentEditorProjectUnavailableError,
   isWorkspaceSegmentSceneSoundRunBusy,
   isStudioGenerationUserFacing,
+  resolveWorkspaceRetainedScenesDraftState,
   resolveWorkspaceScenesModeSwitchTarget,
   shouldShowStudioGenerationError,
   shouldShowWorkspaceStartFreshScenesAction,
@@ -15,6 +16,35 @@ import {
 } from "./workspace-page-model";
 
 describe("studio creation mode switching", () => {
+  it("restores a detached scenes draft after leaving the editor", () => {
+    const detachedDraft = { projectId: 4178, segments: [{ index: 0 }, { index: 1 }] };
+
+    expect(
+      resolveWorkspaceRetainedScenesDraftState(null, 0, {
+        activeSegmentIndex: 1,
+        draft: detachedDraft,
+      }),
+    ).toEqual({
+      activeSegmentIndex: 1,
+      draft: detachedDraft,
+    });
+  });
+
+  it("prefers the active scenes draft over an older detached snapshot", () => {
+    const activeDraft = { projectId: 4178, segments: [{ index: 0 }] };
+    const detachedDraft = { projectId: 4178, segments: [{ index: 0 }, { index: 1 }] };
+
+    expect(
+      resolveWorkspaceRetainedScenesDraftState(activeDraft, 0, {
+        activeSegmentIndex: 1,
+        draft: detachedDraft,
+      }),
+    ).toEqual({
+      activeSegmentIndex: 0,
+      draft: activeDraft,
+    });
+  });
+
   it("opens the displayed video project before creating a scratch draft", () => {
     expect(
       resolveWorkspaceScenesModeSwitchTarget({

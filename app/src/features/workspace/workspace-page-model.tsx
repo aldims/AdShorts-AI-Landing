@@ -1252,6 +1252,26 @@ export type StudioCreateMode = "default" | "segment-editor";
 
 export type WorkspaceScenesModeSwitchTarget = "current" | "project" | "scratch";
 
+export type WorkspaceRetainedScenesDraftState<TDraft> = {
+  activeSegmentIndex: number;
+  draft: TDraft;
+};
+
+export const resolveWorkspaceRetainedScenesDraftState = <TDraft,>(
+  activeDraft: TDraft | null | undefined,
+  activeSegmentIndex: number,
+  detachedDraftState: WorkspaceRetainedScenesDraftState<TDraft> | null | undefined,
+): WorkspaceRetainedScenesDraftState<TDraft> | null => {
+  if (activeDraft) {
+    return {
+      activeSegmentIndex,
+      draft: activeDraft,
+    };
+  }
+
+  return detachedDraftState ?? null;
+};
+
 export const resolveWorkspaceScenesModeSwitchTarget = (options: {
   hasDisplayedGeneratedProject: boolean;
   hasRetainedScenesDraft?: boolean;

@@ -600,6 +600,7 @@ import {
   isWorkspaceSegmentEditorProjectUnavailableError,
   isWorkspaceSegmentEditorPreparingError,
   isStudioGenerationUserFacing,
+  resolveWorkspaceRetainedScenesDraftState,
   resolveWorkspaceScenesModeSwitchTarget,
   shouldShowStudioGenerationError,
   shouldShowWorkspaceStartFreshScenesAction,
@@ -12070,10 +12071,30 @@ export function WorkspacePage({
 
     if (lastStudioCreateModeRef.current === "segment-editor") {
       const currentScenesDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
-      if (currentScenesDraft) {
+      const retainedScenesDraftState = resolveWorkspaceRetainedScenesDraftState(
+        currentScenesDraft,
+        activeSegmentIndex,
+        detachedSegmentEditorDraftRef.current,
+      );
+      if (retainedScenesDraftState) {
+        const retainedScenesDraft = retainedScenesDraftState.draft;
+        const restoredArrayIndex = Math.max(
+          0,
+          Math.min(
+            retainedScenesDraftState.activeSegmentIndex,
+            Math.max(0, retainedScenesDraft.segments.length - 1),
+          ),
+        );
         setStudioView("create");
-        setCreateMode("segment-editor");
-        syncSegmentEditorRouteForArrayIndex(currentScenesDraft, activeSegmentIndex, { replace: true });
+        if (currentScenesDraft) {
+          setCreateMode("segment-editor");
+        } else {
+          openSegmentEditorWithDraft(retainedScenesDraft, {
+            initialSegmentIndex: restoredArrayIndex,
+            initialSegmentMode: "array",
+          });
+        }
+        syncSegmentEditorRouteForArrayIndex(retainedScenesDraft, restoredArrayIndex, { replace: true });
         return;
       }
 
