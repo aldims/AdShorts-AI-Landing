@@ -201,7 +201,10 @@ export function FirstVideoSuccessOffer({
 
       <aside className="first-video-success-offer__purchase" aria-label={text("Оплата START", "START checkout")}>
         <div className="first-video-success-offer__price">
-          <span>START</span>
+          <div className="first-video-success-offer__price-copy">
+            <span>{text("START · 50 кредитов", "START · 50 credits")}</span>
+            <small>{text("До 5 Shorts без водяного знака", "Up to 5 Shorts without a watermark")}</small>
+          </div>
           <strong>{text("390 ₽", "View pricing")}</strong>
         </div>
         <button
@@ -218,7 +221,6 @@ export function FirstVideoSuccessOffer({
           ) : (
             <>
               {checkoutLabel}
-              {locale === "ru" ? <span>390 ₽</span> : null}
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="M5 12h14m-6-6 6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
@@ -233,7 +235,7 @@ export function FirstVideoSuccessOffer({
             </button>
           </div>
         ) : (
-          <>
+          <div className="first-video-success-offer__purchase-meta">
             <small className="first-video-success-offer__trust">
               {text(
                 "Разовая оплата · без автосписаний",
@@ -243,8 +245,9 @@ export function FirstVideoSuccessOffer({
             <button className="first-video-success-offer__compare" type="button" onClick={handleComparePlans}>
               {text("Сравнить тарифы", "Compare plans")}
             </button>
-          </>
+          </div>
         )}
+        {feedbackSection}
       </aside>
 
       <div className="first-video-success-offer__details">
@@ -253,7 +256,6 @@ export function FirstVideoSuccessOffer({
           <li>{text("до 5 Shorts", "up to 5 Shorts")}</li>
           <li>{text("≈ 78 ₽ за ролик", "one-time plan")}</li>
         </ul>
-        {feedbackSection}
       </div>
 
     </section>
