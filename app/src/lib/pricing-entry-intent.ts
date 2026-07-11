@@ -2,7 +2,7 @@ export type PricingEntryIntentSection = "plans" | "addons";
 
 export type PricingEntryIntent = {
   section: PricingEntryIntentSection;
-  source: "insufficient-credits";
+  source: "first-video-success" | "insufficient-credits";
 };
 
 const PRICING_ENTRY_INTENT_STORAGE_KEY = "adshorts.pricing-entry-intent";
@@ -14,7 +14,7 @@ const isValidPricingEntryIntent = (value: unknown): value is PricingEntryIntent 
 
   const payload = value as { section?: unknown; source?: unknown };
   return (
-    payload.source === "insufficient-credits" &&
+    (payload.source === "first-video-success" || payload.source === "insufficient-credits") &&
     (payload.section === "plans" || payload.section === "addons")
   );
 };

@@ -1,4 +1,5 @@
 const STUDIO_PREVIEW_DISMISS_STORAGE_KEY_PREFIX = "adshorts.studio-preview-dismiss:";
+const STUDIO_FIRST_VIDEO_OFFER_DISMISS_STORAGE_KEY_PREFIX = "adshorts.first-video-offer-dismiss:";
 const STUDIO_MEDIA_LIBRARY_HIDDEN_STORAGE_KEY_PREFIX = "adshorts.media-library-hidden:";
 const STUDIO_CREATE_MODE_STORAGE_KEY_PREFIX = "adshorts.studio-create-mode:";
 const STUDIO_CREATE_SETTINGS_STORAGE_KEY_PREFIX = "adshorts.studio-create-settings:";
@@ -7,6 +8,8 @@ const STUDIO_WELCOME_CARD_DISMISS_STORAGE_KEY_PREFIX = "adshorts.studio-welcome-
 export const normalizeWorkspaceEmail = (value: string | null | undefined) => String(value ?? "").trim().toLowerCase();
 
 const getStudioPreviewDismissStorageKey = (email: string) => `${STUDIO_PREVIEW_DISMISS_STORAGE_KEY_PREFIX}${email}`;
+const getStudioFirstVideoOfferDismissStorageKey = (email: string) =>
+  `${STUDIO_FIRST_VIDEO_OFFER_DISMISS_STORAGE_KEY_PREFIX}${email}`;
 const getStudioMediaLibraryHiddenStorageKey = (email: string) => `${STUDIO_MEDIA_LIBRARY_HIDDEN_STORAGE_KEY_PREFIX}${email}`;
 const getStudioCreateModeStorageKey = (email: string) => `${STUDIO_CREATE_MODE_STORAGE_KEY_PREFIX}${email}`;
 const getStudioCreateSettingsStorageKey = (email: string) => `${STUDIO_CREATE_SETTINGS_STORAGE_KEY_PREFIX}${email}`;
@@ -178,6 +181,50 @@ export const persistDismissedStudioPreviewKey = (email: string | null | undefine
     const storageKey = getStudioPreviewDismissStorageKey(normalizedEmail);
     const normalizedDismissKey = String(dismissKey ?? "").trim();
 
+    if (!normalizedDismissKey) {
+      window.sessionStorage.removeItem(storageKey);
+      return;
+    }
+
+    window.sessionStorage.setItem(storageKey, normalizedDismissKey);
+  } catch {
+    // Ignore storage write errors.
+  }
+};
+
+export const readDismissedFirstVideoOfferKey = (email: string | null | undefined) => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const normalizedEmail = normalizeWorkspaceEmail(email);
+  if (!normalizedEmail) {
+    return null;
+  }
+
+  try {
+    return String(window.sessionStorage.getItem(getStudioFirstVideoOfferDismissStorageKey(normalizedEmail)) ?? "").trim() || null;
+  } catch {
+    return null;
+  }
+};
+
+export const persistDismissedFirstVideoOfferKey = (
+  email: string | null | undefined,
+  dismissKey: string | null,
+) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const normalizedEmail = normalizeWorkspaceEmail(email);
+  if (!normalizedEmail) {
+    return;
+  }
+
+  try {
+    const storageKey = getStudioFirstVideoOfferDismissStorageKey(normalizedEmail);
+    const normalizedDismissKey = String(dismissKey ?? "").trim();
     if (!normalizedDismissKey) {
       window.sessionStorage.removeItem(storageKey);
       return;

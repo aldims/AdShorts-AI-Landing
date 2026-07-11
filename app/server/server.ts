@@ -193,6 +193,12 @@ import {
   notifyInternationalPaymentsWaitlistSubmission,
   parseInternationalPaymentsWaitlistSubmission,
 } from "./international-payments-waitlist.js";
+import {
+  ProductFeedbackValidationError,
+  appendProductFeedbackSubmission,
+  notifyProductFeedbackSubmission,
+  parseProductFeedbackSubmission,
+} from "./product-feedback.js";
 import { buildAdsflowUrl, fetchUpstreamResponse, postAdsflowJson, UpstreamFetchError, upstreamPolicies } from "./upstream-client.js";
 import { initServerLogging, logServerEvent } from "./logger.js";
 import {
@@ -3373,6 +3379,48 @@ app.post("/api/contact/international-payments-waitlist", async (req, res) => {
     console.error("[contact] Failed to process international payments waitlist form", error);
     res.status(500).json({
       error: "Could not join the waitlist. Try again in a moment.",
+    });
+  }
+});
+
+app.post("/api/contact/product-feedback", async (req, res) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+
+  if (!session?.user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  try {
+    const submission = parseProductFeedbackSubmission(req.body, {
+      userAgent: req.header("user-agent") ?? null,
+      userEmail: session.user.email,
+      userId: session.user.id,
+    });
+
+    await appendProductFeedbackSubmission(submission);
+    void notifyProductFeedbackSubmission(submission).catch((error) => {
+      console.error("[contact] Failed to notify product feedback submission", error);
+    });
+    logServerEvent("info", "product_feedback_submitted", {
+      plan: submission.plan,
+      projectId: submission.projectId,
+      source: submission.source,
+      userId: submission.userId,
+    });
+
+    res.status(201).json({ data: { ok: true } });
+  } catch (error) {
+    if (error instanceof ProductFeedbackValidationError) {
+      res.status(400).json({ error: error.message });
+      return;
+    }
+
+    console.error("[contact] Failed to process product feedback", error);
+    res.status(500).json({
+      error: "Не удалось отправить отзыв. Попробуйте ещё раз через пару минут.",
     });
   }
 });

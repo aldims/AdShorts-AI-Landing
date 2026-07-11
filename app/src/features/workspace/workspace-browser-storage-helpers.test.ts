@@ -3,13 +3,16 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
+  persistDismissedFirstVideoOfferKey,
   persistDismissedStudioWelcomeCard,
   persistStudioCreateMode,
+  readDismissedFirstVideoOfferKey,
   readDismissedStudioWelcomeCard,
   readStoredStudioCreateMode,
 } from "./workspace-browser-storage-helpers";
 
 let originalLocalStorage: PropertyDescriptor | undefined;
+let originalSessionStorage: PropertyDescriptor | undefined;
 
 const createMemoryStorage = (): Storage => {
   const values = new Map<string, string>();
@@ -92,5 +95,31 @@ describe("studio create mode storage", () => {
     persistStudioCreateMode("user@example.test", "default");
 
     expect(readStoredStudioCreateMode("USER@EXAMPLE.TEST")).toBe("default");
+  });
+});
+
+describe("first video offer dismiss storage", () => {
+  beforeEach(() => {
+    originalSessionStorage = Object.getOwnPropertyDescriptor(window, "sessionStorage");
+    Object.defineProperty(window, "sessionStorage", {
+      configurable: true,
+      value: createMemoryStorage(),
+    });
+  });
+
+  afterEach(() => {
+    if (originalSessionStorage) {
+      Object.defineProperty(window, "sessionStorage", originalSessionStorage);
+    }
+  });
+
+  it("remembers the dismissed result only for the current account session", () => {
+    persistDismissedFirstVideoOfferKey(" User@Example.Test ", "ad:4171");
+
+    expect(readDismissedFirstVideoOfferKey("user@example.test")).toBe("ad:4171");
+    expect(readDismissedFirstVideoOfferKey("other@example.test")).toBeNull();
+
+    persistDismissedFirstVideoOfferKey("user@example.test", null);
+    expect(readDismissedFirstVideoOfferKey("user@example.test")).toBeNull();
   });
 });

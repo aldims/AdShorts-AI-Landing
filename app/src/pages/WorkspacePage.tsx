@@ -2,6 +2,7 @@ import { Fragment, type CSSProperties, type ChangeEvent, type ClipboardEvent as 
 import { createPortal, flushSync } from "react-dom";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { AccountMenuButton } from "../components/AccountMenuButton";
+import { FirstVideoSuccessOffer } from "../components/FirstVideoSuccessOffer";
 import { InsufficientCreditsModal } from "../components/InsufficientCreditsModal";
 import { LanguageSwitcher } from "../components/LanguageSwitcher";
 import { PrimarySiteNav } from "../components/PrimarySiteNav";
@@ -28,10 +29,12 @@ import {
   getStudioPreviewDismissKey,
   normalizeWorkspaceEmail,
   persistDismissedStudioPreviewKey,
+  persistDismissedFirstVideoOfferKey,
   persistHiddenMediaLibraryItemKeys,
   persistStudioCreateMode,
   persistStudioCreateSettings,
   readDismissedStudioPreviewKey,
+  readDismissedFirstVideoOfferKey,
   readDismissedStudioWelcomeCard,
   readHiddenMediaLibraryItemKeys,
   readStoredStudioCreateMode,
@@ -1945,6 +1948,9 @@ export function WorkspacePage({
   const [generatedVideo, setGeneratedVideo] = useState<StudioGeneration | null>(null);
   const [generatedVideoActionMode, setGeneratedVideoActionMode] =
     useState<StudioGeneratedVideoActionMode>("expanded");
+  const [dismissedFirstVideoOfferKey, setDismissedFirstVideoOfferKey] = useState<string | null>(() =>
+    readDismissedFirstVideoOfferKey(session.email),
+  );
   const [studioToast, setStudioToast] = useState<{
     kind: "error" | "status" | "warning";
     message: string;
@@ -4032,6 +4038,7 @@ export function WorkspacePage({
     setActiveProjectPreviewId(null);
     setFailedStudioVideoUrls([]);
     setDismissedStudioPreviewKey(readDismissedStudioPreviewKey(session.email));
+    setDismissedFirstVideoOfferKey(readDismissedFirstVideoOfferKey(session.email));
     setIsStudioWelcomeCardClosed(false);
     setIsStudioWelcomeCardDismissed(readDismissedStudioWelcomeCard(session.email));
     setHiddenMediaLibraryItemKeys(readHiddenMediaLibraryItemKeys(session.email));
@@ -5840,6 +5847,16 @@ export function WorkspacePage({
     normalizeWorkspaceSegmentEditorSetting(segmentEditorDraft?.subtitleType) === "none" || isCurrentDraftVoiceDisabled;
   const segmentEditorCreateShortsRequiredCredits = getWorkspaceSegmentEditorGenerationRequiredCredits(segmentEditorDraft);
   const readyProjectsCount = projects.filter((project) => project.status === "ready").length;
+  const shouldShowFirstVideoSuccessOffer =
+    createMode === "default" &&
+    workspacePlan === "FREE" &&
+    isGeneratedVideoPrimaryActionExpanded &&
+    Boolean(visibleGeneratedVideo) &&
+    Boolean(generatedVideoDismissKey) &&
+    generatedVideoDismissKey !== dismissedFirstVideoOfferKey &&
+    hasLoadedProjects &&
+    !projectsError &&
+    readyProjectsCount <= 1;
   const activeProjectsCount = projects.filter(
     (project) => project.status === "queued" || project.status === "processing",
   ).length;
@@ -10042,10 +10059,21 @@ export function WorkspacePage({
   const hasStudioPromptAuxiliaryContent =
     shouldUseExpandedStudioPrompt || Boolean(segmentEditorError) || hasAppliedSegmentEditorSession;
   const studioPromptInnerClassName = `studio-canvas-prompt__inner${
-    hasStudioPromptAuxiliaryContent ? "" : " studio-canvas-prompt__inner--compact"
+    hasStudioPromptAuxiliaryContent || shouldShowFirstVideoSuccessOffer ? "" : " studio-canvas-prompt__inner--compact"
   }${shouldUseExpandedStudioPrompt ? " studio-canvas-prompt__inner--expanded" : ""}${
     composerSourceIdea ? " studio-canvas-prompt__inner--with-source" : ""
-  }`;
+  }${shouldShowFirstVideoSuccessOffer ? " studio-canvas-prompt__inner--first-video-success" : ""}`;
+
+  const handleFirstVideoOfferUpgrade = () => {
+    writePricingEntryIntent({
+      section: "plans",
+      source: "first-video-success",
+    });
+    navigate(`${localizePath("/pricing/")}#plans`);
+    if (typeof window !== "undefined") {
+      window.scrollTo({ left: 0, top: 0, behavior: "auto" });
+    }
+  };
 
   useEffect(() => {
     if (createMode !== "segment-editor" || (isSegmentAiPhotoModalOpen && !segmentAiPhotoModalSegment)) {
@@ -34932,6 +34960,18 @@ export function WorkspacePage({
                     className={studioPromptInnerClassName}
                     style={promptInnerStyle}
                   >
+                  {shouldShowFirstVideoSuccessOffer ? (
+                    <FirstVideoSuccessOffer
+                      locale={locale}
+                      onDismiss={() => {
+                        setDismissedFirstVideoOfferKey(generatedVideoDismissKey);
+                        persistDismissedFirstVideoOfferKey(session.email, generatedVideoDismissKey);
+                      }}
+                      onUpgrade={handleFirstVideoOfferUpgrade}
+                      plan={workspacePlan}
+                      projectId={visibleGeneratedVideo?.adId ?? null}
+                    />
+                  ) : (
                   <div className="studio-canvas-prompt__editor-layout">
                     <div className="studio-canvas-prompt__editor-pane">
                       <>
@@ -35104,9 +35144,10 @@ export function WorkspacePage({
                         </div>
                       </>
                   </div>
+                  </div>
+                  )}
                 </div>
               </div>
-            </div>
             ) : null}
           </div>
 
