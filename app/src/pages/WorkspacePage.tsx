@@ -30173,6 +30173,9 @@ export function WorkspacePage({
                         <span></span>
                         <span></span>
                         <span></span>
+                        <span></span>
+                        <span></span>
+                        <span></span>
                       </span>
                     </button>
                   ) : null}

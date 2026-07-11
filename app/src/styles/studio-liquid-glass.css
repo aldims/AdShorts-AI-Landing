@@ -2044,8 +2044,8 @@
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: 22px;
-  gap: 2px;
+  grid-template-columns: repeat(3, 2.5px);
+  gap: 2.5px 3.5px;
   color: rgba(190, 203, 232, 0.62);
   pointer-events: none;
   transition:
@@ -2055,20 +2055,13 @@
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle-dots span {
-  width: 22px;
-  height: 1.5px;
-  justify-self: center;
+  width: 2.5px;
+  height: 2.5px;
   border-radius: 999px;
-  background: linear-gradient(90deg, transparent, currentColor 18%, currentColor 82%, transparent);
-  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.42);
-}
-
-.studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle-dots span:nth-child(2) {
-  width: 16.5px;
-}
-
-.studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle-dots span:nth-child(3) {
-  width: 22px;
+  background: currentColor;
+  box-shadow:
+    0 0 5px rgba(83, 205, 255, 0.24),
+    0 1px 1px rgba(0, 0, 0, 0.42);
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle:hover:not(:disabled),
@@ -2083,7 +2076,7 @@
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle:focus-visible .studio-segment-editor__timeline-drag-handle-dots {
   color: rgba(132, 220, 255, 0.96);
   filter: drop-shadow(0 0 5px rgba(83, 205, 255, 0.6));
-  transform: scaleX(1.14);
+  transform: scale(1.14);
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle:active,
@@ -2097,7 +2090,7 @@
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle.is-dragging .studio-segment-editor__timeline-drag-handle-dots {
   color: rgba(238, 232, 255, 0.98);
   filter: drop-shadow(0 0 6px rgba(157, 112, 255, 0.72));
-  transform: scaleX(1.2);
+  transform: scale(1.2);
 }
 
 /* Track ruler timecodes — cooler, crisper */
@@ -2577,21 +2570,13 @@
   }
 
   .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle-dots {
-    grid-template-columns: 16px !important;
-    gap: 2px !important;
+    grid-template-columns: repeat(3, 2px) !important;
+    gap: 2px 3px !important;
   }
 
   .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle-dots span {
-    width: 16px !important;
-    height: 1.5px !important;
-  }
-
-  .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle-dots span:nth-child(2) {
-    width: 12px !important;
-  }
-
-  .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle-dots span:nth-child(3) {
-    width: 16px !important;
+    width: 2px !important;
+    height: 2px !important;
   }
 
   .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-timecode {
