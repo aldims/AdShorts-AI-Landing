@@ -12068,9 +12068,16 @@ export function WorkspacePage({
     }
 
     if (lastStudioCreateModeRef.current === "segment-editor") {
+      const currentScenesDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+      if (currentScenesDraft) {
+        setStudioView("create");
+        setCreateMode("segment-editor");
+        syncSegmentEditorRouteForArrayIndex(currentScenesDraft, activeSegmentIndex, { replace: true });
+        return;
+      }
+
       markPendingStudioRouteSection("create");
       cancelPendingSegmentEditorLoad();
-      stashCurrentSegmentEditorDraft();
       closeSegmentAiPhotoModal({ immediate: true });
       resetSegmentEditorPreviewPlaybackState({ clearRefs: true });
       setSegmentEditorVideoError(null);
