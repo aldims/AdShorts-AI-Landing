@@ -2013,13 +2013,15 @@
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle.is-last {
-  right: 10px;
+  right: auto;
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle {
+  left: 50%;
+  right: auto;
   z-index: 20;
   top: -7px;
-  width: 64px;
+  width: 52px;
   height: 28px;
   border-color: transparent;
   border-radius: 999px;
@@ -2027,6 +2029,7 @@
   color: transparent;
   opacity: 1;
   box-shadow: none;
+  transform: translateX(-50%);
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drop-gap {
@@ -2034,46 +2037,29 @@
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle::before {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 42px;
-  height: 20px;
-  border: 1px solid rgba(170, 186, 255, 0.24);
-  border-radius: 999px;
-  background:
-    radial-gradient(circle at 22% 0%, rgba(115, 210, 255, 0.16), transparent 48%),
-    linear-gradient(135deg, rgba(132, 105, 255, 0.13), rgba(23, 33, 55, 0.08)),
-    rgba(8, 11, 21, 0.76);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.2),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.42),
-    0 0 0 1px rgba(95, 115, 190, 0.08),
-    0 7px 18px -10px rgba(0, 0, 0, 0.94),
-    0 0 14px -8px rgba(112, 130, 255, 0.46);
-  pointer-events: none;
-  transform: translate(-50%, -50%);
+  content: none;
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle-dots {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: repeat(3, 2.5px);
-  gap: 2.5px;
-  color: rgba(213, 222, 255, 0.82);
+  grid-template-columns: 22px;
+  gap: 2px;
+  color: rgba(190, 203, 232, 0.62);
   pointer-events: none;
+  transition:
+    color 0.16s ease,
+    filter 0.16s ease,
+    transform 0.16s ease;
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle-dots span {
-  width: 2.5px;
-  height: 2.5px;
+  width: 22px;
+  height: 1.5px;
   border-radius: 999px;
-  background: currentColor;
-  box-shadow:
-    0 0 5px rgba(116, 201, 255, 0.34),
-    0 1px 1px rgba(0, 0, 0, 0.48);
+  background: linear-gradient(90deg, transparent, currentColor 18%, currentColor 82%, transparent);
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.42);
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle:hover:not(:disabled),
@@ -2081,40 +2067,28 @@
   border-color: transparent;
   background: transparent;
   box-shadow: none;
+  transform: translate(-50%, -1px);
 }
 
-.studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle:hover:not(:disabled)::before,
-.studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle:focus-visible::before {
-  border-color: rgba(128, 220, 255, 0.58);
-  background:
-    radial-gradient(circle at 22% 0%, rgba(109, 224, 255, 0.3), transparent 52%),
-    linear-gradient(135deg, rgba(136, 105, 255, 0.24), rgba(31, 68, 92, 0.12)),
-    rgba(9, 14, 26, 0.84);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.28),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.36),
-    0 0 0 1px rgba(120, 132, 255, 0.16),
-    0 0 20px -6px rgba(83, 205, 255, 0.72);
+.studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle:hover:not(:disabled) .studio-segment-editor__timeline-drag-handle-dots,
+.studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle:focus-visible .studio-segment-editor__timeline-drag-handle-dots {
+  color: rgba(132, 220, 255, 0.96);
+  filter: drop-shadow(0 0 5px rgba(83, 205, 255, 0.6));
+  transform: scaleX(1.14);
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle:active,
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle.is-dragging {
   border-color: transparent;
   background: transparent;
-}
-
-.studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle:active::before,
-.studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle.is-dragging::before {
-  border-color: rgba(176, 142, 255, 0.62);
-  background:
-    radial-gradient(circle at 24% 0%, rgba(100, 217, 255, 0.26), transparent 52%),
-    linear-gradient(135deg, rgba(139, 92, 246, 0.34), rgba(47, 30, 88, 0.16)),
-    rgba(11, 10, 25, 0.9);
+  transform: translateX(-50%);
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle:active .studio-segment-editor__timeline-drag-handle-dots,
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle.is-dragging .studio-segment-editor__timeline-drag-handle-dots {
   color: rgba(238, 232, 255, 0.98);
+  filter: drop-shadow(0 0 6px rgba(157, 112, 255, 0.72));
+  transform: scaleX(1.2);
 }
 
 /* Track ruler timecodes — cooler, crisper */
@@ -2574,17 +2548,18 @@
 
   .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle,
   .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle.is-last {
-    right: 16px !important;
+    left: 50% !important;
+    right: auto !important;
     top: 3px !important;
     bottom: auto !important;
-    width: 20px !important;
+    width: 36px !important;
     height: 18px !important;
     z-index: 18 !important;
   }
 
   .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle.is-last {
-    right: 16px !important;
-    width: 20px !important;
+    right: auto !important;
+    width: 36px !important;
   }
 
   .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle::before {
@@ -2593,12 +2568,12 @@
   }
 
   .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle-dots {
-    grid-template-columns: repeat(3, 1.5px) !important;
-    gap: 1.5px !important;
+    grid-template-columns: 16px !important;
+    gap: 2px !important;
   }
 
   .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle-dots span {
-    width: 1.5px !important;
+    width: 16px !important;
     height: 1.5px !important;
   }
 
