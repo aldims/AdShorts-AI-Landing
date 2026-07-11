@@ -21676,7 +21676,13 @@ export function WorkspacePage({
       stashCurrentSegmentEditorDraft();
     }
 
-    await ensureSegmentEditorDraftForProject(project.adId, getWorkspaceSegmentEditorProjectOpenOptions());
+    await ensureSegmentEditorDraftForProject(
+      project.adId,
+      {
+        ...getWorkspaceSegmentEditorProjectOpenOptions(),
+        bypassCache: true,
+      },
+    );
   };
 
   const handleOpenMediaLibraryItem = (item: WorkspaceMediaLibraryItem) => {
@@ -30814,8 +30820,14 @@ export function WorkspacePage({
               const segmentTimelineVoiceGenerationLabel = isSegmentTimelineVoiceGenerationScheduled
                 ? getWorkspaceSegmentTimelineVoiceLabel(locale, segment, segmentTimelineVoiceSettings)
                 : null;
+              const completedShortsVoiceFallbackUrl =
+                isSegmentTimelineVoiceGenerationScheduled &&
+                segmentEditorDraft.finalVideoStale !== true &&
+                !hasSegmentEditorChanges
+                  ? currentDraftMediaLibraryProject?.videoUrl ?? currentDraftMediaLibraryProject?.videoFallbackUrl ?? null
+                  : null;
               const voiceoverAudioUrl = isSegmentTimelineVoiceGenerationScheduled
-                ? null
+                ? completedShortsVoiceFallbackUrl
                 : embeddedTalkingPhotoAudioUrl ?? voiceoverAudioPreviewSource.audioUrl;
               const voiceAudioKey = `timeline:voice:${segment.index}:${voiceoverAudioUrl ?? "empty"}:${voiceoverAudioPreviewSource.version}`;
               const isVoiceoverGenerationPending = hasWorkspaceSegmentVisualRun(
@@ -30833,6 +30845,12 @@ export function WorkspacePage({
                     `Звук встроен${voiceoverDurationDisplayLabel ? ` ${voiceoverDurationDisplayLabel}` : ""}`,
                     `Embedded audio${voiceoverDurationDisplayLabel ? ` ${voiceoverDurationDisplayLabel}` : ""}`,
                   )
+                : completedShortsVoiceFallbackUrl
+                  ? workspaceText(
+                      locale,
+                      `Звук из готового Shorts${voiceoverDurationDisplayLabel ? ` ${voiceoverDurationDisplayLabel}` : ""}`,
+                      `Audio from completed Shorts${voiceoverDurationDisplayLabel ? ` ${voiceoverDurationDisplayLabel}` : ""}`,
+                    )
                 : isSegmentTimelineVoiceGenerationScheduled && segmentTimelineVoiceGenerationLabel
                   ? workspaceText(
                       locale,
@@ -30850,16 +30868,16 @@ export function WorkspacePage({
               const voicePreviewLabelPrefixEn = usesEmbeddedTalkingPhotoAudio ? "Talking character audio" : "Voiceover";
               const voiceLabel = workspaceText(
                 locale,
-                `${voicePreviewLabelPrefixRu} сцены ${index + 1}: ${voiceDisplayLabel}${
+                `${completedShortsVoiceFallbackUrl ? "Звук готового Shorts" : voicePreviewLabelPrefixRu} сцены ${index + 1}: ${voiceDisplayLabel}${
                   voiceoverDurationDisplayLabel ? `, ${voiceoverDurationDisplayLabel}` : ""
                 }`,
-                `${voicePreviewLabelPrefixEn} scene ${index + 1}: ${voiceDisplayLabel}${
+                `${completedShortsVoiceFallbackUrl ? "Completed Shorts audio" : voicePreviewLabelPrefixEn} scene ${index + 1}: ${voiceDisplayLabel}${
                   voiceoverDurationDisplayLabel ? `, ${voiceoverDurationDisplayLabel}` : ""
                 }`,
               );
               const voiceDisabledReason = isVoiceoverGenerationPending
                 ? workspaceText(locale, "Озвучка сцены создаётся", "Scene voiceover is generating")
-                : isSegmentTimelineVoiceGenerationScheduled
+                : isSegmentTimelineVoiceGenerationScheduled && !completedShortsVoiceFallbackUrl
                   ? workspaceText(
                       locale,
                       "Озвучка будет создана при создании Shorts",
@@ -30992,16 +31010,21 @@ export function WorkspacePage({
                       embeddedTalkingPhotoAudioUrl || !voiceoverAudioPreviewSource.shouldClip
                         ? null
                         : voiceoverDurationInfo?.durationSeconds ?? null,
-                    endTime:
-                      embeddedTalkingPhotoAudioUrl || !voiceoverAudioPreviewSource.shouldClip
+                    label: voiceLabel,
+                    mediaKind: embeddedTalkingPhotoAudioUrl || completedShortsVoiceFallbackUrl ? "video" : undefined,
+                    startTime:
+                      embeddedTalkingPhotoAudioUrl
+                        ? null
+                        : completedShortsVoiceFallbackUrl
+                          ? span.startTime
+                        : !voiceoverAudioPreviewSource.shouldClip
+                          ? null
+                        : voiceoverPreviewRange?.startTime,
+                    endTime: completedShortsVoiceFallbackUrl
+                      ? span.endTime
+                      : embeddedTalkingPhotoAudioUrl || !voiceoverAudioPreviewSource.shouldClip
                         ? null
                         : voiceoverPreviewRange?.endTime,
-                    label: voiceLabel,
-                    mediaKind: embeddedTalkingPhotoAudioUrl ? "video" : undefined,
-                    startTime:
-                      embeddedTalkingPhotoAudioUrl || !voiceoverAudioPreviewSource.shouldClip
-                        ? null
-                        : voiceoverPreviewRange?.startTime,
                     url: voiceoverAudioUrl,
                     volume: embeddedTalkingPhotoAudioUrl ? WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_VOLUME : undefined,
                   })}
