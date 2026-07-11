@@ -2798,6 +2798,11 @@ const buildStudioBatchVoiceoverSegmentAudioUrl = (
   jobId: string | null | undefined,
   payload?: AdsflowSegmentAiVideoAssetPayload | null,
 ) => {
+  const mediaAssetId = normalizePositiveInteger(payload?.media_asset_id);
+  if (mediaAssetId !== null) {
+    return `/api/workspace/media-assets/${mediaAssetId}`;
+  }
+
   const downloadUrl = normalizeGenerationText(payload?.download_url);
   const projectVoiceoverMatch = downloadUrl.match(/\/api\/web\/project-voiceover\/jobs\/([^/?#]+)\/file/);
   if (projectVoiceoverMatch) {

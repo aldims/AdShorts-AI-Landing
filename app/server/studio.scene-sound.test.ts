@@ -427,6 +427,78 @@ describe("studio segment voiceover jobs", () => {
     ]);
   });
 
+  it("uses the durable media proxy for native batch voiceover segment assets", async () => {
+    const { createStudioBatchVoiceoverJob, getStudioBatchVoiceoverJobStatus } = await loadStudioModule();
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(String(input));
+
+        if (url.pathname.startsWith("/api/admin/users")) {
+          return jsonResponse({ items: [] });
+        }
+
+        if (url.pathname === "/api/web/voiceover/batch-jobs") {
+          return jsonResponse({
+            job_id: "batch-job-1",
+            status: "queued",
+            user: { balance: 11, plan: "FREE", user_id: "8160048802147561000" },
+          });
+        }
+
+        if (url.pathname === "/api/web/voiceover/batch-jobs/batch-job-1") {
+          return jsonResponse({
+            job_id: "batch-job-1",
+            segments: [
+              {
+                asset: {
+                  download_url: "https://storage.example.test/signed-segment.wav",
+                  file_name: "scene-5.wav",
+                  media_asset_id: 8740,
+                  mime_type: "audio/wav",
+                },
+                job_id: "project-voiceover-child-job",
+                language: "ru",
+                segment_index: 4,
+                speech_duration: 3.96,
+                status: "done",
+                text: "Последняя сцена.",
+                voice_source_duration: 3.971,
+                voice_type: "Liam_Timing",
+              },
+            ],
+            status: "done",
+            user: { balance: 11, plan: "FREE", user_id: "8160048802147561000" },
+          });
+        }
+
+        return jsonResponse({ detail: `unexpected ${url.pathname}` }, 500);
+      }),
+    );
+
+    const job = await createStudioBatchVoiceoverJob({ email: "alex@example.test", name: "Alex" }, {
+      groups: [
+        {
+          language: "ru",
+          segments: [{ segmentIndex: 4, targetDurationSeconds: 6.051, text: "Последняя сцена." }],
+          voiceType: "Liam_Timing",
+        },
+      ],
+      projectId: 4178,
+    });
+    const status = await getStudioBatchVoiceoverJobStatus(job.jobId, {
+      email: "alex@example.test",
+      name: "Alex",
+    });
+
+    expect(status.status).toBe("done");
+    expect(status.segments[0]?.asset).toEqual(expect.objectContaining({
+      assetId: 8740,
+      remoteUrl: "/api/workspace/media-assets/8740",
+    }));
+  });
+
   it("does not apply a whole-project voiceover segment as the first scene in fallback batch jobs", async () => {
     const { createStudioBatchVoiceoverJob, getStudioBatchVoiceoverJobStatus } = await loadStudioModule();
 
