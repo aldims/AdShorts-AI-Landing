@@ -470,6 +470,57 @@ describe("segment editor asset lifecycle mapping", () => {
     ]);
   });
 
+  it("restores scene voiceover metadata from final project generation settings", () => {
+    const session = buildWorkspaceSegmentEditorSessionFromPayload(
+      4178,
+      {
+        project_id: 4178,
+        voice_type: "Liam_Timing",
+        segments: [
+          {
+            current_video: "current-marker",
+            duration: 3.4,
+            end_time: 3.4,
+            index: 0,
+            start_time: 0,
+            text: "В зверином городе жил Барсик.",
+          },
+        ],
+      },
+      {
+        projectDetailsPayload: {
+          generation_settings: {
+            segment_voiceover_assets: [
+              {
+                download_url: "/api/media/8124/download",
+                library_kind: "voiceover",
+                media_asset_id: 8124,
+                media_type: "audio",
+                mime_type: "audio/wav",
+                role: "segment_voiceover",
+                segment_index: 0,
+                source_kind: "ai_voiceover",
+              },
+            ],
+          },
+          project_id: 4178,
+        },
+        projectMediaEnvelope: {
+          assets: [],
+          loaded: true,
+          projectId: 4178,
+        },
+      },
+    );
+
+    expect(session.segments[0]?.voiceoverAssetId).toBe(8124);
+    expect(session.segments[0]?.voiceover).toEqual(expect.objectContaining({
+      download_url: "/api/media/8124/download",
+      media_asset_id: 8124,
+      mime_type: "audio/wav",
+    }));
+  });
+
   it("marks missing linked project assets as deleted when the media envelope was loaded", () => {
     const segment = buildWorkspaceSegmentEditorSegment(
       42,
@@ -1019,6 +1070,57 @@ describe("segment editor asset lifecycle mapping", () => {
     const fetchedUrls = fetchMock.mock.calls.map(([input]) => String(input));
     expect(fetchedUrls.some((url) => url.includes("/segments/0/voiceover"))).toBe(false);
     expect(fetchedUrls.some((url) => url.includes("/segments/1/voiceover"))).toBe(false);
+  });
+
+  it("recovers playable voiceover proxies for a completed project without a TTS asset id", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/segments/0/voiceover")) {
+        return new Response(createPcmWavBuffer(3.25), {
+          headers: { "Content-Type": "audio/wav" },
+          status: 200,
+        });
+      }
+      if (url.includes("/segment-editor")) {
+        return new Response(JSON.stringify({
+          project_id: 4178,
+          segments: [{ duration: 3.4, end_time: 3.4, index: 0, start_time: 0, text: "First scene." }],
+          title: "Completed legacy voiceover",
+          tts_asset_id: null,
+          voice_type: "Liam_Timing",
+        }), { headers: { "Content-Type": "application/json" }, status: 200 });
+      }
+      if (url.includes("/media")) {
+        return new Response(JSON.stringify({ assets: [], project_id: 4178 }), {
+          headers: { "Content-Type": "application/json" },
+          status: 200,
+        });
+      }
+      return new Response(JSON.stringify({
+        final_video_asset_id: 9001,
+        generation_settings: { final_video_asset_id: 9001 },
+        project_id: 4178,
+      }), { headers: { "Content-Type": "application/json" }, status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const session = await getWorkspaceSegmentEditorSessionForAccessibleProject(
+      { id: "completed-project-user" },
+      4178,
+      { bypassCache: true },
+    );
+
+    expect(session.ttsAssetId).toBeNull();
+    expect(session.segments[0]).toEqual(expect.objectContaining({
+      speechDuration: 3.25,
+      voiceoverLanguage: "",
+      voiceoverTextHash: "first scene.",
+      voiceoverVoiceType: "Liam_Timing",
+    }));
+    expect(session.segments[0]?.voiceover).toEqual(expect.objectContaining({
+      download_url: "/api/workspace/project-segment-voiceover?projectId=4178&segmentIndex=0",
+      mime_type: "audio/wav",
+    }));
   });
 
   it("does not use segment timeline bounds as project TTS ranges when exact voice timing is missing", async () => {
