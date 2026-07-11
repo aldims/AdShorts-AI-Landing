@@ -183,6 +183,7 @@ export const buildWorkspaceSegmentBulkSubtitleText = (segments: Array<{ text?: s
 export const distributeWorkspaceSegmentBulkSubtitleText = (
   text: string,
   segmentCount: number,
+  options?: { allowEmpty?: boolean },
 ): WorkspaceSegmentBulkSubtitleTextResult => {
   const normalizedText = normalizeWorkspaceSegmentBulkSubtitleText(text);
   const normalizedSegmentCount = Number.isFinite(segmentCount) ? Math.max(0, Math.floor(segmentCount)) : 0;
@@ -192,6 +193,9 @@ export const distributeWorkspaceSegmentBulkSubtitleText = (
   }
 
   if (!normalizedText) {
+    if (options?.allowEmpty) {
+      return { error: null, texts: Array.from({ length: normalizedSegmentCount }, () => "") };
+    }
     return { error: "Введите текст субтитров.", texts: [] };
   }
 

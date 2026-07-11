@@ -528,6 +528,13 @@ describe("WorkspacePage segment subtitle bulk text", () => {
     expect(result.texts).toEqual([]);
   });
 
+  it("clears every scene when empty bulk text is explicitly allowed", () => {
+    const result = distributeWorkspaceSegmentBulkSubtitleText("   \n\t  ", 3, { allowEmpty: true });
+
+    expect(result.error).toBeNull();
+    expect(result.texts).toEqual(["", "", ""]);
+  });
+
   it("rejects text with fewer words than segments", () => {
     const result = distributeWorkspaceSegmentBulkSubtitleText("one two", 5);
 

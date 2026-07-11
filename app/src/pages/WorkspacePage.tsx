@@ -13728,13 +13728,14 @@ export function WorkspacePage({
 
   const updateSegmentSubtitleBulkTextDraft = (
     value: string,
-    options?: { captureVoiceTextEditSnapshot?: boolean; language?: StudioLanguage },
+    options?: { allowEmpty?: boolean; captureVoiceTextEditSnapshot?: boolean; language?: StudioLanguage },
   ) => {
     const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
     const textLanguage = options?.language ?? selectedLanguage;
     const result = distributeWorkspaceSegmentBulkSubtitleText(
       value,
       currentDraft?.segments.length ?? 0,
+      { allowEmpty: options?.allowEmpty },
     );
 
     if (result.error) {
@@ -13787,6 +13788,7 @@ export function WorkspacePage({
     setHasEditedSegmentSubtitleBulkTextInput(true);
     setSegmentSubtitleBulkTextInput(value);
     updateSegmentSubtitleBulkTextDraft(value, {
+      allowEmpty: true,
       captureVoiceTextEditSnapshot: true,
       language: voiceDraft?.language ?? selectedLanguage,
     });
@@ -13803,6 +13805,8 @@ export function WorkspacePage({
         voiceId: studioSidebarVoiceId || getDefaultStudioVoiceId(fallbackVoiceLanguage),
       };
     const didUpdate = updateSegmentSubtitleBulkTextDraft(segmentSubtitleBulkTextValue, {
+      allowEmpty: true,
+      captureVoiceTextEditSnapshot: true,
       language: voiceDraft.language,
     });
     if (!didUpdate) {

@@ -829,7 +829,7 @@ export function StudioVoiceSelectorChip({
     typeof bulkTextValue === "string" &&
     typeof onBulkTextChange === "function";
   const bulkTextSaveDisabledReason =
-    hasBulkTextEditor && (!isEnabled || selectedVoiceId === "none")
+    hasBulkTextEditor && bulkTextValue.trim().length > 0 && (!isEnabled || selectedVoiceId === "none")
       ? locale === "en"
         ? "Select a voice first"
         : "Сначала выберите голос"
