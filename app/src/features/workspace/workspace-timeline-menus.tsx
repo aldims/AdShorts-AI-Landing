@@ -741,15 +741,13 @@ export function WorkspaceSegmentTimelineVoiceMenu({
             </button>
           </div>
         ) : null}
-        {canRestoreAdaptedText ? (
-          <div className="studio-segment-editor__timeline-voice-restore-row">
+        <div className="studio-voice-selector__bulk-head studio-segment-editor__timeline-voice-text-counter">
+          {canRestoreAdaptedText ? (
             <button type="button" onClick={onRestoreAdaptedText}>
               <span aria-hidden="true">↶</span>
               <span>{workspaceText(locale, "Вернуть исходный текст", "Restore original text")}</span>
             </button>
-          </div>
-        ) : null}
-        <div className="studio-voice-selector__bulk-head studio-segment-editor__timeline-voice-text-counter">
+          ) : null}
           <small>{workspaceText(locale, `Сцена ${segmentArrayIndex + 1} · ${segment.text.length}/${STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS}`, `Scene ${segmentArrayIndex + 1} · ${segment.text.length}/${STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS}`)}</small>
         </div>
         <textarea
