@@ -23992,9 +23992,10 @@ textarea {
 
 .first-video-success-offer__feedback textarea {
   width: 100%;
-  min-height: 76px;
-  resize: vertical;
-  padding: 10px 11px;
+  height: 100%;
+  min-height: 112px;
+  resize: none;
+  padding: 11px 12px 51px;
   color: #f8f7ff;
   font: inherit;
   font-size: 13px;
@@ -24010,19 +24011,25 @@ textarea {
   box-shadow: 0 0 0 3px rgba(126, 86, 255, 0.13);
 }
 
-.first-video-success-offer__feedback-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+.first-video-success-offer__feedback-input {
+  position: relative;
+  min-height: 112px;
 }
 
-.first-video-success-offer__feedback-actions > span {
+.first-video-success-offer__feedback-error {
+  position: absolute;
+  right: 118px;
+  bottom: 16px;
+  left: 12px;
   color: #ff9aa7;
   font-size: 11px;
+  line-height: 1.25;
 }
 
-.first-video-success-offer__feedback-actions button {
+.first-video-success-offer__feedback-submit {
+  position: absolute;
+  right: 9px;
+  bottom: 9px;
   min-height: 34px;
   padding: 0 14px;
   color: #f7f5ff;
@@ -24035,7 +24042,7 @@ textarea {
   cursor: pointer;
 }
 
-.first-video-success-offer__feedback-actions button:disabled {
+.first-video-success-offer__feedback-submit:disabled {
   cursor: wait;
   opacity: 0.58;
 }

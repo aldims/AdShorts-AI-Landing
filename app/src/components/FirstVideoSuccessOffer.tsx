@@ -148,18 +148,26 @@ export function FirstVideoSuccessOffer({
               <label htmlFor={`${feedbackId}-message`}>
                 {text("Что понравилось? Что можно улучшить?", "What did you like? What could be improved?")}
               </label>
-              <textarea
-                id={`${feedbackId}-message`}
-                value={feedback}
-                maxLength={2000}
-                rows={3}
-                autoFocus
-                placeholder={text("Например: результат понравился, но…", "For example: I liked the result, but…")}
-                onChange={(event) => setFeedback(event.target.value)}
-              />
-              <div className="first-video-success-offer__feedback-actions">
-                {feedbackError ? <span role="alert">{feedbackError}</span> : <span />}
-                <button type="submit" disabled={feedbackStatus === "sending"}>
+              <div className="first-video-success-offer__feedback-input">
+                <textarea
+                  id={`${feedbackId}-message`}
+                  value={feedback}
+                  maxLength={2000}
+                  rows={3}
+                  autoFocus
+                  placeholder={text("Например: результат понравился, но…", "For example: I liked the result, but…")}
+                  onChange={(event) => setFeedback(event.target.value)}
+                />
+                {feedbackError ? (
+                  <span className="first-video-success-offer__feedback-error" role="alert">
+                    {feedbackError}
+                  </span>
+                ) : null}
+                <button
+                  className="first-video-success-offer__feedback-submit"
+                  type="submit"
+                  disabled={feedbackStatus === "sending"}
+                >
                   {feedbackStatus === "sending" ? text("Отправляем…", "Sending…") : text("Отправить", "Send")}
                 </button>
               </div>

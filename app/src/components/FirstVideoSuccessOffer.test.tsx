@@ -35,6 +35,9 @@ describe("FirstVideoSuccessOffer", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Что можно улучшить/i }));
     expect(screen.getByLabelText("Что понравилось? Что можно улучшить?")).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Отправить" }).closest(".first-video-success-offer__feedback-input"),
+    ).toBeTruthy();
   });
 
   it("exposes one primary checkout action and a secondary plan comparison", () => {
