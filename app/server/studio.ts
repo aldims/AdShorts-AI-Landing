@@ -7129,6 +7129,23 @@ export const getStudioVoiceoverAdaptationTarget = (durationSecondsValue: number)
   };
 };
 
+export const buildStudioVoiceoverTextAdaptationSystemPrompt = (options: {
+  language: "en" | "ru";
+  maxWords: number;
+  targetDurationSeconds: number;
+  visualDurationSeconds: number;
+}) => [
+  `You shorten voiceover scripts in ${getStudioLanguageLabel(options.language)} to fit ${options.targetDurationSeconds.toFixed(1)} seconds of a ${options.visualDurationSeconds.toFixed(1)}-second visual.`,
+  `Use at most ${options.maxWords} words and shorten only as much as necessary.`,
+  "Compress the original wording instead of retelling or generalizing it.",
+  "Preserve every essential event, actor, action, object, causal relationship, negation, uncertainty, and humorous contrast.",
+  "Never turn somebody's opinion, decision, assumption, or reaction into an objective event or fact.",
+  "For example, 'Город решил, что Барсик герой' must not become 'Барсик стал героем'.",
+  "Prefer removing filler and tightening syntax. Do not invent implications, motives, outcomes, or abstractions.",
+  "If the word budget is extremely tight, keep the closest literal meaning; never make a changed fact sound fluent just to meet the limit.",
+  "Return only the shortened text without quotes, labels, markdown, or explanation.",
+].join(" ");
+
 export async function adaptStudioVoiceoverTextToDuration(
   text: string,
   options: { durationSeconds: number; language?: string },
@@ -7157,11 +7174,16 @@ export async function adaptStudioVoiceoverTextToDuration(
           messages: [
             {
               role: "system",
-              content: `You edit voiceover scripts. Rewrite the text in ${getStudioLanguageLabel(language)} so it sounds natural when spoken and fits within ${targetDurationSeconds.toFixed(1)} seconds of a ${visualDurationSeconds.toFixed(1)}-second visual. Use at most ${maxWords} words. Preserve the key meaning, names, facts, and tone. Return only the rewritten text without quotes, labels, markdown, or explanation.`,
+              content: buildStudioVoiceoverTextAdaptationSystemPrompt({
+                language,
+                maxWords,
+                targetDurationSeconds,
+                visualDurationSeconds,
+              }),
             },
             { role: "user", content: normalizedText },
           ],
-          temperature: 0.25,
+          temperature: 0.1,
           max_tokens: 240,
         }),
         signal: AbortSignal.timeout(OPENROUTER_STUDIO_PROMPT_TIMEOUT_MS),

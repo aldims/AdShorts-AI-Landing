@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { getStudioVoiceoverAdaptationTarget } from "./studio.js";
+import {
+  buildStudioVoiceoverTextAdaptationSystemPrompt,
+  getStudioVoiceoverAdaptationTarget,
+} from "./studio.js";
 
 describe("getStudioVoiceoverAdaptationTarget", () => {
   it("keeps a 15 percent duration reserve before voiceover is generated", () => {
@@ -13,5 +16,20 @@ describe("getStudioVoiceoverAdaptationTarget", () => {
 
   it("keeps a usable minimum for very short visuals", () => {
     expect(getStudioVoiceoverAdaptationTarget(1).maxWords).toBe(3);
+  });
+});
+
+describe("buildStudioVoiceoverTextAdaptationSystemPrompt", () => {
+  it("forbids changing a character's perceived status into an objective fact", () => {
+    const prompt = buildStudioVoiceoverTextAdaptationSystemPrompt({
+      language: "ru",
+      maxWords: 12,
+      targetDurationSeconds: 5.1,
+      visualDurationSeconds: 6,
+    });
+
+    expect(prompt).toContain("Preserve every essential event, actor, action, object, causal relationship");
+    expect(prompt).toContain("'Город решил, что Барсик герой' must not become 'Барсик стал героем'");
+    expect(prompt).toContain("shorten only as much as necessary");
   });
 });
