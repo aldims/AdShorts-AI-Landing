@@ -24607,8 +24607,8 @@ export function WorkspacePage({
     if (mismatch.voiceoverDurationSource === "estimated") {
       return workspaceText(
         locale,
-        "Видео сцена короче озвучки. Она будет зациклена до длины озвучки, можно уменьшить длину озвучки или продлить видео с помощью ИИ.",
-        "The video scene is shorter than the voiceover. It will loop to match the voiceover length; you can shorten the voiceover or extend the video with AI.",
+        "Исходное видео может оказаться короче озвучки. Тогда последний кадр будет удерживаться до конца сцены. Можно уменьшить текст озвучки или продлить видео с помощью ИИ.",
+        "The source video may be shorter than the voiceover. In that case, its final frame will be held until the scene ends. You can shorten the voiceover text or extend the video with AI.",
       );
     }
 
@@ -24621,8 +24621,8 @@ export function WorkspacePage({
 
     return workspaceText(
       locale,
-      `Озвучка ${voiceoverDurationLabel} длиннее видео ${finalVisualDurationLabel}. В итоговом ролике видео будет зациклено до конца сцены. Чтобы убрать повтор, продлите видео через ИИ-продление.`,
-      `Voiceover ${voiceoverDurationLabel} is longer than the ${finalVisualDurationLabel} video. In the final video, this clip will loop until the scene ends. Extend it with AI extension to remove the repeat.`,
+      `Озвучка ${voiceoverDurationLabel} длиннее исходного видео ${finalVisualDurationLabel}. Последний кадр будет удерживаться до конца сцены. Чтобы сохранить движение, продлите видео с помощью ИИ.`,
+      `Voiceover ${voiceoverDurationLabel} is longer than the ${finalVisualDurationLabel} source video. The final frame will be held until the scene ends. Extend the video with AI to preserve motion.`,
     );
   };
   const showSegmentTimelinePhotoDurationAudioGuardWarning = (
@@ -29743,8 +29743,8 @@ export function WorkspacePage({
         return segmentTimelineVoiceMenuVisualAudioDurationMismatch.voiceoverDurationSource === "estimated"
           ? workspaceText(
               locale,
-              "Видео сцена короче озвучки. Она будет зациклена до длины озвучки, можно уменьшить длину озвучки или продлить видео с помощью ИИ.",
-              "The video scene is shorter than the voiceover. It will loop to match the voiceover length; you can shorten the voiceover or extend the video with AI.",
+              "Исходное видео может оказаться короче озвучки. Тогда последний кадр будет удерживаться до конца сцены. Можно уменьшить текст озвучки или продлить видео с помощью ИИ.",
+              "The source video may be shorter than the voiceover. In that case, its final frame will be held until the scene ends. You can shorten the voiceover text or extend the video with AI.",
             )
           : (() => {
               const voiceoverDurationLabel = formatWorkspaceSegmentEditorSegmentDurationLabel(
@@ -29755,8 +29755,8 @@ export function WorkspacePage({
 
               return workspaceText(
                 locale,
-                `Озвучка ${voiceoverDurationLabel} длиннее видео ${visualDurationLabel}. В итоговом ролике видео будет зациклено до конца сцены. Чтобы убрать повтор, продлите видео через ИИ-продление.`,
-                `Voiceover ${voiceoverDurationLabel} is longer than the ${visualDurationLabel} video. In the final video, this clip will loop until the scene ends. Extend the video with AI extension to remove the repeat.`,
+                `Озвучка ${voiceoverDurationLabel} длиннее исходного видео ${visualDurationLabel}. Последний кадр будет удерживаться до конца сцены. Чтобы сохранить движение, продлите видео с помощью ИИ.`,
+                `Voiceover ${voiceoverDurationLabel} is longer than the ${visualDurationLabel} source video. The final frame will be held until the scene ends. Extend the video with AI to preserve motion.`,
               );
             })();
       })()

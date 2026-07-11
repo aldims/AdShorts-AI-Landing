@@ -256,8 +256,8 @@ export function WorkspaceSegmentTimelineDurationMenu({
             <p className="studio-segment-editor__timeline-duration-loop-note" role="status">
               {workspaceText(
                 locale,
-                "Без ИИ-продления видео зациклится до конца озвучки. Чтобы убрать повтор, продлите видео с ИИ.",
-                "Without AI extension, the video will loop until the voiceover ends. Extend with AI to remove the repeat.",
+                "Без ИИ-продления последний кадр будет удерживаться до конца озвучки. Чтобы сохранить движение, продлите видео с ИИ.",
+                "Without AI extension, the final frame will be held until the voiceover ends. Extend with AI to preserve motion.",
               )}
             </p>
           </>
@@ -370,7 +370,7 @@ export function WorkspaceSegmentTimelineDurationMenu({
                     type="button"
                     onClick={onClose}
                   >
-                    {workspaceText(locale, "Оставить с повтором", "Keep looped")}
+                    {workspaceText(locale, "Оставить без продления", "Keep without extension")}
                   </button>
                 ) : null}
                 <button
