@@ -2057,9 +2057,18 @@
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle-dots span {
   width: 22px;
   height: 1.5px;
+  justify-self: center;
   border-radius: 999px;
   background: linear-gradient(90deg, transparent, currentColor 18%, currentColor 82%, transparent);
   box-shadow: 0 1px 1px rgba(0, 0, 0, 0.42);
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle-dots span:nth-child(2) {
+  width: 16.5px;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle-dots span:nth-child(3) {
+  width: 12.375px;
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle:hover:not(:disabled),
@@ -2575,6 +2584,14 @@
   .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle-dots span {
     width: 16px !important;
     height: 1.5px !important;
+  }
+
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle-dots span:nth-child(2) {
+    width: 12px !important;
+  }
+
+  .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle-dots span:nth-child(3) {
+    width: 9px !important;
   }
 
   .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-timecode {
