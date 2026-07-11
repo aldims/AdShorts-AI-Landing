@@ -5142,6 +5142,7 @@ app.post("/api/studio/segment-scene-sound/jobs", async (req, res) => {
   const prompt = typeof req.body?.prompt === "string" ? req.body.prompt.trim() : "";
   const language = typeof req.body?.language === "string" ? req.body.language.trim() : "";
   const source = typeof req.body?.source === "string" ? req.body.source.trim() : "";
+  const regenerate = req.body?.regenerate === true;
   const projectId =
     normalizeRequestPositiveInteger(req.body?.projectId ?? req.body?.project_id) ??
     normalizeRequestPositiveInteger(req.query?.projectId ?? req.query?.project_id) ??
@@ -5177,6 +5178,7 @@ app.post("/api/studio/segment-scene-sound/jobs", async (req, res) => {
     const job = await createStudioSegmentSceneSoundJob(prompt, session.user, {
       language,
       projectId,
+      regenerate,
       segmentIndex,
       durationSeconds,
       source,

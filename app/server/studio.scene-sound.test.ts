@@ -156,6 +156,7 @@ describe("studio scene sound jobs", () => {
       durationSeconds: 2,
       language: "en",
       projectId: 3576,
+      regenerate: true,
       segmentIndex: 0,
       visualMediaAssetId: 909,
       visualSourceJobId: "talking-job-1",
@@ -169,6 +170,7 @@ describe("studio scene sound jobs", () => {
     expect(calls.find((call) => call.pathname === "/api/web/segment-scene-sound/jobs")?.body).toEqual(
       expect.objectContaining({
         project_id: 3576,
+        regenerate: true,
         segment_index: 0,
         visual_media_asset_id: 909,
         visual_source_job_id: "talking-job-1",

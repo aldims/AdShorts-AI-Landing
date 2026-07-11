@@ -738,6 +738,7 @@ export type WorkspaceSegmentSceneSoundJobCreateRequest = {
   projectId?: number;
   project_id?: number;
   prompt: string;
+  regenerate?: boolean;
   segmentIndex?: number;
   segment_index?: number;
   source?: "current" | "original";

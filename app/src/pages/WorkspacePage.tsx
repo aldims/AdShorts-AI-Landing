@@ -18209,6 +18209,9 @@ export function WorkspacePage({
     const durationSeconds = getWorkspaceSegmentVisualGenerationDurationSeconds(targetSegment);
     const nextPrompt = options?.prompt ?? targetSegment?.sceneSoundPrompt ?? segmentSceneSoundModalPrompt;
     const normalizedPrompt = resolveWorkspaceSegmentSceneSoundPrompt(nextPrompt);
+    const isRegeneration = Boolean(
+      targetSegment && createWorkspaceSegmentSceneSoundAsset(targetSegment, targetSegment.index),
+    );
 
     if (!options?.silent) {
       updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => ({
@@ -18272,6 +18275,7 @@ export function WorkspacePage({
           projectId: sceneSoundProjectId ?? undefined,
           project_id: sceneSoundProjectId ?? undefined,
           prompt: normalizedPrompt,
+          regenerate: isRegeneration,
           segmentIndex: sceneSoundSegmentIndex,
           segment_index: sceneSoundSegmentIndex,
           source: "current",

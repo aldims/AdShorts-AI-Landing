@@ -8093,6 +8093,7 @@ export async function createStudioSegmentSceneSoundJob(
     durationSeconds?: number;
     language?: string;
     projectId?: number;
+    regenerate?: boolean;
     segmentIndex?: number;
     source?: string;
     visualMediaAssetId?: number;
@@ -8142,6 +8143,7 @@ export async function createStudioSegmentSceneSoundJob(
     ...buildStudioSegmentVisualDurationPayload(normalizedDurationSeconds),
     project_id: normalizedProjectId ?? undefined,
     prompt: upstreamPrompt,
+    regenerate: options?.regenerate === true,
     segment_index: normalizedSegmentIndex,
     source: normalizedSource,
     user_email: user.email ?? undefined,
