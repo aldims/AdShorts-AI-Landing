@@ -24598,6 +24598,7 @@ export function WorkspacePage({
         }
       | null,
     visualDurationFallbackLabel?: string | null,
+    holdLastFrame = false,
   ) => {
     if (!mismatch) {
       return null;
@@ -24607,8 +24608,12 @@ export function WorkspacePage({
     if (mismatch.voiceoverDurationSource === "estimated") {
       return workspaceText(
         locale,
-        "Исходное видео может оказаться короче озвучки. Тогда последний кадр будет удерживаться до конца сцены. Можно уменьшить текст озвучки или продлить видео с помощью ИИ.",
-        "The source video may be shorter than the voiceover. In that case, its final frame will be held until the scene ends. You can shorten the voiceover text or extend the video with AI.",
+        holdLastFrame
+          ? "Визуал может оказаться короче озвучки. Тогда последний кадр будет удерживаться до конца сцены. Можно уменьшить текст озвучки или продлить визуал."
+          : "Исходное видео может оказаться короче озвучки. Тогда оно повторится с начала до конца сцены. Можно уменьшить текст озвучки или продлить видео с помощью ИИ.",
+        holdLastFrame
+          ? "The visual may be shorter than the voiceover. In that case, its final frame will be held until the scene ends. You can shorten the voiceover text or extend the visual."
+          : "The source video may be shorter than the voiceover. In that case, it will replay from the beginning until the scene ends. You can shorten the voiceover text or extend the video with AI.",
       );
     }
 
@@ -24621,8 +24626,12 @@ export function WorkspacePage({
 
     return workspaceText(
       locale,
-      `Озвучка ${voiceoverDurationLabel} длиннее исходного видео ${finalVisualDurationLabel}. Последний кадр будет удерживаться до конца сцены. Чтобы сохранить движение, продлите видео с помощью ИИ.`,
-      `Voiceover ${voiceoverDurationLabel} is longer than the ${finalVisualDurationLabel} source video. The final frame will be held until the scene ends. Extend the video with AI to preserve motion.`,
+      holdLastFrame
+        ? `Озвучка ${voiceoverDurationLabel} длиннее визуала ${finalVisualDurationLabel}. Последний кадр будет удерживаться до конца сцены.`
+        : `Озвучка ${voiceoverDurationLabel} длиннее исходного видео ${finalVisualDurationLabel}. Видео повторится с начала до конца сцены. Чтобы убрать повтор, продлите видео с помощью ИИ.`,
+      holdLastFrame
+        ? `Voiceover ${voiceoverDurationLabel} is longer than the ${finalVisualDurationLabel} visual. The final frame will be held until the scene ends.`
+        : `Voiceover ${voiceoverDurationLabel} is longer than the ${finalVisualDurationLabel} source video. The video will replay from the beginning until the scene ends. Extend the video with AI to remove the repeat.`,
     );
   };
   const showSegmentTimelinePhotoDurationAudioGuardWarning = (
@@ -29734,32 +29743,15 @@ export function WorkspacePage({
         )
       : null;
   const segmentTimelineVoiceMenuVisualAudioWarningText = segmentTimelineVoiceMenuVisualAudioDurationMismatch
-    ? (() => {
-        const visualDurationLabel = formatWorkspaceSegmentEditorSegmentDurationLabel(
-          0,
-          segmentTimelineVoiceMenuVisualAudioDurationMismatch.visualDurationSeconds,
-          locale,
-        );
-        return segmentTimelineVoiceMenuVisualAudioDurationMismatch.voiceoverDurationSource === "estimated"
-          ? workspaceText(
-              locale,
-              "Исходное видео может оказаться короче озвучки. Тогда последний кадр будет удерживаться до конца сцены. Можно уменьшить текст озвучки или продлить видео с помощью ИИ.",
-              "The source video may be shorter than the voiceover. In that case, its final frame will be held until the scene ends. You can shorten the voiceover text or extend the video with AI.",
-            )
-          : (() => {
-              const voiceoverDurationLabel = formatWorkspaceSegmentEditorSegmentDurationLabel(
-                0,
-                segmentTimelineVoiceMenuVisualAudioDurationMismatch.voiceoverDurationSeconds,
-                locale,
-              );
-
-              return workspaceText(
-                locale,
-                `Озвучка ${voiceoverDurationLabel} длиннее исходного видео ${visualDurationLabel}. Последний кадр будет удерживаться до конца сцены. Чтобы сохранить движение, продлите видео с помощью ИИ.`,
-                `Voiceover ${voiceoverDurationLabel} is longer than the ${visualDurationLabel} source video. The final frame will be held until the scene ends. Extend the video with AI to preserve motion.`,
-              );
-            })();
-      })()
+    ? getSegmentTimelineVisualAudioDurationMismatchWarning(
+        segmentTimelineVoiceMenuVisualAudioDurationMismatch,
+        null,
+        Boolean(
+          segmentTimelineVoiceMenuSegment &&
+            (segmentTimelineVoiceMenuSegment.mediaType === "photo" ||
+              getWorkspaceSegmentLatestVisualAction(segmentTimelineVoiceMenuSegment) === "talking_photo"),
+        ),
+      )
     : null;
   const segmentTimelineVoiceMenu = (
     <WorkspaceSegmentTimelineVoiceMenu
@@ -30363,6 +30355,7 @@ export function WorkspacePage({
               const segmentDurationWarningTitle = getSegmentTimelineVisualAudioDurationMismatchWarning(
                 visualAudioDurationMismatch,
                 segmentVisualDurationBadgeLabel,
+                segment.mediaType === "photo" || getWorkspaceSegmentLatestVisualAction(segment) === "talking_photo",
               );
               const isSegmentDurationManual = normalizeWorkspaceSegmentDurationMode(segment.durationMode) === "manual";
               const visualHistoryKey = getWorkspaceSegmentTimelineHistoryKey("visual", segment.index);

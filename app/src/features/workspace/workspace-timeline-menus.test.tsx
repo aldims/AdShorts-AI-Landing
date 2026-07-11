@@ -320,7 +320,7 @@ describe("WorkspaceSegmentTimelineDurationMenu", () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
-  it("shows the held-final-frame result as a summary when voiceover is longer than video", () => {
+  it("shows the replayed result as a summary when voiceover is longer than video", () => {
     render(
       <WorkspaceSegmentTimelineDurationMenu
         {...baseDurationProps}
@@ -341,9 +341,9 @@ describe("WorkspaceSegmentTimelineDurationMenu", () => {
     expect(screen.getByText("Текущая озвучка")).toBeTruthy();
     expect(screen.getByText("5.9с")).toBeTruthy();
     expect(
-      screen.getByText("Без ИИ-продления последний кадр будет удерживаться до конца озвучки. Чтобы сохранить движение, продлите видео с ИИ."),
+      screen.getByText("Без ИИ-продления видео повторится с начала до конца озвучки. Чтобы убрать повтор, продлите видео с ИИ."),
     ).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Оставить без продления" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Оставить с повтором" })).toBeTruthy();
   });
 });
 
