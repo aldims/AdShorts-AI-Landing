@@ -2121,6 +2121,12 @@
   color: rgba(200, 216, 246, 0.86);
 }
 
+.studio-canvas-main.is-segment-editor
+  .studio-segment-editor__timeline-label--bulk-sound:not([aria-busy="true"])
+  .studio-segment-editor__timeline-label-bulk-mark {
+  display: none;
+}
+
 /* ─────────────────────────────────────────────────────────────
    TIMELINE CELLS — frosted glass tiles
 ─────────────────────────────────────────────────────────────── */
