@@ -11,6 +11,37 @@ import {
 import { StudioSubtitleSelectorChip, StudioVideoSelectorChip, StudioVoiceSelectorChip } from "./workspace-selector-chips";
 
 describe("StudioVoiceSelectorChip", () => {
+  it("selects Alexander when typing voiceover text while voiceover is disabled", () => {
+    const onBulkTextChange = vi.fn();
+    const onSelect = vi.fn();
+    const onToggleEnabled = vi.fn();
+
+    render(
+      <LocaleProvider locale="ru">
+        <StudioVoiceSelectorChip
+          bulkTextValue=""
+          isEnabled={false}
+          onBulkTextChange={onBulkTextChange}
+          onSelect={onSelect}
+          onToggleEnabled={onToggleEnabled}
+          selectedLanguage="ru"
+          selectedVoiceId="none"
+          voiceOptions={[
+            { description: "Выразительный голос", id: "Liam_Timing", label: "Александр" },
+            { description: "Уверенный голос", id: "Elena", label: "Елена" },
+          ]}
+        />
+      </LocaleProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Озвучка\s*Выкл/ }));
+    fireEvent.change(screen.getByLabelText("Текст озвучки"), { target: { value: "Новый текст" } });
+
+    expect(onSelect).toHaveBeenCalledWith("Liam_Timing");
+    expect(onToggleEnabled).toHaveBeenCalledWith(true);
+    expect(onBulkTextChange).toHaveBeenCalledWith("Новый текст");
+  });
+
   it("allows saving empty bulk text to clear every scene without a selected voice", () => {
     const onBulkTextSave = vi.fn(() => true);
 

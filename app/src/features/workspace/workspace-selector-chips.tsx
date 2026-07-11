@@ -12,6 +12,7 @@ import {
   STUDIO_AI_PHOTO_VIDEO_GENERATION_CREDIT_COST,
   STUDIO_AI_VIDEO_GENERATION_CREDIT_COST,
 } from "../../../shared/studio-credit-costs";
+import { DEFAULT_STUDIO_VOICE_ID } from "../../../shared/locales";
 import { useLocale } from "../../lib/i18n";
 import {
   getStudioBrandSummary,
@@ -1197,7 +1198,17 @@ export function StudioVoiceSelectorChip({
                     value={bulkTextValue}
                     rows={6}
                     placeholder={locale === "en" ? "Enter the full voiceover text" : "Введите полный текст озвучки"}
-                    onChange={(event) => onBulkTextChange?.(event.target.value)}
+                    onChange={(event) => {
+                      const nextValue = event.target.value;
+                      if (!isEnabled && nextValue.trim()) {
+                        const defaultVoiceId = DEFAULT_STUDIO_VOICE_ID.ru;
+                        if (voiceOptions.some((voice) => voice.id === defaultVoiceId)) {
+                          onSelect(defaultVoiceId);
+                          onToggleEnabled(true);
+                        }
+                      }
+                      onBulkTextChange?.(nextValue);
+                    }}
                     onKeyDown={(event) => {
                       if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
                         event.preventDefault();
