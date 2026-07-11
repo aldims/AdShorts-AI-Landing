@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { WORKSPACE_SEGMENT_SCENE_SOUND_DEFAULT_PROMPT } from "./workspace-segment-editor";
 import {
   getWorkspaceSegmentTimelineSoundLabel,
   getWorkspaceSegmentTimelineVoiceLabel,
@@ -16,6 +17,25 @@ describe("getWorkspaceSegmentTimelineSoundLabel", () => {
   it("shows a clear progress label while scene sound is generating", () => {
     expect(getWorkspaceSegmentTimelineSoundLabel("ru", segment, { isPending: true })).toBe("Создаём звук");
     expect(getWorkspaceSegmentTimelineSoundLabel("en", segment, { isPending: true })).toBe("Creating sound");
+  });
+
+  it("shows Auto for the default scene sound prompt", () => {
+    const autoSegment = {
+      ...segment,
+      sceneSoundGeneratedFromPrompt: WORKSPACE_SEGMENT_SCENE_SOUND_DEFAULT_PROMPT,
+    };
+
+    expect(getWorkspaceSegmentTimelineSoundLabel("ru", autoSegment)).toBe("Авто");
+    expect(getWorkspaceSegmentTimelineSoundLabel("en", autoSegment)).toBe("Auto");
+  });
+
+  it("keeps a custom scene sound description visible", () => {
+    const customSegment = {
+      ...segment,
+      sceneSoundPrompt: "Шаги по мокрому асфальту",
+    };
+
+    expect(getWorkspaceSegmentTimelineSoundLabel("ru", customSegment)).toBe("Шаги по мокрому асфальту");
   });
 });
 

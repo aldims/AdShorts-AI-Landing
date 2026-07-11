@@ -4,7 +4,9 @@ import { formatWorkspaceSegmentEditorChecklistPreview } from "./workspace-segmen
 import {
   getWorkspaceSegmentEffectiveSubtitleSettings,
   normalizeWorkspaceSegmentEditorTextForCompare,
+  normalizeWorkspaceSegmentSceneSoundPrompt,
   getWorkspaceSegmentVoiceOverrideId,
+  WORKSPACE_SEGMENT_SCENE_SOUND_DEFAULT_PROMPT,
 } from "./workspace-segment-editor";
 import { getStudioSubtitleStyleDisplayLabel } from "./workspace-subtitle-preview-helpers";
 import type {
@@ -99,8 +101,16 @@ export const getWorkspaceSegmentTimelineSoundLabel = (
     return workspaceText(locale, "Добавить звук", "Add sound");
   }
 
+  const prompt = segment.sceneSoundPrompt || segment.sceneSoundGeneratedFromPrompt || "";
+  if (
+    normalizeWorkspaceSegmentSceneSoundPrompt(prompt) ===
+    normalizeWorkspaceSegmentSceneSoundPrompt(WORKSPACE_SEGMENT_SCENE_SOUND_DEFAULT_PROMPT)
+  ) {
+    return workspaceText(locale, "Авто", "Auto");
+  }
+
   return (
-    formatWorkspaceSegmentEditorChecklistPreview(segment.sceneSoundPrompt || segment.sceneSoundGeneratedFromPrompt || "", 28) ||
+    formatWorkspaceSegmentEditorChecklistPreview(prompt, 28) ||
     workspaceText(locale, "Звук сцены", "Scene sound")
   );
 };
