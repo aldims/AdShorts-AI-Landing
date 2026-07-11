@@ -202,8 +202,7 @@ export function FirstVideoSuccessOffer({
       <aside className="first-video-success-offer__purchase" aria-label={text("Оплата START", "START checkout")}>
         <div className="first-video-success-offer__price">
           <div className="first-video-success-offer__price-copy">
-            <span>{text("START · 50 кредитов", "START · 50 credits")}</span>
-            <small>{text("До 5 Shorts без водяного знака", "Up to 5 Shorts without a watermark")}</small>
+            <span>START</span>
           </div>
           <strong>{text("390 ₽", "View pricing")}</strong>
         </div>
@@ -254,7 +253,6 @@ export function FirstVideoSuccessOffer({
         <ul className="first-video-success-offer__facts" aria-label={text("Что входит в START", "What's included in START")}>
           <li><strong>50</strong> {text("кредитов", "credits")}</li>
           <li>{text("до 5 Shorts", "up to 5 Shorts")}</li>
-          <li>{text("≈ 78 ₽ за ролик", "one-time plan")}</li>
         </ul>
       </div>
 

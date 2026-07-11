@@ -55,6 +55,8 @@ describe("FirstVideoSuccessOffer", () => {
     expect(screen.getByText("Ваш первый Shorts готов.")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Создайте ещё до 5 Shorts без водяного знака" })).toBeTruthy();
     expect(screen.getByText("Раскройте больше тем, воплотите новые идеи и попробуйте разные форматы.")).toBeTruthy();
+    expect(screen.getByText("START")).toBeTruthy();
+    expect(screen.queryByText(/78 ₽ за ролик/i)).toBeNull();
     expect(screen.getByText("Разовая оплата · без автосписаний")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Получить 50 кредитов" })).toBeTruthy();
     expect(
