@@ -4362,13 +4362,20 @@ app.post("/api/studio/voiceover/adapt-to-duration", async (req, res) => {
 
   const text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
   const durationSeconds = Number(req.body?.durationSeconds);
+  const wordsPerSecond = Number(req.body?.wordsPerSecond);
   if (!text || text.length > 200 || !Number.isFinite(durationSeconds) || durationSeconds <= 0 || durationSeconds > 60) {
     res.status(400).json({ error: "Voiceover text and visual duration are required." });
     return;
   }
 
   try {
-    res.json({ data: await adaptStudioVoiceoverTextToDuration(text, { durationSeconds, language: req.body?.language }) });
+    res.json({
+      data: await adaptStudioVoiceoverTextToDuration(text, {
+        durationSeconds,
+        language: req.body?.language,
+        wordsPerSecond: Number.isFinite(wordsPerSecond) && wordsPerSecond > 0 ? wordsPerSecond : undefined,
+      }),
+    });
   } catch (error) {
     console.error("[studio] Failed to adapt voiceover text to visual duration", error);
     res.status(500).json({ error: error instanceof Error ? error.message : "Failed to adapt voiceover text." });

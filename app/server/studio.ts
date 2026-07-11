@@ -7119,13 +7119,21 @@ export async function improveStudioSegmentAiPhotoPrompt(
 const STUDIO_VOICEOVER_TEXT_ADAPTATION_DURATION_RESERVE_RATIO = 0.85;
 const STUDIO_VOICEOVER_ESTIMATED_SECONDS_PER_WORD = 0.42;
 
-export const getStudioVoiceoverAdaptationTarget = (durationSecondsValue: number) => {
+export const getStudioVoiceoverAdaptationTarget = (
+  durationSecondsValue: number,
+  calibratedWordsPerSecondValue?: number,
+) => {
   const visualDurationSeconds = Math.max(1, Math.min(60, Number(durationSecondsValue) || 0));
   const targetDurationSeconds = visualDurationSeconds * STUDIO_VOICEOVER_TEXT_ADAPTATION_DURATION_RESERVE_RATIO;
+  const calibratedWordsPerSecond = Number(calibratedWordsPerSecondValue);
+  const wordsPerSecond = Number.isFinite(calibratedWordsPerSecond) && calibratedWordsPerSecond > 0
+    ? Math.max(0.5, Math.min(4, calibratedWordsPerSecond))
+    : 1 / STUDIO_VOICEOVER_ESTIMATED_SECONDS_PER_WORD;
   return {
-    maxWords: Math.max(3, Math.floor(targetDurationSeconds / STUDIO_VOICEOVER_ESTIMATED_SECONDS_PER_WORD)),
+    maxWords: Math.max(3, Math.floor(targetDurationSeconds * wordsPerSecond)),
     targetDurationSeconds,
     visualDurationSeconds,
+    wordsPerSecond,
   };
 };
 
@@ -7148,10 +7156,13 @@ export const buildStudioVoiceoverTextAdaptationSystemPrompt = (options: {
 
 export async function adaptStudioVoiceoverTextToDuration(
   text: string,
-  options: { durationSeconds: number; language?: string },
+  options: { durationSeconds: number; language?: string; wordsPerSecond?: number },
 ): Promise<{ text: string }> {
   const normalizedText = normalizePrompt(text);
-  const { maxWords, targetDurationSeconds, visualDurationSeconds } = getStudioVoiceoverAdaptationTarget(options.durationSeconds);
+  const { maxWords, targetDurationSeconds, visualDurationSeconds } = getStudioVoiceoverAdaptationTarget(
+    options.durationSeconds,
+    options.wordsPerSecond,
+  );
   if (!normalizedText) throw new Error("Voiceover text is required.");
 
   const language = resolveStudioGenerationLanguage(normalizedText, options.language);

@@ -24202,13 +24202,41 @@ export function WorkspacePage({
     const durationSeconds = segmentTimelineVoiceMenuVisualAudioDurationMismatch?.visualDurationSeconds ?? null;
     if (!segment || !durationSeconds || adaptingVoiceTextSegmentIndex !== null) return;
 
+    const calibratedVoiceId = segmentTimelineVoiceMenuGenerationVoiceId;
+    const measuredVoiceRates = calibratedVoiceId && segmentEditorDraft
+      ? segmentEditorDraft.segments.flatMap((candidate) => {
+          if (
+            getWorkspaceSegmentEffectiveVoiceId(candidate, segmentEditorDraft) !== calibratedVoiceId ||
+            !isWorkspaceSegmentVoiceoverPlaybackFresh(candidate, segmentEditorDraft)
+          ) {
+            return [];
+          }
+          const measuredDuration = getWorkspaceSegmentVoiceSourceDurationSeconds(candidate);
+          const spokenWordCount = candidate.text
+            .split(/\s+/)
+            .filter((word) => /[\p{L}\p{N}]/u.test(word)).length;
+          return measuredDuration && spokenWordCount > 0 ? [spokenWordCount / measuredDuration] : [];
+        }).sort((left, right) => left - right)
+      : [];
+    const middleRateIndex = Math.floor(measuredVoiceRates.length / 2);
+    const calibratedWordsPerSecond = measuredVoiceRates.length === 0
+      ? undefined
+      : measuredVoiceRates.length % 2 === 1
+        ? measuredVoiceRates[middleRateIndex]
+        : ((measuredVoiceRates[middleRateIndex - 1] ?? 0) + (measuredVoiceRates[middleRateIndex] ?? 0)) / 2;
+
     setAdaptingVoiceTextSegmentIndex(segment.index);
     setSegmentEditorVideoError(null);
     try {
       const response = await fetch("/api/studio/voiceover/adapt-to-duration", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: segment.text, durationSeconds, language: segmentTimelineVoiceMenuLanguage }),
+        body: JSON.stringify({
+          text: segment.text,
+          durationSeconds,
+          language: segmentTimelineVoiceMenuLanguage,
+          wordsPerSecond: calibratedWordsPerSecond,
+        }),
       });
       const payload = (await response.json().catch(() => null)) as { data?: { text?: string }; error?: string } | null;
       if (!response.ok || !payload?.data?.text) {

@@ -11,6 +11,16 @@ describe("getStudioVoiceoverAdaptationTarget", () => {
       maxWords: 20,
       targetDurationSeconds: 8.5,
       visualDurationSeconds: 10,
+      wordsPerSecond: 1 / 0.42,
+    });
+  });
+
+  it("uses the measured speed of the selected voice", () => {
+    expect(getStudioVoiceoverAdaptationTarget(5, 10 / 6.5)).toEqual({
+      maxWords: 6,
+      targetDurationSeconds: 4.25,
+      visualDurationSeconds: 5,
+      wordsPerSecond: 10 / 6.5,
     });
   });
 
