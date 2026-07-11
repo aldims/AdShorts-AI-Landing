@@ -3399,7 +3399,7 @@ app.get("/api/studio/segment-image-edit/jobs/:jobId", async (req, res) => {
         });
     }
 });
-app.post("/api/studio/segment-ai-photo/improve-prompt", async (req, res) => {
+app.post(["/api/studio/improve-prompt", "/api/studio/segment-ai-photo/improve-prompt"], async (req, res) => {
     const session = await auth.api.getSession({
         headers: fromNodeHeaders(req.headers),
     });
@@ -3419,9 +3419,9 @@ app.post("/api/studio/segment-ai-photo/improve-prompt", async (req, res) => {
         res.json({ data: result });
     }
     catch (error) {
-        console.error("[studio] Failed to improve segment AI photo prompt", error);
+        console.error("[studio] Failed to improve studio prompt", error);
         res.status(500).json({
-            error: error instanceof Error ? error.message : "Failed to improve segment AI photo prompt.",
+            error: error instanceof Error ? error.message : "Failed to improve prompt.",
         });
     }
 });

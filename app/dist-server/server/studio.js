@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { env } from "./env.js";
 import { buildAuthScopedCacheKey, buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
 import { buildWorkspaceMediaAssetRef, mergeWorkspaceMediaAssetRefs, } from "./media-assets.js";
-import { STUDIO_AI_PHOTO_VIDEO_GENERATION_CREDIT_COST, STUDIO_AI_VIDEO_GENERATION_CREDIT_COST, STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST, STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST_BY_QUALITY, STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST, STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST_BY_QUALITY, STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST, STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST, STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST, getStudioSegmentPhotoAnimationCreditCost, getStudioSegmentTalkingPhotoCreditCost, getStudioSegmentVoiceoverCreditCost, normalizeStudioSegmentPhotoAnimationDurationSeconds, STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST, STUDIO_SEGMENT_VOICEOVER_CREDIT_COST, STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS, STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST, STUDIO_WORKSPACE_CHARACTER_REFERENCE_CREDIT_COST, STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST, } from "../shared/studio-credit-costs.js";
+import { STUDIO_AI_PHOTO_VIDEO_GENERATION_CREDIT_COST, STUDIO_AI_VIDEO_GENERATION_CREDIT_COST, STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST, STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST_BY_QUALITY, STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST, STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST_BY_QUALITY, STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST, STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST, STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST, buildStudioBatchVoiceoverBillingRuns, buildStudioVoiceoverProviderText, getStudioBatchVoiceoverCreditCost, getStudioSegmentPhotoAnimationCreditCost, getStudioSegmentTalkingPhotoCreditCost, getStudioVoiceoverCreditCostForText, normalizeStudioSegmentPhotoAnimationDurationSeconds, STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST, STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS, STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST, STUDIO_WORKSPACE_CHARACTER_REFERENCE_CREDIT_COST, STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST, } from "../shared/studio-credit-costs.js";
 import { normalizeExamplePrefillStudioSettings, } from "../shared/example-prefill.js";
 import { DEFAULT_LOCALE, DEFAULT_STUDIO_VOICE_ID, SUPPORTED_LOCALES, isSupportedLocale, } from "../shared/locales.js";
 import { ensureWorkspaceProjectPlayback, getWorkspaceProjectPlaybackCacheKey, warmWorkspaceProjectPlayback, } from "./project-playback.js";
@@ -156,6 +156,7 @@ const studioSupportedPromptImproveModes = new Set([
     "ai_video",
     "photo_animation",
     "image_edit",
+    "studio_idea",
 ]);
 const studioSupportedSegmentVisualQualities = new Set(["standard", "premium"]);
 const studioSupportedSegmentVideoActions = new Set(["ai", "custom", "original", "talking_photo"]);
@@ -1850,71 +1851,94 @@ const buildStudioSegmentPromptEnhancementFallback = (value, language, mode) => {
         return "";
     }
     const descriptors = language === "en"
-        ? mode === "ai_video"
+        ? mode === "studio_idea"
             ? [
-                "cinematic vertical 9:16 video",
-                "natural subject motion",
-                "clear focal action",
-                "subtle camera movement",
-                "realistic detail",
+                "clear Shorts topic",
+                "strong opening hook",
+                "specific audience benefit",
+                "one focused takeaway",
             ]
-            : mode === "photo_animation"
+            : mode === "ai_video"
                 ? [
-                    "image-to-video animation from a single source photo",
-                    "natural motion",
-                    "gentle camera push-in or parallax",
-                    "preserve subject identity and setting",
+                    "cinematic vertical 9:16 video",
+                    "natural subject motion",
+                    "clear focal action",
+                    "subtle camera movement",
                     "realistic detail",
                 ]
-                : mode === "image_edit"
+                : mode === "photo_animation"
                     ? [
-                        "seamless image edit or outpaint",
-                        "preserve the original subject and composition",
-                        "matching lighting and perspective",
-                        "clean realistic detail",
+                        "image-to-video animation from a single source photo",
+                        "natural motion",
+                        "gentle camera push-in or parallax",
+                        "preserve subject identity and setting",
+                        "realistic detail",
                     ]
-                    : [
-                        "cinematic vertical 9:16 composition",
-                        "photorealistic",
-                        "dramatic lighting",
-                        "clear focal subject",
-                        "high detail",
-                    ]
-        : mode === "ai_video"
+                    : mode === "image_edit"
+                        ? [
+                            "seamless image edit or outpaint",
+                            "preserve the original subject and composition",
+                            "matching lighting and perspective",
+                            "clean realistic detail",
+                        ]
+                        : [
+                            "cinematic vertical 9:16 composition",
+                            "photorealistic",
+                            "dramatic lighting",
+                            "clear focal subject",
+                            "high detail",
+                        ]
+        : mode === "studio_idea"
             ? [
-                "кинематографичное вертикальное видео 9:16",
-                "естественное движение объекта",
-                "четкое главное действие",
-                "мягкое движение камеры",
-                "реалистичная детализация",
+                "четкая тема для Shorts",
+                "сильный стартовый хук",
+                "понятная польза для аудитории",
+                "одна сфокусированная мысль",
             ]
-            : mode === "photo_animation"
+            : mode === "ai_video"
                 ? [
-                    "i2v анимация из одного исходного фото",
-                    "естественное движение",
-                    "легкий наезд камеры или параллакс",
-                    "сохранить героя и окружение",
+                    "кинематографичное вертикальное видео 9:16",
+                    "естественное движение объекта",
+                    "четкое главное действие",
+                    "мягкое движение камеры",
                     "реалистичная детализация",
                 ]
-                : mode === "image_edit"
+                : mode === "photo_animation"
                     ? [
-                        "аккуратная дорисовка или редактирование фото",
-                        "сохранить исходного героя и композицию",
-                        "совпадающий свет и перспектива",
-                        "чистая реалистичная детализация",
+                        "i2v анимация из одного исходного фото",
+                        "естественное движение",
+                        "легкий наезд камеры или параллакс",
+                        "сохранить героя и окружение",
+                        "реалистичная детализация",
                     ]
-                    : [
-                        "кинематографичная вертикальная композиция 9:16",
-                        "фотореализм",
-                        "драматичный свет",
-                        "четкий главный объект",
-                        "высокая детализация",
-                    ];
+                    : mode === "image_edit"
+                        ? [
+                            "аккуратная дорисовка или редактирование фото",
+                            "сохранить исходного героя и композицию",
+                            "совпадающий свет и перспектива",
+                            "чистая реалистичная детализация",
+                        ]
+                        : [
+                            "кинематографичная вертикальная композиция 9:16",
+                            "фотореализм",
+                            "драматичный свет",
+                            "четкий главный объект",
+                            "высокая детализация",
+                        ];
     return [normalizedPrompt.charAt(0).toUpperCase() + normalizedPrompt.slice(1), ...descriptors].join(", ");
 };
 const buildStudioSegmentPromptEnhancementSystemPrompt = (language, mode) => {
     if (language === "en") {
         switch (mode) {
+            case "studio_idea":
+                return [
+                    "You are a short-form video strategist for vertical Shorts.",
+                    "Rewrite the user's rough idea into one clear, compelling production brief for a complete short video.",
+                    "Return exactly one concise prompt in English with no quotes, labels, markdown, or explanations.",
+                    "Keep the original topic and intent, then clarify the target audience, a strong opening hook, the central message, and the concrete takeaway or desired result.",
+                    "Do not turn it into a visual scene prompt, screenplay, shot list, voiceover script, captions, or a list of options.",
+                    "Keep it focused and actionable: one or two sentences, under 420 characters.",
+                ].join(" ");
             case "ai_video":
                 return [
                     "You are an expert prompt engineer for text-to-video generation.",
@@ -1959,6 +1983,15 @@ const buildStudioSegmentPromptEnhancementSystemPrompt = (language, mode) => {
         }
     }
     switch (mode) {
+        case "studio_idea":
+            return [
+                "Ты стратег по коротким вертикальным видео Shorts.",
+                "Преобразуй черновую идею пользователя в один ясный, убедительный бриф для создания цельного короткого ролика.",
+                "Верни ровно один компактный промт на русском языке без кавычек, меток, markdown и пояснений.",
+                "Сохрани исходную тему и намерение, затем уточни целевую аудиторию, сильный стартовый хук, главную мысль и конкретную пользу или результат для зрителя.",
+                "Не превращай идею в промт для одного кадра, сценарий, раскадровку, текст озвучки, субтитры или список вариантов.",
+                "Промт должен быть сфокусированным и применимым: одно или два предложения до 420 символов.",
+            ].join(" ");
         case "ai_video":
             return [
                 "Ты эксперт по созданию промтов для text-to-video генерации.",
@@ -2004,20 +2037,24 @@ const buildStudioSegmentPromptEnhancementSystemPrompt = (language, mode) => {
 };
 const buildStudioSegmentPromptEnhancementUserPrompt = (prompt, language, mode) => {
     const label = language === "en"
-        ? mode === "ai_video"
-            ? "Raw video scene description:"
-            : mode === "photo_animation"
-                ? "Raw photo animation instruction:"
-                : mode === "image_edit"
-                    ? "Raw image edit request:"
-                    : "Raw scene description:"
-        : mode === "ai_video"
-            ? "Черновое описание видео-сцены:"
-            : mode === "photo_animation"
-                ? "Черновое описание анимации фото:"
-                : mode === "image_edit"
-                    ? "Черновой запрос на дорисовку фото:"
-                    : "Черновое описание сцены:";
+        ? mode === "studio_idea"
+            ? "Raw Shorts idea:"
+            : mode === "ai_video"
+                ? "Raw video scene description:"
+                : mode === "photo_animation"
+                    ? "Raw photo animation instruction:"
+                    : mode === "image_edit"
+                        ? "Raw image edit request:"
+                        : "Raw scene description:"
+        : mode === "studio_idea"
+            ? "Черновая идея для Shorts:"
+            : mode === "ai_video"
+                ? "Черновое описание видео-сцены:"
+                : mode === "photo_animation"
+                    ? "Черновое описание анимации фото:"
+                    : mode === "image_edit"
+                        ? "Черновой запрос на дорисовку фото:"
+                        : "Черновое описание сцены:";
     const returnInstruction = language === "en" ? "Return only the final prompt." : "Верни только итоговый промт.";
     return [label, prompt, "", returnInstruction].join("\n");
 };
@@ -5503,7 +5540,7 @@ export async function createStudioSegmentVoiceoverJob(text, user, options) {
     const normalizedProjectId = normalizePositiveInteger(options?.projectId);
     const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
     const normalizedVoiceType = normalizeStudioVoiceIdForLanguage(options?.voiceType, normalizedLanguage);
-    const requiredCredits = getStudioSegmentVoiceoverCreditCost(normalizedVoiceType);
+    const requiredCredits = getStudioVoiceoverCreditCostForText(normalizedText);
     const studioVoiceModelPath = getStudioVoiceModelPath(normalizedVoiceType);
     if (normalizedSegmentIndex === null) {
         throw new Error("Segment index is required for segment voiceover generation.");
@@ -5543,6 +5580,7 @@ export async function createStudioSegmentVoiceoverJob(text, user, options) {
         throw new Error("AdsFlow did not return a segment voiceover job id.");
     }
     return {
+        creditCost: normalizeNonNegativeInteger(payload.credit_cost) ?? requiredCredits,
         jobId,
         profile: await enrichWorkspaceProfileAfterAdsflowWebMutation(payload.user ?? undefined, payload.user?.user_id ? String(payload.user.user_id) : undefined, subscriptionDetails),
         status: String(payload.status ?? "queued"),
@@ -5557,7 +5595,7 @@ export async function createStudioProjectVoiceoverJob(text, user, options) {
     const normalizedLanguage = normalizeStudioLanguage(options?.language);
     const normalizedProjectId = normalizePositiveInteger(options?.projectId);
     const normalizedVoiceType = normalizeStudioVoiceIdForLanguage(options?.voiceType, normalizedLanguage);
-    const requiredCredits = getStudioSegmentVoiceoverCreditCost(normalizedVoiceType);
+    const requiredCredits = getStudioVoiceoverCreditCostForText(normalizedText);
     const studioVoiceModelPath = getStudioVoiceModelPath(normalizedVoiceType);
     const segments = (options?.segments ?? [])
         .map((segment, index) => {
@@ -5615,6 +5653,7 @@ export async function createStudioProjectVoiceoverJob(text, user, options) {
         throw new Error("AdsFlow did not return a project voiceover job id.");
     }
     return {
+        creditCost: normalizeNonNegativeInteger(payload.credit_cost) ?? requiredCredits,
         jobId,
         profile: await enrichWorkspaceProfileAfterAdsflowWebMutation(payload.user ?? undefined, payload.user?.user_id ? String(payload.user.user_id) : undefined, subscriptionDetails),
         status: String(payload.status ?? "queued"),
@@ -5682,7 +5721,7 @@ const normalizeStudioBatchVoiceoverGroups = (groups) => {
             return null;
         }
         return {
-            creditCost: getStudioSegmentVoiceoverCreditCost(voiceType) || STUDIO_SEGMENT_VOICEOVER_CREDIT_COST,
+            creditCost: getStudioVoiceoverCreditCostForText(buildStudioVoiceoverProviderText(segments.map((segment) => segment.text))),
             language,
             segments,
             voiceType,
@@ -5704,7 +5743,6 @@ const normalizeStudioBatchVoiceoverGroups = (groups) => {
     });
     return [...mergedGroups.values()];
 };
-const getStudioBatchVoiceoverCreditCost = (groups) => groups.reduce((total, group) => total + Math.max(0, group.creditCost), 0);
 const STUDIO_BATCH_VOICEOVER_JOB_STORE_SCHEMA_VERSION = 1;
 const STUDIO_BATCH_VOICEOVER_JOB_STORE_DIR_NAME = "studio-batch-voiceover-jobs";
 const getStudioBatchVoiceoverJobStoreDir = () => join(env.dataDir, STUDIO_BATCH_VOICEOVER_JOB_STORE_DIR_NAME);
@@ -5745,8 +5783,7 @@ const normalizeStudioBatchVoiceoverStoredGroup = (value) => {
     }
     return {
         creditCost: Math.max(0, normalizeNumber(value.creditCost ?? value.credit_cost) ?? 0) ||
-            getStudioSegmentVoiceoverCreditCost(voiceType) ||
-            STUDIO_SEGMENT_VOICEOVER_CREDIT_COST,
+            getStudioVoiceoverCreditCostForText(buildStudioVoiceoverProviderText(segments.map((segment) => segment.text))),
         language,
         segments,
         voiceType,
@@ -6016,15 +6053,16 @@ export async function createStudioBatchVoiceoverJob(user, options) {
         if (!jobId) {
             throw new Error("AdsFlow did not return a batch voiceover job id.");
         }
+        const actualCreditCost = normalizeNonNegativeInteger(payload.credit_cost) ?? creditCost;
         const metadata = {
             createdAt: Date.now(),
-            creditCost,
+            creditCost: actualCreditCost,
             groups: normalizedGroups,
         };
         studioBatchVoiceoverJobMetadata.set(jobId, metadata);
         await persistStudioBatchVoiceoverJob(jobId, user, { metadata });
         return {
-            creditCost,
+            creditCost: actualCreditCost,
             jobId,
             profile: await enrichWorkspaceProfileAfterAdsflowWebMutation(payload.user ?? undefined, payload.user?.user_id ? String(payload.user.user_id) : undefined, subscriptionDetails),
             status: String(payload.status ?? "queued"),
@@ -6037,29 +6075,36 @@ export async function createStudioBatchVoiceoverJob(user, options) {
     }
     const children = [];
     const projectGroups = [];
+    const billingRuns = buildStudioBatchVoiceoverBillingRuns(normalizedGroups);
     let fallbackProfile = buildWorkspaceProfile();
     try {
         if (normalizedProjectId) {
-            for (const group of normalizedGroups) {
-                const groupText = group.segments.map((segment) => segment.text).join(" ").trim();
+            for (const run of billingRuns) {
+                const runSegmentIndexes = new Set(run.segmentIndexes);
+                const runGroup = normalizedGroups.find((group) => group.language === run.language &&
+                    group.voiceType.toLowerCase() === run.voiceType.toLowerCase());
+                const runSegments = runGroup?.segments.filter((segment) => runSegmentIndexes.has(segment.segmentIndex)) ?? [];
+                if (!runGroup || runSegments.length === 0) {
+                    continue;
+                }
                 const payload = await postAdsflowJson("/api/web/project-voiceover/jobs", {
                     admin_token: env.adsflowAdminToken,
-                    credit_cost: group.creditCost,
+                    credit_cost: run.creditCost,
                     external_user_id: externalUserId,
-                    language: group.language,
+                    language: runGroup.language,
                     persist_as_segment_assets: true,
                     project_id: normalizedProjectId,
-                    segments: group.segments.map((segment) => ({
+                    segments: runSegments.map((segment) => ({
                         duration: segment.targetDurationSeconds,
                         segment_index: segment.segmentIndex,
                         target_duration: segment.targetDurationSeconds,
                         text: segment.text,
                     })),
-                    text: groupText,
+                    text: run.text,
                     user_email: user.email ?? undefined,
                     user_name: user.name ?? undefined,
-                    voice_type: group.voiceType,
-                    ...(getStudioVoiceModelPath(group.voiceType) ? { model_path: getStudioVoiceModelPath(group.voiceType) } : {}),
+                    voice_type: runGroup.voiceType,
+                    ...(getStudioVoiceModelPath(runGroup.voiceType) ? { model_path: getStudioVoiceModelPath(runGroup.voiceType) } : {}),
                 }, {
                     retryDelaysMs: [],
                     timeoutMs: ADSFLOW_MUTATION_TIMEOUT_MS,
@@ -6069,8 +6114,10 @@ export async function createStudioBatchVoiceoverJob(user, options) {
                     throw new Error("AdsFlow did not return a project voiceover job id.");
                 }
                 projectGroups.push({
-                    ...group,
+                    ...runGroup,
+                    creditCost: run.creditCost,
                     jobId: groupJobId,
+                    segments: runSegments,
                 });
                 fallbackProfile = await enrichWorkspaceProfileAfterAdsflowWebMutation(payload.user ?? undefined, payload.user?.user_id ? String(payload.user.user_id) : undefined, subscriptionDetails);
             }
@@ -6080,7 +6127,7 @@ export async function createStudioBatchVoiceoverJob(user, options) {
                 for (const segment of group.segments) {
                     const payload = await postAdsflowJson("/api/web/segment-voiceover/jobs", {
                         admin_token: env.adsflowAdminToken,
-                        credit_cost: group.creditCost,
+                        credit_cost: getStudioVoiceoverCreditCostForText(segment.text),
                         external_user_id: externalUserId,
                         language: group.language,
                         project_id: normalizedProjectId ?? undefined,

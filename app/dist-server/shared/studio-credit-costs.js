@@ -25,8 +25,9 @@ export const STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST = STUDIO_SEGMENT_AI_PHOTO_STAND
 export const STUDIO_WORKSPACE_CHARACTER_REFERENCE_CREDIT_COST = 10;
 export const STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST = 1;
 export const STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST = 1;
-export const STUDIO_SEGMENT_VOICEOVER_CREDIT_COST = 2;
+export const STUDIO_SEGMENT_VOICEOVER_CREDIT_COST = 1;
 export const STUDIO_SEGMENT_PREMIUM_VOICEOVER_CREDIT_COST = STUDIO_SEGMENT_VOICEOVER_CREDIT_COST;
+export const STUDIO_VOICEOVER_CHARACTERS_PER_CREDIT = 100;
 export const STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS = 200;
 export const STUDIO_PREMIUM_VOICE_IDS = [
     "Liam",
@@ -92,6 +93,73 @@ export const getStudioSegmentVoiceoverCreditCost = (voiceId) => {
     }
     return STUDIO_SEGMENT_VOICEOVER_CREDIT_COST;
 };
+export const normalizeStudioVoiceoverBillingText = (text) => String(text ?? "").trim().replace(/\s+/gu, " ");
+export const getStudioVoiceoverCharacterCount = (text) => Array.from(normalizeStudioVoiceoverBillingText(text)).length;
+export const getStudioVoiceoverCreditCostForText = (text) => {
+    const characterCount = getStudioVoiceoverCharacterCount(text);
+    return characterCount > 0 ? Math.ceil(characterCount / STUDIO_VOICEOVER_CHARACTERS_PER_CREDIT) : 0;
+};
+export const buildStudioVoiceoverProviderText = (segmentTexts) => segmentTexts
+    .map(normalizeStudioVoiceoverBillingText)
+    .filter(Boolean)
+    .map((text) => (/[.!?…]$/u.test(text) ? text : `${text}.`))
+    .join(" ");
+export const buildStudioBatchVoiceoverBillingRuns = (groups) => {
+    const targets = (groups ?? [])
+        .flatMap((group) => {
+        const language = String(group.language ?? "").trim().toLowerCase();
+        const voiceType = String(group.voiceType ?? "").trim();
+        if (!voiceType || voiceType.toLowerCase() === "none") {
+            return [];
+        }
+        const fingerprint = `${language}:${voiceType.toLowerCase()}`;
+        return (group.segments ?? []).flatMap((segment, position) => {
+            const text = normalizeStudioVoiceoverBillingText(segment.text);
+            if (!text) {
+                return [];
+            }
+            const rawSegmentIndex = Number(segment.segmentIndex);
+            const segmentIndex = Number.isInteger(rawSegmentIndex) && rawSegmentIndex >= 0
+                ? rawSegmentIndex
+                : position;
+            return [{ fingerprint, language, segmentIndex, text, voiceType }];
+        });
+    })
+        .sort((left, right) => left.segmentIndex - right.segmentIndex);
+    const runs = [];
+    const seenSegmentIndexes = new Set();
+    for (const target of targets) {
+        if (seenSegmentIndexes.has(target.segmentIndex)) {
+            continue;
+        }
+        seenSegmentIndexes.add(target.segmentIndex);
+        const previousRun = runs[runs.length - 1];
+        if (previousRun?.fingerprint === target.fingerprint) {
+            previousRun.segmentIndexes.push(target.segmentIndex);
+            previousRun.texts.push(target.text);
+            continue;
+        }
+        runs.push({
+            fingerprint: target.fingerprint,
+            language: target.language,
+            segmentIndexes: [target.segmentIndex],
+            texts: [target.text],
+            voiceType: target.voiceType,
+        });
+    }
+    return runs.map((run) => {
+        const text = buildStudioVoiceoverProviderText(run.texts);
+        return {
+            characterCount: getStudioVoiceoverCharacterCount(text),
+            creditCost: getStudioVoiceoverCreditCostForText(text),
+            language: run.language,
+            segmentIndexes: run.segmentIndexes,
+            text,
+            voiceType: run.voiceType,
+        };
+    });
+};
+export const getStudioBatchVoiceoverCreditCost = (groups) => buildStudioBatchVoiceoverBillingRuns(groups).reduce((total, run) => total + run.creditCost, 0);
 export const getStudioSegmentTalkingPhotoCreditCostForDuration = (durationSeconds) => {
     const duration = Number(durationSeconds);
     if (!Number.isFinite(duration) || duration <= 0) {
