@@ -24194,6 +24194,7 @@ export function WorkspacePage({
     }), WORKSPACE_SEGMENT_EDITOR_VOICE_TEXT_TIMELINE_REBUILD_OPTIONS);
   };
   const handleSegmentTimelineTextChange = (segmentIndex: number, event: ChangeEvent<HTMLTextAreaElement>) => {
+    setAdaptedVoiceTextOriginal(null);
     applySegmentTimelineTextValue(segmentIndex, event.target.value);
   };
   const handleSegmentTimelineVoiceTextAdapt = async () => {
