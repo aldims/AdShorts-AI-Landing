@@ -17,11 +17,11 @@ describe("WorkspaceSegmentEditorBulkSceneSoundModal", () => {
         onClose={() => undefined}
         onGenerate={() => undefined}
         sceneCount={5}
-        totalCredits={5}
+        totalCredits={10}
       />,
     );
 
-    expect(screen.getByText("5 сцен × 1 кредит")).toBeTruthy();
+    expect(screen.getByText("5 сцен · цена зависит от длительности")).toBeTruthy();
     expect(screen.getByText("ИИ подберёт эффекты по визуалу каждой сцены — вводить описание не нужно. Уже добавленные звуки будут заменены.")).toBeTruthy();
     expect(screen.queryByRole("textbox")).toBeNull();
   });
@@ -38,11 +38,11 @@ describe("WorkspaceSegmentEditorBulkSceneSoundModal", () => {
         onClose={() => undefined}
         onGenerate={onGenerate}
         sceneCount={5}
-        totalCredits={5}
+        totalCredits={10}
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Создать звуки · 5 ⚡" }));
+    fireEvent.click(screen.getByRole("button", { name: "Создать звуки · 10 ⚡" }));
     expect(onGenerate).toHaveBeenCalledOnce();
   });
 });

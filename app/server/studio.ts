@@ -22,10 +22,10 @@ import {
   buildStudioVoiceoverProviderText,
   getStudioBatchVoiceoverCreditCost,
   getStudioSegmentPhotoAnimationCreditCost,
+  getStudioSegmentSceneSoundCreditCost,
   getStudioSegmentTalkingPhotoCreditCost,
   getStudioVoiceoverCreditCostForText,
   normalizeStudioSegmentPhotoAnimationDurationSeconds,
-  STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST,
   STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS,
   STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST,
   STUDIO_WORKSPACE_CHARACTER_REFERENCE_CREDIT_COST,
@@ -8093,7 +8093,6 @@ export async function createStudioSegmentSceneSoundJob(
     durationSeconds?: number;
     language?: string;
     projectId?: number;
-    regenerate?: boolean;
     segmentIndex?: number;
     source?: string;
     visualMediaAssetId?: number;
@@ -8137,13 +8136,12 @@ export async function createStudioSegmentSceneSoundJob(
 
   const payload = await postAdsflowJson<AdsflowSegmentAiVideoJobCreateResponse>("/api/web/segment-scene-sound/jobs", {
     admin_token: env.adsflowAdminToken,
-    credit_cost: STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST,
+    credit_cost: getStudioSegmentSceneSoundCreditCost(normalizedDurationSeconds),
     external_user_id: externalUserId,
     language: normalizedLanguage,
     ...buildStudioSegmentVisualDurationPayload(normalizedDurationSeconds),
     project_id: normalizedProjectId ?? undefined,
     prompt: upstreamPrompt,
-    regenerate: options?.regenerate === true,
     segment_index: normalizedSegmentIndex,
     source: normalizedSource,
     user_email: user.email ?? undefined,

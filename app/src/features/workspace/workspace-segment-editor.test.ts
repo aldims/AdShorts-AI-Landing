@@ -79,13 +79,12 @@ describe("resolveWorkspaceSegmentSceneSoundPrompt", () => {
 });
 
 describe("getWorkspaceSegmentEditorBulkSceneSoundCreditCost", () => {
-  it("charges one credit for every scene", () => {
-    expect(getWorkspaceSegmentEditorBulkSceneSoundCreditCost(5)).toBe(5);
+  it("sums two credits for every started five-second block in each scene", () => {
+    expect(getWorkspaceSegmentEditorBulkSceneSoundCreditCost([4.5, 5, 5.1, 10, 10.1])).toBe(2 + 2 + 4 + 4 + 6);
   });
 
-  it("does not return a negative or fractional charge", () => {
-    expect(getWorkspaceSegmentEditorBulkSceneSoundCreditCost(-2)).toBe(0);
-    expect(getWorkspaceSegmentEditorBulkSceneSoundCreditCost(3.9)).toBe(3);
+  it("returns zero when there are no scenes", () => {
+    expect(getWorkspaceSegmentEditorBulkSceneSoundCreditCost([])).toBe(0);
   });
 });
 

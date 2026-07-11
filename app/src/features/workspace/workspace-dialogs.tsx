@@ -854,7 +854,13 @@ export function WorkspaceSegmentEditorBulkSceneSoundModal({
           className="workspace-confirm-modal__bulk-sound-cost"
           aria-label={workspaceText(locale, "Стоимость генерации", "Generation cost")}
         >
-          <span>{workspaceText(locale, `${sceneCount} сцен × 1 кредит`, `${sceneCount} scenes × 1 credit`)}</span>
+          <span>
+            {workspaceText(
+              locale,
+              `${sceneCount} сцен · цена зависит от длительности`,
+              `${sceneCount} scenes · duration-based price`,
+            )}
+          </span>
           <strong>{totalCredits} ⚡</strong>
         </div>
 

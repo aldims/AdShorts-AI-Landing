@@ -950,10 +950,10 @@ import {
   STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST,
   STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST,
   getStudioBatchVoiceoverCreditCost,
+  getStudioSegmentSceneSoundCreditCost,
   getStudioSegmentTalkingPhotoCreditCost,
   getStudioVoiceoverCreditCostForText,
   normalizeStudioSegmentPhotoAnimationDurationSeconds,
-  STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST,
   STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS,
   STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST,
   STUDIO_WORKSPACE_CHARACTER_REFERENCE_CREDIT_COST,
@@ -6656,9 +6656,12 @@ export function WorkspacePage({
   }, [filteredVisibleMediaLibraryItems, isMediaLibraryVirtualGridReady, mediaLibraryVirtualLayout]);
   const segmentEditorSegmentCount = segmentEditorDraft?.segments.length ?? 0;
   const segmentEditorBulkSceneSoundCreditCost = getWorkspaceSegmentEditorBulkSceneSoundCreditCost(
-    segmentEditorSegmentCount,
+    (segmentEditorDraft?.segments ?? []).map(getWorkspaceSegmentVisualGenerationDurationSeconds),
   );
   const activeSegment = segmentEditorDraft?.segments[activeSegmentIndex] ?? null;
+  const activeSegmentSceneSoundCreditCost = getStudioSegmentSceneSoundCreditCost(
+    getWorkspaceSegmentVisualGenerationDurationSeconds(activeSegment),
+  );
   const segmentReferenceSceneOptions = useMemo(
     () =>
       (segmentEditorDraft?.segments ?? []).map((segment) => {
@@ -18207,11 +18210,9 @@ export function WorkspacePage({
     }
 
     const durationSeconds = getWorkspaceSegmentVisualGenerationDurationSeconds(targetSegment);
+    const requiredCredits = getStudioSegmentSceneSoundCreditCost(durationSeconds);
     const nextPrompt = options?.prompt ?? targetSegment?.sceneSoundPrompt ?? segmentSceneSoundModalPrompt;
     const normalizedPrompt = resolveWorkspaceSegmentSceneSoundPrompt(nextPrompt);
-    const isRegeneration = Boolean(
-      targetSegment && createWorkspaceSegmentSceneSoundAsset(targetSegment, targetSegment.index),
-    );
 
     if (!options?.silent) {
       updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => ({
@@ -18221,9 +18222,9 @@ export function WorkspacePage({
       }));
     }
 
-    if (workspaceBalance !== null && workspaceBalance < STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST) {
+    if (workspaceBalance !== null && workspaceBalance < requiredCredits) {
       setSegmentEditorVideoError(null);
-      openInsufficientCreditsModal("scene_sound", STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST);
+      openInsufficientCreditsModal("scene_sound", requiredCredits);
       return false;
     }
 
@@ -18275,7 +18276,6 @@ export function WorkspacePage({
           projectId: sceneSoundProjectId ?? undefined,
           project_id: sceneSoundProjectId ?? undefined,
           prompt: normalizedPrompt,
-          regenerate: isRegeneration,
           segmentIndex: sceneSoundSegmentIndex,
           segment_index: sceneSoundSegmentIndex,
           source: "current",
@@ -18291,7 +18291,7 @@ export function WorkspacePage({
           clearSegmentVisualRun(segmentSceneSoundRunRef, setSegmentEditorGeneratingSceneSoundRunIds, targetSegmentIndex, runId);
         }
         if (!options?.silent) {
-          openInsufficientCreditsModal("scene_sound", STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST);
+          openInsufficientCreditsModal("scene_sound", requiredCredits);
         }
         return false;
       }
@@ -18352,7 +18352,9 @@ export function WorkspacePage({
   const handleSegmentEditorBulkSceneSoundGenerate = async () => {
     const currentDraft = segmentEditorDraft ?? segmentEditorDraftRef.current;
     const targetSegmentIndexes = currentDraft?.segments.map((segment) => segment.index) ?? [];
-    const requiredCredits = getWorkspaceSegmentEditorBulkSceneSoundCreditCost(targetSegmentIndexes.length);
+    const requiredCredits = getWorkspaceSegmentEditorBulkSceneSoundCreditCost(
+      currentDraft?.segments.map(getWorkspaceSegmentVisualGenerationDurationSeconds) ?? [],
+    );
     if (!currentDraft || targetSegmentIndexes.length === 0 || isSegmentEditorBulkSceneSoundGenerating) {
       return;
     }
@@ -29994,7 +29996,11 @@ export function WorkspacePage({
   const segmentTimelineSoundMenu = (
     <WorkspaceSegmentTimelineSoundMenu
       canDelete={canDeleteSegmentTimelineSoundMenu}
-      creditLabel={formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST)}
+      creditLabel={formatSegmentVisualCreditsLabel(
+        getStudioSegmentSceneSoundCreditCost(
+          getWorkspaceSegmentVisualGenerationDurationSeconds(segmentTimelineSoundMenuSegment),
+        ),
+      )}
       isActionDisabled={isSegmentTimelineSoundMenuActionDisabled}
       isPending={isSegmentTimelineSoundMenuPending}
       isStructureActionBusy={isSegmentEditorStructureActionBusy}
@@ -32801,7 +32807,7 @@ export function WorkspacePage({
           : isPromptUpscaleMode
             ? STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST
             : isPromptSceneSoundMode
-              ? STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST
+              ? activeSegmentSceneSoundCreditCost
             : null;
   const isPromptVisualBusy =
     (isPromptAiPhotoMode && isSegmentAiPhotoModalGeneratingCurrentSegment) ||

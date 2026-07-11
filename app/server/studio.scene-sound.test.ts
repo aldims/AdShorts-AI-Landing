@@ -111,6 +111,7 @@ describe("studio scene sound jobs", () => {
     const sceneSoundCall = calls.find((call) => call.pathname === "/api/web/segment-scene-sound/jobs");
     expect(sceneSoundCall?.body).toEqual(
       expect.objectContaining({
+        credit_cost: 2,
         segment_index: 1,
         visual_media_asset_id: 909,
       }),
@@ -153,10 +154,9 @@ describe("studio scene sound jobs", () => {
       email: "alex@example.test",
       name: "Alex",
     }, {
-      durationSeconds: 2,
+      durationSeconds: 7,
       language: "en",
       projectId: 3576,
-      regenerate: true,
       segmentIndex: 0,
       visualMediaAssetId: 909,
       visualSourceJobId: "talking-job-1",
@@ -169,8 +169,8 @@ describe("studio scene sound jobs", () => {
     }));
     expect(calls.find((call) => call.pathname === "/api/web/segment-scene-sound/jobs")?.body).toEqual(
       expect.objectContaining({
+        credit_cost: 4,
         project_id: 3576,
-        regenerate: true,
         segment_index: 0,
         visual_media_asset_id: 909,
         visual_source_job_id: "talking-job-1",

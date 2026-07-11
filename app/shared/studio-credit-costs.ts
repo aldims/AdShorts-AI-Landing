@@ -38,11 +38,18 @@ export const STUDIO_SEGMENT_AI_PHOTO_PREMIUM_CREDIT_COST = 2;
 export const STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST = STUDIO_SEGMENT_AI_PHOTO_STANDARD_CREDIT_COST;
 export const STUDIO_WORKSPACE_CHARACTER_REFERENCE_CREDIT_COST = 10;
 export const STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST = 1;
-export const STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST = 1;
+export const STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST_PER_5_SECONDS = 2;
+export const STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST = STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST_PER_5_SECONDS;
 export const STUDIO_SEGMENT_VOICEOVER_CREDIT_COST = 1;
 export const STUDIO_SEGMENT_PREMIUM_VOICEOVER_CREDIT_COST = STUDIO_SEGMENT_VOICEOVER_CREDIT_COST;
 export const STUDIO_VOICEOVER_CHARACTERS_PER_CREDIT = 100;
 export const STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS = 200;
+
+export const getStudioSegmentSceneSoundCreditCost = (durationSeconds: number | null | undefined) => {
+  const normalizedDuration = Number.isFinite(durationSeconds) ? Math.max(0, Number(durationSeconds)) : 0;
+  const fiveSecondBlocks = Math.max(1, Math.ceil(normalizedDuration / 5));
+  return fiveSecondBlocks * STUDIO_SEGMENT_SCENE_SOUND_CREDIT_COST_PER_5_SECONDS;
+};
 export const STUDIO_PREMIUM_VOICE_IDS = [
   "Liam",
   "Liam_Timing",

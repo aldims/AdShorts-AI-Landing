@@ -17,6 +17,7 @@ import {
   getStudioVoiceoverCharacterCount,
   getStudioVoiceoverCreditCostForText,
   getStudioSegmentPhotoAnimationCreditCost,
+  getStudioSegmentSceneSoundCreditCost,
   getStudioSegmentPhotoAnimationDurationOptions,
   normalizeStudioSegmentPhotoAnimationDurationSeconds,
 } from "./studio-credit-costs";
@@ -142,5 +143,15 @@ describe("talking photo credit costs", () => {
         "Раз два три четыре пять шесть семь восемь девять десять одиннадцать двенадцать тринадцать четырнадцать пятнадцать шестнадцать семнадцать восемнадцать девятнадцать двадцать",
       ),
     ).toBeGreaterThan(10);
+  });
+});
+
+describe("scene sound credit costs", () => {
+  it("charges two credits for every started five-second block", () => {
+    expect(getStudioSegmentSceneSoundCreditCost(0)).toBe(2);
+    expect(getStudioSegmentSceneSoundCreditCost(5)).toBe(2);
+    expect(getStudioSegmentSceneSoundCreditCost(5.001)).toBe(4);
+    expect(getStudioSegmentSceneSoundCreditCost(10)).toBe(4);
+    expect(getStudioSegmentSceneSoundCreditCost(10.001)).toBe(6);
   });
 });
