@@ -5847,16 +5847,20 @@ export function WorkspacePage({
     normalizeWorkspaceSegmentEditorSetting(segmentEditorDraft?.subtitleType) === "none" || isCurrentDraftVoiceDisabled;
   const segmentEditorCreateShortsRequiredCredits = getWorkspaceSegmentEditorGenerationRequiredCredits(segmentEditorDraft);
   const readyProjectsCount = projects.filter((project) => project.status === "ready").length;
+  // Temporary product-review allowlist. Remove after the first-video offer is approved.
+  const isFirstVideoSuccessOfferPreviewAccount =
+    normalizeWorkspaceEmail(session.email) === "alexmamonidi@gmail.com";
   const shouldShowFirstVideoSuccessOffer =
     createMode === "default" &&
-    workspacePlan === "FREE" &&
-    isGeneratedVideoPrimaryActionExpanded &&
     Boolean(visibleGeneratedVideo) &&
     Boolean(generatedVideoDismissKey) &&
     generatedVideoDismissKey !== dismissedFirstVideoOfferKey &&
-    hasLoadedProjects &&
-    !projectsError &&
-    readyProjectsCount <= 1;
+    (isFirstVideoSuccessOfferPreviewAccount ||
+      (workspacePlan === "FREE" &&
+        isGeneratedVideoPrimaryActionExpanded &&
+        hasLoadedProjects &&
+        !projectsError &&
+        readyProjectsCount <= 1));
   const activeProjectsCount = projects.filter(
     (project) => project.status === "queued" || project.status === "processing",
   ).length;
