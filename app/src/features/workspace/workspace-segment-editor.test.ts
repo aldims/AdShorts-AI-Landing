@@ -997,6 +997,53 @@ describe("workspace segment editor project voiceover timeline", () => {
     }));
   });
 
+  it("does not append a stale project timeline tail to the last voice-owned scene", () => {
+    const firstSegment = createProjectVoiceoverSegment({
+      duration: 4.5,
+      durationSyncMode: "voiceover",
+      endTime: 4.5,
+      index: 0,
+      mediaType: "video",
+      startTime: 0,
+      videoAction: "custom",
+      voiceoverAsset: null,
+      voiceSourceDuration: 4,
+      voiceSourceEndTime: 4,
+      voiceSourceStartTime: 0,
+    });
+    const secondSegment = createProjectVoiceoverSegment({
+      duration: 6.5,
+      durationSyncMode: "voiceover",
+      endTime: 11,
+      index: 1,
+      mediaType: "video",
+      startTime: 4.5,
+      videoAction: "custom",
+      voiceoverAsset: null,
+      voiceSourceDuration: 4.8,
+      voiceSourceEndTime: 8.8,
+      voiceSourceStartTime: 4,
+    });
+    const session = {
+      ...createProjectVoiceoverDraft([firstSegment, secondSegment]),
+      ttsAssetId: 777,
+      voiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    };
+
+    const normalized = createWorkspaceSegmentEditorDraftSession(session);
+
+    expect(normalized.segments[0]).toEqual(expect.objectContaining({
+      duration: 4,
+      endTime: 4,
+      startTime: 0,
+    }));
+    expect(normalized.segments[1]).toEqual(expect.objectContaining({
+      duration: 4.8,
+      endTime: 8.8,
+      startTime: 4,
+    }));
+  });
+
   it("does not warn when an ffmpeg-rendered photo segment is shorter than voiceover", () => {
     const segment = createProjectVoiceoverSegment({
       currentAsset: {

@@ -7514,6 +7514,28 @@ export const rebuildWorkspaceSegmentEditorDraftTimeline = (
       segmentWithPendingVoiceoverTiming,
       session,
     );
+    const timelineDurationBeforeFreshVoiceoverSync = roundWorkspaceSegmentTimelineSeconds(
+      Math.max(
+        0,
+        getWorkspaceSegmentEditorDisplayEndTime(segmentWithPendingVoiceoverTiming) -
+          getWorkspaceSegmentEditorDisplayStartTime(segmentWithPendingVoiceoverTiming),
+      ),
+    );
+    const actualTimelineVoiceoverDurationInfo = getWorkspaceSegmentTimelineVoiceoverDurationInfo(
+      segmentWithPendingVoiceoverTiming,
+      session,
+      { allowEstimated: false },
+    );
+    if (
+      actualTimelineVoiceoverDurationInfo?.source === "actual" &&
+      normalizeWorkspaceSegmentDurationSyncMode(segmentWithFreshVoiceoverTiming.durationSyncMode) === "voiceover" &&
+      !areWorkspaceSegmentDurationValuesEqual(
+        timelineDurationBeforeFreshVoiceoverSync,
+        actualTimelineVoiceoverDurationInfo.durationSeconds,
+      )
+    ) {
+      hasVoiceoverTimelineDurationReset = true;
+    }
     const segmentWithRestoredVisualDuration = restoreWorkspaceSegmentStaleVoiceoverTrimToVisualDuration(
       segmentWithFreshVoiceoverTiming,
       session,
