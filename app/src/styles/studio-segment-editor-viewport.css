@@ -695,7 +695,7 @@
     min-height: 0 !important;
     height: auto !important;
     max-height: none !important;
-    padding: 8px !important;
+    padding: 8px 74px 8px 8px !important;
     border-radius: 20px !important;
     overflow: hidden !important;
   }
@@ -811,8 +811,8 @@
     bottom: 10px !important;
     z-index: 64 !important;
     display: inline-grid !important;
-    width: 42px !important;
-    min-width: 42px !important;
+    width: 66px !important;
+    min-width: 66px !important;
     height: 42px !important;
     min-height: 42px !important;
     border-radius: 14px !important;
@@ -822,9 +822,9 @@
   }
 
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-reset {
-    left: 17px !important;
+    left: auto !important;
     top: 9px !important;
-    right: auto !important;
+    right: 29px !important;
     z-index: 65 !important;
   }
 }

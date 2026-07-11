@@ -2117,11 +2117,6 @@
   pointer-events: none;
 }
 
-.studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-reset {
-  left: 39px;
-  right: auto;
-}
-
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-label-icon {
   color: rgba(200, 216, 246, 0.86);
 }
@@ -2504,7 +2499,7 @@
     --studio-segment-editor-timeline-scrollbar-lane: 0px;
     --studio-segment-editor-timeline-visual-track-height: 58px;
     --studio-segment-editor-timeline-scene-track-height: 38px;
-    padding: 8px 54px 10px 8px !important;
+    padding: 8px 78px 10px 8px !important;
     border-radius: 18px !important;
     overflow: visible !important;
     scrollbar-gutter: auto !important;
@@ -2515,7 +2510,7 @@
     overflow-y: hidden !important;
     overscroll-behavior-x: contain;
     scrollbar-width: none;
-    scroll-padding-right: 54px;
+    scroll-padding-right: 78px;
   }
 
   .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-scroll::-webkit-scrollbar {
@@ -2537,8 +2532,8 @@
     display: grid !important;
     grid-template: 1fr / 1fr !important;
     place-items: center !important;
-    width: 46px !important;
-    min-width: 46px !important;
+    width: 70px !important;
+    min-width: 70px !important;
     height: auto !important;
     min-height: 0 !important;
     padding: 0 !important;
@@ -2634,11 +2629,6 @@
 }
 
 @media (max-width: 980px) {
-  .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-reset {
-    left: 17px;
-    right: auto;
-  }
-
   .studio-canvas-main.is-segment-editor
     .studio-segment-editor__timeline.is-standard-fit
     .studio-segment-editor__timeline-add-rail {
