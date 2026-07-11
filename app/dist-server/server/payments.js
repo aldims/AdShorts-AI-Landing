@@ -3,6 +3,8 @@ import { env } from "./env.js";
 import { buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
 import { addCurrentAdsflowWebDeviceToBody, getCurrentAdsflowWebSignalHeaders, } from "./web-device.js";
 export const checkoutProductIds = ["start", "pro", "ultra", "package_10", "package_50", "package_100"];
+export const checkoutAttributionSources = ["pricing_site", "pricing_addons_web", "first_free_video_offer"];
+export const checkoutOfferVariants = ["plans_redirect_v1", "start_direct_v1"];
 export class CheckoutConfigError extends Error {
 }
 export class CheckoutProductUnavailableError extends Error {
@@ -16,6 +18,8 @@ const checkoutLinks = {
     package_100: env.paymentLinkPackage100,
 };
 const normalizeText = (value) => String(value ?? "").trim();
+export const isCheckoutAttributionSource = (value) => checkoutAttributionSources.includes(normalizeText(value));
+export const isCheckoutOfferVariant = (value) => checkoutOfferVariants.includes(normalizeText(value));
 const normalizePlan = (value) => normalizeText(value).toUpperCase();
 const resolveBootstrapPlan = (payload) => normalizePlan(payload?.user?.plan) ||
     normalizePlan(payload?.user?.subscription_type) ||
@@ -571,13 +575,19 @@ const normalizeCheckoutLinkUrl = (productId, checkoutLink) => {
 };
 const buildDynamicCheckoutUrl = async (productId, user, checkoutContext, options) => {
     const resolvedCheckoutContext = checkoutContext ?? (await getAdsflowCheckoutContext(user));
+    const defaultSource = isPackageCheckoutProductId(productId) ? "pricing_addons_web" : "pricing_site";
+    const source = options?.attribution?.source ?? defaultSource;
+    const originScreen = source === "first_free_video_offer" ? "studio_first_video_offer" : defaultSource === "pricing_addons_web" ? "pricing_addons_web" : "pricing_page_web";
     const params = {
         user_id: resolvedCheckoutContext.userId,
         plan_code: productId,
         ts: String(Math.floor(Date.now() / 1000)),
-        source: isPackageCheckoutProductId(productId) ? "pricing_addons_web" : "pricing_site",
-        origin_screen: isPackageCheckoutProductId(productId) ? "pricing_addons_web" : "pricing_page_web",
+        source,
+        origin_screen: originScreen,
     };
+    if (options?.attribution?.variant) {
+        params.offer_variant = options.attribution.variant;
+    }
     if (options?.checkoutMode === "embedded") {
         params.checkout_mode = "embedded";
     }
@@ -636,7 +646,7 @@ const fetchDynamicCheckoutWidgetSession = async (checkoutUrl) => {
     throw lastError ?? new CheckoutConfigError("Payment widget unavailable.");
 };
 export const isCheckoutProductId = (value) => checkoutProductIds.includes(value);
-export const getCheckoutUrl = async (productId, user) => {
+export const getCheckoutUrl = async (productId, user, attribution) => {
     const checkoutContext = isPackageCheckoutProductId(productId) || isPlanCheckoutProductId(productId)
         ? await getAdsflowCheckoutContext(user, { includeStartPlanUsage: productId === "start" })
         : null;
@@ -650,9 +660,9 @@ export const getCheckoutUrl = async (productId, user) => {
     if (checkoutLink) {
         return checkoutLink;
     }
-    return resolveDynamicCheckoutUrl(await buildDynamicCheckoutUrl(productId, user, checkoutContext ?? undefined));
+    return resolveDynamicCheckoutUrl(await buildDynamicCheckoutUrl(productId, user, checkoutContext ?? undefined, { attribution }));
 };
-export const getCheckoutWidgetSession = async (productId, user) => {
+export const getCheckoutWidgetSession = async (productId, user, attribution) => {
     const checkoutContext = isPackageCheckoutProductId(productId) || isPlanCheckoutProductId(productId)
         ? await getAdsflowCheckoutContext(user, { includeStartPlanUsage: productId === "start" })
         : await getAdsflowCheckoutContext(user);
@@ -663,8 +673,14 @@ export const getCheckoutWidgetSession = async (productId, user) => {
         assertPlanCheckoutAvailable(productId, checkoutContext);
     }
     const fallbackLink = normalizeCheckoutLinkUrl(productId, productId === "start" ? "" : checkoutLinks[productId]);
-    const fallbackUrl = fallbackLink || (await buildDynamicCheckoutUrl(productId, user, checkoutContext, { checkoutMode: "redirect" }));
-    const widgetUrl = await buildDynamicCheckoutUrl(productId, user, checkoutContext, { checkoutMode: "embedded" });
+    const fallbackUrl = fallbackLink || (await buildDynamicCheckoutUrl(productId, user, checkoutContext, {
+        attribution,
+        checkoutMode: "redirect",
+    }));
+    const widgetUrl = await buildDynamicCheckoutUrl(productId, user, checkoutContext, {
+        attribution,
+        checkoutMode: "embedded",
+    });
     const widgetSession = await fetchDynamicCheckoutWidgetSession(widgetUrl);
     return {
         ...widgetSession,

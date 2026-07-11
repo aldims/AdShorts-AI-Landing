@@ -23,9 +23,9 @@ import { ensureWorkspaceVideoPoster, getWorkspaceVideoPosterCacheKey, } from "./
 import { ensureWorkspaceMediaAssetPlayback, getWorkspaceMediaAssetPlaybackCacheKey, } from "./media-asset-playback.js";
 import { ensureWorkspaceSegmentVideoCache, getWorkspaceSegmentVideoCacheKey, } from "./segment-video-cache.js";
 import { createTelegramOidcSession, getTelegramUserProfile, getTelegramUserProfileFromIdToken, parseTelegramOidcSession, parseTelegramLoginNonce, serializeTelegramLoginNonce, serializeTelegramOidcSession, TELEGRAM_LOGIN_NONCE_COOKIE_NAME, TELEGRAM_LOGIN_NONCE_MAX_AGE_MS, TELEGRAM_OIDC_SESSION_COOKIE_NAME, verifyTelegramLogin, } from "./telegram.js";
-import { createStudioSegmentAiPhotoJob, createStudioProjectCharacter, getStudioSegmentAiVideoPlaybackAsset, createStudioSegmentAiVideoJob, createStudioSegmentImageEditJob, createStudioSegmentImageUpscaleJob, createStudioSegmentPhotoAnimationJob, createStudioSegmentSceneSoundJob, createStudioBatchVoiceoverJob, createStudioProjectVoiceoverJob, createStudioSegmentVoiceoverJob, createStudioSegmentTalkingPhotoJob, createStudioGenerationJob, generateStudioSegmentAiPhoto, generateStudioContentPlanIdeas, getStudioSegmentAiPhotoJobStatus, getStudioSegmentAiVideoJobPosterPath, getStudioSegmentAiVideoJobStatus, getStudioSegmentImageEditJobStatus, getStudioSegmentImageUpscaleJobStatus, getStudioSegmentPhotoAnimationPlaybackAsset, getStudioSegmentPhotoAnimationJobPosterPath, getStudioSegmentPhotoAnimationJobStatus, getStudioSegmentSceneSoundJobFileProxyTarget, getStudioSegmentSceneSoundJobStatus, getStudioBatchVoiceoverJobStatus, getStudioProjectVoiceoverJobFileProxyTarget, getStudioProjectVoiceoverJobStatus, getStudioSegmentVoiceoverJobFileProxyTarget, getStudioSegmentVoiceoverJobStatus, getStudioSegmentTalkingPhotoPlaybackAsset, getStudioSegmentTalkingPhotoJobPosterPath, getStudioSegmentTalkingPhotoJobStatus, getStudioPlaybackAsset, getStudioProjectCharacters, getWorkspaceBootstrap, getStudioGenerationAvailability, getStudioGenerationStatus, getStudioVideoProxyTargetByPath, getStudioVideoProxyTarget, invalidateWorkspaceBootstrapCacheByIdentityFragments, StudioVoiceoverTextLimitError, invalidateWorkspaceBootstrapCache, improveStudioSegmentAiPhotoPrompt, normalizeStudioMediaSegmentIndexForScope, previewStudioSegmentTalkingPhotoSpeaker, translateStudioTexts, STUDIO_GENERATION_UNAVAILABLE_ERROR_CODE, STUDIO_GENERATION_UNAVAILABLE_MESSAGE, StudioGenerationUnavailableError, WorkspaceCreditLimitError, } from "./studio.js";
+import { createStudioSegmentAiPhotoJob, createStudioProjectCharacter, getStudioSegmentAiVideoPlaybackAsset, createStudioSegmentAiVideoJob, createStudioSegmentImageEditJob, createStudioSegmentImageUpscaleJob, createStudioSegmentPhotoAnimationJob, createStudioSegmentSceneSoundJob, createStudioBatchVoiceoverJob, createStudioProjectVoiceoverJob, createStudioSegmentVoiceoverJob, createStudioSegmentTalkingPhotoJob, createStudioGenerationJob, generateStudioSegmentAiPhoto, generateStudioContentPlanIdeas, getStudioSegmentAiPhotoJobStatus, getStudioSegmentAiVideoJobPosterPath, getStudioSegmentAiVideoJobStatus, getStudioSegmentImageEditJobStatus, getStudioSegmentImageUpscaleJobStatus, getStudioSegmentPhotoAnimationPlaybackAsset, getStudioSegmentPhotoAnimationJobPosterPath, getStudioSegmentPhotoAnimationJobStatus, getStudioSegmentSceneSoundJobFileProxyTarget, getStudioSegmentSceneSoundJobStatus, getStudioBatchVoiceoverJobStatus, getStudioProjectVoiceoverJobFileProxyTarget, getStudioProjectVoiceoverJobStatus, getStudioSegmentVoiceoverJobFileProxyTarget, getStudioSegmentVoiceoverJobStatus, getStudioSegmentTalkingPhotoPlaybackAsset, getStudioSegmentTalkingPhotoJobPosterPath, getStudioSegmentTalkingPhotoJobStatus, getStudioPlaybackAsset, getStudioProjectCharacters, getWorkspaceBootstrap, getStudioGenerationAvailability, getStudioGenerationStatus, getStudioVideoProxyTargetByPath, getStudioVideoProxyTarget, invalidateWorkspaceBootstrapCacheByIdentityFragments, StudioVoiceoverTextLimitError, invalidateWorkspaceBootstrapCache, adaptStudioVoiceoverTextToDuration, improveStudioSegmentAiPhotoPrompt, normalizeStudioMediaSegmentIndexForScope, previewStudioSegmentTalkingPhotoSpeaker, translateStudioTexts, STUDIO_GENERATION_UNAVAILABLE_ERROR_CODE, STUDIO_GENERATION_UNAVAILABLE_MESSAGE, StudioGenerationUnavailableError, WorkspaceCreditLimitError, } from "./studio.js";
 import { getStudioVoicePreview, StudioVoicePreviewNotFoundError } from "./voice-preview.js";
-import { CheckoutConfigError, CheckoutProductUnavailableError, applySimulatedCheckoutProfileOverride, getCheckoutUrl, getCheckoutWidgetSession, isCheckoutProductId, shouldSimulateCheckoutPayment, simulateCheckoutPayment, } from "./payments.js";
+import { CheckoutConfigError, CheckoutProductUnavailableError, applySimulatedCheckoutProfileOverride, getCheckoutUrl, getCheckoutWidgetSession, isCheckoutAttributionSource, isCheckoutOfferVariant, isCheckoutProductId, shouldSimulateCheckoutPayment, simulateCheckoutPayment, } from "./payments.js";
 import { normalizeWebReferralSource } from "./referral.js";
 import { deleteLocalExample, getLocalExamplePosterAsset, getLocalExampleVideoAsset, getLocalExamplesState, LocalExamplesPermissionError, saveLocalExample, } from "./local-examples.js";
 import { normalizeExamplePrefillStudioSettings } from "../shared/example-prefill.js";
@@ -34,6 +34,8 @@ import { purgeAdminAccountData } from "./admin-account-purge.js";
 import { startAdminImpersonationSession, verifyAdminImpersonationToken, } from "./admin-impersonation.js";
 import { AgencyContactValidationError, parseAgencyContactSubmission, sendAgencyContactSubmission, } from "./agency-contact.js";
 import { InternationalPaymentsWaitlistValidationError, appendInternationalPaymentsWaitlistSubmission, notifyInternationalPaymentsWaitlistSubmission, parseInternationalPaymentsWaitlistSubmission, } from "./international-payments-waitlist.js";
+import { isTrackedFirstVideoOfferEvent } from "./first-video-offer.js";
+import { ProductFeedbackValidationError, appendProductFeedbackSubmission, notifyProductFeedbackSubmission, parseProductFeedbackSubmission, } from "./product-feedback.js";
 import { buildAdsflowUrl, fetchUpstreamResponse, postAdsflowJson, UpstreamFetchError, upstreamPolicies } from "./upstream-client.js";
 import { initServerLogging, logServerEvent } from "./logger.js";
 import { resolveAdsflowWebSignalContext, runWithAdsflowWebSignal, setAdsflowWebDeviceCookie, } from "./web-device.js";
@@ -2532,6 +2534,22 @@ app.get("/api/payments/checkout/:productId", async (req, res) => {
         res.status(400).json({ error: "Unknown checkout product." });
         return;
     }
+    const attributionSource = String(req.query.source ?? "").trim();
+    const offerVariant = String(req.query.variant ?? "").trim();
+    if (attributionSource && !isCheckoutAttributionSource(attributionSource)) {
+        res.status(400).json({ error: "Unknown checkout source." });
+        return;
+    }
+    if (offerVariant && (!isCheckoutOfferVariant(offerVariant) || attributionSource !== "first_free_video_offer")) {
+        res.status(400).json({ error: "Unknown checkout offer variant." });
+        return;
+    }
+    const attribution = isCheckoutAttributionSource(attributionSource)
+        ? {
+            source: attributionSource,
+            ...(isCheckoutOfferVariant(offerVariant) ? { variant: offerVariant } : {}),
+        }
+        : undefined;
     try {
         const mode = String(req.query.mode ?? "").trim().toLowerCase();
         if (mode === "widget" && shouldSimulateCheckoutPayment(session.user)) {
@@ -2541,7 +2559,7 @@ app.get("/api/payments/checkout/:productId", async (req, res) => {
         }
         if (mode === "widget") {
             try {
-                const widget = await getCheckoutWidgetSession(productId, session.user);
+                const widget = await getCheckoutWidgetSession(productId, session.user, attribution);
                 res.json({ data: { widget } });
                 return;
             }
@@ -2552,7 +2570,7 @@ app.get("/api/payments/checkout/:productId", async (req, res) => {
                 throw widgetError;
             }
         }
-        const url = await getCheckoutUrl(productId, session.user);
+        const url = await getCheckoutUrl(productId, session.user, attribution);
         res.json({ data: { url } });
     }
     catch (error) {
@@ -2621,6 +2639,30 @@ app.post("/api/client-events", async (req, res) => {
         authUserEmail: session?.user?.email ?? null,
         source: "client",
     });
+    if (session?.user && isTrackedFirstVideoOfferEvent(eventName)) {
+        try {
+            const externalUserId = await resolvePreferredExternalUserId(session.user);
+            await postAdsflowJson("/api/web/client-event", {
+                admin_token: env.adsflowAdminToken,
+                event_name: eventName,
+                event_data: payload,
+                external_user_id: externalUserId,
+                language: typeof payload.lang === "string" ? payload.lang : "ru",
+                user_email: session.user.email ?? undefined,
+                user_email_verified: session.user.emailVerified === true,
+                user_name: session.user.name ?? undefined,
+            }, upstreamPolicies.adsflowMetadata, {
+                endpoint: "client-events.first-video-offer",
+                projectId: typeof payload.projectId === "number" ? payload.projectId : externalUserId,
+            });
+        }
+        catch (error) {
+            console.warn("[client-events] Failed to persist first-video offer event", {
+                eventName,
+                error: error instanceof Error ? error.message : String(error),
+            });
+        }
+    }
     res.status(202).json({ data: { ok: true } });
 });
 app.post("/api/contact/agency", async (req, res) => {
@@ -2661,6 +2703,43 @@ app.post("/api/contact/international-payments-waitlist", async (req, res) => {
         console.error("[contact] Failed to process international payments waitlist form", error);
         res.status(500).json({
             error: "Could not join the waitlist. Try again in a moment.",
+        });
+    }
+});
+app.post("/api/contact/product-feedback", async (req, res) => {
+    const session = await auth.api.getSession({
+        headers: fromNodeHeaders(req.headers),
+    });
+    if (!session?.user) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    try {
+        const submission = parseProductFeedbackSubmission(req.body, {
+            userAgent: req.header("user-agent") ?? null,
+            userEmail: session.user.email,
+            userId: session.user.id,
+        });
+        await appendProductFeedbackSubmission(submission);
+        void notifyProductFeedbackSubmission(submission).catch((error) => {
+            console.error("[contact] Failed to notify product feedback submission", error);
+        });
+        logServerEvent("info", "product_feedback_submitted", {
+            plan: submission.plan,
+            projectId: submission.projectId,
+            source: submission.source,
+            userId: submission.userId,
+        });
+        res.status(201).json({ data: { ok: true } });
+    }
+    catch (error) {
+        if (error instanceof ProductFeedbackValidationError) {
+            res.status(400).json({ error: error.message });
+            return;
+        }
+        console.error("[contact] Failed to process product feedback", error);
+        res.status(500).json({
+            error: "Не удалось отправить отзыв. Попробуйте ещё раз через пару минут.",
         });
     }
 });
@@ -3423,6 +3502,33 @@ app.post(["/api/studio/improve-prompt", "/api/studio/segment-ai-photo/improve-pr
         res.status(500).json({
             error: error instanceof Error ? error.message : "Failed to improve prompt.",
         });
+    }
+});
+app.post("/api/studio/voiceover/adapt-to-duration", async (req, res) => {
+    const session = await auth.api.getSession({ headers: fromNodeHeaders(req.headers) });
+    if (!session?.user) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
+    const durationSeconds = Number(req.body?.durationSeconds);
+    const wordsPerSecond = Number(req.body?.wordsPerSecond);
+    if (!text || text.length > 200 || !Number.isFinite(durationSeconds) || durationSeconds <= 0 || durationSeconds > 60) {
+        res.status(400).json({ error: "Voiceover text and visual duration are required." });
+        return;
+    }
+    try {
+        res.json({
+            data: await adaptStudioVoiceoverTextToDuration(text, {
+                durationSeconds,
+                language: req.body?.language,
+                wordsPerSecond: Number.isFinite(wordsPerSecond) && wordsPerSecond > 0 ? wordsPerSecond : undefined,
+            }),
+        });
+    }
+    catch (error) {
+        console.error("[studio] Failed to adapt voiceover text to visual duration", error);
+        res.status(500).json({ error: error instanceof Error ? error.message : "Failed to adapt voiceover text." });
     }
 });
 app.post("/api/studio/translate", async (req, res) => {

@@ -1342,9 +1342,11 @@ const enrichWorkspaceSegmentEditorSessionWithVoiceoverDurations = async (session
     if (!session.segments.length) {
         return session;
     }
-    const projectVoiceoverSegmentsNeedingMeasurement = !session.voiceType || session.voiceType === "none" || session.ttsAssetId === null
+    const canRecoverCompletedProjectVoiceover = session.finalVideoAssetId !== null && !session.finalVideoStale;
+    const projectVoiceoverSegmentsNeedingMeasurement = !session.voiceType || session.voiceType === "none" || (session.ttsAssetId === null && !canRecoverCompletedProjectVoiceover)
         ? []
-        : session.segments.filter((segment) => (hasSegmentEditorAuthoritativeSpeechTiming(segment) &&
+        : session.segments.filter((segment) => ((hasSegmentEditorAuthoritativeSpeechTiming(segment) || canRecoverCompletedProjectVoiceover) &&
+            normalizeText(segment.text).length > 0 &&
             normalizeNumber(segment.speechDuration) === null));
     const voiceoverAssetSegmentsNeedingMeasurement = session.segments.filter((segment) => {
         const assetId = normalizePositiveProjectId(segment.voiceoverAssetId ?? segment.voiceover?.media_asset_id);
@@ -1394,6 +1396,9 @@ const enrichWorkspaceSegmentEditorSessionWithVoiceoverDurations = async (session
         ...measuredProjectVoiceoverDurations,
         ...measuredVoiceoverAssetDurations,
     ].filter((entry) => entry[1] !== null));
+    const recoveredProjectVoiceoverSegmentIndexes = new Set(measuredProjectVoiceoverDurations
+        .filter((entry) => entry[1] !== null)
+        .map(([segmentIndex]) => segmentIndex));
     if (durationBySegmentIndex.size === 0) {
         return session;
     }
@@ -1410,6 +1415,13 @@ const enrichWorkspaceSegmentEditorSessionWithVoiceoverDurations = async (session
                 speechWordsRange?.startTime ??
                 segment.startTime;
             const voiceSourceDuration = Math.max(normalizeNumber(segment.voiceSourceDuration) ?? 0, durationSeconds);
+            const recoveredProjectVoiceover = session.ttsAssetId === null && recoveredProjectVoiceoverSegmentIndexes.has(segment.index)
+                ? {
+                    download_url: `/api/workspace/project-segment-voiceover?projectId=${session.projectId}&segmentIndex=${segment.index}`,
+                    file_name: `project-${session.projectId}-segment-${segment.index + 1}-voiceover.wav`,
+                    mime_type: "audio/wav",
+                }
+                : segment.voiceover;
             return {
                 ...segment,
                 speechDuration: durationSeconds,
@@ -1417,6 +1429,10 @@ const enrichWorkspaceSegmentEditorSessionWithVoiceoverDurations = async (session
                 speechEndTime: speechStartTime + durationSeconds,
                 speechStartTime,
                 voiceSourceDuration,
+                voiceover: recoveredProjectVoiceover,
+                voiceoverLanguage: recoveredProjectVoiceover ? session.language : segment.voiceoverLanguage,
+                voiceoverTextHash: recoveredProjectVoiceover ? normalizeText(segment.text).toLowerCase() : segment.voiceoverTextHash,
+                voiceoverVoiceType: recoveredProjectVoiceover ? session.voiceType : segment.voiceoverVoiceType,
             };
         }),
     };
@@ -1686,6 +1702,7 @@ export const buildWorkspaceSegmentEditorSessionFromPayload = (requestedProjectId
     const originalEntries = getProjectOriginalMediaEntries(projectDetailsPayload);
     const currentEntries = getProjectCurrentMediaEntries(projectDetailsPayload, originalEntries);
     const sceneSoundEntries = pickProjectMediaEntries(generationSettings?.segment_scene_sounds);
+    const voiceoverEntries = pickProjectMediaEntries(generationSettings?.segment_voiceover_assets);
     const authoritativeTimelineSegmentsByIndex = new Map(pickProjectDetailSegments(generationSettings).map((segment, fallbackIndex) => [
         getSegmentEditorSegmentIndex(segment, fallbackIndex),
         segment,
@@ -1699,6 +1716,7 @@ export const buildWorkspaceSegmentEditorSessionFromPayload = (requestedProjectId
         projectMediaByAssetId,
         originalEntries,
         sceneSoundEntries,
+        voiceoverEntries,
     }))
         .filter((segment) => Boolean(segment))
         .sort((left, right) => left.index - right.index);
@@ -1827,6 +1845,7 @@ export const buildWorkspaceSegmentEditorSegment = (projectId, payload, projectSo
         null;
     const explicitVoiceover = buildWorkspaceSegmentSceneSoundRef(payload.voiceover);
     const projectVoiceoverEntry = findProjectVoiceoverMediaEntry([
+        ...(projectSources?.voiceoverEntries ?? []),
         ...(projectSources?.currentEntries ?? []),
         ...(projectSources?.originalEntries ?? []),
     ], index);

@@ -4820,6 +4820,85 @@ export async function improveStudioSegmentAiPhotoPrompt(prompt, options) {
     }
     throw lastError ?? new Error("Failed to improve segment AI photo prompt.");
 }
+const STUDIO_VOICEOVER_TEXT_ADAPTATION_DURATION_RESERVE_RATIO = 0.85;
+const STUDIO_VOICEOVER_ESTIMATED_SECONDS_PER_WORD = 0.42;
+export const getStudioVoiceoverAdaptationTarget = (durationSecondsValue, calibratedWordsPerSecondValue) => {
+    const visualDurationSeconds = Math.max(1, Math.min(60, Number(durationSecondsValue) || 0));
+    const targetDurationSeconds = visualDurationSeconds * STUDIO_VOICEOVER_TEXT_ADAPTATION_DURATION_RESERVE_RATIO;
+    const calibratedWordsPerSecond = Number(calibratedWordsPerSecondValue);
+    const wordsPerSecond = Number.isFinite(calibratedWordsPerSecond) && calibratedWordsPerSecond > 0
+        ? Math.max(0.5, Math.min(4, calibratedWordsPerSecond))
+        : 1 / STUDIO_VOICEOVER_ESTIMATED_SECONDS_PER_WORD;
+    return {
+        maxWords: Math.max(3, Math.floor(targetDurationSeconds * wordsPerSecond)),
+        targetDurationSeconds,
+        visualDurationSeconds,
+        wordsPerSecond,
+    };
+};
+export const buildStudioVoiceoverTextAdaptationSystemPrompt = (options) => [
+    `You shorten voiceover scripts in ${getStudioLanguageLabel(options.language)} to fit ${options.targetDurationSeconds.toFixed(1)} seconds of a ${options.visualDurationSeconds.toFixed(1)}-second visual.`,
+    `Use at most ${options.maxWords} words and shorten only as much as necessary.`,
+    "Compress the original wording instead of retelling or generalizing it.",
+    "Preserve every essential event, actor, action, object, causal relationship, negation, uncertainty, and humorous contrast.",
+    "Never turn somebody's opinion, decision, assumption, or reaction into an objective event or fact.",
+    "For example, 'Город решил, что Барсик герой' must not become 'Барсик стал героем'.",
+    "Prefer removing filler and tightening syntax. Do not invent implications, motives, outcomes, or abstractions.",
+    "If the word budget is extremely tight, keep the closest literal meaning; never make a changed fact sound fluent just to meet the limit.",
+    "Return only the shortened text without quotes, labels, markdown, or explanation.",
+].join(" ");
+export async function adaptStudioVoiceoverTextToDuration(text, options) {
+    const normalizedText = normalizePrompt(text);
+    const { maxWords, targetDurationSeconds, visualDurationSeconds } = getStudioVoiceoverAdaptationTarget(options.durationSeconds, options.wordsPerSecond);
+    if (!normalizedText)
+        throw new Error("Voiceover text is required.");
+    const language = resolveStudioGenerationLanguage(normalizedText, options.language);
+    const models = requireStudioOpenRouterModels();
+    let lastError = null;
+    for (const model of models) {
+        try {
+            const response = await fetch(`${env.openrouterBaseUrl.replace(/\/+$/, "")}/chat/completions`, {
+                method: "POST",
+                headers: {
+                    Accept: "application/json",
+                    Authorization: `Bearer ${env.openrouterApiKey}`,
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": OPENROUTER_STUDIO_PROMPT_HTTP_REFERER,
+                    "X-Title": OPENROUTER_STUDIO_PROMPT_TITLE,
+                },
+                body: JSON.stringify({
+                    model,
+                    messages: [
+                        {
+                            role: "system",
+                            content: buildStudioVoiceoverTextAdaptationSystemPrompt({
+                                language,
+                                maxWords,
+                                targetDurationSeconds,
+                                visualDurationSeconds,
+                            }),
+                        },
+                        { role: "user", content: normalizedText },
+                    ],
+                    temperature: 0.1,
+                    max_tokens: 240,
+                }),
+                signal: AbortSignal.timeout(OPENROUTER_STUDIO_PROMPT_TIMEOUT_MS),
+            });
+            const payload = (await response.json().catch(() => null));
+            if (!response.ok)
+                throw new Error(extractOpenRouterErrorMessage(payload) || `Voiceover adaptation failed (${response.status}).`);
+            const adaptedText = sanitizeStudioTranslationResponseText(extractOpenRouterChatCompletionText(payload)).slice(0, 200).trim();
+            if (!adaptedText)
+                throw new Error("AI returned empty voiceover text.");
+            return { text: adaptedText };
+        }
+        catch (error) {
+            lastError = error instanceof Error ? error : new Error("Voiceover adaptation failed.");
+        }
+    }
+    throw lastError ?? new Error("Voiceover adaptation failed.");
+}
 export async function generateStudioContentPlanIdeas(query, options) {
     const normalizedQuery = normalizePrompt(query);
     if (!normalizedQuery) {
