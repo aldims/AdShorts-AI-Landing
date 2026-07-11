@@ -119,6 +119,7 @@ describe("WorkspaceSegmentTimelineVoiceMenu", () => {
 
     screen.getByRole("button", { name: "Подстроить текст под длину визуала" }).click();
     expect(onAdaptTextToVisual).toHaveBeenCalledOnce();
+    expect(screen.getByRole("tooltip").textContent).toContain("примерная подстройка");
   });
 
   it("offers restoring the original text after AI adaptation", () => {

@@ -32691,7 +32691,13 @@ html.platform-windows .studio-voice-selector__menu {
   gap: 7px;
 }
 
-.studio-segment-editor__timeline-voice-loop-warning button {
+.studio-segment-editor__timeline-voice-adapt-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.studio-segment-editor__timeline-voice-adapt-button {
   display: inline-flex;
   align-items: center;
   align-self: flex-start;
@@ -32706,14 +32712,61 @@ html.platform-windows .studio-voice-selector__menu {
   cursor: pointer;
 }
 
-.studio-segment-editor__timeline-voice-loop-warning button:hover:not(:disabled) {
+.studio-segment-editor__timeline-voice-adapt-button:hover:not(:disabled) {
   border-color: rgba(251, 191, 36, 0.52);
   background: rgba(251, 191, 36, 0.17);
 }
 
-.studio-segment-editor__timeline-voice-loop-warning button:disabled {
+.studio-segment-editor__timeline-voice-adapt-button:disabled {
   cursor: wait;
   opacity: 0.68;
+}
+
+.studio-segment-editor__timeline-voice-adapt-help {
+  position: relative;
+  display: inline-flex;
+}
+
+.studio-segment-editor__timeline-voice-adapt-help > button {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid rgba(251, 191, 36, 0.28);
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.35);
+  color: rgba(255, 244, 214, 0.76);
+  font-family: inherit;
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1;
+  cursor: help;
+}
+
+.studio-segment-editor__timeline-voice-adapt-help [role="tooltip"] {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  z-index: 4;
+  width: min(290px, 70vw);
+  padding: 8px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 8px;
+  background: rgba(8, 12, 24, 0.97);
+  color: rgba(226, 232, 240, 0.92);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.32);
+  font-size: 0.62rem;
+  font-weight: 600;
+  line-height: 1.4;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 4px);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.studio-segment-editor__timeline-voice-adapt-help:hover [role="tooltip"],
+.studio-segment-editor__timeline-voice-adapt-help:focus-within [role="tooltip"] {
+  opacity: 1;
+  transform: translate(-50%, 0);
 }
 
 .studio-segment-editor__timeline-voice-adapt-icon {

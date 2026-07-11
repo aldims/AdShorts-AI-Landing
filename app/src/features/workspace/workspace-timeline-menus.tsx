@@ -735,10 +735,22 @@ export function WorkspaceSegmentTimelineVoiceMenu({
               <span className="studio-segment-editor__timeline-duration-warning" aria-hidden="true">!</span>
               <span>{visualAudioWarningText}</span>
             </div>
-            <button type="button" disabled={isAdaptingText} aria-busy={isAdaptingText || undefined} onClick={onAdaptTextToVisual}>
-              <span className="studio-segment-editor__timeline-voice-adapt-icon" aria-hidden="true">✦</span>
-              <span>{isAdaptingText ? workspaceText(locale, "Подстраиваем…", "Adapting…") : workspaceText(locale, "Подстроить текст под длину визуала", "Adapt text to visual length")}</span>
-            </button>
+            <div className="studio-segment-editor__timeline-voice-adapt-actions">
+              <button className="studio-segment-editor__timeline-voice-adapt-button" type="button" disabled={isAdaptingText} aria-busy={isAdaptingText || undefined} onClick={onAdaptTextToVisual}>
+                <span className="studio-segment-editor__timeline-voice-adapt-icon" aria-hidden="true">✦</span>
+                <span>{isAdaptingText ? workspaceText(locale, "Подстраиваем…", "Adapting…") : workspaceText(locale, "Подстроить текст под длину визуала", "Adapt text to visual length")}</span>
+              </button>
+              <span className="studio-segment-editor__timeline-voice-adapt-help">
+                <button type="button" aria-label={workspaceText(locale, "Как рассчитывается длина текста", "How text length is calculated")} aria-describedby={`${textAreaId}-adapt-help`}>i</button>
+                <span id={`${textAreaId}-adapt-help`} role="tooltip">
+                  {workspaceText(
+                    locale,
+                    "Это примерная подстройка по скорости выбранного голоса. После генерации длительность может немного отличаться из-за пауз и произношения.",
+                    "This is an estimate based on the selected voice speed. The generated duration may vary slightly because of pauses and pronunciation.",
+                  )}
+                </span>
+              </span>
+            </div>
           </div>
         ) : null}
         <div className="studio-voice-selector__bulk-head studio-segment-editor__timeline-voice-text-counter">
