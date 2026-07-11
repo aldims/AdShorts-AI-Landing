@@ -24331,6 +24331,14 @@ body .studio-canvas-route:not(.is-segment-editor):has(.studio-canvas-prompt__inn
   --studio-prompt-reserve: clamp(324px, 34vh, 352px);
 }
 
+@media (min-width: 1181px) {
+  body .studio-canvas-route:not(.is-segment-editor):has(.studio-canvas-prompt__inner--first-video-success) {
+    /* The offer is fixed to the viewport bottom; reserve its real height instead
+       of a viewport percentage so the preview can consume the remaining stage. */
+    --studio-prompt-reserve: 276px;
+  }
+}
+
 @media (max-width: 760px) {
   body .studio-canvas-route:not(.is-segment-editor):has(.studio-canvas-prompt__inner--first-video-success) {
     --studio-prompt-reserve: 448px !important;
