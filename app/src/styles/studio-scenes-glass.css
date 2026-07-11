@@ -200,6 +200,15 @@
     rgba(12, 16, 27, 0.68);
 }
 
+#app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-cell--visual::before {
+  background: transparent;
+}
+
+#app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-scene-backdrop img,
+#app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-scene-backdrop video {
+  filter: saturate(1.04) brightness(0.984);
+}
+
 #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-cell:hover:not(:disabled),
 #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-cell:focus-visible {
   border-color: rgba(190, 204, 255, 0.24);
