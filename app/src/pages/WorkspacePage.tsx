@@ -35341,9 +35341,15 @@ export function WorkspacePage({
                                     )}
                                   </small>
                                 </span>
+                                <span className="studio-welcome-card__mode-capabilities studio-welcome-card__mode-capabilities--speed">
+                                  <span>{workspaceText(locale, "Один промпт", "One prompt")}</span>
+                                  <span>{workspaceText(locale, "Автосборка", "Auto assembly")}</span>
+                                  <span>{workspaceText(locale, "Минимум настроек", "Minimal setup")}</span>
+                                  <span>{workspaceText(locale, "Быстрый результат", "Fast result")}</span>
+                                </span>
                               </div>
                               <button
-                                className="studio-welcome-card__mode"
+                                className="studio-welcome-card__mode is-advanced"
                                 type="button"
                                 onClick={() => {
                                   closeStudioWelcomeCard();
@@ -35358,7 +35364,10 @@ export function WorkspacePage({
                                     </svg>
                                   </span>
                                   <span className="studio-welcome-card__mode-kicker">
-                                    {workspaceText(locale, "ПОЛНЫЙ КОНТРОЛЬ", "FULL CONTROL")}
+                                    {workspaceText(locale, "МАКСИМУМ ВОЗМОЖНОСТЕЙ", "MAXIMUM CAPABILITY")}
+                                  </span>
+                                  <span className="studio-welcome-card__mode-state is-featured">
+                                    {workspaceText(locale, "САМЫЙ МОЩНЫЙ", "MOST POWERFUL")}
                                   </span>
                                 </span>
                                 <span className="studio-welcome-card__mode-copy">
@@ -35366,8 +35375,8 @@ export function WorkspacePage({
                                   <small>
                                     {workspaceText(
                                       locale,
-                                      "Создавайте с нуля или дорабатывайте готовый ролик — сцена за сценой.",
-                                      "Create from scratch or refine a finished video — scene by scene.",
+                                      "Самый мощный режим: точная настройка каждой сцены и полный набор AI-инструментов.",
+                                      "Our most powerful mode: precise scene control and the complete AI toolset.",
                                     )}
                                   </small>
                                 </span>
