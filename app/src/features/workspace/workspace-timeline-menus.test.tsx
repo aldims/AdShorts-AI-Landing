@@ -14,6 +14,7 @@ const baseProps = {
   generateCostLabel: "1 ⚡",
   generateDisabledReason: null,
   generateLabel: "Сгенерировать озвучку",
+  isAdaptingText: false,
   isGeneratingVoiceover: false,
   isVoiceDisabled: false,
   language: "ru" as const,
@@ -22,6 +23,7 @@ const baseProps = {
   menuRef: { current: null },
   onClose: vi.fn(),
   onGenerateVoiceover: vi.fn(),
+  onAdaptTextToVisual: vi.fn(),
   onLanguageSelect: vi.fn(),
   onTextChange: vi.fn(),
   onUseGlobalVoice: vi.fn(),
@@ -101,6 +103,20 @@ describe("WorkspaceSegmentTimelineVoiceMenu", () => {
     const textarea = screen.getByRole("textbox", { name: "Текст озвучки" }) as HTMLTextAreaElement;
     expect(textarea.maxLength).toBe(200);
     expect(screen.getByText("Сцена 1 · 11/200")).toBeTruthy();
+  });
+
+  it("offers AI text adaptation when voiceover is longer than the visual", () => {
+    const onAdaptTextToVisual = vi.fn();
+    render(
+      <WorkspaceSegmentTimelineVoiceMenu
+        {...baseProps}
+        onAdaptTextToVisual={onAdaptTextToVisual}
+        visualAudioWarningText="Видео сцена короче озвучки."
+      />,
+    );
+
+    screen.getByRole("button", { name: "Подстроить текст под длину визуала" }).click();
+    expect(onAdaptTextToVisual).toHaveBeenCalledOnce();
   });
 });
 

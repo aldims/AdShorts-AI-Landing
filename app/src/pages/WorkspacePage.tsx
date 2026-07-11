@@ -1721,6 +1721,7 @@ export function WorkspacePage({
   const lastStudioCreateModeRef = useRef<StudioCreateMode>(initialStudioCreateMode);
   const [topicInput, setTopicInput] = useState("");
   const [isStudioIdeaPromptImproving, setIsStudioIdeaPromptImproving] = useState(false);
+  const [adaptingVoiceTextSegmentIndex, setAdaptingVoiceTextSegmentIndex] = useState<number | null>(null);
   const previousActiveTabRef = useRef<WorkspaceTab>(defaultTab);
   const [contentPlanQueryInput, setContentPlanQueryInput] = useState("");
   const [hasEditedContentPlanQueryInput, setHasEditedContentPlanQueryInput] = useState(false);
@@ -24142,8 +24143,8 @@ export function WorkspacePage({
     syncSegmentAiPhotoModalForSegment(targetSegment, { preserveTab: true });
     setSegmentTimelineTextMenuSegmentIndex((current) => (current === targetSegment.index ? null : targetSegment.index));
   };
-  const handleSegmentTimelineTextChange = (segmentIndex: number, event: ChangeEvent<HTMLTextAreaElement>) => {
-    const nextValue = event.target.value.slice(0, STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS);
+  const applySegmentTimelineTextValue = (segmentIndex: number, value: string) => {
+    const nextValue = value.slice(0, STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS);
     const currentSegment =
       segmentEditorDraftRef.current?.segments.find((segment) => segment.index === segmentIndex) ??
       segmentEditorDraft?.segments.find((segment) => segment.index === segmentIndex) ??
@@ -24187,6 +24188,33 @@ export function WorkspacePage({
         });
       }),
     }), WORKSPACE_SEGMENT_EDITOR_VOICE_TEXT_TIMELINE_REBUILD_OPTIONS);
+  };
+  const handleSegmentTimelineTextChange = (segmentIndex: number, event: ChangeEvent<HTMLTextAreaElement>) => {
+    applySegmentTimelineTextValue(segmentIndex, event.target.value);
+  };
+  const handleSegmentTimelineVoiceTextAdapt = async () => {
+    const segment = segmentTimelineVoiceMenuSegment;
+    const durationSeconds = segmentTimelineVoiceMenuVisualAudioDurationMismatch?.visualDurationSeconds ?? null;
+    if (!segment || !durationSeconds || adaptingVoiceTextSegmentIndex !== null) return;
+
+    setAdaptingVoiceTextSegmentIndex(segment.index);
+    setSegmentEditorVideoError(null);
+    try {
+      const response = await fetch("/api/studio/voiceover/adapt-to-duration", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: segment.text, durationSeconds, language: segmentTimelineVoiceMenuLanguage }),
+      });
+      const payload = (await response.json().catch(() => null)) as { data?: { text?: string }; error?: string } | null;
+      if (!response.ok || !payload?.data?.text) {
+        throw new Error(payload?.error ?? workspaceText(locale, "Не удалось подстроить текст.", "Failed to adapt the text."));
+      }
+      applySegmentTimelineTextValue(segment.index, payload.data.text);
+    } catch (error) {
+      setSegmentEditorVideoError(error instanceof Error ? error.message : workspaceText(locale, "Не удалось подстроить текст.", "Failed to adapt the text."));
+    } finally {
+      setAdaptingVoiceTextSegmentIndex(null);
+    }
   };
   const handleSegmentTimelineSubtitleDisable = (segmentIndex: number) => {
     setSegmentEditorVideoError(null);
@@ -29685,6 +29713,7 @@ export function WorkspacePage({
       generateCostLabel={segmentTimelineVoiceMenuGenerateCostLabel}
       generateDisabledReason={segmentTimelineVoiceMenuGenerateDisabledReason}
       generateLabel={segmentTimelineVoiceMenuGenerateLabel}
+      isAdaptingText={adaptingVoiceTextSegmentIndex === segmentTimelineVoiceMenuSegment?.index}
       isGeneratingVoiceover={isSegmentTimelineVoiceMenuGeneratingVoiceover}
       isVoiceDisabled={segmentTimelineVoiceMenuIsDisabled}
       language={segmentTimelineVoiceMenuLanguage}
@@ -29706,6 +29735,7 @@ export function WorkspacePage({
           voiceType: segmentTimelineVoiceMenuGenerationVoiceId,
         });
       }}
+      onAdaptTextToVisual={() => void handleSegmentTimelineVoiceTextAdapt()}
       onLanguageSelect={handleSegmentTimelineVoiceLanguageSelect}
       onTextChange={handleSegmentTimelineTextChange}
       onUseGlobalVoice={handleSegmentTimelineVoiceUseGlobal}

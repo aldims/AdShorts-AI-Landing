@@ -7116,6 +7116,57 @@ export async function improveStudioSegmentAiPhotoPrompt(
   throw lastError ?? new Error("Failed to improve segment AI photo prompt.");
 }
 
+export async function adaptStudioVoiceoverTextToDuration(
+  text: string,
+  options: { durationSeconds: number; language?: string },
+): Promise<{ text: string }> {
+  const normalizedText = normalizePrompt(text);
+  const durationSeconds = Math.max(1, Math.min(60, Number(options.durationSeconds) || 0));
+  if (!normalizedText) throw new Error("Voiceover text is required.");
+
+  const language = resolveStudioGenerationLanguage(normalizedText, options.language);
+  const maxWords = Math.max(3, Math.floor(durationSeconds / 0.42));
+  const models = requireStudioOpenRouterModels();
+  let lastError: Error | null = null;
+
+  for (const model of models) {
+    try {
+      const response = await fetch(`${env.openrouterBaseUrl.replace(/\/+$/, "")}/chat/completions`, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${env.openrouterApiKey}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": OPENROUTER_STUDIO_PROMPT_HTTP_REFERER,
+          "X-Title": OPENROUTER_STUDIO_PROMPT_TITLE,
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            {
+              role: "system",
+              content: `You edit voiceover scripts. Rewrite the text in ${getStudioLanguageLabel(language)} so it sounds natural when spoken and fits within ${durationSeconds.toFixed(1)} seconds. Use at most ${maxWords} words. Preserve the key meaning, names, facts, and tone. Return only the rewritten text without quotes, labels, markdown, or explanation.`,
+            },
+            { role: "user", content: normalizedText },
+          ],
+          temperature: 0.25,
+          max_tokens: 240,
+        }),
+        signal: AbortSignal.timeout(OPENROUTER_STUDIO_PROMPT_TIMEOUT_MS),
+      });
+      const payload = (await response.json().catch(() => null)) as OpenRouterChatCompletionResponse | null;
+      if (!response.ok) throw new Error(extractOpenRouterErrorMessage(payload) || `Voiceover adaptation failed (${response.status}).`);
+      const adaptedText = sanitizeStudioTranslationResponseText(extractOpenRouterChatCompletionText(payload)).slice(0, 200).trim();
+      if (!adaptedText) throw new Error("AI returned empty voiceover text.");
+      return { text: adaptedText };
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error("Voiceover adaptation failed.");
+    }
+  }
+
+  throw lastError ?? new Error("Voiceover adaptation failed.");
+}
+
 export async function generateStudioContentPlanIdeas(
   query: string,
   options?: {

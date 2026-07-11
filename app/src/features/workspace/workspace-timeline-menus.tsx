@@ -521,6 +521,7 @@ type WorkspaceSegmentTimelineVoiceMenuProps = {
   generateDisabledReason: string | null;
   generateLabel: string;
   isGeneratingVoiceover: boolean;
+  isAdaptingText: boolean;
   isVoiceDisabled: boolean;
   language: StudioLanguage;
   languageOptions: WorkspaceSegmentTimelineVoiceLanguageOption[];
@@ -528,6 +529,7 @@ type WorkspaceSegmentTimelineVoiceMenuProps = {
   menuRef: RefObject<HTMLDivElement | null>;
   onClose: () => void;
   onGenerateVoiceover: () => void;
+  onAdaptTextToVisual: () => void;
   onLanguageSelect: (segmentIndex: number, language: StudioLanguage) => void;
   onTextChange: (segmentIndex: number, event: ChangeEvent<HTMLTextAreaElement>) => void;
   onUseGlobalVoice: (segmentIndex: number) => void;
@@ -560,6 +562,7 @@ export function WorkspaceSegmentTimelineVoiceMenu({
   generateDisabledReason,
   generateLabel,
   isGeneratingVoiceover,
+  isAdaptingText,
   isVoiceDisabled,
   language,
   languageOptions,
@@ -567,6 +570,7 @@ export function WorkspaceSegmentTimelineVoiceMenu({
   menuRef,
   onClose,
   onGenerateVoiceover,
+  onAdaptTextToVisual,
   onLanguageSelect,
   onTextChange,
   onUseGlobalVoice,
@@ -716,26 +720,26 @@ export function WorkspaceSegmentTimelineVoiceMenu({
         })}
       </div>
       <div className="studio-voice-selector__bulk-text studio-segment-editor__timeline-voice-text">
-        <div className="studio-voice-selector__bulk-head">
+        <div className="studio-voice-selector__bulk-head studio-segment-editor__timeline-voice-text-title">
           <label htmlFor={textAreaId}>
             {workspaceText(locale, "Текст озвучки", "Voiceover text")}
           </label>
-          <small>
-            {workspaceText(
-              locale,
-              `Сцена ${segmentArrayIndex + 1} · ${segment.text.length}/${STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS}`,
-              `Scene ${segmentArrayIndex + 1} · ${segment.text.length}/${STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS}`,
-            )}
-          </small>
         </div>
         {visualAudioWarningText ? (
-          <p className="studio-segment-editor__timeline-voice-loop-warning" role="status">
-            <span className="studio-segment-editor__timeline-duration-warning" aria-hidden="true">
-              !
-            </span>
-            <span>{visualAudioWarningText}</span>
-          </p>
+          <div className="studio-segment-editor__timeline-voice-loop-warning">
+            <div className="studio-segment-editor__timeline-voice-loop-warning-copy" role="status">
+              <span className="studio-segment-editor__timeline-duration-warning" aria-hidden="true">!</span>
+              <span>{visualAudioWarningText}</span>
+            </div>
+            <button type="button" disabled={isAdaptingText} aria-busy={isAdaptingText || undefined} onClick={onAdaptTextToVisual}>
+              <span className="studio-segment-editor__timeline-voice-adapt-icon" aria-hidden="true">✦</span>
+              <span>{isAdaptingText ? workspaceText(locale, "Подстраиваем…", "Adapting…") : workspaceText(locale, "Подстроить текст под длину визуала", "Adapt text to visual length")}</span>
+            </button>
+          </div>
         ) : null}
+        <div className="studio-voice-selector__bulk-head studio-segment-editor__timeline-voice-text-counter">
+          <small>{workspaceText(locale, `Сцена ${segmentArrayIndex + 1} · ${segment.text.length}/${STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS}`, `Scene ${segmentArrayIndex + 1} · ${segment.text.length}/${STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS}`)}</small>
+        </div>
         <textarea
           id={textAreaId}
           className="studio-voice-selector__bulk-textarea studio-segment-editor__timeline-voice-textarea"

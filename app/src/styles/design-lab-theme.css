@@ -32668,6 +32668,7 @@ html.platform-windows .studio-voice-selector__menu {
 
 .studio-segment-editor__timeline-voice-loop-warning {
   display: flex;
+  flex-direction: column;
   align-items: flex-start;
   gap: 7px;
   margin: 0;
@@ -32682,6 +32683,47 @@ html.platform-windows .studio-voice-selector__menu {
   font-weight: 750;
   letter-spacing: 0;
   line-height: 1.35;
+}
+
+.studio-segment-editor__timeline-voice-loop-warning-copy {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+}
+
+.studio-segment-editor__timeline-voice-loop-warning button {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 6px;
+  min-height: 30px;
+  padding: 6px 10px;
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  border-radius: 8px;
+  background: rgba(251, 191, 36, 0.1);
+  color: rgba(255, 247, 221, 0.96);
+  font: inherit;
+  cursor: pointer;
+}
+
+.studio-segment-editor__timeline-voice-loop-warning button:hover:not(:disabled) {
+  border-color: rgba(251, 191, 36, 0.52);
+  background: rgba(251, 191, 36, 0.17);
+}
+
+.studio-segment-editor__timeline-voice-loop-warning button:disabled {
+  cursor: wait;
+  opacity: 0.68;
+}
+
+.studio-segment-editor__timeline-voice-adapt-icon {
+  color: #facc15;
+  font-size: 0.9rem;
+}
+
+.studio-segment-editor__timeline-voice-text-counter {
+  justify-content: flex-end;
+  min-height: 12px;
 }
 
 .studio-segment-editor__timeline-voice-loop-warning .studio-segment-editor__timeline-duration-warning {

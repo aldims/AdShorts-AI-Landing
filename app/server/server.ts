@@ -145,6 +145,7 @@ import {
   invalidateWorkspaceBootstrapCacheByIdentityFragments,
   StudioVoiceoverTextLimitError,
   invalidateWorkspaceBootstrapCache,
+  adaptStudioVoiceoverTextToDuration,
   improveStudioSegmentAiPhotoPrompt,
   normalizeStudioMediaSegmentIndexForScope,
   previewStudioSegmentTalkingPhotoSpeaker,
@@ -4349,6 +4350,28 @@ app.post(["/api/studio/improve-prompt", "/api/studio/segment-ai-photo/improve-pr
     res.status(500).json({
       error: error instanceof Error ? error.message : "Failed to improve prompt.",
     });
+  }
+});
+
+app.post("/api/studio/voiceover/adapt-to-duration", async (req, res) => {
+  const session = await auth.api.getSession({ headers: fromNodeHeaders(req.headers) });
+  if (!session?.user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
+  const durationSeconds = Number(req.body?.durationSeconds);
+  if (!text || text.length > 200 || !Number.isFinite(durationSeconds) || durationSeconds <= 0 || durationSeconds > 60) {
+    res.status(400).json({ error: "Voiceover text and visual duration are required." });
+    return;
+  }
+
+  try {
+    res.json({ data: await adaptStudioVoiceoverTextToDuration(text, { durationSeconds, language: req.body?.language }) });
+  } catch (error) {
+    console.error("[studio] Failed to adapt voiceover text to visual duration", error);
+    res.status(500).json({ error: error instanceof Error ? error.message : "Failed to adapt voiceover text." });
   }
 });
 
