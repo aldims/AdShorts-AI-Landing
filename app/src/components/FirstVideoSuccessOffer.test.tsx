@@ -49,6 +49,16 @@ describe("FirstVideoSuccessOffer", () => {
     expect(onComparePlans).toHaveBeenCalledTimes(1);
   });
 
+  it("shows the benefit-led offer copy without the YooKassa trust claim", () => {
+    renderOffer();
+
+    expect(screen.getByText("Ваш первый Shorts готов.")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Создайте ещё до 5 Shorts без водяного знака" })).toBeTruthy();
+    expect(screen.getByText("Раскройте больше тем, воплотите новые идеи и попробуйте разные форматы.")).toBeTruthy();
+    expect(screen.getByText("Разовая оплата · без автосписаний")).toBeTruthy();
+    expect(screen.queryByText(/ЮKassa/i)).toBeNull();
+  });
+
   it("submits feedback without trusting client identity", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       json: async () => ({ data: { ok: true } }),

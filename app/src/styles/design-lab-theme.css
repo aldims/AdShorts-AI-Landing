@@ -23765,10 +23765,7 @@ textarea {
   padding: 0;
   overflow: hidden;
   border-color: rgba(151, 119, 255, 0.34);
-  background:
-    radial-gradient(circle at 12% 20%, rgba(126, 86, 255, 0.2), transparent 32%),
-    radial-gradient(circle at 88% 84%, rgba(56, 196, 181, 0.1), transparent 30%),
-    linear-gradient(145deg, rgba(25, 27, 52, 0.97), rgba(10, 14, 30, 0.97));
+  background: #121628;
   box-shadow:
     0 2px 0 rgba(255, 255, 255, 0.08) inset,
     0 30px 80px -24px rgba(0, 0, 0, 0.82),
@@ -23787,18 +23784,14 @@ textarea {
 }
 
 .first-video-success-offer::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.025), transparent 42%);
+  content: none;
 }
 
 .first-video-success-offer__dismiss {
   position: absolute;
   z-index: 2;
-  top: 16px;
-  right: 16px;
+  top: 12px;
+  right: 12px;
   display: grid;
   place-items: center;
   width: 34px;
@@ -24100,14 +24093,15 @@ textarea {
 
 .first-video-success-offer {
   grid-template-columns: minmax(0, 1.15fr) minmax(330px, 0.85fr);
+  align-content: start;
   gap: 16px 34px;
   min-height: 230px;
-  padding: 24px 58px 18px 28px;
+  padding: 12px 58px 24px 28px;
 }
 
 .first-video-success-offer__main {
   display: block;
-  align-self: center;
+  align-self: start;
 }
 
 .first-video-success-offer__main h2 {
@@ -24148,13 +24142,13 @@ textarea {
   position: relative;
   z-index: 1;
   display: grid;
-  align-content: center;
+  align-content: start;
   gap: 8px;
   min-width: 0;
   grid-column: 2;
   grid-row: 1 / span 2;
   padding: 16px;
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.025));
+  background: rgba(255, 255, 255, 0.045);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 18px;
   box-shadow: 0 14px 32px -24px rgba(0, 0, 0, 0.9);

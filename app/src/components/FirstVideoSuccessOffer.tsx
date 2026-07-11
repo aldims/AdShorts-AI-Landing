@@ -186,15 +186,15 @@ export function FirstVideoSuccessOffer({
       <div className="first-video-success-offer__main">
         <span className="first-video-success-offer__eyebrow">
           <span aria-hidden="true">✓</span>
-          {text("Ваш первый Shorts готов", "Your first Short is ready")}
+          {text("Ваш первый Shorts готов.", "Your first Short is ready.")}
         </span>
         <h2 id={`${feedbackId}-title`}>
-          {text("Создайте ещё 5 Shorts за 390 ₽", "Create 5 more Shorts")}
+          {text("Создайте ещё до 5 Shorts без водяного знака", "Create up to 5 more Shorts without a watermark")}
         </h2>
         <p>
           {text(
-            "Получите 50 кредитов. Следующие видео — без водяного знака.",
-            "Get 50 credits. Your next videos will have no watermark.",
+            "Раскройте больше тем, воплотите новые идеи и попробуйте разные форматы.",
+            "Explore more topics, bring new ideas to life, and try different formats.",
           )}
         </p>
       </div>
@@ -236,8 +236,8 @@ export function FirstVideoSuccessOffer({
           <>
             <small className="first-video-success-offer__trust">
               {text(
-                "Разовая оплата · без автосписаний · безопасная оплата ЮKassa",
-                "One-time payment · no auto-renewal · secure checkout",
+                "Разовая оплата · без автосписаний",
+                "One-time payment · no auto-renewal",
               )}
             </small>
             <button className="first-video-success-offer__compare" type="button" onClick={handleComparePlans}>
