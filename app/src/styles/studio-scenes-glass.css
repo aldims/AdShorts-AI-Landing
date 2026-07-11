@@ -213,8 +213,8 @@
 #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-cell:focus-visible {
   border-color: rgba(190, 204, 255, 0.24);
   background:
-    linear-gradient(180deg, rgba(210, 220, 255, 0.12), rgba(255, 255, 255, 0.025)),
-    rgba(12, 16, 27, 0.46);
+    linear-gradient(180deg, rgba(176, 192, 255, 0.09), rgba(255, 255, 255, 0.012)),
+    rgba(16, 21, 35, 0.82);
 }
 
 #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-row--visual .studio-segment-editor__timeline-cell.is-active {
