@@ -161,9 +161,12 @@ import {
   applySimulatedCheckoutProfileOverride,
   getCheckoutUrl,
   getCheckoutWidgetSession,
+  isCheckoutAttributionSource,
+  isCheckoutOfferVariant,
   isCheckoutProductId,
   shouldSimulateCheckoutPayment,
   simulateCheckoutPayment,
+  type CheckoutAttribution,
 } from "./payments.js";
 import { normalizeWebReferralSource } from "./referral.js";
 import {
@@ -193,6 +196,7 @@ import {
   notifyInternationalPaymentsWaitlistSubmission,
   parseInternationalPaymentsWaitlistSubmission,
 } from "./international-payments-waitlist.js";
+import { resolveFirstVideoOfferVariant } from "./experiments.js";
 import {
   ProductFeedbackValidationError,
   appendProductFeedbackSubmission,
@@ -1884,6 +1888,9 @@ app.get("/api/workspace/bootstrap", async (req, res) => {
         latestGeneration: workspace.latestGeneration,
         notifications: workspace.notifications,
         profile,
+        experiments: {
+          firstVideoOfferVariant: resolveFirstVideoOfferVariant(session.user.id),
+        },
         studioOptions: workspace.studioOptions,
       },
     });
@@ -3229,6 +3236,23 @@ app.get("/api/payments/checkout/:productId", async (req, res) => {
     return;
   }
 
+  const attributionSource = String(req.query.source ?? "").trim();
+  const offerVariant = String(req.query.variant ?? "").trim();
+  if (attributionSource && !isCheckoutAttributionSource(attributionSource)) {
+    res.status(400).json({ error: "Unknown checkout source." });
+    return;
+  }
+  if (offerVariant && (!isCheckoutOfferVariant(offerVariant) || attributionSource !== "first_free_video_offer")) {
+    res.status(400).json({ error: "Unknown checkout offer variant." });
+    return;
+  }
+  const attribution: CheckoutAttribution | undefined = isCheckoutAttributionSource(attributionSource)
+    ? {
+        source: attributionSource,
+        ...(isCheckoutOfferVariant(offerVariant) ? { variant: offerVariant } : {}),
+      }
+    : undefined;
+
   try {
     const mode = String(req.query.mode ?? "").trim().toLowerCase();
     if (mode === "widget" && shouldSimulateCheckoutPayment(session.user)) {
@@ -3239,7 +3263,7 @@ app.get("/api/payments/checkout/:productId", async (req, res) => {
 
     if (mode === "widget") {
       try {
-        const widget = await getCheckoutWidgetSession(productId, session.user);
+        const widget = await getCheckoutWidgetSession(productId, session.user, attribution);
         res.json({ data: { widget } });
         return;
       } catch (widgetError) {
@@ -3250,7 +3274,7 @@ app.get("/api/payments/checkout/:productId", async (req, res) => {
       }
     }
 
-    const url = await getCheckoutUrl(productId, session.user);
+    const url = await getCheckoutUrl(productId, session.user, attribution);
     res.json({ data: { url } });
   } catch (error) {
     const statusCode = error instanceof CheckoutProductUnavailableError ? 409 : error instanceof CheckoutConfigError ? 503 : 500;

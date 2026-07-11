@@ -1,23 +1,32 @@
 import { type FormEvent, useEffect, useId, useState } from "react";
 
 import { logClientEvent } from "../lib/client-log";
+import type { FirstVideoOfferVariant } from "../lib/first-video-offer";
 
 type FirstVideoSuccessOfferProps = {
+  checkoutError: string | null;
+  isCheckoutPending: boolean;
   locale: "ru" | "en";
+  onCheckoutStart: () => void;
+  onComparePlans: () => void;
   onDismiss: () => void;
-  onUpgrade: () => void;
   plan: string | null;
   projectId: number | null;
+  variant: FirstVideoOfferVariant;
 };
 
 type FeedbackStatus = "idle" | "sending" | "sent";
 
 export function FirstVideoSuccessOffer({
+  checkoutError,
+  isCheckoutPending,
   locale,
+  onCheckoutStart,
+  onComparePlans,
   onDismiss,
-  onUpgrade,
   plan,
   projectId,
+  variant,
 }: FirstVideoSuccessOfferProps) {
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const [feedback, setFeedback] = useState("");
@@ -25,30 +34,36 @@ export function FirstVideoSuccessOffer({
   const [feedbackStatus, setFeedbackStatus] = useState<FeedbackStatus>("idle");
   const feedbackId = useId();
   const text = (ru: string, en: string) => (locale === "en" ? en : ru);
+  const analyticsContext = {
+    plan,
+    productId: "start",
+    projectId,
+    source: "first_free_video_offer",
+    variant,
+  } as const;
 
   useEffect(() => {
     logClientEvent("first_free_video_offer_viewed", {
+      ...analyticsContext,
       path: `${window.location.pathname}${window.location.search}`,
-      plan,
-      projectId,
     });
-  }, [plan, projectId]);
+  }, [plan, projectId, variant]);
 
-  const handleUpgrade = () => {
-    logClientEvent("first_free_video_offer_clicked", {
+  const handleCheckout = () => {
+    logClientEvent("first_video_offer_checkout_clicked", {
+      ...analyticsContext,
       path: `${window.location.pathname}${window.location.search}`,
-      plan,
-      projectId,
-      target: "plans",
     });
-    onUpgrade();
+    onCheckoutStart();
+  };
+
+  const handleComparePlans = () => {
+    logClientEvent("first_video_offer_compare_plans_clicked", analyticsContext);
+    onComparePlans();
   };
 
   const handleDismiss = () => {
-    logClientEvent("first_free_video_offer_dismissed", {
-      plan,
-      projectId,
-    });
+    logClientEvent("first_free_video_offer_dismissed", analyticsContext);
     onDismiss();
   };
 
@@ -57,7 +72,7 @@ export function FirstVideoSuccessOffer({
     setIsFeedbackOpen(nextIsOpen);
     setFeedbackError(null);
     if (nextIsOpen) {
-      logClientEvent("first_free_video_feedback_opened", { plan, projectId });
+      logClientEvent("first_free_video_feedback_opened", analyticsContext);
     }
   };
 
@@ -81,7 +96,7 @@ export function FirstVideoSuccessOffer({
           message,
           plan,
           projectId,
-          source: "/app/studio:first-free-video",
+          source: `/app/studio:first-free-video:${variant}`,
         }),
       });
       const payload = (await response.json().catch(() => null)) as { error?: string } | null;
@@ -91,9 +106,8 @@ export function FirstVideoSuccessOffer({
 
       setFeedbackStatus("sent");
       logClientEvent("first_free_video_feedback_submitted", {
+        ...analyticsContext,
         messageLength: message.length,
-        plan,
-        projectId,
       });
     } catch (error) {
       setFeedbackStatus("idle");
@@ -104,6 +118,57 @@ export function FirstVideoSuccessOffer({
       );
     }
   };
+
+  const checkoutLabel =
+    variant === "start_direct_v1"
+      ? text("Получить 50 кредитов", "Get 50 credits")
+      : text("Продолжить со START", "Continue with START");
+  const feedbackSection = (
+    <div className="first-video-success-offer__feedback">
+      {feedbackStatus === "sent" ? (
+        <span className="first-video-success-offer__thanks" role="status">
+          {text("Спасибо — отзыв поможет улучшить сервис.", "Thanks — your feedback will help us improve.")}
+        </span>
+      ) : (
+        <>
+          <button
+            className="first-video-success-offer__feedback-toggle"
+            type="button"
+            aria-expanded={isFeedbackOpen}
+            aria-controls={`${feedbackId}-form`}
+            onClick={handleFeedbackToggle}
+          >
+            {text("Что можно улучшить? Написать", "What could be improved? Tell us")}
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="m7 10 5 5 5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          {isFeedbackOpen ? (
+            <form id={`${feedbackId}-form`} onSubmit={handleFeedbackSubmit}>
+              <label htmlFor={`${feedbackId}-message`}>
+                {text("Что понравилось? Что можно улучшить?", "What did you like? What could be improved?")}
+              </label>
+              <textarea
+                id={`${feedbackId}-message`}
+                value={feedback}
+                maxLength={2000}
+                rows={3}
+                autoFocus
+                placeholder={text("Например: результат понравился, но…", "For example: I liked the result, but…")}
+                onChange={(event) => setFeedback(event.target.value)}
+              />
+              <div className="first-video-success-offer__feedback-actions">
+                {feedbackError ? <span role="alert">{feedbackError}</span> : <span />}
+                <button type="submit" disabled={feedbackStatus === "sending"}>
+                  {feedbackStatus === "sending" ? text("Отправляем…", "Sending…") : text("Отправить", "Send")}
+                </button>
+              </div>
+            </form>
+          ) : null}
+        </>
+      )}
+    </div>
+  );
 
   return (
     <section className={`first-video-success-offer${isFeedbackOpen ? " is-feedback-open" : ""}`} aria-labelledby={`${feedbackId}-title`}>
@@ -121,81 +186,76 @@ export function FirstVideoSuccessOffer({
       <div className="first-video-success-offer__main">
         <span className="first-video-success-offer__eyebrow">
           <span aria-hidden="true">✓</span>
-          {text("Первое бесплатное видео готово", "Your first free video is ready")}
+          {text("Ваш первый Shorts готов", "Your first Short is ready")}
         </span>
-        <h2 id={`${feedbackId}-title`}>{text("Продолжите с готовой идеей", "Keep the momentum going")}</h2>
+        <h2 id={`${feedbackId}-title`}>
+          {text("Создайте ещё 5 Shorts за 390 ₽", "Create 5 more Shorts")}
+        </h2>
         <p>
           {text(
-            "На START хватит до 5 новых Shorts — без водяного знака.",
-            "Choose a plan to create more Shorts without a watermark.",
+            "Получите 50 кредитов. Следующие видео — без водяного знака.",
+            "Get 50 credits. Your next videos will have no watermark.",
           )}
         </p>
-        <div className="first-video-success-offer__value" aria-label={text("Условия тарифа START", "START plan terms")}>
-          <strong>50 ⚡</strong>
-          <span>{text("390 ₽", "START")}</span>
-          <small>{text("разовая оплата", "plan options")}</small>
-        </div>
-        <button className="first-video-success-offer__upgrade" type="button" onClick={handleUpgrade}>
-          {text("Продолжить со START", "View plans")}
-          {locale === "ru" ? <span>390 ₽</span> : null}
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M5 12h14m-6-6 6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </button>
-        <small className="first-video-success-offer__renewal-note">
-          {text("Без автопродления", "See current availability on pricing")}
-        </small>
       </div>
 
-      <div className="first-video-success-offer__feedback">
-        {feedbackStatus === "sent" ? (
-          <div className="first-video-success-offer__thanks" role="status">
-            <span aria-hidden="true">♥</span>
-            <strong>{text("Спасибо за отзыв!", "Thanks for your feedback!")}</strong>
-            <p>{text("Он поможет нам сделать сервис удобнее.", "It will help us improve the product.")}</p>
+      <aside className="first-video-success-offer__purchase" aria-label={text("Оплата START", "START checkout")}>
+        <div className="first-video-success-offer__price">
+          <span>START</span>
+          <strong>{text("390 ₽", "View pricing")}</strong>
+        </div>
+        <button
+          className="first-video-success-offer__upgrade"
+          type="button"
+          disabled={isCheckoutPending}
+          onClick={handleCheckout}
+        >
+          {isCheckoutPending ? (
+            <>
+              <span className="first-video-success-offer__spinner" aria-hidden="true" />
+              {text("Открываем безопасную оплату…", "Opening secure checkout…")}
+            </>
+          ) : (
+            <>
+              {checkoutLabel}
+              {locale === "ru" ? <span>390 ₽</span> : null}
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M5 12h14m-6-6 6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </>
+          )}
+        </button>
+        {checkoutError ? (
+          <div className="first-video-success-offer__checkout-error" role="alert">
+            <span>{checkoutError}</span>
+            <button type="button" disabled={isCheckoutPending} onClick={handleCheckout}>
+              {text("Повторить", "Try again")}
+            </button>
           </div>
         ) : (
           <>
-            <button
-              className="first-video-success-offer__feedback-toggle"
-              type="button"
-              aria-expanded={isFeedbackOpen}
-              aria-controls={`${feedbackId}-form`}
-              onClick={handleFeedbackToggle}
-            >
-              <span>
-                <strong>{text("Помогите нам стать лучше", "Help us improve")}</strong>
-                <small>{text("Оставьте короткий отзыв", "Share a quick note")}</small>
-              </span>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="m7 10 5 5 5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
+            <small className="first-video-success-offer__trust">
+              {text(
+                "Разовая оплата · без автосписаний · безопасная оплата ЮKassa",
+                "One-time payment · no auto-renewal · secure checkout",
+              )}
+            </small>
+            <button className="first-video-success-offer__compare" type="button" onClick={handleComparePlans}>
+              {text("Сравнить тарифы", "Compare plans")}
             </button>
-            {isFeedbackOpen ? (
-              <form id={`${feedbackId}-form`} onSubmit={handleFeedbackSubmit}>
-                <label htmlFor={`${feedbackId}-message`}>
-                  {text("Что понравилось? Что можно улучшить?", "What did you like? What could be improved?")}
-                </label>
-                <textarea
-                  id={`${feedbackId}-message`}
-                  value={feedback}
-                  maxLength={2000}
-                  rows={3}
-                  autoFocus
-                  placeholder={text("Например: результат понравился, но…", "For example: I liked the result, but…")}
-                  onChange={(event) => setFeedback(event.target.value)}
-                />
-                <div className="first-video-success-offer__feedback-actions">
-                  {feedbackError ? <span role="alert">{feedbackError}</span> : <span />}
-                  <button type="submit" disabled={feedbackStatus === "sending"}>
-                    {feedbackStatus === "sending" ? text("Отправляем…", "Sending…") : text("Отправить", "Send")}
-                  </button>
-                </div>
-              </form>
-            ) : null}
           </>
         )}
+      </aside>
+
+      <div className="first-video-success-offer__details">
+        <ul className="first-video-success-offer__facts" aria-label={text("Что входит в START", "What's included in START")}>
+          <li><strong>50</strong> {text("кредитов", "credits")}</li>
+          <li>{text("до 5 Shorts", "up to 5 Shorts")}</li>
+          <li>{text("≈ 78 ₽ за ролик", "one-time plan")}</li>
+        </ul>
+        {feedbackSection}
       </div>
+
     </section>
   );
 }

@@ -613,7 +613,6 @@ import {
   workspaceCreditTopupPacks,
   type WorkspaceTab,
   type WorkspaceMediaLibraryFilter,
-  type WorkspacePackageCheckoutProductId,
   type WorkspaceCheckoutResponse,
   type Props,
   type WorkspaceGenerateOptions,
@@ -847,6 +846,11 @@ import type {
 import type { WorkspaceMediaAssetRef } from "../../shared/workspace-media-assets";
 import { clearExamplePrefillIntent, readExamplePrefillIntent } from "../lib/example-prefill";
 import { logClientEvent } from "../lib/client-log";
+import {
+  isFirstVideoOfferEligible,
+  normalizeFirstVideoOfferVariant,
+  type FirstVideoOfferVariant,
+} from "../lib/first-video-offer";
 import { useLocale } from "../lib/i18n";
 import {
   canPurchaseAddonCredits,
@@ -857,6 +861,12 @@ import {
 import {
   buildPaymentReturnUrl,
   clearPreCheckoutProfile,
+  pollCheckoutPaymentProfile,
+  readPaymentReturnAttribution,
+  readPaymentReturnProductId,
+  readPreCheckoutProfile,
+  removePaymentReturnParams,
+  type CheckoutProductId,
   writePreCheckoutProfile,
 } from "../lib/payment-return";
 import { writePricingEntryIntent } from "../lib/pricing-entry-intent";
@@ -1161,6 +1171,8 @@ export type {
 } from "../features/workspace/workspace-types";
 
 const SEGMENT_EDITOR_CREATE_SHORTS_PREPARING_JOB_ID = "__segment_editor_create_shorts_preparing__";
+const FIRST_VIDEO_PAYMENT_PROFILE_POLL_ATTEMPTS = 6;
+const FIRST_VIDEO_PAYMENT_PROFILE_POLL_INTERVAL_MS = 2_000;
 
 export const resolveWorkspaceSegmentDurationMenuTrimLabels = (options: {
   currentVideoDurationSeconds: number | null | undefined;
@@ -1943,8 +1955,10 @@ export function WorkspacePage({
   const [workspaceProfile, setWorkspaceProfile] = useState<WorkspaceProfile | null>(initialProfile);
   const [workspaceNotifications, setWorkspaceNotifications] = useState<WorkspaceNotification[]>([]);
   const [workspaceCheckoutError, setWorkspaceCheckoutError] = useState<string | null>(null);
+  const [firstVideoCheckoutError, setFirstVideoCheckoutError] = useState<string | null>(null);
   const [activeWorkspaceCheckoutProductId, setActiveWorkspaceCheckoutProductId] =
-    useState<WorkspacePackageCheckoutProductId | null>(null);
+    useState<CheckoutProductId | null>(null);
+  const [firstVideoOfferVariant, setFirstVideoOfferVariant] = useState<FirstVideoOfferVariant | null>(null);
   const [generatedVideo, setGeneratedVideo] = useState<StudioGeneration | null>(null);
   const [generatedVideoActionMode, setGeneratedVideoActionMode] =
     useState<StudioGeneratedVideoActionMode>("expanded");
@@ -2312,6 +2326,7 @@ export function WorkspacePage({
   const activeGenerationJobIdRef = useRef<string | null>(null);
   const suppressProjectFallbackPreviewRef = useRef(false);
   const createdVideoAnalyticsJobIdsRef = useRef<Set<string>>(new Set());
+  const firstVideoPaymentSuccessEventKeyRef = useRef<string | null>(null);
   const pendingGeneratedVideoActionModeRef = useRef<StudioGeneratedVideoActionMode>("expanded");
   const hasDisplayedGeneratedVideoActionsRef = useRef(false);
   const studioToastTimerRef = useRef<number | null>(null);
@@ -4039,6 +4054,8 @@ export function WorkspacePage({
     setFailedStudioVideoUrls([]);
     setDismissedStudioPreviewKey(readDismissedStudioPreviewKey(session.email));
     setDismissedFirstVideoOfferKey(readDismissedFirstVideoOfferKey(session.email));
+    setFirstVideoOfferVariant(null);
+    setFirstVideoCheckoutError(null);
     setIsStudioWelcomeCardClosed(false);
     setIsStudioWelcomeCardDismissed(readDismissedStudioWelcomeCard(session.email));
     setHiddenMediaLibraryItemKeys(readHiddenMediaLibraryItemKeys(session.email));
@@ -5524,14 +5541,50 @@ export function WorkspacePage({
   const openWorkspaceCreditPacks = () => {
     navigate(localizePath(workspaceCanPurchaseCreditPacks ? "/pricing/#addons" : "/pricing/#plans"));
   };
-  const handleWorkspaceCreditPackCheckout = async (pack: WorkspaceCreditTopupPack) => {
-    if (!workspaceCanPurchaseCreditPacks) {
-      openWorkspaceCreditPacks();
+  const reportFirstVideoPaymentSuccess = ({
+    addedCredits,
+    balance,
+    plan,
+    productId,
+    variant,
+  }: {
+    addedCredits: number | null;
+    balance: number | null;
+    plan: string | null;
+    productId: CheckoutProductId;
+    variant: FirstVideoOfferVariant;
+  }) => {
+    const eventKey = [productId, plan ?? "", balance ?? "", addedCredits ?? "", variant].join(":");
+    if (firstVideoPaymentSuccessEventKeyRef.current === eventKey) {
       return;
     }
 
-    const productId = pack.checkoutProductId;
-    setWorkspaceCheckoutError(null);
+    firstVideoPaymentSuccessEventKeyRef.current = eventKey;
+    void logClientEvent("payment_success", {
+      addedCredits,
+      balance,
+      lang: locale,
+      path: `${location.pathname}${location.search}`,
+      plan,
+      productId,
+      projectId: generatedVideo?.adId ?? null,
+      source: "first_free_video_offer",
+      variant,
+    });
+    showStudioToast(
+      workspaceText(
+        locale,
+        `START активирован · +${addedCredits ?? 50} кредитов`,
+        `START activated · +${addedCredits ?? 50} credits`,
+      ),
+    );
+  };
+  const requestWorkspaceCheckout = async (
+    productId: CheckoutProductId,
+    options?: { source?: "first_free_video_offer"; variant?: FirstVideoOfferVariant },
+  ) => {
+    const setCheckoutError = options?.source ? setFirstVideoCheckoutError : setWorkspaceCheckoutError;
+    setCheckoutError(null);
     setActiveWorkspaceCheckoutProductId(productId);
     writePreCheckoutProfile(productId, {
       balance: workspaceBalance ?? 0,
@@ -5539,7 +5592,12 @@ export function WorkspacePage({
     });
 
     try {
-      const response = await fetch(`/api/payments/checkout/${encodeURIComponent(productId)}?mode=widget`, {
+      const checkoutParams = new URLSearchParams({ mode: "widget" });
+      if (options?.source && options.variant) {
+        checkoutParams.set("source", options.source);
+        checkoutParams.set("variant", options.variant);
+      }
+      const response = await fetch(`/api/payments/checkout/${encodeURIComponent(productId)}?${checkoutParams.toString()}`, {
         signal: AbortSignal.timeout(WORKSPACE_CHECKOUT_REQUEST_TIMEOUT_MS),
       });
       const payload = (await response.json().catch(() => null)) as WorkspaceCheckoutResponse | null;
@@ -5552,8 +5610,18 @@ export function WorkspacePage({
       const errorMessage =
         payload?.error ?? workspaceText(locale, "Не удалось открыть оплату.", "Could not open checkout.");
       if (payload?.data?.simulatedPayment) {
-        applyWorkspaceProfile(payload.data.simulatedPayment.profile);
+        const simulatedPayment = payload.data.simulatedPayment;
+        applyWorkspaceProfile(simulatedPayment.profile);
         clearPreCheckoutProfile();
+        if (options?.source && options.variant) {
+          reportFirstVideoPaymentSuccess({
+            addedCredits: simulatedPayment.addedCredits,
+            balance: simulatedPayment.profile.balance,
+            plan: simulatedPayment.profile.plan,
+            productId,
+            variant: options.variant,
+          });
+        }
         return;
       }
 
@@ -5562,14 +5630,24 @@ export function WorkspacePage({
       }
 
       if (payload.data.widget?.confirmationToken) {
+        if (options?.source && options.variant) {
+          void logClientEvent("checkout_widget_opened", {
+            productId,
+            projectId: generatedVideo?.adId ?? null,
+            source: options.source,
+            variant: options.variant,
+          });
+        }
         await openYooKassaPaymentWidget({
           confirmationToken: payload.data.widget.confirmationToken,
           returnUrl: buildPaymentReturnUrl({
             paymentId: payload.data.widget.paymentId,
-            pricingPath: localizePath("/pricing/"),
+            pricingPath: options?.source ? localizePath("/app/studio") : localizePath("/pricing/"),
             productId,
+            source: options?.source,
+            variant: options?.variant,
           }),
-          onError: setWorkspaceCheckoutError,
+          onError: setCheckoutError,
         });
         return;
       }
@@ -5580,11 +5658,91 @@ export function WorkspacePage({
           : error instanceof Error
             ? error.message
             : workspaceText(locale, "Не удалось открыть оплату.", "Could not open checkout.");
-      setWorkspaceCheckoutError(errorMessage);
+      setCheckoutError(errorMessage);
+      if (options?.source && options.variant) {
+        void logClientEvent("checkout_open_failed", {
+          error: errorMessage,
+          productId,
+          projectId: generatedVideo?.adId ?? null,
+          source: options.source,
+          variant: options.variant,
+        }, "warn");
+      }
     } finally {
       setActiveWorkspaceCheckoutProductId(null);
     }
   };
+  const handleWorkspaceCreditPackCheckout = async (pack: WorkspaceCreditTopupPack) => {
+    if (!workspaceCanPurchaseCreditPacks) {
+      openWorkspaceCreditPacks();
+      return;
+    }
+
+    await requestWorkspaceCheckout(pack.checkoutProductId);
+  };
+  useEffect(() => {
+    const productId = readPaymentReturnProductId(location.search);
+    const attribution = readPaymentReturnAttribution(location.search);
+    if (
+      productId !== "start" ||
+      attribution.source !== "first_free_video_offer" ||
+      !attribution.variant
+    ) {
+      return;
+    }
+    const paymentVariant = attribution.variant;
+
+    const controller = new AbortController();
+    const previousProfile = readPreCheckoutProfile(productId);
+    setActiveWorkspaceCheckoutProductId(productId);
+    setFirstVideoCheckoutError(null);
+
+    void pollCheckoutPaymentProfile({
+      attempts: FIRST_VIDEO_PAYMENT_PROFILE_POLL_ATTEMPTS,
+      delayMs: FIRST_VIDEO_PAYMENT_PROFILE_POLL_INTERVAL_MS,
+      fetchProfile: async () => {
+        const response = await fetch(buildWorkspaceBootstrapRequestUrl(""));
+        const payload = (await response.json().catch(() => null)) as WorkspaceBootstrapResponse | null;
+        if (!response.ok || !payload?.data?.profile) {
+          throw new Error(payload?.error ?? "Failed to refresh workspace profile.");
+        }
+        return payload.data.profile;
+      },
+      onProfile: (profile) => applyWorkspaceProfile(profile as WorkspaceProfile),
+      previousProfile,
+      productId,
+      signal: controller.signal,
+    }).then((result) => {
+      if (controller.signal.aborted) {
+        return;
+      }
+
+      setActiveWorkspaceCheckoutProductId(null);
+      if (result?.status === "success") {
+        clearPreCheckoutProfile();
+        reportFirstVideoPaymentSuccess({
+          addedCredits: result.addedCredits,
+          balance: result.balance,
+          plan: result.plan,
+          productId,
+          variant: paymentVariant,
+        });
+        const nextSearch = removePaymentReturnParams(location.search);
+        navigate(`${location.pathname}${nextSearch}`, { replace: true });
+        return;
+      }
+
+      setFirstVideoCheckoutError(
+        workspaceText(
+          locale,
+          "Платёж ещё обрабатывается. Обновите страницу через несколько секунд.",
+          "The payment is still processing. Refresh the page in a few seconds.",
+        ),
+      );
+    });
+
+    return () => controller.abort();
+  }, [location.pathname, location.search]);
   const handleInsufficientCreditsAction = () => {
     const targetSection = getInsufficientCreditsPricingSection(insufficientCreditsContext?.plan ?? workspacePlan);
     closeInsufficientCreditsModal();
@@ -5847,20 +6005,24 @@ export function WorkspacePage({
     normalizeWorkspaceSegmentEditorSetting(segmentEditorDraft?.subtitleType) === "none" || isCurrentDraftVoiceDisabled;
   const segmentEditorCreateShortsRequiredCredits = getWorkspaceSegmentEditorGenerationRequiredCredits(segmentEditorDraft);
   const readyProjectsCount = projects.filter((project) => project.status === "ready").length;
-  // Temporary product-review allowlist. Remove after the first-video offer is approved.
-  const isFirstVideoSuccessOfferPreviewAccount =
-    normalizeWorkspaceEmail(session.email) === "alexmamonidi@gmail.com";
+  const resolvedFirstVideoOfferVariant = firstVideoOfferVariant;
+  const isEligibleForFirstVideoSuccessOffer = isFirstVideoOfferEligible({
+    firstVideoActionsExpanded: isGeneratedVideoPrimaryActionExpanded,
+    hasLoadedProjects,
+    hasVisibleVideo: Boolean(visibleGeneratedVideo),
+    locale,
+    plan: workspacePlan,
+    projectsFailed: Boolean(projectsError),
+    readyProjectsCount,
+    startPlanUsed: Boolean(workspaceProfile?.startPlanUsed),
+  });
   const shouldShowFirstVideoSuccessOffer =
     createMode === "default" &&
     Boolean(visibleGeneratedVideo) &&
     Boolean(generatedVideoDismissKey) &&
     generatedVideoDismissKey !== dismissedFirstVideoOfferKey &&
-    (isFirstVideoSuccessOfferPreviewAccount ||
-      (workspacePlan === "FREE" &&
-        isGeneratedVideoPrimaryActionExpanded &&
-        hasLoadedProjects &&
-        !projectsError &&
-        readyProjectsCount <= 1));
+    Boolean(resolvedFirstVideoOfferVariant) &&
+    isEligibleForFirstVideoSuccessOffer;
   const activeProjectsCount = projects.filter(
     (project) => project.status === "queued" || project.status === "processing",
   ).length;
@@ -10068,8 +10230,9 @@ export function WorkspacePage({
     composerSourceIdea ? " studio-canvas-prompt__inner--with-source" : ""
   }${shouldShowFirstVideoSuccessOffer ? " studio-canvas-prompt__inner--first-video-success" : ""}`;
 
-  const handleFirstVideoOfferUpgrade = () => {
+  const handleFirstVideoOfferComparePlans = () => {
     writePricingEntryIntent({
+      ...(resolvedFirstVideoOfferVariant ? { offerVariant: resolvedFirstVideoOfferVariant } : {}),
       section: "plans",
       source: "first-video-success",
     });
@@ -10077,6 +10240,21 @@ export function WorkspacePage({
     if (typeof window !== "undefined") {
       window.scrollTo({ left: 0, top: 0, behavior: "auto" });
     }
+  };
+  const handleFirstVideoOfferCheckout = () => {
+    if (!resolvedFirstVideoOfferVariant) {
+      return;
+    }
+
+    if (resolvedFirstVideoOfferVariant === "plans_redirect_v1") {
+      handleFirstVideoOfferComparePlans();
+      return;
+    }
+
+    void requestWorkspaceCheckout("start", {
+      source: "first_free_video_offer",
+      variant: resolvedFirstVideoOfferVariant,
+    });
   };
 
   useEffect(() => {
@@ -22608,6 +22786,9 @@ export function WorkspacePage({
         if (isCancelled) return;
 
         applyWorkspaceProfile(payload.data.profile);
+        setFirstVideoOfferVariant(
+          normalizeFirstVideoOfferVariant(payload.data.experiments?.firstVideoOfferVariant),
+        );
         setWorkspaceNotifications(Array.isArray(payload.data.notifications) ? payload.data.notifications : []);
         const nextSubtitleStyleOptions =
           payload.data.studioOptions.subtitleStyles.length > 0
@@ -34966,14 +35147,19 @@ export function WorkspacePage({
                   >
                   {shouldShowFirstVideoSuccessOffer ? (
                     <FirstVideoSuccessOffer
+                      checkoutError={firstVideoCheckoutError}
+                      isCheckoutPending={activeWorkspaceCheckoutProductId === "start"}
                       locale={locale}
+                      onCheckoutStart={handleFirstVideoOfferCheckout}
+                      onComparePlans={handleFirstVideoOfferComparePlans}
                       onDismiss={() => {
+                        setFirstVideoCheckoutError(null);
                         setDismissedFirstVideoOfferKey(generatedVideoDismissKey);
                         persistDismissedFirstVideoOfferKey(session.email, generatedVideoDismissKey);
                       }}
-                      onUpgrade={handleFirstVideoOfferUpgrade}
                       plan={workspacePlan}
                       projectId={visibleGeneratedVideo?.adId ?? null}
+                      variant={resolvedFirstVideoOfferVariant ?? "plans_redirect_v1"}
                     />
                   ) : (
                   <div className="studio-canvas-prompt__editor-layout">

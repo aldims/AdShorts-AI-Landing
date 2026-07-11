@@ -20,4 +20,18 @@ describe("pricing entry intent", () => {
       expect(readPricingEntryIntent()).toEqual({ section: "plans", source });
     },
   );
+
+  it("keeps first-video experiment attribution", () => {
+    writePricingEntryIntent({
+      offerVariant: "plans_redirect_v1",
+      section: "plans",
+      source: "first-video-success",
+    });
+
+    expect(readPricingEntryIntent()).toEqual({
+      offerVariant: "plans_redirect_v1",
+      section: "plans",
+      source: "first-video-success",
+    });
+  });
 });

@@ -17,6 +17,7 @@ import {
   clearPreCheckoutProfile,
   getCheckoutProductLabel,
   isPackageCheckoutProductId,
+  pollCheckoutPaymentProfile,
   readPaymentReturnProductId,
   readPreCheckoutProfile,
   writePreCheckoutProfile,
@@ -367,8 +368,6 @@ const getPricingFaqs = (locale: Locale): PricingFAQ[] =>
     question: faq.question[locale],
   }));
 
-const delay = (durationMs: number) => new Promise((resolve) => window.setTimeout(resolve, durationMs));
-
 const normalizeWorkspaceProfilePayload = (value: unknown): WorkspaceProfile => {
   if (!value || typeof value !== "object") return null;
 
@@ -414,6 +413,7 @@ export function PricingPage({
   const pricingPlans = getPricingPlans(locale);
   const pricingPacks = getPricingPacks(locale);
   const pricingFaqs = getPricingFaqs(locale);
+  const [pricingEntryIntent] = useState(() => readPricingEntryIntent());
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [activeCheckoutProductId, setActiveCheckoutProductId] = useState<CheckoutProductId | null>(null);
   const [activePlanId, setActivePlanId] = useState<PlanCheckoutProductId>(DEFAULT_FEATURED_PLAN_ID);
@@ -509,7 +509,12 @@ export function PricingPage({
     });
 
     try {
-      const response = await fetch(`/api/payments/checkout/${encodeURIComponent(productId)}?mode=widget`, {
+      const checkoutParams = new URLSearchParams({ mode: "widget" });
+      if (pricingEntryIntent?.source === "first-video-success" && pricingEntryIntent.offerVariant) {
+        checkoutParams.set("source", "first_free_video_offer");
+        checkoutParams.set("variant", pricingEntryIntent.offerVariant);
+      }
+      const response = await fetch(`/api/payments/checkout/${encodeURIComponent(productId)}?${checkoutParams.toString()}`, {
         signal: AbortSignal.timeout(CHECKOUT_REQUEST_TIMEOUT_MS),
       });
       const payload = (await response.json().catch(() => null)) as CheckoutResponse | null;
@@ -637,8 +642,7 @@ export function PricingPage({
   };
 
   useLayoutEffect(() => {
-    const intent = readPricingEntryIntent();
-    if (!intent) {
+    if (!pricingEntryIntent) {
       return;
     }
 
@@ -646,7 +650,7 @@ export function PricingPage({
     if (typeof window !== "undefined") {
       window.scrollTo({ left: 0, top: 0, behavior: "auto" });
     }
-  }, []);
+  }, [pricingEntryIntent]);
 
   useLayoutEffect(() => {
     if (typeof window === "undefined") {
@@ -723,8 +727,10 @@ export function PricingPage({
       path: `${location.pathname}${location.search}${location.hash}`,
       plan: checkoutResult.plan ?? null,
       productId: checkoutResult.productId,
+      source: pricingEntryIntent?.source === "first-video-success" ? "first_free_video_offer" : "pricing_site",
+      variant: pricingEntryIntent?.offerVariant ?? null,
     });
-  }, [checkoutResult, locale, location.hash, location.pathname, location.search]);
+  }, [checkoutResult, locale, location.hash, location.pathname, location.search, pricingEntryIntent]);
 
   useEffect(() => {
     const productId = readPaymentReturnProductId(location.search);
@@ -732,38 +738,8 @@ export function PricingPage({
       return;
     }
 
-    let isCancelled = false;
+    const controller = new AbortController();
     const previousProfile = readPreCheckoutProfile(productId);
-    const expectedPlan = isPackageCheckoutProductId(productId) ? null : productId.toUpperCase();
-
-    const applyProfile = (profile: WorkspaceProfile) => {
-      if (profile) {
-        onWorkspaceProfileChange?.(profile);
-      }
-
-      const nextBalance = profile?.balance ?? null;
-      const nextPlan = profile?.plan ? String(profile.plan).trim().toUpperCase() : null;
-      const addedCredits =
-        previousProfile && nextBalance !== null ? Math.max(0, nextBalance - previousProfile.balance) : null;
-      const planActivated = Boolean(expectedPlan && nextPlan === expectedPlan);
-      const balanceIncreased = Boolean(addedCredits !== null && addedCredits > 0);
-      const success =
-        balanceIncreased || planActivated || Boolean(!previousProfile && expectedPlan && nextPlan && nextPlan !== "FREE");
-
-      setCheckoutResult({
-        addedCredits,
-        balance: nextBalance,
-        plan: nextPlan,
-        productId,
-        status: success ? "success" : "pending",
-      });
-
-      if (success) {
-        clearPreCheckoutProfile();
-      }
-
-      return success;
-    };
 
     const pollPaymentProfile = async () => {
       setCheckoutResult({
@@ -774,25 +750,45 @@ export function PricingPage({
         status: "checking",
       });
 
-      for (let attempt = 0; attempt < PAYMENT_PROFILE_POLL_ATTEMPTS; attempt += 1) {
-        try {
+      const result = await pollCheckoutPaymentProfile({
+        attempts: PAYMENT_PROFILE_POLL_ATTEMPTS,
+        delayMs: PAYMENT_PROFILE_POLL_INTERVAL_MS,
+        fetchProfile: async () => {
           const profile = await fetchWorkspaceProfile();
-          if (isCancelled) return;
-          if (applyProfile(profile)) return;
-        } catch {
-          if (isCancelled) return;
-        }
+          if (!profile) {
+            throw new Error("Workspace profile is unavailable.");
+          }
+          return profile;
+        },
+        onProfile: (profile) => onWorkspaceProfileChange?.(profile as NonNullable<WorkspaceProfile>),
+        previousProfile,
+        productId,
+        signal: controller.signal,
+      });
+      if (controller.signal.aborted) {
+        return;
+      }
 
-        if (attempt < PAYMENT_PROFILE_POLL_ATTEMPTS - 1) {
-          await delay(PAYMENT_PROFILE_POLL_INTERVAL_MS);
+      if (result) {
+        setCheckoutResult(result);
+        if (result.status === "success") {
+          clearPreCheckoutProfile();
         }
+      } else {
+        setCheckoutResult({
+          addedCredits: null,
+          balance: null,
+          plan: null,
+          productId,
+          status: "pending",
+        });
       }
     };
 
     void pollPaymentProfile();
 
     return () => {
-      isCancelled = true;
+      controller.abort();
     };
   }, [isInternationalPricing, location.search, navigate, onWorkspaceProfileChange, session]);
 

@@ -1,6 +1,7 @@
 export type PricingEntryIntentSection = "plans" | "addons";
 
 export type PricingEntryIntent = {
+  offerVariant?: "plans_redirect_v1" | "start_direct_v1";
   section: PricingEntryIntentSection;
   source: "first-video-success" | "insufficient-credits";
 };
@@ -12,9 +13,15 @@ const isValidPricingEntryIntent = (value: unknown): value is PricingEntryIntent 
     return false;
   }
 
-  const payload = value as { section?: unknown; source?: unknown };
+  const payload = value as { offerVariant?: unknown; section?: unknown; source?: unknown };
+  const hasValidOfferVariant =
+    payload.offerVariant === undefined ||
+    payload.offerVariant === "plans_redirect_v1" ||
+    payload.offerVariant === "start_direct_v1";
   return (
+    hasValidOfferVariant &&
     (payload.source === "first-video-success" || payload.source === "insufficient-credits") &&
+    (payload.source === "first-video-success" || payload.offerVariant === undefined) &&
     (payload.section === "plans" || payload.section === "addons")
   );
 };
