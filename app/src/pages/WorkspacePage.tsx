@@ -35343,8 +35343,6 @@ export function WorkspacePage({
                                 </span>
                                 <span className="studio-welcome-card__mode-capabilities studio-welcome-card__mode-capabilities--speed">
                                   <span>{workspaceText(locale, "Один промпт", "One prompt")}</span>
-                                  <span>{workspaceText(locale, "Автосборка", "Auto assembly")}</span>
-                                  <span>{workspaceText(locale, "Минимум настроек", "Minimal setup")}</span>
                                   <span>{workspaceText(locale, "Быстрый результат", "Fast result")}</span>
                                 </span>
                               </div>
