@@ -2038,18 +2038,20 @@
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 39px;
-  height: 18px;
-  border: 1px solid rgba(190, 205, 230, 0.16);
+  width: 42px;
+  height: 20px;
+  border: 1px solid rgba(170, 186, 255, 0.24);
   border-radius: 999px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.026)),
-    rgba(7, 10, 16, 0.58);
+    radial-gradient(circle at 22% 0%, rgba(115, 210, 255, 0.16), transparent 48%),
+    linear-gradient(135deg, rgba(132, 105, 255, 0.13), rgba(23, 33, 55, 0.08)),
+    rgba(8, 11, 21, 0.76);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.16),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.34),
-    0 0 0 0.5px rgba(200, 212, 236, 0.08),
-    0 8px 16px -12px rgba(0, 0, 0, 0.84);
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.42),
+    0 0 0 1px rgba(95, 115, 190, 0.08),
+    0 7px 18px -10px rgba(0, 0, 0, 0.94),
+    0 0 14px -8px rgba(112, 130, 255, 0.46);
   pointer-events: none;
   transform: translate(-50%, -50%);
 }
@@ -2058,18 +2060,20 @@
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: repeat(3, 2px);
-  gap: 2px;
-  color: rgba(190, 205, 230, 0.74);
+  grid-template-columns: repeat(3, 2.5px);
+  gap: 2.5px;
+  color: rgba(213, 222, 255, 0.82);
   pointer-events: none;
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle-dots span {
-  width: 2px;
-  height: 2px;
+  width: 2.5px;
+  height: 2.5px;
   border-radius: 999px;
   background: currentColor;
-  box-shadow: 0 0 6px rgba(94, 234, 212, 0.18);
+  box-shadow:
+    0 0 5px rgba(116, 201, 255, 0.34),
+    0 1px 1px rgba(0, 0, 0, 0.48);
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle:hover:not(:disabled),
@@ -2081,15 +2085,16 @@
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle:hover:not(:disabled)::before,
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle:focus-visible::before {
-  border-color: rgba(94, 234, 212, 0.30);
+  border-color: rgba(128, 220, 255, 0.58);
   background:
-    linear-gradient(180deg, rgba(94, 234, 212, 0.16), rgba(255, 255, 255, 0.032)),
-    rgba(7, 12, 18, 0.72);
+    radial-gradient(circle at 22% 0%, rgba(109, 224, 255, 0.3), transparent 52%),
+    linear-gradient(135deg, rgba(136, 105, 255, 0.24), rgba(31, 68, 92, 0.12)),
+    rgba(9, 14, 26, 0.84);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.20),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
     inset 0 -1px 0 rgba(0, 0, 0, 0.36),
-    0 0 0 0.5px rgba(94, 234, 212, 0.16),
-    0 0 18px -8px rgba(94, 234, 212, 0.54);
+    0 0 0 1px rgba(120, 132, 255, 0.16),
+    0 0 20px -6px rgba(83, 205, 255, 0.72);
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle:active,
@@ -2100,15 +2105,16 @@
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle:active::before,
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle.is-dragging::before {
-  border-color: rgba(251, 191, 36, 0.30);
+  border-color: rgba(176, 142, 255, 0.62);
   background:
-    linear-gradient(180deg, rgba(251, 191, 36, 0.16), rgba(255, 255, 255, 0.03)),
-    rgba(14, 11, 6, 0.76);
+    radial-gradient(circle at 24% 0%, rgba(100, 217, 255, 0.26), transparent 52%),
+    linear-gradient(135deg, rgba(139, 92, 246, 0.34), rgba(47, 30, 88, 0.16)),
+    rgba(11, 10, 25, 0.9);
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle:active .studio-segment-editor__timeline-drag-handle-dots,
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-drag-handle.is-dragging .studio-segment-editor__timeline-drag-handle-dots {
-  color: rgba(255, 226, 160, 0.90);
+  color: rgba(238, 232, 255, 0.98);
 }
 
 /* Track ruler timecodes — cooler, crisper */
