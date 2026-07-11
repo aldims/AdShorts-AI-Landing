@@ -1722,6 +1722,10 @@ export function WorkspacePage({
   const [topicInput, setTopicInput] = useState("");
   const [isStudioIdeaPromptImproving, setIsStudioIdeaPromptImproving] = useState(false);
   const [adaptingVoiceTextSegmentIndex, setAdaptingVoiceTextSegmentIndex] = useState<number | null>(null);
+  const [adaptedVoiceTextOriginal, setAdaptedVoiceTextOriginal] = useState<{
+    segmentIndex: number;
+    text: string;
+  } | null>(null);
   const previousActiveTabRef = useRef<WorkspaceTab>(defaultTab);
   const [contentPlanQueryInput, setContentPlanQueryInput] = useState("");
   const [hasEditedContentPlanQueryInput, setHasEditedContentPlanQueryInput] = useState(false);
@@ -24209,12 +24213,20 @@ export function WorkspacePage({
       if (!response.ok || !payload?.data?.text) {
         throw new Error(payload?.error ?? workspaceText(locale, "Не удалось подстроить текст.", "Failed to adapt the text."));
       }
+      setAdaptedVoiceTextOriginal((current) =>
+        current?.segmentIndex === segment.index ? current : { segmentIndex: segment.index, text: segment.text },
+      );
       applySegmentTimelineTextValue(segment.index, payload.data.text);
     } catch (error) {
       setSegmentEditorVideoError(error instanceof Error ? error.message : workspaceText(locale, "Не удалось подстроить текст.", "Failed to adapt the text."));
     } finally {
       setAdaptingVoiceTextSegmentIndex(null);
     }
+  };
+  const handleSegmentTimelineVoiceTextRestore = () => {
+    if (!adaptedVoiceTextOriginal) return;
+    applySegmentTimelineTextValue(adaptedVoiceTextOriginal.segmentIndex, adaptedVoiceTextOriginal.text);
+    setAdaptedVoiceTextOriginal(null);
   };
   const handleSegmentTimelineSubtitleDisable = (segmentIndex: number) => {
     setSegmentEditorVideoError(null);
@@ -29713,6 +29725,7 @@ export function WorkspacePage({
       generateCostLabel={segmentTimelineVoiceMenuGenerateCostLabel}
       generateDisabledReason={segmentTimelineVoiceMenuGenerateDisabledReason}
       generateLabel={segmentTimelineVoiceMenuGenerateLabel}
+      canRestoreAdaptedText={adaptedVoiceTextOriginal?.segmentIndex === segmentTimelineVoiceMenuSegment?.index}
       isAdaptingText={adaptingVoiceTextSegmentIndex === segmentTimelineVoiceMenuSegment?.index}
       isGeneratingVoiceover={isSegmentTimelineVoiceMenuGeneratingVoiceover}
       isVoiceDisabled={segmentTimelineVoiceMenuIsDisabled}
@@ -29722,6 +29735,7 @@ export function WorkspacePage({
       menuRef={segmentTimelineVoiceMenuRef}
       onClose={() => {
         clearSegmentTimelineVoiceTextEditSnapshot();
+        setAdaptedVoiceTextOriginal(null);
         setSegmentTimelineVoiceMenuSegmentIndex(null);
       }}
       onGenerateVoiceover={() => {
@@ -29736,6 +29750,7 @@ export function WorkspacePage({
         });
       }}
       onAdaptTextToVisual={() => void handleSegmentTimelineVoiceTextAdapt()}
+      onRestoreAdaptedText={handleSegmentTimelineVoiceTextRestore}
       onLanguageSelect={handleSegmentTimelineVoiceLanguageSelect}
       onTextChange={handleSegmentTimelineTextChange}
       onUseGlobalVoice={handleSegmentTimelineVoiceUseGlobal}

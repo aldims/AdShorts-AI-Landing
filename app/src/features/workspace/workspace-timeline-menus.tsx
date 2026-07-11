@@ -522,6 +522,7 @@ type WorkspaceSegmentTimelineVoiceMenuProps = {
   generateLabel: string;
   isGeneratingVoiceover: boolean;
   isAdaptingText: boolean;
+  canRestoreAdaptedText: boolean;
   isVoiceDisabled: boolean;
   language: StudioLanguage;
   languageOptions: WorkspaceSegmentTimelineVoiceLanguageOption[];
@@ -530,6 +531,7 @@ type WorkspaceSegmentTimelineVoiceMenuProps = {
   onClose: () => void;
   onGenerateVoiceover: () => void;
   onAdaptTextToVisual: () => void;
+  onRestoreAdaptedText: () => void;
   onLanguageSelect: (segmentIndex: number, language: StudioLanguage) => void;
   onTextChange: (segmentIndex: number, event: ChangeEvent<HTMLTextAreaElement>) => void;
   onUseGlobalVoice: (segmentIndex: number) => void;
@@ -563,6 +565,7 @@ export function WorkspaceSegmentTimelineVoiceMenu({
   generateLabel,
   isGeneratingVoiceover,
   isAdaptingText,
+  canRestoreAdaptedText,
   isVoiceDisabled,
   language,
   languageOptions,
@@ -571,6 +574,7 @@ export function WorkspaceSegmentTimelineVoiceMenu({
   onClose,
   onGenerateVoiceover,
   onAdaptTextToVisual,
+  onRestoreAdaptedText,
   onLanguageSelect,
   onTextChange,
   onUseGlobalVoice,
@@ -734,6 +738,14 @@ export function WorkspaceSegmentTimelineVoiceMenu({
             <button type="button" disabled={isAdaptingText} aria-busy={isAdaptingText || undefined} onClick={onAdaptTextToVisual}>
               <span className="studio-segment-editor__timeline-voice-adapt-icon" aria-hidden="true">✦</span>
               <span>{isAdaptingText ? workspaceText(locale, "Подстраиваем…", "Adapting…") : workspaceText(locale, "Подстроить текст под длину визуала", "Adapt text to visual length")}</span>
+            </button>
+          </div>
+        ) : null}
+        {canRestoreAdaptedText ? (
+          <div className="studio-segment-editor__timeline-voice-restore-row">
+            <button type="button" onClick={onRestoreAdaptedText}>
+              <span aria-hidden="true">↶</span>
+              <span>{workspaceText(locale, "Вернуть исходный текст", "Restore original text")}</span>
             </button>
           </div>
         ) : null}

@@ -14,6 +14,7 @@ const baseProps = {
   generateCostLabel: "1 ⚡",
   generateDisabledReason: null,
   generateLabel: "Сгенерировать озвучку",
+  canRestoreAdaptedText: false,
   isAdaptingText: false,
   isGeneratingVoiceover: false,
   isVoiceDisabled: false,
@@ -24,6 +25,7 @@ const baseProps = {
   onClose: vi.fn(),
   onGenerateVoiceover: vi.fn(),
   onAdaptTextToVisual: vi.fn(),
+  onRestoreAdaptedText: vi.fn(),
   onLanguageSelect: vi.fn(),
   onTextChange: vi.fn(),
   onUseGlobalVoice: vi.fn(),
@@ -117,6 +119,20 @@ describe("WorkspaceSegmentTimelineVoiceMenu", () => {
 
     screen.getByRole("button", { name: "Подстроить текст под длину визуала" }).click();
     expect(onAdaptTextToVisual).toHaveBeenCalledOnce();
+  });
+
+  it("offers restoring the original text after AI adaptation", () => {
+    const onRestoreAdaptedText = vi.fn();
+    render(
+      <WorkspaceSegmentTimelineVoiceMenu
+        {...baseProps}
+        canRestoreAdaptedText
+        onRestoreAdaptedText={onRestoreAdaptedText}
+      />,
+    );
+
+    screen.getByRole("button", { name: "Вернуть исходный текст" }).click();
+    expect(onRestoreAdaptedText).toHaveBeenCalledOnce();
   });
 });
 
