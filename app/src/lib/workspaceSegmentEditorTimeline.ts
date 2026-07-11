@@ -30,6 +30,7 @@ export type WorkspaceSegmentTimelineSegment = {
 export const WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS = 1;
 const WORKSPACE_SEGMENT_TIMELINE_ESTIMATED_DURATION_FLOOR_SECONDS = 1.8;
 const WORKSPACE_SEGMENT_TIMELINE_SECONDS_PER_WORD = 0.34;
+const WORKSPACE_SEGMENT_TIMELINE_AVERAGE_SPOKEN_CHARS_PER_WORD = 7;
 const WORKSPACE_SEGMENT_TIMELINE_SECONDS_PER_INLINE_PAUSE = 0.55;
 const WORKSPACE_SEGMENT_TIMELINE_SECONDS_PER_SENTENCE_PAUSE = 0.35;
 const WORKSPACE_SEGMENT_TIMELINE_EPSILON = 1e-6;
@@ -74,9 +75,15 @@ export const estimateWorkspaceSegmentEditorSpeechDuration = (
   fallbackWordCount?: number,
 ) => {
   const normalizedText = String(text ?? "");
+  const spokenCharacterCount = normalizedText.match(/[\p{L}\p{N}]/gu)?.length ?? 0;
+  const characterBasedWordCount = Math.ceil(
+    spokenCharacterCount / WORKSPACE_SEGMENT_TIMELINE_AVERAGE_SPOKEN_CHARS_PER_WORD,
+  );
   const resolvedWordCount = Math.max(
     1,
-    fallbackWordCount ?? tokenizeWorkspaceSegmentTimelineText(normalizedText).length,
+    fallbackWordCount ?? 0,
+    tokenizeWorkspaceSegmentTimelineText(normalizedText).length,
+    characterBasedWordCount,
   );
   const inlinePauseCount = normalizedText.match(/[,;:]/g)?.length ?? 0;
   const sentencePauseCount = normalizedText.match(/[.!?…]+/g)?.length ?? 0;

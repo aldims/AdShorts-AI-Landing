@@ -135,6 +135,13 @@ describe("workspace segment editor timeline", () => {
     );
   });
 
+  it("does not underestimate long text joined into a single token", () => {
+    const joinedText = `Так одна игра спасла целый город от неприятностей огромного монстр${"а".repeat(80)}`;
+
+    expect(joinedText.length).toBeGreaterThan(120);
+    expect(estimateWorkspaceSegmentEditorSpeechDuration(joinedText)).toBeGreaterThan(5);
+  });
+
   it("does not count standalone punctuation as spoken words", () => {
     expect(
       estimateWorkspaceSegmentEditorSpeechDuration(
