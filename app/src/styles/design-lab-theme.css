@@ -24142,12 +24142,13 @@ textarea {
   position: relative;
   z-index: 1;
   display: grid;
+  align-self: start;
   align-content: start;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
   grid-column: 2;
   grid-row: 1 / span 2;
-  padding: 16px;
+  padding: 12px 14px;
   background: rgba(255, 255, 255, 0.045);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 18px;
@@ -24299,6 +24300,10 @@ textarea {
   padding: 2px 0;
   color: #a9f1d8;
   font-size: 11px;
+}
+
+body .studio-canvas-route:not(.is-segment-editor):has(.studio-canvas-prompt__inner--first-video-success) {
+  --studio-prompt-reserve: clamp(324px, 34vh, 352px);
 }
 
 @media (max-width: 760px) {
