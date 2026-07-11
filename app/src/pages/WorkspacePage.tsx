@@ -35379,8 +35379,8 @@ export function WorkspacePage({
                                   </small>
                                 </span>
                                 <span className="studio-welcome-card__mode-capabilities">
-                                  <span>{workspaceText(locale, "Оживление фото", "Photo animation")}</span>
-                                  <span>{workspaceText(locale, "Изменение фото", "Photo editing")}</span>
+                                  <span>{workspaceText(locale, "Анимация фото", "Photo animation")}</span>
+                                  <span>{workspaceText(locale, "Редактирование фото", "Photo editing")}</span>
                                   <span>{workspaceText(locale, "Создание персонажа", "Character creation")}</span>
                                   <span>{workspaceText(locale, "Говорящий персонаж", "Talking character")}</span>
                                 </span>
