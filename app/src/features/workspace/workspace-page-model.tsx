@@ -234,9 +234,6 @@ export type WorkspaceLocalExampleSaveResponse = {
 };
 
 export type WorkspaceBootstrapPayload = {
-  experiments?: {
-    firstVideoOfferVariant?: "plans_redirect_v1" | "start_direct_v1";
-  };
   latestGeneration?: StudioGenerationStatusPayload | null;
   notifications?: WorkspaceNotification[];
   profile: WorkspaceProfile;

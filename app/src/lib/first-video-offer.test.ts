@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isFirstVideoOfferEligible, normalizeFirstVideoOfferVariant } from "./first-video-offer";
+import { activeFirstVideoOfferVariant, isFirstVideoOfferEligible } from "./first-video-offer";
 
 const eligibleInput = {
   firstVideoActionsExpanded: true,
@@ -14,9 +14,8 @@ const eligibleInput = {
 };
 
 describe("first video offer", () => {
-  it("accepts only known experiment variants", () => {
-    expect(normalizeFirstVideoOfferVariant("start_direct_v1")).toBe("start_direct_v1");
-    expect(normalizeFirstVideoOfferVariant("force_paid")).toBeNull();
+  it("uses the direct START offer for every eligible user", () => {
+    expect(activeFirstVideoOfferVariant).toBe("start_direct_v1");
   });
 
   it("shows only for the first eligible RU free result", () => {

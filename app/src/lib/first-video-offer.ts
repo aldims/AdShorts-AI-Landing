@@ -2,12 +2,7 @@ export const firstVideoOfferVariants = ["plans_redirect_v1", "start_direct_v1"] 
 
 export type FirstVideoOfferVariant = (typeof firstVideoOfferVariants)[number];
 
-export const normalizeFirstVideoOfferVariant = (value: unknown): FirstVideoOfferVariant | null => {
-  const normalized = String(value ?? "").trim();
-  return firstVideoOfferVariants.includes(normalized as FirstVideoOfferVariant)
-    ? (normalized as FirstVideoOfferVariant)
-    : null;
-};
+export const activeFirstVideoOfferVariant: FirstVideoOfferVariant = "start_direct_v1";
 
 export const isFirstVideoOfferEligible = ({
   firstVideoActionsExpanded,

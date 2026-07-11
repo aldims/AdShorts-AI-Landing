@@ -24088,15 +24088,15 @@ textarea {
 
 /* Conversion-focused first-video offer */
 .studio-canvas-prompt__inner--first-video-success {
-  min-height: 230px;
+  min-height: 0;
 }
 
 .first-video-success-offer {
   grid-template-columns: minmax(0, 1.15fr) minmax(330px, 0.85fr);
   align-content: start;
   gap: 16px 34px;
-  min-height: 230px;
-  padding: 12px 58px 24px 28px;
+  min-height: 0;
+  padding: 12px 58px 14px 28px;
 }
 
 .first-video-success-offer__main {
@@ -24147,7 +24147,7 @@ textarea {
   gap: 6px;
   min-width: 0;
   grid-column: 2;
-  grid-row: 1 / span 2;
+  grid-row: 1;
   padding: 12px 14px;
   background: rgba(255, 255, 255, 0.045);
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -24156,7 +24156,11 @@ textarea {
 }
 
 .first-video-success-offer__details {
-  grid-column: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  grid-column: 1 / -1;
   grid-row: 2;
   min-width: 0;
 }
@@ -24328,6 +24332,8 @@ body .studio-canvas-route:not(.is-segment-editor):has(.studio-canvas-prompt__inn
   }
 
   .first-video-success-offer__details {
+    align-items: stretch;
+    flex-direction: column;
     grid-column: 1;
     grid-row: 3;
   }

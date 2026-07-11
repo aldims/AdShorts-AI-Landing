@@ -847,8 +847,8 @@ import type { WorkspaceMediaAssetRef } from "../../shared/workspace-media-assets
 import { clearExamplePrefillIntent, readExamplePrefillIntent } from "../lib/example-prefill";
 import { logClientEvent } from "../lib/client-log";
 import {
+  activeFirstVideoOfferVariant,
   isFirstVideoOfferEligible,
-  normalizeFirstVideoOfferVariant,
   type FirstVideoOfferVariant,
 } from "../lib/first-video-offer";
 import { useLocale } from "../lib/i18n";
@@ -1958,7 +1958,6 @@ export function WorkspacePage({
   const [firstVideoCheckoutError, setFirstVideoCheckoutError] = useState<string | null>(null);
   const [activeWorkspaceCheckoutProductId, setActiveWorkspaceCheckoutProductId] =
     useState<CheckoutProductId | null>(null);
-  const [firstVideoOfferVariant, setFirstVideoOfferVariant] = useState<FirstVideoOfferVariant | null>(null);
   const [generatedVideo, setGeneratedVideo] = useState<StudioGeneration | null>(null);
   const [generatedVideoActionMode, setGeneratedVideoActionMode] =
     useState<StudioGeneratedVideoActionMode>("expanded");
@@ -4054,7 +4053,6 @@ export function WorkspacePage({
     setFailedStudioVideoUrls([]);
     setDismissedStudioPreviewKey(readDismissedStudioPreviewKey(session.email));
     setDismissedFirstVideoOfferKey(readDismissedFirstVideoOfferKey(session.email));
-    setFirstVideoOfferVariant(null);
     setFirstVideoCheckoutError(null);
     setIsStudioWelcomeCardClosed(false);
     setIsStudioWelcomeCardDismissed(readDismissedStudioWelcomeCard(session.email));
@@ -6005,12 +6003,10 @@ export function WorkspacePage({
     normalizeWorkspaceSegmentEditorSetting(segmentEditorDraft?.subtitleType) === "none" || isCurrentDraftVoiceDisabled;
   const segmentEditorCreateShortsRequiredCredits = getWorkspaceSegmentEditorGenerationRequiredCredits(segmentEditorDraft);
   const readyProjectsCount = projects.filter((project) => project.status === "ready").length;
-  // Temporary product-review allowlist. Remove after the optimized offer is approved.
+  // Temporary product-review allowlist; this is independent of the removed A/B assignment.
   const isFirstVideoSuccessOfferPreviewAccount =
     normalizeWorkspaceEmail(session.email) === "alexmamonidi@gmail.com";
-  const resolvedFirstVideoOfferVariant: FirstVideoOfferVariant | null = isFirstVideoSuccessOfferPreviewAccount
-    ? "start_direct_v1"
-    : firstVideoOfferVariant;
+  const resolvedFirstVideoOfferVariant = activeFirstVideoOfferVariant;
   const isEligibleForFirstVideoSuccessOffer = isFirstVideoOfferEligible({
     firstVideoActionsExpanded: isGeneratedVideoPrimaryActionExpanded,
     hasLoadedProjects,
@@ -6026,7 +6022,6 @@ export function WorkspacePage({
     Boolean(visibleGeneratedVideo) &&
     Boolean(generatedVideoDismissKey) &&
     generatedVideoDismissKey !== dismissedFirstVideoOfferKey &&
-    Boolean(resolvedFirstVideoOfferVariant) &&
     (isFirstVideoSuccessOfferPreviewAccount || isEligibleForFirstVideoSuccessOffer);
   const activeProjectsCount = projects.filter(
     (project) => project.status === "queued" || project.status === "processing",
@@ -10247,15 +10242,6 @@ export function WorkspacePage({
     }
   };
   const handleFirstVideoOfferCheckout = () => {
-    if (!resolvedFirstVideoOfferVariant) {
-      return;
-    }
-
-    if (resolvedFirstVideoOfferVariant === "plans_redirect_v1") {
-      handleFirstVideoOfferComparePlans();
-      return;
-    }
-
     void requestWorkspaceCheckout("start", {
       source: "first_free_video_offer",
       variant: resolvedFirstVideoOfferVariant,
@@ -22791,9 +22777,6 @@ export function WorkspacePage({
         if (isCancelled) return;
 
         applyWorkspaceProfile(payload.data.profile);
-        setFirstVideoOfferVariant(
-          normalizeFirstVideoOfferVariant(payload.data.experiments?.firstVideoOfferVariant),
-        );
         setWorkspaceNotifications(Array.isArray(payload.data.notifications) ? payload.data.notifications : []);
         const nextSubtitleStyleOptions =
           payload.data.studioOptions.subtitleStyles.length > 0
@@ -35164,7 +35147,7 @@ export function WorkspacePage({
                       }}
                       plan={workspacePlan}
                       projectId={visibleGeneratedVideo?.adId ?? null}
-                      variant={resolvedFirstVideoOfferVariant ?? "plans_redirect_v1"}
+                      variant={resolvedFirstVideoOfferVariant}
                     />
                   ) : (
                   <div className="studio-canvas-prompt__editor-layout">

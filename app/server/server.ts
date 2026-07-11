@@ -196,7 +196,7 @@ import {
   notifyInternationalPaymentsWaitlistSubmission,
   parseInternationalPaymentsWaitlistSubmission,
 } from "./international-payments-waitlist.js";
-import { resolveFirstVideoOfferVariant } from "./experiments.js";
+import { isTrackedFirstVideoOfferEvent } from "./first-video-offer.js";
 import {
   ProductFeedbackValidationError,
   appendProductFeedbackSubmission,
@@ -1888,9 +1888,6 @@ app.get("/api/workspace/bootstrap", async (req, res) => {
         latestGeneration: workspace.latestGeneration,
         notifications: workspace.notifications,
         profile,
-        experiments: {
-          firstVideoOfferVariant: resolveFirstVideoOfferVariant(session.user.id),
-        },
         studioOptions: workspace.studioOptions,
       },
     });
@@ -3357,6 +3354,35 @@ app.post("/api/client-events", async (req, res) => {
     authUserEmail: session?.user?.email ?? null,
     source: "client",
   });
+
+  if (session?.user && isTrackedFirstVideoOfferEvent(eventName)) {
+    try {
+      const externalUserId = await resolvePreferredExternalUserId(session.user);
+      await postAdsflowJson(
+        "/api/web/client-event",
+        {
+          admin_token: env.adsflowAdminToken,
+          event_name: eventName,
+          event_data: payload,
+          external_user_id: externalUserId,
+          language: typeof payload.lang === "string" ? payload.lang : "ru",
+          user_email: session.user.email ?? undefined,
+          user_email_verified: session.user.emailVerified === true,
+          user_name: session.user.name ?? undefined,
+        },
+        upstreamPolicies.adsflowMetadata,
+        {
+          endpoint: "client-events.first-video-offer",
+          projectId: typeof payload.projectId === "number" ? payload.projectId : externalUserId,
+        },
+      );
+    } catch (error) {
+      console.warn("[client-events] Failed to persist first-video offer event", {
+        eventName,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
 
   res.status(202).json({ data: { ok: true } });
 });
