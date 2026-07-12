@@ -827,19 +827,18 @@ export function StudioVoiceSelectorChip({
   const hasBulkTextEditor =
     typeof bulkTextValue === "string" &&
     typeof onBulkTextChange === "function";
-  const bulkTextSaveDisabledReason =
-    hasBulkTextEditor && bulkTextValue.trim().length > 0 && (!isEnabled || selectedVoiceId === "none")
-      ? locale === "en"
-        ? "Select a voice first"
-        : "Сначала выберите голос"
-      : null;
+  const bulkTextSaveDisabledReason = null;
   const hasVoiceoverGenerator = typeof onGenerateVoiceover === "function";
   const resolvedTriggerLabel = triggerLabel ?? (locale === "en" ? "Voiceover" : "Озвучка");
   const resolvedDisabledValueLabel = disabledValueLabel ?? (locale === "en" ? "Off" : "Выкл");
   const resolvedGenerateVoiceoverLabel =
     generateVoiceoverLabel ?? (locale === "en" ? "Generate voiceover" : "Сгенерировать озвучку");
   const generateVoiceoverResolvedDisabledReason =
-    bulkTextSaveDisabledReason ?? generateVoiceoverDisabledReason;
+    hasBulkTextEditor && bulkTextValue.trim().length > 0 && (!isEnabled || selectedVoiceId === "none")
+      ? locale === "en"
+        ? "Select a voice first"
+        : "Сначала выберите голос"
+      : generateVoiceoverDisabledReason;
   const getVoiceLanguageLabel = (language: StudioLanguage) =>
     locale === "en" ? (language === "en" ? "English" : "Russian") : language === "en" ? "Английский" : "Русский";
   const getVoiceLanguageDescription = (language: StudioLanguage) =>

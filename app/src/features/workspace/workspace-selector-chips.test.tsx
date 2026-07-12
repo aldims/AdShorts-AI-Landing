@@ -69,6 +69,35 @@ describe("StudioVoiceSelectorChip", () => {
     expect(onBulkTextSave).toHaveBeenCalledOnce();
   });
 
+  it("allows saving existing text after voiceover is disabled", () => {
+    const onBulkTextSave = vi.fn(() => true);
+
+    render(
+      <LocaleProvider locale="ru">
+        <StudioVoiceSelectorChip
+          bulkTextValue="Сохранённый текст озвучки"
+          isEnabled={false}
+          onBulkTextChange={vi.fn()}
+          onBulkTextSave={onBulkTextSave}
+          onGenerateVoiceover={vi.fn()}
+          onSelect={vi.fn()}
+          onToggleEnabled={vi.fn()}
+          selectedVoiceId="none"
+          voiceOptions={[]}
+        />
+      </LocaleProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Озвучка\s*Выкл/ }));
+    const saveButton = screen.getByRole("button", { name: "Сохранить" }) as HTMLButtonElement;
+    const generateButton = screen.getByRole("button", { name: /Сгенерировать озвучку/ }) as HTMLButtonElement;
+
+    expect(saveButton.disabled).toBe(false);
+    expect(generateButton.disabled).toBe(true);
+    fireEvent.click(saveButton);
+    expect(onBulkTextSave).toHaveBeenCalledOnce();
+  });
+
   it("passes the selected visible voice to whole-video generation", async () => {
     const onGenerateVoiceover = vi.fn();
 

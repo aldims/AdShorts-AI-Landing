@@ -14088,6 +14088,8 @@ export function WorkspacePage({
         ...applySegmentEditorGlobalVoiceToAllSegments(draft, selectedGlobalVoiceType),
         language: voiceDraft.language,
       }));
+    } else {
+      updateSegmentEditorDraft((draft) => applySegmentEditorGlobalVoiceToAllSegments(draft, "none"));
     }
 
     clearSegmentTimelineBulkVoiceTextEditSnapshot();
