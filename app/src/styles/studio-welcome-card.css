@@ -23,7 +23,7 @@
 
 .studio-canvas-route:not(.is-segment-editor)
   .studio-canvas-preview.is-creative-brief:has(.studio-canvas-preview__placeholder.has-welcome-card) {
-  height: min(468px, var(--studio-preview-available-height)) !important;
+  height: min(421px, var(--studio-preview-available-height)) !important;
 }
 
 .studio-canvas-route:not(.is-segment-editor) .studio-welcome-card {
@@ -458,15 +458,15 @@
 @media (min-width: 761px) {
   .studio-canvas-route:not(.is-segment-editor)
     .studio-canvas-preview.is-creative-brief:has(.studio-canvas-preview__placeholder.has-welcome-card) {
-    width: min(1176px, calc(100vw - 48px)) !important;
-    max-width: 1176px !important;
+    width: min(1058px, 90%) !important;
+    max-width: 1058px !important;
   }
 }
 
 @media (min-width: 900px) and (min-height: 761px) {
   .studio-canvas-route:not(.is-segment-editor)
     .studio-canvas-preview.is-creative-brief:has(.studio-canvas-preview__placeholder.has-welcome-card) {
-    height: min(504px, var(--studio-preview-available-height)) !important;
+    height: min(454px, var(--studio-preview-available-height)) !important;
   }
 
   .studio-canvas-route:not(.is-segment-editor) .studio-welcome-card {
@@ -490,19 +490,19 @@
     position: absolute;
     top: 23px;
     left: 36px;
-    min-height: 32px;
+    min-height: 34px;
     margin-bottom: 0;
     padding-inline: 13px;
-    font-size: 0.72rem;
+    font-size: 0.78rem;
   }
 
   .studio-welcome-card__eyebrow strong {
-    font-size: 0.7rem;
+    font-size: 0.76rem;
   }
 
   .studio-welcome-card__hero h2 {
     max-width: none;
-    font-size: clamp(2.15rem, 4.5cqw, 2.7rem);
+    font-size: clamp(2.3rem, 4.8cqw, 2.85rem);
   }
 
   .studio-welcome-card__hero h2 em {
@@ -513,7 +513,7 @@
   .studio-welcome-card__hero-copy > p {
     max-width: none;
     margin-top: 11px;
-    font-size: 1.06rem;
+    font-size: 1.14rem;
     text-wrap: wrap;
   }
 
@@ -530,37 +530,47 @@
     border-radius: 20px;
   }
 
+  .studio-welcome-card__mode-topline {
+    grid-template-columns: 34px minmax(0, 1fr) auto;
+  }
+
+  .studio-welcome-card__mode-icon {
+    width: 34px;
+    height: 34px;
+  }
+
   .studio-welcome-card__mode-copy {
     gap: 6px;
   }
 
   .studio-welcome-card__mode-copy strong {
-    font-size: 1.14rem;
+    font-size: 1.22rem;
   }
 
   .studio-welcome-card__mode-copy small {
-    font-size: 0.86rem;
+    font-size: 0.92rem;
   }
 
   .studio-welcome-card__mode-kicker {
-    font-size: 0.62rem;
+    font-size: 0.67rem;
   }
 
   .studio-welcome-card__mode-state {
-    font-size: 0.56rem;
+    min-height: 24px;
+    font-size: 0.6rem;
   }
 
   .studio-welcome-card__mode-state.is-featured {
-    font-size: 0.53rem;
+    font-size: 0.57rem;
   }
 
   .studio-welcome-card__mode-capabilities > span {
-    min-height: 36px;
-    font-size: 0.72rem;
+    min-height: 39px;
+    font-size: 0.78rem;
   }
 
   .studio-welcome-card__mode-capabilities > span::before {
-    font-size: 0.48rem;
+    font-size: 0.52rem;
   }
 
 }
