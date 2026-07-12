@@ -127,6 +127,17 @@ describe("workspace voice timeline edit display", () => {
       shouldDisplayWorkspaceSegmentVoiceCellEdited({
         isEffectiveVoiceEdited: true,
         isGeneratedVoiceoverEdited: false,
+        isTextEdited: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("shows the voice timeline edited badge when the scene text changed", () => {
+    expect(
+      shouldDisplayWorkspaceSegmentVoiceCellEdited({
+        isEffectiveVoiceEdited: false,
+        isGeneratedVoiceoverEdited: false,
+        isTextEdited: true,
       }),
     ).toBe(true);
   });
@@ -136,6 +147,7 @@ describe("workspace voice timeline edit display", () => {
       shouldDisplayWorkspaceSegmentVoiceCellEdited({
         isEffectiveVoiceEdited: false,
         isGeneratedVoiceoverEdited: false,
+        isTextEdited: false,
       }),
     ).toBe(false);
   });

@@ -251,8 +251,9 @@ export const shouldDisplayWorkspaceSegmentGeneratedVoiceoverEdited = (options: {
 export const shouldDisplayWorkspaceSegmentVoiceCellEdited = (options: {
   isEffectiveVoiceEdited: boolean;
   isGeneratedVoiceoverEdited: boolean;
+  isTextEdited: boolean;
 }) =>
-  options.isEffectiveVoiceEdited || options.isGeneratedVoiceoverEdited;
+  options.isEffectiveVoiceEdited || options.isGeneratedVoiceoverEdited || options.isTextEdited;
 
 export const shouldDisplayWorkspaceSegmentSubtitleCellEdited = (options: {
   isGlobalSubtitleEdited: boolean;
