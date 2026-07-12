@@ -572,6 +572,23 @@ describe("media library durable assets", () => {
     expect(getWorkspaceMediaLibraryKindFromDurableAsset(segmentImage)).toBeNull();
   });
 
+  it("does not expose segment infographic overlays as selectable scene visuals", () => {
+    const asset = buildWorkspaceMediaAssetRef({
+      download_path: "/api/media/790/download",
+      id: 790,
+      kind: "segment_infographic",
+      library_kind: "infographic",
+      media_type: "photo",
+      project_id: 42,
+      role: "segment_infographic",
+      segment_index: 0,
+      source_kind: "ai_generated_infographic",
+      status: "ready",
+    });
+
+    expect(getWorkspaceMediaLibraryKindFromDurableAsset(asset)).toBeNull();
+  });
+
   it("does not expose stock durable assets as ai media library items", () => {
     const asset = buildWorkspaceMediaAssetRef({
       download_path: "/api/media/781/download",

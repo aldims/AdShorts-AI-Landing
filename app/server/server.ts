@@ -106,8 +106,8 @@ import {
   createStudioProjectCharacter,
   getStudioSegmentAiVideoPlaybackAsset,
   createStudioSegmentAiVideoJob,
+  createStudioSegmentInfographicJob,
   createStudioSegmentImageEditJob,
-  createStudioSegmentImageUpscaleJob,
   createStudioSegmentPhotoAnimationJob,
   createStudioSegmentSceneSoundJob,
   setStudioSegmentSceneSoundSelection,
@@ -121,6 +121,7 @@ import {
   getStudioSegmentAiPhotoJobStatus,
   getStudioSegmentAiVideoJobPosterPath,
   getStudioSegmentAiVideoJobStatus,
+  getStudioSegmentInfographicJobStatus,
   getStudioSegmentImageEditJobStatus,
   getStudioSegmentImageUpscaleJobStatus,
   getStudioSegmentPhotoAnimationPlaybackAsset,
@@ -217,6 +218,21 @@ import { verifyVideoProxyToken } from "./video-proxy-token.js";
 initServerLogging();
 
 const app = express();
+const studioSegmentInfographicCohort = new Set(
+  String(env.studioSegmentInfographicCohort ?? "")
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean),
+);
+const isStudioSegmentInfographicEnabledForUser = (user: { email?: string | null; id?: string | null }) => {
+  if (env.studioSegmentInfographicEnabled) {
+    return true;
+  }
+  const identities = [user.id, user.email]
+    .map((value) => String(value ?? "").trim().toLowerCase())
+    .filter(Boolean);
+  return identities.some((identity) => studioSegmentInfographicCohort.has(identity));
+};
 app.disable("x-powered-by");
 
 const resolvePreferredExternalUserId = async (user: { email?: string | null; id?: string | null }) => {
@@ -700,6 +716,9 @@ type StudioGenerateMultipartSegment = {
   duration_sync_mode_user_selected?: unknown;
   endTime?: unknown;
   index?: unknown;
+  infographic?: unknown;
+  infographicRemoved?: unknown;
+  infographic_removed?: unknown;
   manualDurationSeconds?: unknown;
   manual_duration_seconds?: unknown;
   resetVisual?: unknown;
@@ -1085,6 +1104,9 @@ const parseStudioGenerateMultipartBody = async (req: express.Request) => {
                   segmentRecord.duration_sync_mode_user_selected,
                 endTime: segmentRecord.endTime,
                 index: segmentRecord.index,
+                infographic: segmentRecord.infographic,
+                infographicRemoved:
+                  segmentRecord.infographicRemoved ?? segmentRecord.infographic_removed,
                 manualDurationSeconds: segmentRecord.manualDurationSeconds ?? segmentRecord.manual_duration_seconds,
                 resetVisual: Boolean(segmentRecord.resetVisual),
                 sceneSoundAssetId: normalizeRequestPositiveInteger(segmentRecord.sceneSoundAssetId),
@@ -1887,6 +1909,9 @@ app.get("/api/workspace/bootstrap", async (req, res) => {
 
     res.json({
       data: {
+        featureFlags: {
+          segmentInfographic: isStudioSegmentInfographicEnabledForUser(session.user),
+        },
         latestGeneration: workspace.latestGeneration,
         notifications: workspace.notifications,
         profile,
@@ -4173,6 +4198,113 @@ app.post("/api/studio/segment-ai-photo/generate", async (req, res) => {
   }
 });
 
+app.post("/api/studio/segment-infographic/jobs", async (req, res) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+
+  if (!session?.user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  if (!isStudioSegmentInfographicEnabledForUser(session.user)) {
+    res.status(404).json({ error: "Infographic generation is not enabled for this account." });
+    return;
+  }
+
+  const text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
+  const stylePrompt = typeof req.body?.stylePrompt === "string" ? req.body.stylePrompt.trim() : "";
+  const idempotencyKey = typeof req.body?.idempotencyKey === "string" ? req.body.idempotencyKey.trim() : "";
+  const language = typeof req.body?.language === "string" ? req.body.language.trim() : "";
+  const projectId = Number(req.body?.projectId ?? 0);
+  const segmentIndex = Number(req.body?.segmentIndex ?? -1);
+  const sourceMediaAssetId = normalizeRequestPositiveInteger(req.body?.sourceMediaAssetId);
+
+  if (!text || Array.from(text).length > 160) {
+    res.status(400).json({ error: "Infographic text must contain between 1 and 160 characters." });
+    return;
+  }
+  if (Array.from(stylePrompt).length > 300) {
+    res.status(400).json({ error: "Infographic style must not exceed 300 characters." });
+    return;
+  }
+  if (!sourceMediaAssetId) {
+    res.status(400).json({ error: "Source media asset id is required." });
+    return;
+  }
+  if (!Number.isInteger(projectId) || projectId <= 0) {
+    res.status(400).json({ error: "Project id is required." });
+    return;
+  }
+  if (!Number.isInteger(segmentIndex) || segmentIndex < 0) {
+    res.status(400).json({ error: "Segment index is required." });
+    return;
+  }
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(idempotencyKey)) {
+    res.status(400).json({ error: "A valid infographic idempotency key is required." });
+    return;
+  }
+
+  try {
+    const job = await createStudioSegmentInfographicJob(text, session.user, {
+      idempotencyKey,
+      language,
+      projectId,
+      segmentIndex,
+      sourceMediaAssetId,
+      stylePrompt: stylePrompt || undefined,
+    });
+    res.json({ data: job });
+  } catch (error) {
+    console.error("[studio] Failed to create segment infographic job", error);
+    const upstreamStatus = Number((error as { statusCode?: unknown })?.statusCode);
+    const statusCode = error instanceof WorkspaceCreditLimitError
+      ? 402
+      : Number.isInteger(upstreamStatus) && upstreamStatus >= 400 && upstreamStatus < 500
+        ? upstreamStatus
+        : upstreamStatus === 503
+          ? 503
+          : 500;
+
+    res.status(statusCode).json({
+      error: error instanceof Error ? error.message : "Failed to create segment infographic job.",
+    });
+  }
+});
+
+app.get("/api/studio/segment-infographic/jobs/:jobId", async (req, res) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+
+  if (!session?.user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  try {
+    const status = await getStudioSegmentInfographicJobStatus(req.params.jobId, session.user);
+    if (status.asset && isStudioSegmentVisualJobReadyStatus(status.status)) {
+      await invalidateWorkspaceSegmentVisualCaches(session.user);
+    }
+    res.json({ data: status });
+  } catch (error) {
+    console.error("[studio] Failed to get segment infographic status", error);
+    const upstreamStatus = Number((error as { statusCode?: unknown })?.statusCode);
+    const statusCode = error instanceof WorkspaceCreditLimitError
+      ? 402
+      : Number.isInteger(upstreamStatus) && upstreamStatus >= 400 && upstreamStatus < 500
+        ? upstreamStatus
+        : upstreamStatus === 503
+          ? 503
+          : 500;
+    res.status(statusCode).json({
+      error: error instanceof Error ? error.message : "Failed to get segment infographic status.",
+    });
+  }
+});
+
 app.post("/api/studio/segment-image-upscale/jobs", async (req, res) => {
   const session = await auth.api.getSession({
     headers: fromNodeHeaders(req.headers),
@@ -4183,35 +4315,9 @@ app.post("/api/studio/segment-image-upscale/jobs", async (req, res) => {
     return;
   }
 
-  const imageAssetId = normalizeRequestPositiveInteger(req.body?.imageAssetId);
-  const imageDataUrl = typeof req.body?.imageDataUrl === "string" ? req.body.imageDataUrl.trim() : "";
-  const imageFileName = typeof req.body?.imageFileName === "string" ? req.body.imageFileName.trim() : "";
-  const language = typeof req.body?.language === "string" ? req.body.language.trim() : "";
-  const projectId = Number(req.body?.projectId ?? 0);
-  const segmentIndex = Number(req.body?.segmentIndex ?? -1);
-
-  if (!imageDataUrl && !imageAssetId) {
-    res.status(400).json({ error: "Image asset id or image data URL is required." });
-    return;
-  }
-
-  try {
-    const job = await createStudioSegmentImageUpscaleJob(imageDataUrl || undefined, session.user, {
-      fileName: imageFileName || undefined,
-      imageAssetId,
-      language,
-      projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : undefined,
-      segmentIndex: Number.isFinite(segmentIndex) && segmentIndex >= 0 ? segmentIndex : undefined,
-    });
-    res.json({ data: job });
-  } catch (error) {
-    console.error("[studio] Failed to create segment image upscale job", error);
-    const statusCode = error instanceof WorkspaceCreditLimitError ? 402 : 500;
-
-    res.status(statusCode).json({
-      error: error instanceof Error ? error.message : "Failed to create segment image upscale job.",
-    });
-  }
+  res.status(410).json({
+    error: "Image upscale creation has been replaced by infographic generation.",
+  });
 });
 
 app.get("/api/studio/segment-image-upscale/jobs/:jobId", async (req, res) => {

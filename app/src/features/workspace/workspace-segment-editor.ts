@@ -15,6 +15,11 @@ import {
 import type { WorkspaceMediaAssetRef } from "../../../shared/workspace-media-assets";
 import type { WorkspaceReferenceKind } from "../../../shared/workspace-references";
 import { WORKSPACE_SEGMENT_PHOTO_DURATION_AUDIO_GUARD_EPSILON_SECONDS } from "./workspace-constants";
+import {
+  areWorkspaceSegmentInfographicsEqual,
+  cloneWorkspaceSegmentInfographic,
+  normalizeWorkspaceSegmentInfographic,
+} from "./workspace-infographic-helpers";
 import type {
   StudioBrandLogoFile,
   StudioCustomMusicFile,
@@ -2741,6 +2746,17 @@ export const restoreWorkspaceSegmentTimelineSnapshot = (
     return restoreWorkspaceSegmentSceneSoundState(segment, snapshot);
   }
 
+  if (kind === "infographic") {
+    return {
+      ...segment,
+      infographic: cloneWorkspaceSegmentInfographic(snapshot.infographic),
+      infographicRemoved: snapshot.infographicRemoved,
+      infographicSourceWarningDismissedForIdentity: snapshot.infographicSourceWarningDismissedForIdentity,
+      infographicStylePromptDraft: snapshot.infographicStylePromptDraft,
+      infographicTextDraft: snapshot.infographicTextDraft,
+    };
+  }
+
   const restoredVisualSegment = {
     ...segment,
     aiPhotoAsset: cloneStudioCustomVideoFile(snapshot.aiPhotoAsset),
@@ -2888,6 +2904,20 @@ export const cloneWorkspaceSegmentEditorDraftSegment = (
       : null,
   imageEditPrompt: typeof segment.imageEditPrompt === "string" ? segment.imageEditPrompt : "",
   imageEditPromptInitialized: Boolean(segment.imageEditPromptInitialized),
+  infographic: cloneWorkspaceSegmentInfographic(segment.infographic),
+  infographicRemoved: segment.infographicRemoved === true,
+  infographicSourceWarningDismissedForIdentity:
+    typeof segment.infographicSourceWarningDismissedForIdentity === "string"
+      ? segment.infographicSourceWarningDismissedForIdentity
+      : null,
+  infographicStylePromptDraft:
+    typeof segment.infographicStylePromptDraft === "string"
+      ? segment.infographicStylePromptDraft
+      : segment.infographic?.stylePrompt ?? "",
+  infographicTextDraft:
+    typeof segment.infographicTextDraft === "string"
+      ? segment.infographicTextDraft
+      : segment.infographic?.text ?? "",
   durationMode: normalizeWorkspaceSegmentDurationMode(segment.durationMode),
   manualDurationSeconds: normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds),
   mediaType: normalizeWorkspaceSegmentMediaType(segment.mediaType),
@@ -7707,6 +7737,7 @@ export const createWorkspaceSegmentEditorDraftSession = (
         const legacyVoiceRenderSourceEndTime = normalizeWorkspaceSegmentManualDurationSeconds(
           segment._voice_render_source_end_time,
         );
+        const infographic = normalizeWorkspaceSegmentInfographic(segment.infographic);
 
         return {
           ...normalizeWorkspaceSegmentEditorSegmentUrls(segment),
@@ -7728,6 +7759,11 @@ export const createWorkspaceSegmentEditorDraftSession = (
           imageEditGeneratedFromPrompt: null,
           imageEditPrompt: "",
           imageEditPromptInitialized: false,
+          infographic,
+          infographicRemoved: false,
+          infographicSourceWarningDismissedForIdentity: null,
+          infographicStylePromptDraft: infographic?.stylePrompt ?? "",
+          infographicTextDraft: infographic?.text ?? "",
           mediaType: normalizeWorkspaceSegmentMediaType(segment.mediaType),
           manualDurationSeconds,
           originalText: segment.text,
@@ -8177,6 +8213,17 @@ export const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
       : freshSceneSoundPayload ??
         cloneWorkspaceSegmentSceneSoundPayload(liveSegment.scene_sound) ??
         buildWorkspaceSegmentSceneSoundPayloadFromAsset(nextSceneSoundAsset, nextSceneSoundAssetId);
+  const freshInfographic = normalizeWorkspaceSegmentInfographic(normalizedFreshSegment.infographic);
+  const baselineInfographic = normalizeWorkspaceSegmentInfographic(baselineSegment?.infographic);
+  const shouldPreserveLiveInfographic = Boolean(
+    liveSegment.infographicRemoved ||
+      (baselineSegment
+        ? !areWorkspaceSegmentInfographicsEqual(liveSegment.infographic, baselineInfographic)
+        : liveSegment.infographic),
+  );
+  const nextInfographic = shouldPreserveLiveInfographic
+    ? cloneWorkspaceSegmentInfographic(liveSegment.infographic)
+    : freshInfographic;
 
   return {
     ...normalizedFreshSegment,
@@ -8225,6 +8272,11 @@ export const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
     imageEditGeneratedFromPrompt: liveSegment.imageEditGeneratedFromPrompt,
     imageEditPrompt: liveSegment.imageEditPrompt,
     imageEditPromptInitialized: liveSegment.imageEditPromptInitialized,
+    infographic: nextInfographic,
+    infographicRemoved: shouldPreserveLiveInfographic ? liveSegment.infographicRemoved : false,
+    infographicSourceWarningDismissedForIdentity: liveSegment.infographicSourceWarningDismissedForIdentity,
+    infographicStylePromptDraft: liveSegment.infographicStylePromptDraft,
+    infographicTextDraft: liveSegment.infographicTextDraft,
     manualDurationSeconds: shouldAdoptFreshProjectVoiceoverSourceDuration
       ? null
       : shouldPreserveLiveDuration
@@ -8491,6 +8543,11 @@ export const createWorkspaceSegmentEditorInsertedSegment = (options: {
     imageEditGeneratedFromPrompt: null,
     imageEditPrompt: "",
     imageEditPromptInitialized: false,
+    infographic: null,
+    infographicRemoved: false,
+    infographicSourceWarningDismissedForIdentity: null,
+    infographicStylePromptDraft: "",
+    infographicTextDraft: "",
     manualDurationSeconds: null,
     mediaType: "video",
     originalAsset: null,
@@ -8623,6 +8680,11 @@ export const resetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene = (
     musicType: "none",
     segments: draft.segments.map((segment) => ({
       ...segment,
+      infographic: null,
+      infographicRemoved: Boolean(segment.infographic),
+      infographicSourceWarningDismissedForIdentity: null,
+      infographicStylePromptDraft: "",
+      infographicTextDraft: "",
       originalText: "",
       originalTextByLanguage: { ...emptyTextByLanguage },
       sceneSound: null,

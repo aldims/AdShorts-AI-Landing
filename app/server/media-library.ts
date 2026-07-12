@@ -363,6 +363,12 @@ const WORKSPACE_MEDIA_LIBRARY_SOURCE_INPUT_CLASSIFIERS = new Set([
   "source_upload",
 ]);
 
+const WORKSPACE_MEDIA_LIBRARY_EDITOR_ONLY_CLASSIFIERS = new Set([
+  "ai_generated_infographic",
+  "infographic",
+  "segment_infographic",
+]);
+
 const WORKSPACE_MEDIA_LIBRARY_AI_GENERATED_CLASSIFIERS = new Set([
   "ai",
   "ai_generated",
@@ -466,6 +472,18 @@ const isWorkspaceDurableSourceInputAsset = (
   );
 };
 
+const isWorkspaceDurableEditorOnlyAsset = (
+  asset: ReturnType<typeof buildWorkspaceMediaAssetRef>,
+) => {
+  if (!asset) {
+    return false;
+  }
+
+  return getWorkspaceDurableAssetClassifiers(asset).some((classifier) =>
+    WORKSPACE_MEDIA_LIBRARY_EDITOR_ONLY_CLASSIFIERS.has(classifier),
+  );
+};
+
 const isWorkspaceAiGeneratedClassifier = (classifier: string) =>
   WORKSPACE_MEDIA_LIBRARY_AI_GENERATED_CLASSIFIERS.has(classifier);
 
@@ -522,6 +540,7 @@ export const getWorkspaceMediaLibraryKindFromDurableAsset = (
     !asset ||
     isWorkspaceDurableFinalVideoAsset(asset) ||
     isWorkspaceDurableSourceInputAsset(asset) ||
+    isWorkspaceDurableEditorOnlyAsset(asset) ||
     !isWorkspaceDurableAiGeneratedAsset(asset)
   ) {
     return null;

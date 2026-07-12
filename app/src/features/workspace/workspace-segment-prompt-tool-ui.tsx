@@ -10,6 +10,7 @@ export const renderSegmentEditorPromptToolIcon = (
     | "talking_photo"
     | "image_edit"
     | "image_upscale"
+    | "infographic"
     | "scene_sound"
     | "voiceover"
     | "brand",
@@ -22,6 +23,7 @@ export const renderSegmentEditorPromptToolIcon = (
     kind === "talking_photo" ||
     kind === "image_edit" ||
     kind === "image_upscale" ||
+    kind === "infographic" ||
     kind === "scene_sound" ? (
       <span className="studio-segment-editor__prompt-tool-icon__badge">AI</span>
     ) : null;
@@ -197,6 +199,18 @@ export const renderSegmentEditorPromptToolIcon = (
     );
   }
 
+  if (kind === "infographic") {
+    return renderIconSvg(
+      <>
+        <rect x="13" y="15" width="38" height="34" rx="9" fill={`url(#${glassGradientId})`} opacity="0.3" />
+        <rect x="13" y="15" width="38" height="34" rx="9" stroke={`url(#${shineGradientId})`} strokeWidth="2.8" />
+        <path d="M21 40V31M29 40V25M37 40V20M45 40V28" stroke={`url(#${cyanGradientId})`} strokeLinecap="round" strokeWidth="4" />
+        <path d="M20 44h26" stroke="white" strokeLinecap="round" strokeOpacity="0.46" strokeWidth="2" />
+        <path d="m48 10 1.7 3.7 3.8 1.5-3.8 1.5-1.7 3.7-1.7-3.7-3.8-1.5 3.8-1.5L48 10Z" fill={`url(#${violetGradientId})`} />
+      </>,
+    );
+  }
+
   if (kind === "voiceover") {
     return renderIconSvg(
       <>
@@ -229,6 +243,7 @@ export const renderSegmentEditorPromptToolButtonContent = (
     | "talking_photo"
     | "image_edit"
     | "image_upscale"
+    | "infographic"
     | "scene_sound"
     | "voiceover"
     | "brand",

@@ -309,6 +309,15 @@ type AdsflowSegmentAiPhotoAssetPayload = {
   mime_type?: string | null;
   remote_url?: string | null;
   url?: string | null;
+  intrinsic_height?: number | string | null;
+  intrinsic_width?: number | string | null;
+  input_hash?: string | null;
+  initial_transform?: {
+    center_x?: number | string | null;
+    center_y?: number | string | null;
+    width?: number | string | null;
+  } | null;
+  source_visual_identity?: string | null;
 };
 
 type AdsflowSegmentAiPhotoGenerateResponse = {
@@ -316,7 +325,9 @@ type AdsflowSegmentAiPhotoGenerateResponse = {
 };
 
 type AdsflowSegmentAiPhotoJobCreateResponse = {
+  credit_cost?: number | string | null;
   job_id?: string;
+  request_fingerprint?: string | null;
   status?: string;
   user?: AdsflowWebUserPayload | null;
 };
@@ -325,6 +336,9 @@ type AdsflowSegmentAiPhotoJobStatusResponse = {
   asset?: AdsflowSegmentAiPhotoAssetPayload | null;
   error?: string | null;
   job_id?: string;
+  project_id?: number | string | null;
+  request_fingerprint?: string | null;
+  segment_index?: number | string | null;
   status?: string;
   user?: AdsflowWebUserPayload | null;
 };
@@ -555,6 +569,15 @@ export type StudioGeneratedImageAsset = {
   fileSize: number;
   mimeType: string;
   remoteUrl?: string;
+  intrinsicHeight?: number;
+  intrinsicWidth?: number;
+  inputHash?: string;
+  initialTransform?: {
+    centerX: number;
+    centerY: number;
+    width: number;
+  };
+  sourceVisualIdentity?: string;
 };
 
 export type StudioGeneratedVideoAsset = {
@@ -583,6 +606,7 @@ export type StudioSegmentAiPhotoJob = {
   asset?: StudioGeneratedImageAsset;
   jobId: string;
   profile: WorkspaceProfile;
+  requestFingerprint?: string;
   status: string;
 };
 
@@ -591,6 +615,9 @@ export type StudioSegmentAiPhotoJobStatus = {
   error?: string;
   jobId: string;
   profile: WorkspaceProfile;
+  projectId?: number;
+  requestFingerprint?: string;
+  segmentIndex?: number;
   status: string;
 };
 
@@ -877,6 +904,26 @@ export type StudioSegmentEditorVideoAction = "ai" | "custom" | "original" | "tal
 export type StudioSegmentEditorDurationMode = "auto" | "manual";
 export type StudioSegmentEditorDurationSyncMode = "voiceover" | "visual";
 
+export type StudioSegmentInfographic = {
+  animation: {
+    durationSeconds: number;
+    type: "fade";
+  };
+  inputHash: string;
+  intrinsicHeight: number;
+  intrinsicWidth: number;
+  mediaAssetId: number;
+  sourceVisualIdentity: string;
+  stylePrompt: string | null;
+  text: string;
+  transform: {
+    centerX: number;
+    centerY: number;
+    width: number;
+  };
+  version: 1;
+};
+
 export type StudioSegmentEditorSegment = {
   customVideoAssetId?: number;
   customVideoFileDataUrl?: string;
@@ -889,6 +936,8 @@ export type StudioSegmentEditorSegment = {
   durationSyncModeUserSelected?: boolean | null;
   endTime?: number;
   index: number;
+  infographic?: StudioSegmentInfographic;
+  infographicRemoved?: boolean;
   manualDurationSeconds?: number | null;
   resetVisual?: boolean;
   sceneSoundAssetId?: number;
@@ -1933,6 +1982,85 @@ const normalizeStudioSegmentManualDurationSeconds = (value: unknown) => {
   return normalized !== null && normalized >= 1 ? normalized : null;
 };
 
+const normalizeStudioSegmentInfographic = (value: unknown): StudioSegmentInfographic | undefined => {
+  if (value === null || value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== "object") {
+    throw new Error("Segment infographic payload is invalid.");
+  }
+
+  const record = value as Record<string, unknown>;
+  const transformValue = record.transform;
+  const transform = transformValue && typeof transformValue === "object"
+    ? (transformValue as Record<string, unknown>)
+    : null;
+  const mediaAssetId = normalizePositiveInteger(record.mediaAssetId ?? record.media_asset_id);
+  const intrinsicWidth = normalizePositiveInteger(record.intrinsicWidth ?? record.intrinsic_width);
+  const intrinsicHeight = normalizePositiveInteger(record.intrinsicHeight ?? record.intrinsic_height);
+  const centerX = normalizeNumber(transform?.centerX ?? transform?.center_x);
+  const centerY = normalizeNumber(transform?.centerY ?? transform?.center_y);
+  const width = normalizeNumber(transform?.width);
+  const text = String(record.text ?? "").trim();
+  const stylePrompt = String(record.stylePrompt ?? record.style_prompt ?? "").trim();
+  const inputHash = String(record.inputHash ?? record.input_hash ?? "").trim();
+  const sourceVisualIdentity = String(
+    record.sourceVisualIdentity ?? record.source_visual_identity ?? "",
+  ).trim();
+
+  if (
+    !mediaAssetId ||
+    !intrinsicWidth ||
+    !intrinsicHeight ||
+    centerX === null ||
+    centerY === null ||
+    width === null ||
+    !Number.isFinite(centerX) ||
+    !Number.isFinite(centerY) ||
+    !Number.isFinite(width) ||
+    centerX < 0 ||
+    centerX > 1 ||
+    centerY < 0 ||
+    centerY > 1 ||
+    width < 0.12 ||
+    width > 1 ||
+    !text ||
+    Array.from(text).length > 160 ||
+    Array.from(stylePrompt).length > 300 ||
+    !/^[0-9a-f]{64}$/i.test(inputHash) ||
+    !/^asset:[1-9]\d*$/.test(sourceVisualIdentity)
+  ) {
+    throw new Error("Segment infographic payload is incomplete or out of bounds.");
+  }
+
+  const normalizedHeight = (width * 9 * intrinsicHeight) / (16 * intrinsicWidth);
+  const halfWidth = width / 2;
+  const halfHeight = normalizedHeight / 2;
+  if (
+    normalizedHeight <= 0 ||
+    normalizedHeight > 1 ||
+    centerX - halfWidth < -0.0001 ||
+    centerX + halfWidth > 1.0001 ||
+    centerY - halfHeight < -0.0001 ||
+    centerY + halfHeight > 1.0001
+  ) {
+    throw new Error("Segment infographic must stay inside the video frame.");
+  }
+
+  return {
+    animation: { durationSeconds: 0.35, type: "fade" },
+    inputHash,
+    intrinsicHeight,
+    intrinsicWidth,
+    mediaAssetId,
+    sourceVisualIdentity,
+    stylePrompt: stylePrompt || null,
+    text,
+    transform: { centerX, centerY, width },
+    version: 1,
+  };
+};
+
 export const normalizeStudioSegmentEditorPayload = (
   value: unknown,
   language: Locale,
@@ -1982,6 +2110,9 @@ export const normalizeStudioSegmentEditorPayload = (
       duration_sync_mode_user_selected?: unknown;
       endTime?: unknown;
       index?: unknown;
+      infographic?: unknown;
+      infographicRemoved?: unknown;
+      infographic_removed?: unknown;
       manualDurationSeconds?: unknown;
       manual_duration_seconds?: unknown;
       resetVisual?: unknown;
@@ -2113,6 +2244,12 @@ export const normalizeStudioSegmentEditorPayload = (
           getDefaultStudioSubtitleColorForStyle(segmentSubtitleStyle ?? "modern"),
         )
       : null;
+    const infographicRemoved = normalizeWorkspaceBooleanFlag(
+      segmentRecord.infographicRemoved ?? segmentRecord.infographic_removed,
+    ) === true;
+    const infographic = infographicRemoved
+      ? undefined
+      : normalizeStudioSegmentInfographic(segmentRecord.infographic);
 
     const attachesCustomVisual = videoAction === "custom" || videoAction === "talking_photo";
     if (attachesCustomVisual && !customVideoAssetId && (!customVideoFileDataUrl || !customVideoFileName)) {
@@ -2131,6 +2268,8 @@ export const normalizeStudioSegmentEditorPayload = (
       durationSyncModeUserSelected,
       endTime,
       index,
+      infographic,
+      infographicRemoved,
       manualDurationSeconds: normalizedManualDurationSeconds,
       resetVisual: Boolean(segmentRecord.resetVisual),
       sceneSoundAssetId: normalizePositiveInteger(segmentRecord.sceneSoundAssetId) ?? undefined,
@@ -4226,6 +4365,20 @@ const normalizeAdsflowSegmentAiPhotoAsset = async (
   const assetId = normalizePositiveInteger(payload?.media_asset_id) ?? null;
   const inlineDataUrl = normalizeGenerationText(payload?.data_url);
   const remoteUrl = resolveAdsflowAssetUrl(payload?.remote_url ?? payload?.download_url ?? payload?.url);
+  const rawInitialTransform = payload?.initial_transform;
+  const initialCenterX = Number(rawInitialTransform?.center_x);
+  const initialCenterY = Number(rawInitialTransform?.center_y);
+  const initialWidth = Number(rawInitialTransform?.width);
+  const infographicMetadata = {
+    intrinsicHeight: normalizePositiveInteger(payload?.intrinsic_height) ?? undefined,
+    intrinsicWidth: normalizePositiveInteger(payload?.intrinsic_width) ?? undefined,
+    inputHash: normalizeGenerationText(payload?.input_hash) || undefined,
+    initialTransform:
+      Number.isFinite(initialCenterX) && Number.isFinite(initialCenterY) && Number.isFinite(initialWidth)
+        ? { centerX: initialCenterX, centerY: initialCenterY, width: initialWidth }
+        : undefined,
+    sourceVisualIdentity: normalizeGenerationText(payload?.source_visual_identity) || undefined,
+  };
 
   if (!assetId && !inlineDataUrl && !remoteUrl) {
     throw new Error("AdsFlow did not return a generated image.");
@@ -4244,6 +4397,7 @@ const normalizeAdsflowSegmentAiPhotoAsset = async (
       fileSize: Math.max(0, Number(payload?.file_size ?? 0)),
       mimeType,
       remoteUrl: `/api/workspace/media-assets/${assetId}`,
+      ...infographicMetadata,
     };
   }
 
@@ -4273,6 +4427,7 @@ const normalizeAdsflowSegmentAiPhotoAsset = async (
     fileName,
     fileSize: Math.max(0, Number(payload?.file_size ?? bytes.length)),
     mimeType,
+    ...infographicMetadata,
   };
 };
 
@@ -5942,6 +6097,23 @@ const fetchAdsflowSegmentImageUpscaleJobStatus = async (jobId: string, user: Stu
   );
 };
 
+const fetchAdsflowSegmentInfographicJobStatus = async (jobId: string, user: StudioUser) => {
+  assertAdsflowConfigured();
+
+  const safeJobId = String(jobId ?? "").trim();
+  if (!safeJobId) {
+    throw new Error("Job id is required.");
+  }
+
+  const externalUserId = await resolveStudioExternalUserId(user);
+  return fetchAdsflowJson<AdsflowSegmentAiPhotoJobStatusResponse>(
+    buildAdsflowUrl(`/api/web/segment-infographic/jobs/${encodeURIComponent(safeJobId)}`, {
+      admin_token: env.adsflowAdminToken ?? "",
+      external_user_id: externalUserId,
+    }),
+  );
+};
+
 const fetchAdsflowSegmentSceneSoundJobStatus = async (jobId: string, user: StudioUser) => {
   assertAdsflowConfigured();
 
@@ -7010,6 +7182,116 @@ export async function createStudioSegmentImageUpscaleJob(
       subscriptionDetails,
     ),
     status: String(payload.status ?? "queued"),
+  };
+}
+
+export async function createStudioSegmentInfographicJob(
+  text: string,
+  user: StudioUser,
+  options: {
+    idempotencyKey: string;
+    language?: string;
+    projectId: number;
+    segmentIndex: number;
+    sourceMediaAssetId: number;
+    stylePrompt?: string;
+  },
+): Promise<StudioSegmentAiPhotoJob> {
+  assertAdsflowConfigured();
+
+  const normalizedText = String(text ?? "").trim();
+  const normalizedStylePrompt = String(options.stylePrompt ?? "").trim();
+  const normalizedIdempotencyKey = String(options.idempotencyKey ?? "").trim();
+  const sourceMediaAssetId = normalizePositiveInteger(options.sourceMediaAssetId);
+  const segmentIndex = normalizeNonNegativeInteger(options.segmentIndex);
+  const projectId = normalizePositiveInteger(options.projectId);
+
+  if (!normalizedText || Array.from(normalizedText).length > 160) {
+    throw new Error("Infographic text must contain between 1 and 160 characters.");
+  }
+  if (Array.from(normalizedStylePrompt).length > 300) {
+    throw new Error("Infographic style must not exceed 300 characters.");
+  }
+  if (!sourceMediaAssetId) {
+    throw new Error("Source media asset id is required.");
+  }
+  if (!projectId) {
+    throw new Error("Project id is required.");
+  }
+  if (segmentIndex === null) {
+    throw new Error("Segment index is required.");
+  }
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(normalizedIdempotencyKey)) {
+    throw new Error("A valid infographic idempotency key is required.");
+  }
+
+  const externalUserId = await resolveStudioExternalUserId(user);
+  const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
+  const payload = await postAdsflowJson<AdsflowSegmentAiPhotoJobCreateResponse>(
+    "/api/web/segment-infographic/jobs",
+    {
+      admin_token: env.adsflowAdminToken,
+      external_user_id: externalUserId,
+      idempotency_key: normalizedIdempotencyKey,
+      language: normalizeStudioLanguage(options.language),
+      project_id: projectId,
+      segment_index: segmentIndex,
+      source_media_asset_id: sourceMediaAssetId,
+      style_prompt: normalizedStylePrompt || undefined,
+      text: normalizedText,
+      user_email: user.email ?? undefined,
+      user_name: user.name ?? undefined,
+    },
+    {
+      retryDelaysMs: [],
+      timeoutMs: ADSFLOW_MUTATION_TIMEOUT_MS,
+    },
+  );
+
+  const jobId = String(payload.job_id ?? "").trim();
+  if (!jobId) {
+    throw new Error("AdsFlow did not return a segment infographic job id.");
+  }
+  const requestFingerprint = normalizeGenerationText(payload.request_fingerprint);
+  if (!/^[0-9a-f]{64}$/i.test(requestFingerprint)) {
+    throw new Error("AdsFlow did not return the infographic request fingerprint.");
+  }
+
+  return {
+    jobId,
+    profile: await enrichWorkspaceProfileAfterAdsflowWebMutation(
+      payload.user ?? undefined,
+      payload.user?.user_id ? String(payload.user.user_id) : undefined,
+      subscriptionDetails,
+    ),
+    requestFingerprint,
+    status: String(payload.status ?? "queued"),
+  };
+}
+
+export async function getStudioSegmentInfographicJobStatus(
+  jobId: string,
+  user: StudioUser,
+): Promise<StudioSegmentAiPhotoJobStatus> {
+  const payload = await fetchAdsflowSegmentInfographicJobStatus(jobId, user);
+  const status = String(payload.status ?? "queued").trim() || "queued";
+  const safeJobId = String(payload.job_id ?? jobId).trim() || String(jobId ?? "").trim();
+  const asset = payload.asset ? await normalizeAdsflowSegmentAiPhotoAsset(payload.asset) : undefined;
+  const projectId = normalizePositiveInteger(payload.project_id);
+  const requestFingerprint = normalizeGenerationText(payload.request_fingerprint);
+  const segmentIndex = normalizeNonNegativeInteger(payload.segment_index);
+
+  return {
+    asset,
+    error: normalizeGenerationText(payload.error) || undefined,
+    jobId: safeJobId,
+    profile: await enrichWorkspaceProfile(payload.user ?? undefined, {
+      rawUserId: payload.user?.user_id ? String(payload.user.user_id) : undefined,
+    }),
+    projectId: projectId ?? undefined,
+    requestFingerprint: requestFingerprint || undefined,
+    segmentIndex: segmentIndex ?? undefined,
+    status,
   };
 }
 

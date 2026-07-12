@@ -33,6 +33,7 @@ import type {
   WorkspaceSegmentEditorDraftSession,
   WorkspaceSegmentEditorSession,
   WorkspaceSegmentEditorSpeechWord,
+  WorkspaceSegmentInfographicTransform,
   WorkspaceSegmentTimelineHistoryKind,
 } from "./workspace-types";
 
@@ -234,6 +235,9 @@ export type WorkspaceLocalExampleSaveResponse = {
 };
 
 export type WorkspaceBootstrapPayload = {
+  featureFlags?: {
+    segmentInfographic?: boolean;
+  };
   latestGeneration?: StudioGenerationStatusPayload | null;
   notifications?: WorkspaceNotification[];
   profile: WorkspaceProfile;
@@ -349,6 +353,7 @@ export type WorkspaceSegmentVisualModalTab =
   | "ai_photo"
   | "image_edit"
   | "image_upscale"
+  | "infographic"
   | "scene_sound"
   | "voiceover"
   | "upload"
@@ -501,6 +506,15 @@ export type WorkspaceSegmentImageEditRequest = WorkspaceSegmentImageUpscaleReque
   sceneReferenceAssetIds?: number[];
 };
 
+export type WorkspaceSegmentInfographicRequest = {
+  idempotencyKey: string;
+  projectId: number;
+  segmentIndex: number;
+  sourceMediaAssetId: number;
+  stylePrompt?: string;
+  text: string;
+};
+
 export type WorkspaceSegmentAiPhotoPromptImproveMode = "ai_photo" | "ai_video" | "photo_animation" | "image_edit";
 
 export type WorkspaceStudioPromptImproveMode = WorkspaceSegmentAiPhotoPromptImproveMode | "studio_idea";
@@ -577,6 +591,7 @@ export type WorkspaceSegmentAiPhotoJobStatusResponse = {
 export type WorkspaceSegmentImageUpscaleJobCreatePayload = {
   jobId: string;
   profile: WorkspaceProfile;
+  requestFingerprint?: string;
   status: string;
 };
 
@@ -595,6 +610,35 @@ export type WorkspaceSegmentImageUpscaleJobStatusPayload = {
 
 export type WorkspaceSegmentImageUpscaleJobStatusResponse = {
   data?: WorkspaceSegmentImageUpscaleJobStatusPayload;
+  error?: string;
+};
+
+export type WorkspaceSegmentInfographicJobCreateResponse = WorkspaceSegmentImageUpscaleJobCreateResponse;
+
+export type WorkspaceSegmentInfographicJobAsset = StudioCustomVideoFile & {
+  inputHash?: string | null;
+  input_hash?: string | null;
+  initialTransform?: WorkspaceSegmentInfographicTransform | null;
+  initial_transform?: {
+    center_x?: number | null;
+    center_y?: number | null;
+    width?: number | null;
+  } | null;
+  intrinsicHeight?: number | null;
+  intrinsicWidth?: number | null;
+  intrinsic_height?: number | null;
+  intrinsic_width?: number | null;
+  sourceVisualIdentity?: string | null;
+  source_visual_identity?: string | null;
+};
+
+export type WorkspaceSegmentInfographicJobStatusResponse = {
+  data?: Omit<WorkspaceSegmentImageUpscaleJobStatusPayload, "asset"> & {
+    asset?: WorkspaceSegmentInfographicJobAsset;
+    projectId?: number;
+    requestFingerprint?: string;
+    segmentIndex?: number;
+  };
   error?: string;
 };
 
@@ -945,6 +989,7 @@ export type WorkspaceSegmentVisualRunScope =
   | "custom_upload"
   | "image_edit"
   | "image_upscale"
+  | "infographic"
   | "photo_animation"
   | "scene_sound"
   | "talking_photo"
@@ -997,6 +1042,9 @@ export const STUDIO_PROMPT_PANEL_EXPANDED_MAX_WIDTH = 1220;
 export const STUDIO_PROMPT_PANEL_INLINE_BUFFER = 8;
 export const WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS = 8;
 export const WORKSPACE_SEGMENT_STILL_GENERATION_JOB_TIMEOUT_MS = 4 * 60 * 1000;
+// Backend expires and refunds at 30 minutes. Keep polling through a short
+// transport grace period so the terminal/refund state is observed reliably.
+export const WORKSPACE_SEGMENT_INFOGRAPHIC_JOB_TIMEOUT_MS = 35 * 60 * 1000;
 export const WORKSPACE_SEGMENT_AI_PHOTO_JOB_TIMEOUT_MS = 10 * 60 * 1000;
 export const WORKSPACE_SEGMENT_AI_PHOTO_SERVER_BUSY_MESSAGE = "Сервер генерации изображений сейчас загружен. Попробуйте позже.";
 export const WORKSPACE_SEGMENT_VIDEO_GENERATION_JOB_TIMEOUT_MS = 10 * 60 * 1000;

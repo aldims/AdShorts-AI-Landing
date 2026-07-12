@@ -53,6 +53,7 @@ import {
 } from "./workspace-segment-editor";
 import {
   applyWorkspaceSegmentSceneSoundVisualAssetId,
+  canWorkspaceSegmentCreateInfographic,
   getWorkspaceSegmentCurrentVideoSourceAsset,
   getWorkspaceSegmentSceneSoundVisualAssetId,
   isWorkspaceSegmentReadyVisualSelectionTab,
@@ -143,6 +144,11 @@ const createProjectVoiceoverSegment = (
     aiVideoGeneratedFromPrompt: null,
     aiVideoPrompt: "",
     aiVideoPromptInitialized: false,
+    infographic: null,
+    infographicRemoved: false,
+    infographicSourceWarningDismissedForIdentity: null,
+    infographicStylePromptDraft: "",
+    infographicTextDraft: "",
     currentAsset: null,
     currentExternalPlaybackUrl: null,
     currentExternalPreviewUrl: null,
@@ -200,6 +206,24 @@ const createProjectVoiceoverSegment = (
     ...overrides,
   };
 };
+
+describe("segment infographic availability", () => {
+  it("is available for durable photo and video visuals and disabled for an empty segment", () => {
+    const photo = createProjectVoiceoverSegment({
+      currentAsset: { assetId: 101 } as any,
+      mediaType: "photo",
+    });
+    const video = createProjectVoiceoverSegment({
+      currentAsset: { assetId: 202 } as any,
+      mediaType: "video",
+    });
+    const empty = createProjectVoiceoverSegment();
+
+    expect(canWorkspaceSegmentCreateInfographic(photo)).toBe(true);
+    expect(canWorkspaceSegmentCreateInfographic(video)).toBe(true);
+    expect(canWorkspaceSegmentCreateInfographic(empty)).toBe(false);
+  });
+});
 
 describe("workspace segment ready visual selection tabs", () => {
   it("allows upload and media library selection outside the AI visual job lock", () => {

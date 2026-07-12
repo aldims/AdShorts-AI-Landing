@@ -49,12 +49,14 @@ import {
   isWorkspaceSegmentAiPhotoReady,
   isWorkspaceSegmentImageEditReady,
 } from "./workspace-segment-visual-helpers";
+import { cloneWorkspaceSegmentInfographic } from "./workspace-infographic-helpers";
 import type {
   StudioCustomVideoFile,
   StudioLanguage,
   WorkspaceSegmentEditorDraftSegment,
   WorkspaceSegmentEditorDraftSession,
   WorkspaceSegmentEditorVideoAction,
+  WorkspaceSegmentInfographic,
 } from "./workspace-types";
 
 export type WorkspaceSegmentEditorPayloadVideoAction = "ai" | "custom" | "original" | "talking_photo";
@@ -75,6 +77,8 @@ export type WorkspaceSegmentEditorPayloadSegment = {
   duration_sync_mode_user_selected?: boolean | null;
   endTime?: number;
   index: number;
+  infographic?: WorkspaceSegmentInfographic;
+  infographicRemoved?: boolean;
   manualTimingUserChanged?: boolean;
   manual_timing_user_changed?: boolean;
   manualDurationSeconds?: number | null;
@@ -485,6 +489,8 @@ export const buildWorkspaceSegmentEditorPayload = async (
       endTime,
       // Keep the original segment identity in `index`; array order carries the new sequence after reorder.
       index: segment.index,
+      ...(segment.infographic ? { infographic: cloneWorkspaceSegmentInfographic(segment.infographic) ?? undefined } : {}),
+      ...(segment.infographicRemoved ? { infographicRemoved: true } : {}),
       manualTimingUserChanged,
       manual_timing_user_changed: manualTimingUserChanged,
       manualDurationSeconds: roundedManualDurationSeconds,

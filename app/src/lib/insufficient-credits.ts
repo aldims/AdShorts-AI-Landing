@@ -64,6 +64,8 @@ export const getInsufficientCreditsContextActionLabel = (action: StudioCreditAct
         return "Image edit";
       case "image_upscale":
         return "Image upscale";
+      case "infographic":
+        return "Infographic";
       case "scene_sound":
         return "Scene sound";
       case "segment_voiceover":
@@ -87,6 +89,8 @@ export const getInsufficientCreditsContextActionLabel = (action: StudioCreditAct
       return "Дорисовать";
     case "image_upscale":
       return "Улучшение качества изображения";
+    case "infographic":
+      return "Создание инфографики";
     case "scene_sound":
       return "Звук сцены";
     case "segment_voiceover":

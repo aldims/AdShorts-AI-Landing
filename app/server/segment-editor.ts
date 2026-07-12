@@ -51,6 +51,7 @@ type AdsflowSegmentEditorSegmentPayload = {
   duration_sync_mode_user_selected?: boolean | number | string | null;
   end_time?: number | string | null;
   index?: number | string | null;
+  infographic?: unknown;
   manual_duration_seconds?: number | string | null;
   media_type?: string | null;
   original_video?: string | null;
@@ -211,6 +212,19 @@ export type WorkspaceSegmentEditorSpeechWord = {
 
 export type WorkspaceSegmentEditorMediaType = "photo" | "video";
 
+export type WorkspaceSegmentInfographic = {
+  animation: { durationSeconds: number; type: "fade" };
+  inputHash: string;
+  intrinsicHeight: number;
+  intrinsicWidth: number;
+  mediaAssetId: number;
+  sourceVisualIdentity: string;
+  stylePrompt: string | null;
+  text: string;
+  transform: { centerX: number; centerY: number; width: number };
+  version: 1;
+};
+
 export type WorkspaceSegmentEditorSegment = {
   currentAsset: WorkspaceMediaAssetRef | null;
   currentExternalPlaybackUrl: string | null;
@@ -229,6 +243,7 @@ export type WorkspaceSegmentEditorSegment = {
   duration_sync_mode_user_selected: boolean;
   endTime: number;
   index: number;
+  infographic?: WorkspaceSegmentInfographic | null;
   manualDurationSeconds: number | null;
   mediaType: WorkspaceSegmentEditorMediaType;
   originalAsset: WorkspaceMediaAssetRef | null;
@@ -1383,6 +1398,7 @@ const buildSegmentEditorPayloadFromProjectDetails = (
         duration_sync_mode_user_selected: durationSyncModeUserSelected,
         end_time: endTime,
         index,
+        infographic: record.infographic,
         manual_duration_seconds: normalizeNumber(record.manual_duration_seconds),
         media_type: normalizeMediaType(currentEntry?.media_type ?? originalEntry?.media_type ?? record.media_type),
         original_video: getProjectSegmentMarker(originalEntry, `project:${projectId}:segment:${index}:original`),
@@ -2785,6 +2801,57 @@ export const buildWorkspaceSegmentEditorSessionFromPayload = (
   };
 };
 
+const normalizeWorkspaceSegmentInfographic = (value: unknown): WorkspaceSegmentInfographic | null => {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  const rawTransform = record.transform;
+  const transform = rawTransform && typeof rawTransform === "object"
+    ? rawTransform as Record<string, unknown>
+    : {};
+  const mediaAssetId = normalizePositiveProjectId(record.mediaAssetId ?? record.media_asset_id);
+  const intrinsicWidth = normalizePositiveProjectId(record.intrinsicWidth ?? record.intrinsic_width);
+  const intrinsicHeight = normalizePositiveProjectId(record.intrinsicHeight ?? record.intrinsic_height);
+  const centerX = normalizeNumber(transform.centerX ?? transform.center_x);
+  const centerY = normalizeNumber(transform.centerY ?? transform.center_y);
+  const width = normalizeNumber(transform.width);
+  const text = String(record.text ?? "").trim();
+  const inputHash = normalizeText(record.inputHash ?? record.input_hash);
+  const sourceVisualIdentity = normalizeText(
+    record.sourceVisualIdentity ?? record.source_visual_identity,
+  );
+  const stylePrompt = String(record.stylePrompt ?? record.style_prompt ?? "").trim();
+
+  if (
+    !mediaAssetId ||
+    !intrinsicWidth ||
+    !intrinsicHeight ||
+    centerX === null ||
+    centerY === null ||
+    width === null ||
+    !text ||
+    !/^[0-9a-f]{64}$/i.test(inputHash) ||
+    !/^asset:[1-9]\d*$/.test(sourceVisualIdentity)
+  ) {
+    return null;
+  }
+
+  return {
+    animation: { durationSeconds: 0.35, type: "fade" },
+    inputHash,
+    intrinsicHeight,
+    intrinsicWidth,
+    mediaAssetId,
+    sourceVisualIdentity,
+    stylePrompt: stylePrompt || null,
+    text,
+    transform: { centerX, centerY, width },
+    version: 1,
+  };
+};
+
 export const buildWorkspaceSegmentEditorSegment = (
   projectId: number,
   payload: AdsflowSegmentEditorSegmentPayload,
@@ -2949,6 +3016,7 @@ export const buildWorkspaceSegmentEditorSegment = (
     duration_sync_mode_user_selected: durationSyncModeUserSelected,
     endTime,
     index,
+    infographic: normalizeWorkspaceSegmentInfographic(payload.infographic),
     manualDurationSeconds,
     mediaType: resolvedMediaType,
     originalAsset,

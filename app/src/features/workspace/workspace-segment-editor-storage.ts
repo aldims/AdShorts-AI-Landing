@@ -19,6 +19,7 @@ import {
   rebuildWorkspaceSegmentEditorDraftSessionTimeline,
 } from "./workspace-segment-editor";
 import { normalizeWorkspaceVideoSourceUrl } from "./workspace-utils";
+import { truncateWorkspaceSegmentInfographicText } from "./workspace-infographic-helpers";
 import type {
   StudioLanguage,
   StudioCustomVideoFile,
@@ -100,6 +101,21 @@ export type StoredWorkspaceSegmentImageUpscaleJob = {
   projectId: number;
   segmentIndex: number;
   status: string;
+};
+
+export type StoredWorkspaceSegmentInfographicJob = {
+  createdAt: number;
+  idempotencyKey: string;
+  jobId: string;
+  projectId: number;
+  requestFingerprint: string;
+  serverRequestFingerprint: string;
+  segmentIndex: number;
+  sourceMediaAssetId: number;
+  sourceVisualIdentity: string;
+  status: string;
+  stylePrompt: string;
+  text: string;
 };
 
 export type StoredWorkspaceSegmentBatchVoiceoverSegment = {
@@ -426,6 +442,8 @@ const WORKSPACE_SEGMENT_IMAGE_EDIT_PENDING_STORAGE_KEY_PREFIX = "adshorts.segmen
 const WORKSPACE_SEGMENT_IMAGE_EDIT_PENDING_TTL_MS = 24 * 60 * 60 * 1000;
 const WORKSPACE_SEGMENT_IMAGE_UPSCALE_PENDING_STORAGE_KEY_PREFIX = "adshorts.segment-image-upscale-pending:";
 const WORKSPACE_SEGMENT_IMAGE_UPSCALE_PENDING_TTL_MS = 24 * 60 * 60 * 1000;
+const WORKSPACE_SEGMENT_INFOGRAPHIC_PENDING_STORAGE_KEY_PREFIX = "adshorts.segment-infographic-pending:";
+const WORKSPACE_SEGMENT_INFOGRAPHIC_PENDING_TTL_MS = 24 * 60 * 60 * 1000;
 const WORKSPACE_SEGMENT_SCENE_SOUND_PENDING_STORAGE_KEY_PREFIX = "adshorts.segment-scene-sound-pending:";
 const WORKSPACE_SEGMENT_SCENE_SOUND_PENDING_TTL_MS = 24 * 60 * 60 * 1000;
 const WORKSPACE_SEGMENT_BATCH_VOICEOVER_PENDING_STORAGE_KEY_PREFIX = "adshorts.segment-batch-voiceover-pending:";
@@ -476,6 +494,9 @@ const getWorkspaceSegmentImageEditPendingStorageKey = (email: string) =>
 
 const getWorkspaceSegmentImageUpscalePendingStorageKey = (email: string) =>
   `${WORKSPACE_SEGMENT_IMAGE_UPSCALE_PENDING_STORAGE_KEY_PREFIX}${email}`;
+
+const getWorkspaceSegmentInfographicPendingStorageKey = (email: string) =>
+  `${WORKSPACE_SEGMENT_INFOGRAPHIC_PENDING_STORAGE_KEY_PREFIX}${email}`;
 
 const getWorkspaceSegmentSceneSoundPendingStorageKey = (email: string) =>
   `${WORKSPACE_SEGMENT_SCENE_SOUND_PENDING_STORAGE_KEY_PREFIX}${email}`;
@@ -1200,6 +1221,151 @@ export const removeStoredWorkspaceSegmentImageUpscaleJobsForSegment = (
     (job) => !(job.projectId === normalizedProjectId && job.segmentIndex === normalizedSegmentIndex),
   );
   writeStoredWorkspaceSegmentImageUpscaleJobs(email, jobs);
+};
+
+const normalizeStoredWorkspaceSegmentInfographicJob = (
+  value: StoredWorkspaceSegmentInfographicJob,
+): StoredWorkspaceSegmentInfographicJob => ({
+  createdAt: Number.isFinite(Number(value.createdAt)) ? Number(value.createdAt) : Date.now(),
+  idempotencyKey: String(value.idempotencyKey ?? "").trim(),
+  jobId: String(value.jobId ?? "").trim(),
+  projectId: Math.max(0, Math.trunc(Number(value.projectId))),
+  requestFingerprint: String(value.requestFingerprint ?? "").trim(),
+  serverRequestFingerprint: String(value.serverRequestFingerprint ?? "").trim().toLowerCase(),
+  segmentIndex: Math.max(0, Math.trunc(Number(value.segmentIndex))),
+  sourceMediaAssetId: Math.max(0, Math.trunc(Number(value.sourceMediaAssetId))),
+  sourceVisualIdentity: String(value.sourceVisualIdentity ?? "").trim(),
+  status: String(value.status ?? "queued").trim() || "queued",
+  stylePrompt: truncateWorkspaceSegmentInfographicText(value.stylePrompt, 300),
+  text: truncateWorkspaceSegmentInfographicText(String(value.text ?? "").trim(), 160),
+});
+
+const isStoredWorkspaceSegmentInfographicJob = (value: unknown): value is StoredWorkspaceSegmentInfographicJob => {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const job = normalizeStoredWorkspaceSegmentInfographicJob(value as StoredWorkspaceSegmentInfographicJob);
+  return Boolean(
+    job.jobId &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(job.idempotencyKey) &&
+      job.requestFingerprint &&
+      /^[0-9a-f]{64}$/i.test(job.serverRequestFingerprint) &&
+      job.text &&
+      job.sourceMediaAssetId > 0 &&
+      /^asset:[1-9]\d*$/.test(job.sourceVisualIdentity) &&
+      Number.isInteger(job.projectId) &&
+      job.projectId > 0 &&
+      Number.isInteger(job.segmentIndex),
+  );
+};
+
+const writeStoredWorkspaceSegmentInfographicJobs = (
+  email: string | null | undefined,
+  jobs: StoredWorkspaceSegmentInfographicJob[],
+) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const normalizedEmail = normalizeWorkspaceSegmentEditorStorageEmail(email);
+  if (!normalizedEmail) {
+    return;
+  }
+  const normalizedJobs = jobs
+    .filter(isStoredWorkspaceSegmentInfographicJob)
+    .map(normalizeStoredWorkspaceSegmentInfographicJob)
+    .filter((job) => Date.now() - job.createdAt <= WORKSPACE_SEGMENT_INFOGRAPHIC_PENDING_TTL_MS);
+  const storageKey = getWorkspaceSegmentInfographicPendingStorageKey(normalizedEmail);
+  if (!normalizedJobs.length) {
+    removeWorkspaceSegmentEditorStorageValue(storageKey);
+    return;
+  }
+  writeWorkspaceSegmentEditorStorageValue(storageKey, JSON.stringify(normalizedJobs));
+};
+
+export const readStoredWorkspaceSegmentInfographicJobs = (
+  email: string | null | undefined,
+): StoredWorkspaceSegmentInfographicJob[] => {
+  if (typeof window === "undefined") {
+    return [];
+  }
+  const normalizedEmail = normalizeWorkspaceSegmentEditorStorageEmail(email);
+  if (!normalizedEmail) {
+    return [];
+  }
+  const storageKey = getWorkspaceSegmentInfographicPendingStorageKey(normalizedEmail);
+  const candidate = readWorkspaceSegmentEditorStorageCandidates(storageKey)[0];
+  if (!candidate) {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(candidate.rawValue) as unknown;
+    const rawJobs = Array.isArray(parsed) ? parsed : [];
+    const jobs = rawJobs
+      .filter(isStoredWorkspaceSegmentInfographicJob)
+      .map(normalizeStoredWorkspaceSegmentInfographicJob)
+      .filter((job) => Date.now() - job.createdAt <= WORKSPACE_SEGMENT_INFOGRAPHIC_PENDING_TTL_MS);
+    if (jobs.length !== rawJobs.length || candidate.storageName === "sessionStorage") {
+      writeStoredWorkspaceSegmentInfographicJobs(normalizedEmail, jobs);
+    }
+    return jobs;
+  } catch {
+    removeWorkspaceSegmentEditorStorageValue(storageKey);
+    return [];
+  }
+};
+
+export const upsertStoredWorkspaceSegmentInfographicJob = (
+  email: string | null | undefined,
+  job: StoredWorkspaceSegmentInfographicJob,
+) => {
+  const normalizedJob = normalizeStoredWorkspaceSegmentInfographicJob(job);
+  const jobs = readStoredWorkspaceSegmentInfographicJobs(email).filter(
+    (item) =>
+      item.jobId !== normalizedJob.jobId &&
+      !(item.projectId === normalizedJob.projectId && item.segmentIndex === normalizedJob.segmentIndex),
+  );
+  writeStoredWorkspaceSegmentInfographicJobs(email, [normalizedJob, ...jobs]);
+};
+
+export const persistStoredWorkspaceSegmentInfographicJobBeforePolling = (
+  email: string | null | undefined,
+  job: StoredWorkspaceSegmentInfographicJob,
+  canStartPolling: () => boolean,
+) => {
+  upsertStoredWorkspaceSegmentInfographicJob(email, job);
+  return canStartPolling();
+};
+
+export const removeStoredWorkspaceSegmentInfographicJob = (
+  email: string | null | undefined,
+  jobId: string | null | undefined,
+) => {
+  const safeJobId = String(jobId ?? "").trim();
+  if (!safeJobId) {
+    return;
+  }
+  writeStoredWorkspaceSegmentInfographicJobs(
+    email,
+    readStoredWorkspaceSegmentInfographicJobs(email).filter((job) => job.jobId !== safeJobId),
+  );
+};
+
+export const removeStoredWorkspaceSegmentInfographicJobsForSegment = (
+  email: string | null | undefined,
+  projectId: number | null | undefined,
+  segmentIndex: number | null | undefined,
+) => {
+  const normalizedProjectId = Number(projectId);
+  const normalizedSegmentIndex = Number(segmentIndex);
+  if (!Number.isInteger(normalizedProjectId) || normalizedProjectId < 0 || !Number.isInteger(normalizedSegmentIndex)) {
+    return;
+  }
+  writeStoredWorkspaceSegmentInfographicJobs(
+    email,
+    readStoredWorkspaceSegmentInfographicJobs(email).filter(
+      (job) => !(job.projectId === normalizedProjectId && job.segmentIndex === normalizedSegmentIndex),
+    ),
+  );
 };
 
 const isStoredWorkspaceSegmentSceneSoundJob = (value: unknown): value is StoredWorkspaceSegmentSceneSoundJob => {
@@ -2272,6 +2438,15 @@ export const clearStoredWorkspaceSegmentEditorTemporaryStateExcept = (
     return shouldKeep;
   });
   writeStoredWorkspaceSegmentImageUpscaleJobs(normalizedEmail, nextImageUpscaleJobs);
+
+  const nextInfographicJobs = readStoredWorkspaceSegmentInfographicJobs(normalizedEmail).filter((job) => {
+    const shouldKeep = keptProjectIds.has(job.projectId);
+    if (!shouldKeep) {
+      clearedProjectIds.add(job.projectId);
+    }
+    return shouldKeep;
+  });
+  writeStoredWorkspaceSegmentInfographicJobs(normalizedEmail, nextInfographicJobs);
 
   const nextSceneSoundJobs = readStoredWorkspaceSegmentSceneSoundJobs(normalizedEmail).filter((job) => {
     const shouldKeep = keptProjectIds.has(job.projectId);

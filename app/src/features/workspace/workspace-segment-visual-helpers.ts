@@ -29,6 +29,7 @@ export type WorkspaceSegmentVisualModalTab =
   | "ai_video"
   | "image_edit"
   | "image_upscale"
+  | "infographic"
   | "photo_animation"
   | "scene_sound"
   | "talking_photo"
@@ -579,6 +580,10 @@ export const canWorkspaceSegmentEditPhoto = (segment: WorkspaceSegmentEditorDraf
 export const canWorkspaceSegmentUpscalePhoto = (segment: WorkspaceSegmentEditorDraftSegment | null | undefined) =>
   Boolean(segment && canWorkspaceSegmentUsePhotoEditingTools(segment) && getWorkspaceSegmentImageUpscaleSource(segment));
 
+export const canWorkspaceSegmentCreateInfographic = (
+  segment: WorkspaceSegmentEditorDraftSegment | null | undefined,
+) => Boolean(segment && getWorkspaceSegmentSceneSoundVisualAssetId(segment));
+
 export const getWorkspaceSegmentVisualModalDefaultTab = (
   segment: WorkspaceSegmentEditorDraftSegment,
 ): WorkspaceSegmentVisualModalTab => {
@@ -612,6 +617,8 @@ export const isWorkspaceSegmentVisualModalTabAllowed = (
       return canWorkspaceSegmentEditPhoto(segment);
     case "image_upscale":
       return canWorkspaceSegmentUpscalePhoto(segment);
+    case "infographic":
+      return canWorkspaceSegmentCreateInfographic(segment);
     default:
       return true;
   }
@@ -632,6 +639,7 @@ export const getWorkspaceSegmentPromptSceneModeForTab = (tab: WorkspaceSegmentEd
     case "talking_photo":
     case "image_edit":
     case "image_upscale":
+    case "infographic":
     case "scene_sound":
     case "voiceover":
       return "edit";

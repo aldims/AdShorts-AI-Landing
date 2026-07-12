@@ -369,13 +369,12 @@ import {
   canWorkspaceSegmentAnimatePhoto,
   canWorkspaceSegmentCreateTalkingPhoto,
   canWorkspaceSegmentEditPhoto,
-  canWorkspaceSegmentUpscalePhoto,
+  canWorkspaceSegmentCreateInfographic,
   canWorkspaceSegmentUsePhotoAnimationTool,
   canWorkspaceSegmentUsePhotoEditingTools,
   getWorkspacePhotoAnimationUploadSourceAsset,
   getWorkspaceSegmentAiPhotoPromptPrefill,
   getWorkspaceSegmentImageEditSource,
-  getWorkspaceSegmentImageUpscaleSource,
   getWorkspaceSegmentPhotoToolUnavailableReason,
   getWorkspaceSegmentPromptSceneModeForTab,
   getWorkspaceSegmentCurrentVideoSourceAsset,
@@ -581,6 +580,7 @@ import {
   WORKSPACE_SEGMENT_AI_PHOTO_JOB_TIMEOUT_MS,
   WORKSPACE_SEGMENT_AI_PHOTO_SERVER_BUSY_MESSAGE,
   WORKSPACE_SEGMENT_STILL_GENERATION_JOB_TIMEOUT_MS,
+  WORKSPACE_SEGMENT_INFOGRAPHIC_JOB_TIMEOUT_MS,
   WORKSPACE_SEGMENT_VIDEO_GENERATION_JOB_TIMEOUT_MS,
   WORKSPACE_SEGMENT_PHOTO_ANIMATION_JOB_TIMEOUT_MS,
   WORKSPACE_SEGMENT_SCENE_SOUND_JOB_TIMEOUT_MS,
@@ -648,7 +648,6 @@ import {
   type WorkspaceSegmentEditorFullPreviewDebugWindow,
   type WorkspaceSegmentEditorResponse,
   type WorkspaceSegmentAiPhotoJobCreateRequest,
-  type WorkspaceSegmentImageUpscaleRequest,
   type WorkspaceSegmentImageEditRequest,
   type WorkspaceSegmentAiPhotoPromptImproveMode,
   type WorkspaceSegmentPromptImprovementSnapshot,
@@ -660,8 +659,10 @@ import {
   type WorkspaceSegmentTextTranslateResponse,
   type WorkspaceSegmentAiPhotoJobCreateResponse,
   type WorkspaceSegmentAiPhotoJobStatusResponse,
-  type WorkspaceSegmentImageUpscaleJobCreateResponse,
   type WorkspaceSegmentImageUpscaleJobStatusResponse,
+  type WorkspaceSegmentInfographicJobCreateResponse,
+  type WorkspaceSegmentInfographicJobStatusResponse,
+  type WorkspaceSegmentInfographicRequest,
   type WorkspaceSegmentAiVideoJobCreateRequest,
   type WorkspaceProjectCharacter,
   type WorkspaceProjectCharactersResponse,
@@ -729,6 +730,7 @@ import {
   readStoredWorkspaceSegmentEditorSession,
   readStoredWorkspaceSegmentImageEditJobs,
   readStoredWorkspaceSegmentImageUpscaleJobs,
+  readStoredWorkspaceSegmentInfographicJobs,
   readStoredWorkspaceSegmentPhotoAnimationJobs,
   readStoredWorkspaceSegmentSceneSoundJobs,
   readStoredWorkspaceSegmentTalkingPhotoJobs,
@@ -748,16 +750,20 @@ import {
   removeStoredWorkspaceSegmentImageEditJobsForSegment,
   removeStoredWorkspaceSegmentImageUpscaleJob,
   removeStoredWorkspaceSegmentImageUpscaleJobsForSegment,
+  removeStoredWorkspaceSegmentInfographicJob,
+  removeStoredWorkspaceSegmentInfographicJobsForSegment,
   removeStoredWorkspaceSegmentPhotoAnimationJob,
   removeStoredWorkspaceSegmentSceneSoundJob,
   removeStoredWorkspaceSegmentSceneSoundJobsForSegment,
   removeStoredWorkspaceSegmentTalkingPhotoJob,
   removeStoredWorkspaceSegmentTalkingPhotoJobsForSegment,
+  persistStoredWorkspaceSegmentInfographicJobBeforePolling,
   upsertStoredWorkspaceSegmentAiPhotoJob,
   upsertStoredWorkspaceSegmentAiVideoJob,
   upsertStoredWorkspaceSegmentBatchVoiceoverJob,
   upsertStoredWorkspaceSegmentImageEditJob,
   upsertStoredWorkspaceSegmentImageUpscaleJob,
+  upsertStoredWorkspaceSegmentInfographicJob,
   upsertStoredWorkspaceSegmentPhotoAnimationJob,
   upsertStoredWorkspaceSegmentSceneSoundJob,
   upsertStoredWorkspaceSegmentTalkingPhotoJob,
@@ -778,6 +784,7 @@ import type {
   StoredWorkspaceSegmentBatchVoiceoverJob,
   StoredWorkspaceSegmentImageEditJob,
   StoredWorkspaceSegmentImageUpscaleJob,
+  StoredWorkspaceSegmentInfographicJob,
   StoredWorkspaceSegmentPhotoAnimationJob,
   StoredWorkspaceSegmentSceneSoundJob,
   StoredWorkspaceSegmentTalkingPhotoJob,
@@ -848,7 +855,28 @@ import type {
   WorkspaceSegmentEditorSession,
   WorkspaceSegmentPreviewKind,
   WorkspaceSegmentTimelineHistoryKind,
+  WorkspaceSegmentInfographicTransform,
 } from "../features/workspace/workspace-types";
+import {
+  applyWorkspaceSegmentInfographicStateSnapshot,
+  cloneWorkspaceSegmentInfographic,
+  createWorkspaceSegmentInfographicIdempotencyKey,
+  createWorkspaceSegmentInfographic,
+  createWorkspaceSegmentInfographicStateSnapshot,
+  getWorkspaceSegmentInfographicSourceVisualIdentity,
+  getWorkspaceSegmentInfographicCharacterCount,
+  getWorkspaceSegmentInfographicStatusFailureAction,
+  isWorkspaceSegmentInfographicJobResultContextValid,
+  isWorkspaceSegmentInfographicStale,
+  pushWorkspaceSegmentInfographicHistory,
+  redoWorkspaceSegmentInfographicHistory,
+  truncateWorkspaceSegmentInfographicText,
+  undoWorkspaceSegmentInfographicHistory,
+  WORKSPACE_SEGMENT_INFOGRAPHIC_STYLE_MAX_CHARS,
+  WORKSPACE_SEGMENT_INFOGRAPHIC_TEXT_MAX_CHARS,
+  type WorkspaceSegmentInfographicHistory,
+} from "../features/workspace/workspace-infographic-helpers";
+import { WorkspaceSegmentInfographicOverlay } from "../features/workspace/workspace-infographic-overlay";
 import type { WorkspaceMediaAssetRef } from "../../shared/workspace-media-assets";
 import { clearExamplePrefillIntent, readExamplePrefillIntent } from "../lib/example-prefill";
 import { logClientEvent } from "../lib/client-log";
@@ -950,7 +978,7 @@ import {
 } from "../lib/workspaceSegmentEditorTimeline";
 import {
   STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST,
-  STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST,
+  STUDIO_SEGMENT_INFOGRAPHIC_CREDIT_COST,
   getStudioBatchVoiceoverCreditCost,
   getStudioSegmentSceneSoundCreditCost,
   getStudioSegmentTalkingPhotoCreditCost,
@@ -1965,6 +1993,7 @@ export function WorkspacePage({
   const [isWorkspaceBootstrapPending, setIsWorkspaceBootstrapPending] = useState(true);
   const [workspaceProfile, setWorkspaceProfile] = useState<WorkspaceProfile | null>(initialProfile);
   const [workspaceNotifications, setWorkspaceNotifications] = useState<WorkspaceNotification[]>([]);
+  const [isSegmentInfographicFeatureEnabled, setIsSegmentInfographicFeatureEnabled] = useState(false);
   const [workspaceCheckoutError, setWorkspaceCheckoutError] = useState<string | null>(null);
   const [firstVideoCheckoutError, setFirstVideoCheckoutError] = useState<string | null>(null);
   const [activeWorkspaceCheckoutProductId, setActiveWorkspaceCheckoutProductId] =
@@ -2087,6 +2116,10 @@ export function WorkspacePage({
     Record<string, SegmentTimelineVoiceHistory>
   >({});
   const segmentTimelineVoiceHistoryRef = useRef<Record<string, SegmentTimelineVoiceHistory>>({});
+  const [segmentInfographicHistory, setSegmentInfographicHistoryState] = useState<
+    Record<number, WorkspaceSegmentInfographicHistory>
+  >({});
+  const segmentInfographicHistoryRef = useRef<Record<number, WorkspaceSegmentInfographicHistory>>({});
   const [dismissedSegmentTimelineVisualHistory, setDismissedSegmentTimelineVisualHistory] = useState<
     Record<string, true>
   >({});
@@ -2110,14 +2143,25 @@ export function WorkspacePage({
     segmentTimelineVoiceHistoryRef.current = nextHistory;
     setSegmentTimelineVoiceHistoryState(nextHistory);
   }, []);
+  const setSegmentInfographicHistory = useCallback((
+    nextValue: SetStateAction<Record<number, WorkspaceSegmentInfographicHistory>>,
+  ) => {
+    const nextHistory = typeof nextValue === "function"
+      ? nextValue(segmentInfographicHistoryRef.current)
+      : nextValue;
+    segmentInfographicHistoryRef.current = nextHistory;
+    setSegmentInfographicHistoryState(nextHistory);
+  }, []);
   useEffect(() => {
     setSegmentTimelineRedoSnapshots({});
     setSegmentTimelineVoiceHistory({});
     setDismissedSegmentTimelineVisualHistory({});
+    setSegmentInfographicHistory({});
   }, [
     segmentEditorLoadedSession?.projectId,
     setSegmentTimelineRedoSnapshots,
     setSegmentTimelineVoiceHistory,
+    setSegmentInfographicHistory,
   ]);
   useEffect(() => {
     setSegmentTimelineVisualDurationInputDraft(null);
@@ -2180,6 +2224,8 @@ export function WorkspacePage({
     useState<WorkspaceSegmentVisualRunState>({});
   const [segmentEditorUpscalingImageRunIds, setSegmentEditorUpscalingImageRunIds] =
     useState<WorkspaceSegmentVisualRunState>({});
+  const [segmentEditorGeneratingInfographicRunIds, setSegmentEditorGeneratingInfographicRunIds] =
+    useState<WorkspaceSegmentVisualRunState>({});
   const [segmentEditorGeneratingSceneSoundRunIds, setSegmentEditorGeneratingSceneSoundRunIds] =
     useState<WorkspaceSegmentVisualRunState>({});
   const [isSegmentEditorBulkSceneSoundModalOpen, setIsSegmentEditorBulkSceneSoundModalOpen] = useState(false);
@@ -2197,6 +2243,7 @@ export function WorkspacePage({
   const isSegmentEditorGeneratingTalkingPhoto = hasAnyWorkspaceSegmentVisualRun(segmentEditorGeneratingTalkingPhotoRunIds);
   const isSegmentEditorGeneratingImageEdit = hasAnyWorkspaceSegmentVisualRun(segmentEditorGeneratingImageEditRunIds);
   const isSegmentEditorUpscalingImage = hasAnyWorkspaceSegmentVisualRun(segmentEditorUpscalingImageRunIds);
+  const isSegmentEditorGeneratingInfographic = hasAnyWorkspaceSegmentVisualRun(segmentEditorGeneratingInfographicRunIds);
   const isSegmentEditorGeneratingSceneSound = hasAnyWorkspaceSegmentVisualRun(segmentEditorGeneratingSceneSoundRunIds);
   const isSegmentEditorGeneratingVoiceover = hasAnyWorkspaceSegmentVisualRun(segmentEditorGeneratingVoiceoverRunIds);
   const clearSegmentEditorVoiceoverError = (_segmentIndex: number) => {};
@@ -2360,6 +2407,8 @@ export function WorkspacePage({
   const segmentImageEditActiveJobIdsRef = useRef<Set<string>>(new Set());
   const segmentImageUpscaleRunRef = useRef<WorkspaceSegmentVisualRunState>({});
   const segmentImageUpscaleActiveJobIdsRef = useRef<Set<string>>(new Set());
+  const segmentInfographicRunRef = useRef<WorkspaceSegmentVisualRunState>({});
+  const segmentInfographicActiveJobIdsRef = useRef<Set<string>>(new Set());
   const segmentSceneSoundRunRef = useRef<WorkspaceSegmentVisualRunState>({});
   const segmentSceneSoundActiveJobIdsRef = useRef<Set<string>>(new Set());
   const segmentVoiceoverRunRef = useRef<WorkspaceSegmentVisualRunState>({});
@@ -2654,6 +2703,7 @@ export function WorkspacePage({
     if (runRef === segmentAiVideoRunRef) return "ai_video";
     if (runRef === segmentImageEditRunRef) return "image_edit";
     if (runRef === segmentImageUpscaleRunRef) return "image_upscale";
+    if (runRef === segmentInfographicRunRef) return "infographic";
     if (runRef === segmentPhotoAnimationRunRef) return "photo_animation";
     if (runRef === segmentSceneSoundRunRef) return "scene_sound";
     if (runRef === segmentVoiceoverRunRef) return "voiceover";
@@ -2736,6 +2786,7 @@ export function WorkspacePage({
     clearRunRef(segmentTalkingPhotoRunRef);
     clearRunRef(segmentImageEditRunRef);
     clearRunRef(segmentImageUpscaleRunRef);
+    clearRunRef(segmentInfographicRunRef);
     clearRunRef(segmentSceneSoundRunRef);
     clearRunRef(segmentVoiceoverRunRef);
     segmentAiPhotoActiveJobIdsRef.current.clear();
@@ -2744,6 +2795,7 @@ export function WorkspacePage({
     segmentTalkingPhotoActiveJobIdsRef.current.clear();
     segmentImageEditActiveJobIdsRef.current.clear();
     segmentImageUpscaleActiveJobIdsRef.current.clear();
+    segmentInfographicActiveJobIdsRef.current.clear();
     segmentSceneSoundActiveJobIdsRef.current.clear();
     segmentBatchVoiceoverActiveJobIdsRef.current.clear();
     setSegmentEditorGeneratingAiPhotoRunIds({});
@@ -2753,6 +2805,7 @@ export function WorkspacePage({
     setSegmentEditorGeneratingTalkingPhotoRunIds({});
     setSegmentEditorGeneratingImageEditRunIds({});
     setSegmentEditorUpscalingImageRunIds({});
+    setSegmentEditorGeneratingInfographicRunIds({});
     setSegmentEditorGeneratingSceneSoundRunIds({});
     setSegmentEditorGeneratingVoiceoverRunIds({});
   };
@@ -7371,6 +7424,9 @@ export function WorkspacePage({
     isSegmentEditorUpscalingImage ||
     hasActiveSegmentEditorVisualRunScope("image_upscale") ||
     segmentImageUpscaleActiveJobIdsRef.current.size > 0 ||
+    isSegmentEditorGeneratingInfographic ||
+    hasActiveSegmentEditorVisualRunScope("infographic") ||
+    segmentInfographicActiveJobIdsRef.current.size > 0 ||
     isSegmentEditorGeneratingSceneSound ||
     hasActiveSegmentEditorVisualRunScope("scene_sound") ||
     segmentSceneSoundActiveJobIdsRef.current.size > 0 ||
@@ -7386,6 +7442,7 @@ export function WorkspacePage({
       hasWorkspaceSegmentVisualRun(segmentEditorGeneratingTalkingPhotoRunIds, segmentIndex) ||
       hasWorkspaceSegmentVisualRun(segmentEditorGeneratingImageEditRunIds, segmentIndex) ||
       hasWorkspaceSegmentVisualRun(segmentEditorUpscalingImageRunIds, segmentIndex) ||
+      hasWorkspaceSegmentVisualRun(segmentEditorGeneratingInfographicRunIds, segmentIndex) ||
       hasWorkspaceSegmentVisualRun(segmentEditorGeneratingSceneSoundRunIds, segmentIndex) ||
       hasWorkspaceSegmentVisualRun(segmentEditorGeneratingVoiceoverRunIds, segmentIndex));
   const isWorkspaceSegmentSceneSoundJobBusy = (segmentIndex: number | null | undefined) =>
@@ -7432,6 +7489,14 @@ export function WorkspacePage({
       segmentImageEditActiveJobIdsRef.current.size > 0
     ) {
       return "image_edit";
+    }
+
+    if (
+      isSegmentEditorGeneratingInfographic ||
+      hasActiveSegmentEditorVisualRunScope("infographic") ||
+      segmentInfographicActiveJobIdsRef.current.size > 0
+    ) {
+      return "infographic";
     }
 
     if (
@@ -7664,9 +7729,9 @@ export function WorkspacePage({
     segmentAiPhotoModalSegment &&
       hasWorkspaceSegmentVisualRun(segmentEditorGeneratingImageEditRunIds, segmentAiPhotoModalSegment.index),
   );
-  const isSegmentImageUpscaleCurrentSegment = Boolean(
+  const isSegmentInfographicCurrentSegment = Boolean(
     segmentAiPhotoModalSegment &&
-      hasWorkspaceSegmentVisualRun(segmentEditorUpscalingImageRunIds, segmentAiPhotoModalSegment.index),
+      hasWorkspaceSegmentVisualRun(segmentEditorGeneratingInfographicRunIds, segmentAiPhotoModalSegment.index),
   );
   const isActiveSegmentSceneSoundCurrent = Boolean(
     activeSegment && hasWorkspaceSegmentVisualRun(segmentEditorGeneratingSceneSoundRunIds, activeSegment.index),
@@ -7684,7 +7749,8 @@ export function WorkspacePage({
   );
   const isSegmentAiPhotoModalSegmentVisualJobBusy = isWorkspaceSegmentVisualJobBusy(segmentAiPhotoModalSegment?.index);
   const canEditSegmentImage = canWorkspaceSegmentEditPhoto(segmentAiPhotoModalSegment);
-  const canUpscaleSegmentImage = canWorkspaceSegmentUpscalePhoto(segmentAiPhotoModalSegment);
+  const canCreateSegmentInfographic =
+    isSegmentInfographicFeatureEnabled && canWorkspaceSegmentCreateInfographic(segmentAiPhotoModalSegment);
   const segmentPhotoToolUnavailableReason = getWorkspaceSegmentPhotoToolUnavailableReason(
     segmentAiPhotoModalSegment,
     "Сначала выберите фото",
@@ -7717,8 +7783,9 @@ export function WorkspacePage({
     isBusy: isSegmentAiPhotoModalPreparingCustomVideo,
     isReady: hasSegmentAiPhotoModalCustomFile,
   });
-  const segmentAiPhotoModalUpscaleStatus = createSegmentAiPhotoModalStatus({
-    isBusy: isSegmentImageUpscaleCurrentSegment,
+  const segmentAiPhotoModalInfographicStatus = createSegmentAiPhotoModalStatus({
+    isBusy: isSegmentInfographicCurrentSegment,
+    isReady: Boolean(segmentAiPhotoModalSegment?.infographic),
   });
   const canImproveSegmentAiPhotoPrompt = Boolean(
     normalizedSegmentAiPhotoModalPrompt || normalizeWorkspaceSegmentAiPhotoPrompt(segmentAiPhotoModalScenarioPrompt),
@@ -12857,6 +12924,11 @@ export function WorkspacePage({
     if (segmentAiPhotoModalSegmentIndex === targetSegment.index) {
       closeSegmentAiPhotoModal();
     }
+    removeStoredWorkspaceSegmentInfographicJobsForSegment(
+      session.email,
+      segmentEditorDraft.projectId,
+      targetSegment.index,
+    );
 
     const resolvedNextSegments = resolveWorkspaceSegmentEditorSegmentsAfterDelete(segmentEditorDraft, targetSegment.index, {
       reservedSegmentIndexes: segmentEditorReservedSegmentIndexes,
@@ -13689,6 +13761,22 @@ export function WorkspacePage({
     clearSegmentVisualRun(segmentImageUpscaleRunRef, setSegmentEditorUpscalingImageRunIds, targetSegmentIndex);
   };
 
+  const cancelPendingSegmentInfographicRun = (targetSegmentIndex: number) => {
+    const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+    removeStoredWorkspaceSegmentInfographicJobsForSegment(
+      session.email,
+      currentDraft?.projectId,
+      targetSegmentIndex,
+    );
+    if (hasWorkspaceSegmentVisualRun(segmentEditorGeneratingInfographicRunIds, targetSegmentIndex)) {
+      clearSegmentVisualRun(
+        segmentInfographicRunRef,
+        setSegmentEditorGeneratingInfographicRunIds,
+        targetSegmentIndex,
+      );
+    }
+  };
+
   const cancelPendingSegmentSceneSoundRun = (targetSegmentIndex: number) => {
     const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
     removeStoredWorkspaceSegmentSceneSoundJobsForSegment(session.email, currentDraft?.projectId, targetSegmentIndex);
@@ -14264,6 +14352,118 @@ export function WorkspacePage({
     }));
   };
 
+  const captureSegmentEditorInfographicHistory = (targetSegmentIndex: number) => {
+    const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+    const segment = currentDraft?.segments.find((item) => item.index === targetSegmentIndex) ?? null;
+    if (!segment) {
+      return;
+    }
+    const snapshot = createWorkspaceSegmentInfographicStateSnapshot(segment);
+    setSegmentInfographicHistory((current) => ({
+      ...current,
+      [targetSegmentIndex]: pushWorkspaceSegmentInfographicHistory(current[targetSegmentIndex], snapshot),
+    }));
+  };
+
+  const undoSegmentEditorInfographic = (targetSegmentIndex: number) => {
+    if (isWorkspaceSegmentVisualJobBusy(targetSegmentIndex)) {
+      return;
+    }
+    const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+    const segment = currentDraft?.segments.find((item) => item.index === targetSegmentIndex) ?? null;
+    const result = segment
+      ? undoWorkspaceSegmentInfographicHistory(
+          segmentInfographicHistoryRef.current[targetSegmentIndex],
+          createWorkspaceSegmentInfographicStateSnapshot(segment),
+        )
+      : null;
+    if (!result) {
+      return;
+    }
+    setSegmentInfographicHistory((current) => ({ ...current, [targetSegmentIndex]: result.history }));
+    updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (currentSegment) =>
+      applyWorkspaceSegmentInfographicStateSnapshot(currentSegment, result.snapshot),
+    );
+  };
+
+  const redoSegmentEditorInfographic = (targetSegmentIndex: number) => {
+    if (isWorkspaceSegmentVisualJobBusy(targetSegmentIndex)) {
+      return;
+    }
+    const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+    const segment = currentDraft?.segments.find((item) => item.index === targetSegmentIndex) ?? null;
+    const result = segment
+      ? redoWorkspaceSegmentInfographicHistory(
+          segmentInfographicHistoryRef.current[targetSegmentIndex],
+          createWorkspaceSegmentInfographicStateSnapshot(segment),
+        )
+      : null;
+    if (!result) {
+      return;
+    }
+    setSegmentInfographicHistory((current) => ({ ...current, [targetSegmentIndex]: result.history }));
+    updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (currentSegment) =>
+      applyWorkspaceSegmentInfographicStateSnapshot(currentSegment, result.snapshot),
+    );
+  };
+
+  const resetSegmentEditorInfographicByIndex = (targetSegmentIndex: number) => {
+    const baselineSegment = segmentEditorChecklistBaseSession?.segments.find(
+      (segment) => segment.index === targetSegmentIndex,
+    );
+    captureSegmentEditorInfographicHistory(targetSegmentIndex);
+    cancelPendingSegmentInfographicRun(targetSegmentIndex);
+    updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => ({
+      ...segment,
+      infographic: cloneWorkspaceSegmentInfographic(baselineSegment?.infographic),
+      infographicRemoved: false,
+      infographicSourceWarningDismissedForIdentity: null,
+      infographicStylePromptDraft: baselineSegment?.infographic?.stylePrompt ?? "",
+      infographicTextDraft: baselineSegment?.infographic?.text ?? "",
+    }));
+  };
+
+  const deleteSegmentEditorInfographicByIndex = (targetSegmentIndex: number) => {
+    const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+    const segment = currentDraft?.segments.find((item) => item.index === targetSegmentIndex) ?? null;
+    if (!segment?.infographic) {
+      return;
+    }
+    const baselineSegment = segmentEditorChecklistBaseSession?.segments.find(
+      (item) => item.index === targetSegmentIndex,
+    );
+    if (!window.confirm(workspaceText(locale, "Удалить инфографику из этой сцены?", "Delete the infographic from this scene?"))) {
+      return;
+    }
+    captureSegmentEditorInfographicHistory(targetSegmentIndex);
+    cancelPendingSegmentInfographicRun(targetSegmentIndex);
+    updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (currentSegment) => ({
+      ...currentSegment,
+      infographic: null,
+      infographicRemoved: Boolean(baselineSegment?.infographic),
+      infographicSourceWarningDismissedForIdentity: null,
+    }));
+  };
+
+  const updateSegmentEditorInfographicTransform = (
+    targetSegmentIndex: number,
+    transform: WorkspaceSegmentInfographicTransform,
+  ) => {
+    captureSegmentEditorInfographicHistory(targetSegmentIndex);
+    updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) =>
+      segment.infographic
+        ? {
+            ...segment,
+            infographic: {
+              ...segment.infographic,
+              transform: { ...transform },
+            },
+            infographicRemoved: false,
+          }
+        : segment,
+    );
+  };
+
   const resetSegmentEditorVisualByIndex = (targetSegmentIndex: number) => {
     if (isWorkspaceSegmentVisualJobBusy(targetSegmentIndex)) {
       clearSegmentEditorVoiceoverError(targetSegmentIndex);
@@ -14643,6 +14843,11 @@ export function WorkspacePage({
       return;
     }
 
+    if (kind === "infographic") {
+      resetSegmentEditorInfographicByIndex(safeSegmentIndex);
+      return;
+    }
+
     resetSegmentEditorTextByIndex(safeSegmentIndex);
   };
 
@@ -14815,6 +15020,11 @@ export function WorkspacePage({
         subtitleType: "none",
       }));
       setSegmentTimelineTextMenuSegmentIndex(null);
+      return;
+    }
+
+    if (kind === "infographic") {
+      deleteSegmentEditorInfographicByIndex(safeSegmentIndex);
       return;
     }
 
@@ -18037,130 +18247,6 @@ export function WorkspacePage({
     };
   }, [createMode, segmentEditorDraft?.projectId, segmentEditorDraft?.segments.length, session.email]);
 
-  const handleSegmentEditorImageUpscale = async (
-    options?: {
-      segmentIndex?: number;
-    },
-  ) => {
-    if (!segmentEditorDraft) {
-      return;
-    }
-
-    const targetSegmentIndex = options?.segmentIndex ?? activeSegment?.index;
-    if (typeof targetSegmentIndex !== "number") {
-      return;
-    }
-
-    if (isWorkspaceSegmentVisualJobBusy(targetSegmentIndex)) {
-      setSegmentEditorVideoError("Дождитесь завершения генерации текущего сегмента.");
-      return;
-    }
-
-    const visualJobBinding = getSegmentEditorVisualJobBinding(targetSegmentIndex);
-
-    const targetSegment =
-      segmentEditorDraft.segments.find((segment) => segment.index === targetSegmentIndex) ??
-      (activeSegment?.index === targetSegmentIndex ? activeSegment : null);
-    if (targetSegment && !canWorkspaceSegmentUsePhotoEditingTools(targetSegment)) {
-      setSegmentEditorVideoError("Сначала выберите фото для сегмента.");
-      return;
-    }
-    const upscaleSource = targetSegment ? getWorkspaceSegmentImageUpscaleSource(targetSegment) : null;
-
-    if (!upscaleSource) {
-      setSegmentEditorVideoError("Выберите фото сегмента, чтобы улучшить качество изображения.");
-      return;
-    }
-
-    if (workspaceBalance !== null && workspaceBalance < STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST) {
-      setSegmentEditorVideoError(null);
-      openInsufficientCreditsModal("image_upscale", STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST);
-      return;
-    }
-
-    const runId = startSegmentVisualRun(segmentImageUpscaleRunRef, setSegmentEditorUpscalingImageRunIds, targetSegmentIndex);
-    setSegmentEditorVideoError(null);
-    setInsufficientCreditsContext(null);
-
-    let pollStarted = false;
-
-    try {
-      const imageAssetId = await ensureStudioUploadedAssetId(upscaleSource.asset, {
-        fallbackFileName: upscaleSource.fileName,
-        fallbackMimeType: upscaleSource.asset.mimeType,
-        kind: "segment_image",
-        language: selectedLanguage,
-        mediaType: "photo",
-        projectId: visualJobBinding.projectId,
-        role: "segment_source",
-        segmentIndex: visualJobBinding.segmentIndex,
-      });
-      if (!imageAssetId) {
-        throw new Error("Не удалось подготовить изображение для улучшения качества.");
-      }
-
-      const response = await fetch("/api/studio/segment-image-upscale/jobs", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          imageAssetId,
-          imageFileName: upscaleSource.fileName,
-          language: selectedLanguage,
-          projectId: visualJobBinding.projectId,
-          segmentIndex: visualJobBinding.segmentIndex,
-        } satisfies WorkspaceSegmentImageUpscaleRequest),
-      });
-      const payload = (await response.json().catch(() => null)) as WorkspaceSegmentImageUpscaleJobCreateResponse | null;
-
-      if (response.status === 402) {
-        if (isSegmentVisualRunCurrent(segmentImageUpscaleRunRef, targetSegmentIndex, runId)) {
-          clearSegmentVisualRun(segmentImageUpscaleRunRef, setSegmentEditorUpscalingImageRunIds, targetSegmentIndex, runId);
-        }
-        openInsufficientCreditsModal("image_upscale", STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST);
-        return;
-      }
-
-      if (!response.ok || !payload?.data?.jobId) {
-        throw new Error(payload?.error ?? "Не удалось запустить улучшение качества изображения.");
-      }
-
-      if (!isSegmentVisualRunCurrent(segmentImageUpscaleRunRef, targetSegmentIndex, runId)) {
-        return;
-      }
-
-      applyWorkspaceProfile(payload.data.profile);
-      const pendingJobCreatedAt = Date.now();
-      if (typeof visualJobBinding.projectId === "number" && visualJobBinding.projectId >= 0) {
-        upsertStoredWorkspaceSegmentImageUpscaleJob(session.email, {
-          createdAt: pendingJobCreatedAt,
-          jobId: payload.data.jobId,
-          projectId: visualJobBinding.projectId,
-          segmentIndex: targetSegmentIndex,
-          status: payload.data.status,
-        });
-      }
-      pollStarted = true;
-      await pollSegmentEditorImageUpscaleJob(payload.data.jobId, payload.data.status, {
-        createdAt: pendingJobCreatedAt,
-        projectId: visualJobBinding.projectId,
-        runId,
-        segmentIndex: targetSegmentIndex,
-      });
-    } catch (error) {
-      if (!isSegmentVisualRunCurrent(segmentImageUpscaleRunRef, targetSegmentIndex, runId)) {
-        return;
-      }
-
-      setSegmentEditorVideoError(error instanceof Error ? error.message : "Не удалось улучшить качество изображения.");
-    } finally {
-      if (!pollStarted && isSegmentVisualRunCurrent(segmentImageUpscaleRunRef, targetSegmentIndex, runId)) {
-        clearSegmentVisualRun(segmentImageUpscaleRunRef, setSegmentEditorUpscalingImageRunIds, targetSegmentIndex, runId);
-      }
-    }
-  };
-
   const resumePendingSegmentImageUpscaleJob = (job: StoredWorkspaceSegmentImageUpscaleJob) => {
     if (segmentImageUpscaleActiveJobIdsRef.current.size > 0) {
       return false;
@@ -18244,6 +18330,369 @@ export function WorkspacePage({
       window.clearInterval(intervalId);
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [createMode, segmentEditorDraft?.projectId, segmentEditorDraft?.segments.length, session.email]);
+
+  const getSegmentInfographicRequestFingerprint = (request: WorkspaceSegmentInfographicRequest) =>
+    JSON.stringify({
+      projectId: request.projectId,
+      segmentIndex: request.segmentIndex,
+      sourceMediaAssetId: request.sourceMediaAssetId,
+      stylePrompt: request.stylePrompt ?? "",
+      text: request.text,
+    });
+
+  const pollSegmentEditorInfographicJob = async (
+    job: StoredWorkspaceSegmentInfographicJob,
+    runId: number,
+  ) => {
+    const safeJobId = job.jobId.trim();
+    if (!safeJobId) {
+      throw new Error("Не удалось запустить создание инфографики.");
+    }
+    const expectedFingerprint = getSegmentInfographicRequestFingerprint({
+      idempotencyKey: job.idempotencyKey,
+      projectId: job.projectId,
+      segmentIndex: job.segmentIndex,
+      sourceMediaAssetId: job.sourceMediaAssetId,
+      ...(job.stylePrompt ? { stylePrompt: job.stylePrompt } : {}),
+      text: job.text,
+    });
+    if (expectedFingerprint !== job.requestFingerprint) {
+      removeStoredWorkspaceSegmentInfographicJob(session.email, safeJobId);
+      throw new Error("Данные задачи инфографики изменились. Создайте её заново.");
+    }
+
+    let latestStatus = job.status || "queued";
+    let transientFailures = 0;
+    let doneWithoutAssetFailures = 0;
+    const maxTransientFailures = 5;
+    const preservedJobStatusError =
+      "Не удалось проверить статус инфографики. Задача сохранена и возобновится автоматически; при необходимости обновите страницу.";
+    segmentInfographicActiveJobIdsRef.current.add(safeJobId);
+    try {
+      while (isSegmentVisualRunCurrent(segmentInfographicRunRef, job.segmentIndex, runId)) {
+        if (Date.now() - job.createdAt >= WORKSPACE_SEGMENT_INFOGRAPHIC_JOB_TIMEOUT_MS) {
+          removeStoredWorkspaceSegmentInfographicJob(session.email, safeJobId);
+          throw new Error("Создание инфографики занимает слишком много времени. Кредиты будут возвращены автоматически.");
+        }
+
+        let response: Response;
+        let payload: WorkspaceSegmentInfographicJobStatusResponse | null = null;
+        try {
+          response = await fetch(`/api/studio/segment-infographic/jobs/${encodeURIComponent(safeJobId)}`);
+          payload = (await response.json().catch(() => null)) as WorkspaceSegmentInfographicJobStatusResponse | null;
+        } catch {
+          transientFailures += 1;
+          if (
+            getWorkspaceSegmentInfographicStatusFailureAction({
+              failureCount: transientFailures,
+              maxTransientFailures,
+              statusCode: null,
+            }) === "preserve"
+          ) {
+            throw new Error(preservedJobStatusError);
+          }
+          await new Promise((resolve) => window.setTimeout(resolve, 3000));
+          continue;
+        }
+
+        if (!response.ok || !payload?.data) {
+          const failureAction = getWorkspaceSegmentInfographicStatusFailureAction({
+            failureCount: transientFailures + 1,
+            maxTransientFailures,
+            statusCode: response.status,
+          });
+          if (failureAction !== "remove") {
+            transientFailures += 1;
+            if (failureAction === "preserve") {
+              throw new Error(preservedJobStatusError);
+            }
+            await new Promise((resolve) => window.setTimeout(resolve, 3000));
+            continue;
+          }
+          removeStoredWorkspaceSegmentInfographicJob(session.email, safeJobId);
+          throw new Error(payload?.error ?? "Не удалось получить статус создания инфографики.");
+        }
+        if (!isWorkspaceSegmentInfographicJobResultContextValid({
+          expectedProjectId: job.projectId,
+          expectedRequestFingerprint: job.serverRequestFingerprint,
+          expectedSegmentIndex: job.segmentIndex,
+          projectId: payload.data.projectId,
+          requestFingerprint: payload.data.requestFingerprint,
+          segmentIndex: payload.data.segmentIndex,
+        })) {
+          removeStoredWorkspaceSegmentInfographicJob(session.email, safeJobId);
+          throw new Error("Сервер вернул результат инфографики для другой сцены.");
+        }
+        transientFailures = 0;
+        latestStatus = normalizeWorkspaceSegmentGenerationJobStatus(payload.data.status);
+        applyWorkspaceProfile(payload.data.profile);
+        upsertStoredWorkspaceSegmentInfographicJob(session.email, { ...job, status: latestStatus });
+
+        const asset = payload.data.asset;
+        if (asset) {
+          const mediaAssetId = getPositiveWorkspaceMediaAssetId(asset.assetId);
+          if (!mediaAssetId) {
+            removeStoredWorkspaceSegmentInfographicJob(session.email, safeJobId);
+            throw new Error("Сервер не вернул сохранённый файл инфографики.");
+          }
+          const currentDraft = segmentEditorDraftRef.current;
+          if (!currentDraft || currentDraft.projectId !== job.projectId) {
+            return;
+          }
+          const targetSegment = currentDraft.segments.find((segment) => segment.index === job.segmentIndex) ?? null;
+          if (!targetSegment) {
+            removeStoredWorkspaceSegmentInfographicJob(session.email, safeJobId);
+            return;
+          }
+          const sourceVisualIdentity =
+            String(asset.sourceVisualIdentity ?? asset.source_visual_identity ?? "").trim() || job.sourceVisualIdentity;
+          const nextInfographic = createWorkspaceSegmentInfographic({
+            inputHash: String(asset.inputHash ?? asset.input_hash ?? "").trim(),
+            initialTransform: asset.initialTransform ?? (
+              asset.initial_transform
+                ? {
+                    centerX: Number(asset.initial_transform.center_x),
+                    centerY: Number(asset.initial_transform.center_y),
+                    width: Number(asset.initial_transform.width),
+                  }
+                : null
+            ),
+            intrinsicHeight: asset.intrinsicHeight ?? asset.intrinsic_height,
+            intrinsicWidth: asset.intrinsicWidth ?? asset.intrinsic_width,
+            mediaAssetId,
+            previousTransform: targetSegment.infographic?.transform,
+            sourceVisualIdentity,
+            stylePrompt: job.stylePrompt,
+            text: job.text,
+          });
+          captureSegmentEditorInfographicHistory(job.segmentIndex);
+          updateSegmentEditorDraftSegmentByIndex(job.segmentIndex, (segment) => ({
+            ...segment,
+            infographic: nextInfographic,
+            infographicRemoved: false,
+            infographicSourceWarningDismissedForIdentity: null,
+            infographicStylePromptDraft: job.stylePrompt,
+            infographicTextDraft: job.text,
+          }));
+          removeStoredWorkspaceSegmentInfographicJob(session.email, safeJobId);
+          return;
+        }
+
+        if (isWorkspaceSegmentGenerationJobFailedStatus(latestStatus)) {
+          removeStoredWorkspaceSegmentInfographicJob(session.email, safeJobId);
+          throw new Error(payload.data.error ?? "Не удалось создать инфографику. Кредиты возвращены.");
+        }
+        if (isWorkspaceSegmentGenerationJobDoneStatus(latestStatus)) {
+          doneWithoutAssetFailures += 1;
+          if (doneWithoutAssetFailures <= 5) {
+            await new Promise((resolve) => window.setTimeout(resolve, 3000));
+            continue;
+          }
+          throw new Error(
+            payload.data.error ??
+              "Файл инфографики временно недоступен. Обновите страницу — задача сохранена и продолжит проверяться.",
+          );
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, latestStatus === "queued" ? 1500 : 2200));
+      }
+    } finally {
+      segmentInfographicActiveJobIdsRef.current.delete(safeJobId);
+      if (isSegmentVisualRunCurrent(segmentInfographicRunRef, job.segmentIndex, runId)) {
+        clearSegmentVisualRun(
+          segmentInfographicRunRef,
+          setSegmentEditorGeneratingInfographicRunIds,
+          job.segmentIndex,
+          runId,
+        );
+      }
+    }
+  };
+
+  const handleSegmentEditorInfographicGenerate = async (segmentIndex?: number) => {
+    if (!isSegmentInfographicFeatureEnabled) {
+      setSegmentEditorVideoError("Создание инфографики пока недоступно для этого аккаунта.");
+      return;
+    }
+    const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+    const targetSegmentIndex = segmentIndex ?? activeSegment?.index;
+    if (!currentDraft || typeof targetSegmentIndex !== "number") {
+      return;
+    }
+    const targetSegment = currentDraft.segments.find((segment) => segment.index === targetSegmentIndex) ?? null;
+    const text = String(targetSegment?.infographicTextDraft ?? "").trim();
+    const stylePrompt = String(targetSegment?.infographicStylePromptDraft ?? "").trim();
+    if (!targetSegment || !text) {
+      setSegmentEditorVideoError("Введите текст инфографики.");
+      return;
+    }
+    if (
+      getWorkspaceSegmentInfographicCharacterCount(text) > WORKSPACE_SEGMENT_INFOGRAPHIC_TEXT_MAX_CHARS ||
+      getWorkspaceSegmentInfographicCharacterCount(stylePrompt) > WORKSPACE_SEGMENT_INFOGRAPHIC_STYLE_MAX_CHARS
+    ) {
+      setSegmentEditorVideoError("Сократите текст или описание стиля инфографики.");
+      return;
+    }
+    if (isWorkspaceSegmentVisualJobBusy(targetSegmentIndex)) {
+      setSegmentEditorVideoError("Дождитесь завершения текущей операции с сегментом.");
+      return;
+    }
+    const projectId = getPositiveWorkspaceMediaAssetId(currentDraft.projectId);
+    const sourceMediaAssetId = getWorkspaceSegmentSceneSoundVisualAssetId(targetSegment);
+    const sourceVisualIdentity = getWorkspaceSegmentInfographicSourceVisualIdentity(sourceMediaAssetId);
+    if (!projectId || !sourceMediaAssetId || !sourceVisualIdentity) {
+      setSegmentEditorVideoError("Сначала сохраните визуал сегмента, чтобы создать инфографику.");
+      return;
+    }
+    if (workspaceBalance !== null && workspaceBalance < STUDIO_SEGMENT_INFOGRAPHIC_CREDIT_COST) {
+      setSegmentEditorVideoError(null);
+      openInsufficientCreditsModal("infographic", STUDIO_SEGMENT_INFOGRAPHIC_CREDIT_COST);
+      return;
+    }
+
+    const idempotencyKey = createWorkspaceSegmentInfographicIdempotencyKey();
+    const request: WorkspaceSegmentInfographicRequest = {
+      idempotencyKey,
+      projectId,
+      segmentIndex: targetSegmentIndex,
+      sourceMediaAssetId,
+      ...(stylePrompt ? { stylePrompt } : {}),
+      text,
+    };
+    const runId = startSegmentVisualRun(
+      segmentInfographicRunRef,
+      setSegmentEditorGeneratingInfographicRunIds,
+      targetSegmentIndex,
+    );
+    setSegmentEditorVideoError(null);
+    setInsufficientCreditsContext(null);
+    let pollStarted = false;
+    try {
+      let response: Response | null = null;
+      let payload: WorkspaceSegmentInfographicJobCreateResponse | null = null;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          response = await fetch("/api/studio/segment-infographic/jobs", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(request),
+          });
+          payload = (await response.json().catch(() => null)) as WorkspaceSegmentInfographicJobCreateResponse | null;
+          if (response.status < 500 || attempt === 1) {
+            break;
+          }
+        } catch (error) {
+          if (attempt === 1) {
+            throw error;
+          }
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, 650));
+      }
+      if (!response) {
+        throw new Error("Не удалось связаться с сервисом инфографики.");
+      }
+      if (response.status === 402) {
+        openInsufficientCreditsModal("infographic", STUDIO_SEGMENT_INFOGRAPHIC_CREDIT_COST);
+        return;
+      }
+      if (!response.ok || !payload?.data?.jobId) {
+        throw new Error(payload?.error ?? "Не удалось запустить создание инфографики.");
+      }
+      const serverRequestFingerprint = String(payload.data.requestFingerprint ?? "").trim().toLowerCase();
+      if (!/^[0-9a-f]{64}$/i.test(serverRequestFingerprint)) {
+        throw new Error("Сервис не вернул идентификатор запроса инфографики. Обновите страницу для восстановления задачи.");
+      }
+      const job: StoredWorkspaceSegmentInfographicJob = {
+        createdAt: Date.now(),
+        idempotencyKey,
+        jobId: payload.data.jobId,
+        projectId,
+        requestFingerprint: getSegmentInfographicRequestFingerprint(request),
+        serverRequestFingerprint,
+        segmentIndex: targetSegmentIndex,
+        sourceMediaAssetId,
+        sourceVisualIdentity,
+        status: payload.data.status,
+        stylePrompt,
+        text,
+      };
+      applyWorkspaceProfile(payload.data.profile);
+      const canStartPolling = persistStoredWorkspaceSegmentInfographicJobBeforePolling(
+        session.email,
+        job,
+        () => isSegmentVisualRunCurrent(segmentInfographicRunRef, targetSegmentIndex, runId),
+      );
+      if (!canStartPolling) {
+        return;
+      }
+      pollStarted = true;
+      await pollSegmentEditorInfographicJob(job, runId);
+    } catch (error) {
+      if ((segmentEditorDraftRef.current ?? segmentEditorDraft)?.projectId === projectId) {
+        setSegmentEditorVideoError(error instanceof Error ? error.message : "Не удалось создать инфографику.");
+      }
+    } finally {
+      if (!pollStarted && isSegmentVisualRunCurrent(segmentInfographicRunRef, targetSegmentIndex, runId)) {
+        clearSegmentVisualRun(
+          segmentInfographicRunRef,
+          setSegmentEditorGeneratingInfographicRunIds,
+          targetSegmentIndex,
+          runId,
+        );
+      }
+    }
+  };
+
+  const resumePendingSegmentInfographicJob = (job: StoredWorkspaceSegmentInfographicJob) => {
+    const currentDraft = segmentEditorDraftRef.current;
+    if (
+      segmentInfographicActiveJobIdsRef.current.size > 0 ||
+      !currentDraft ||
+      currentDraft.projectId !== job.projectId ||
+      !currentDraft.segments.some((segment) => segment.index === job.segmentIndex) ||
+      isWorkspaceSegmentVisualJobBusy(job.segmentIndex)
+    ) {
+      return false;
+    }
+    const runId = startSegmentVisualRun(
+      segmentInfographicRunRef,
+      setSegmentEditorGeneratingInfographicRunIds,
+      job.segmentIndex,
+    );
+    void pollSegmentEditorInfographicJob(job, runId).catch((error) => {
+      if (segmentEditorDraftRef.current?.projectId === job.projectId) {
+        setSegmentEditorVideoError(error instanceof Error ? error.message : "Не удалось создать инфографику.");
+      }
+    });
+    return true;
+  };
+
+  useEffect(() => {
+    if (createMode !== "segment-editor" || !segmentEditorDraft) {
+      return undefined;
+    }
+    const tryResume = () => {
+      if (segmentInfographicActiveJobIdsRef.current.size > 0) {
+        return;
+      }
+      const currentDraft = segmentEditorDraftRef.current;
+      if (!currentDraft) {
+        return;
+      }
+      const pendingJob = readStoredWorkspaceSegmentInfographicJobs(session.email)
+        .filter((job) => job.projectId === currentDraft.projectId)
+        .sort((left, right) => left.createdAt - right.createdAt)[0] ?? null;
+      if (pendingJob) {
+        resumePendingSegmentInfographicJob(pendingJob);
+      }
+    };
+    tryResume();
+    const intervalId = window.setInterval(tryResume, 30_000);
+    window.addEventListener("focus", tryResume);
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", tryResume);
     };
   }, [createMode, segmentEditorDraft?.projectId, segmentEditorDraft?.segments.length, session.email]);
 
@@ -19214,19 +19663,6 @@ export function WorkspacePage({
     setSegmentAiPhotoModalTab("scene_sound");
     await handleSegmentEditorSceneSoundGenerate({
       prompt: options?.prompt ?? segmentSceneSoundModalPrompt,
-      segmentIndex: targetSegmentIndex,
-    });
-  };
-
-  const handleSegmentAiPhotoModalUpscaleImage = async (options?: { segmentIndex?: number | null }) => {
-    const targetSegmentIndex = options?.segmentIndex ?? segmentAiPhotoModalSegment?.index;
-    if (typeof targetSegmentIndex !== "number") {
-      return;
-    }
-
-    setSegmentEditorVideoError(null);
-    setSegmentAiPhotoModalTab("image_upscale");
-    await handleSegmentEditorImageUpscale({
       segmentIndex: targetSegmentIndex,
     });
   };
@@ -21313,6 +21749,11 @@ export function WorkspacePage({
         return;
       }
 
+      if (activeSegmentEditorVisualJobKind === "infographic") {
+        reportGeneratePreflightFailure("Подождите, пока инфографика создаётся для сегмента.", "Infographic preparing");
+        return;
+      }
+
       if (activeSegmentEditorVisualJobKind === "scene_sound") {
         reportGeneratePreflightFailure("Подождите, пока звук сцены создаётся для сегмента.", "Scene sound preparing");
         return;
@@ -23024,6 +23465,7 @@ export function WorkspacePage({
         if (isCancelled) return;
 
         applyWorkspaceProfile(payload.data.profile);
+        setIsSegmentInfographicFeatureEnabled(payload.data.featureFlags?.segmentInfographic === true);
         setWorkspaceNotifications(Array.isArray(payload.data.notifications) ? payload.data.notifications : []);
         const nextSubtitleStyleOptions =
           payload.data.studioOptions.subtitleStyles.length > 0
@@ -23455,6 +23897,10 @@ export function WorkspacePage({
 
                   if (item.restoreVisual) {
                     restoreSegmentEditorVisualByIndex(item.segmentIndex);
+                  }
+
+                  if (item.resetInfographic) {
+                    resetSegmentEditorInfographicByIndex(item.segmentIndex);
                   }
 
                   if (item.resetSceneSound) {
@@ -29255,7 +29701,7 @@ export function WorkspacePage({
       return null;
     }
 
-    if (tab === "photo_animation" || tab === "talking_photo" || tab === "image_edit" || tab === "image_upscale") {
+    if (tab === "photo_animation" || tab === "talking_photo" || tab === "image_edit") {
       return getWorkspaceSegmentPhotoToolUnavailableReason(
         segment,
         workspaceText(locale, "Сначала выберите фото", "Select a photo first"),
@@ -29805,10 +30251,10 @@ export function WorkspacePage({
               title: workspaceText(locale, "Дорисовать", "Image edit"),
             },
             {
-              description: workspaceText(locale, "Апскейл фото", "Photo upscale"),
-              icon: "HD",
-              tab: "image_upscale",
-              title: workspaceText(locale, "Улучшить качество", "Upscale image"),
+              description: workspaceText(locale, "Интерактивный слой поверх сцены", "Interactive overlay on the scene"),
+              icon: "INFO",
+              tab: "infographic",
+              title: workspaceText(locale, "Инфографика", "Infographic"),
             },
           ],
         },
@@ -31589,11 +32035,15 @@ export function WorkspacePage({
       </div>
     ) : null;
   const canSelectSegmentEditorPromptVisualTool = (tab: WorkspaceSegmentVisualModalTab) =>
-    Boolean(activeSegment && isWorkspaceSegmentVisualModalTabAllowed(activeSegment, tab));
+    Boolean(
+      activeSegment &&
+      (tab !== "infographic" || isSegmentInfographicFeatureEnabled) &&
+      isWorkspaceSegmentVisualModalTabAllowed(activeSegment, tab),
+    );
   const segmentEditorVisualPromptToolTab =
     segmentEditorPromptToolTab === "scene_sound" || segmentEditorPromptToolTab === "voiceover"
       ? "ai_photo"
-      : activeSegment && !isWorkspaceSegmentVisualModalTabAllowed(activeSegment, segmentEditorPromptToolTab)
+      : activeSegment && !canSelectSegmentEditorPromptVisualTool(segmentEditorPromptToolTab)
         ? getWorkspaceSegmentVisualModalDefaultTab(activeSegment)
         : segmentEditorPromptToolTab;
   const isPromptAiPhotoMode = segmentEditorVisualPromptToolTab === "ai_photo";
@@ -31601,7 +32051,7 @@ export function WorkspacePage({
   const isPromptPhotoAnimationMode = segmentEditorVisualPromptToolTab === "photo_animation";
   const isPromptTalkingPhotoMode = segmentEditorVisualPromptToolTab === "talking_photo";
   const isPromptImageEditMode = segmentEditorVisualPromptToolTab === "image_edit";
-  const isPromptUpscaleMode = segmentEditorVisualPromptToolTab === "image_upscale";
+  const isPromptInfographicMode = segmentEditorVisualPromptToolTab === "infographic";
   const isPromptSceneSoundMode = false;
   const isPromptVoiceoverMode = false;
   const isPromptLibraryMode = segmentEditorVisualPromptToolTab === "library";
@@ -32821,6 +33271,8 @@ export function WorkspacePage({
     : isPromptAiPhotoMode
       ? segmentAiPhotoModalPrompt
       : segmentAiVideoModalPrompt;
+  const activeSegmentInfographicText = activeSegment?.infographicTextDraft ?? "";
+  const activeSegmentInfographicStylePrompt = activeSegment?.infographicStylePromptDraft ?? "";
   const promptVisualRichEditorValue = canPromptUseVisualReferences
     ? normalizeWorkspacePromptRichEditorValue(promptVisualTextareaValue)
     : promptVisualTextareaValue;
@@ -32859,9 +33311,13 @@ export function WorkspacePage({
     isPromptAiVideoMode ||
     isPromptPhotoAnimationMode ||
     isPromptTalkingPhotoMode ||
-    isPromptImageEditMode;
+    isPromptImageEditMode ||
+    isPromptInfographicMode;
   const isPromptVisualPromptEmpty =
-    isPromptVisualPromptRequired && !normalizeWorkspaceSegmentAiPhotoPrompt(promptVisualPromptForAction);
+    isPromptVisualPromptRequired &&
+    !(isPromptInfographicMode
+      ? activeSegmentInfographicText.trim()
+      : normalizeWorkspaceSegmentAiPhotoPrompt(promptVisualPromptForAction));
   const isSegmentAiPhotoModalAiPhotoPromptEmpty =
     !normalizeWorkspaceSegmentAiPhotoPrompt(segmentAiPhotoModalPrompt);
   const isSegmentAiPhotoModalAiVideoPromptEmpty =
@@ -32884,8 +33340,8 @@ export function WorkspacePage({
           STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST
         : isPromptImageEditMode
           ? STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST
-          : isPromptUpscaleMode
-            ? STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST
+          : isPromptInfographicMode
+            ? STUDIO_SEGMENT_INFOGRAPHIC_CREDIT_COST
             : isPromptSceneSoundMode
               ? activeSegmentSceneSoundCreditCost
             : null;
@@ -32895,7 +33351,7 @@ export function WorkspacePage({
     (isPromptPhotoAnimationMode && isSegmentPhotoAnimationModalGeneratingCurrentSegment) ||
     (isPromptTalkingPhotoMode && isSegmentTalkingPhotoModalGeneratingCurrentSegment) ||
     (isPromptImageEditMode && isSegmentImageEditModalGeneratingCurrentSegment) ||
-    (isPromptUpscaleMode && isSegmentImageUpscaleCurrentSegment) ||
+    (isPromptInfographicMode && isSegmentInfographicCurrentSegment) ||
     (isPromptSceneSoundMode && isActiveSegmentSceneSoundCurrent) ||
     (isPromptUploadMode && isActiveSegmentPreparingCustomVideo);
   const isPromptTalkingPhotoVoiceMissing = isPromptTalkingPhotoMode && !activeSegmentEffectiveDraftVoiceId;
@@ -32910,7 +33366,7 @@ export function WorkspacePage({
     (isPromptTalkingPhotoMode && !canCreateSegmentTalkingPhoto) ||
     isPromptTalkingPhotoVoiceMissing ||
     (isPromptImageEditMode && !canEditSegmentImage) ||
-    (isPromptUpscaleMode && !canUpscaleSegmentImage);
+    (isPromptInfographicMode && !canCreateSegmentInfographic);
   const isPromptVisualActionDisabled =
     isPromptVisualBaseDisabled ||
     isPromptVisualPromptEmpty ||
@@ -33245,8 +33701,8 @@ export function WorkspacePage({
         prompt: promptVisualPromptForAction,
         segmentIndex: activeSegment.index,
       });
-    } else if (isPromptUpscaleMode) {
-      void handleSegmentAiPhotoModalUpscaleImage({ segmentIndex: activeSegment.index });
+    } else if (isPromptInfographicMode) {
+      void handleSegmentEditorInfographicGenerate(activeSegment.index);
     } else if (isPromptSceneSoundMode) {
       void handleSegmentSceneSoundGenerate({ prompt: segmentSceneSoundModalPrompt, segmentIndex: activeSegment.index });
     } else if (isPromptVoiceoverMode) {
@@ -33269,8 +33725,10 @@ export function WorkspacePage({
         ? workspaceText(locale, "Создать говорящего персонажа", "Create talking character")
         : isPromptImageEditMode
           ? workspaceText(locale, "Применить правку", "Apply edit")
-          : isPromptUpscaleMode
-            ? workspaceText(locale, "Улучшить качество", "Upscale image")
+          : isPromptInfographicMode
+            ? activeSegment?.infographic
+              ? workspaceText(locale, "Создать заново", "Create again")
+              : workspaceText(locale, "Создать инфографику", "Create infographic")
             : isPromptSceneSoundMode
               ? workspaceText(locale, "Добавить звук", "Add sound")
             : isPromptVoiceoverMode
@@ -33389,8 +33847,8 @@ export function WorkspacePage({
         ? workspaceText(locale, "Говорящий персонаж", "Talking character")
         : isPromptImageEditMode
           ? workspaceText(locale, "Точная правка кадра", "Precise shot edit")
-          : isPromptUpscaleMode
-            ? workspaceText(locale, "Повысить качество кадра", "Improve shot quality")
+          : isPromptInfographicMode
+            ? workspaceText(locale, "Инфографика поверх сцены", "Infographic overlay")
             : isPromptSceneSoundMode
               ? workspaceText(locale, "Звук для этой сцены", "Sound for this scene")
             : isPromptVoiceoverMode
@@ -33402,8 +33860,8 @@ export function WorkspacePage({
     ? workspaceText(locale, "Выберите готовый визуал для активной сцены.", "Choose a saved visual for the active scene.")
     : isPromptUploadMode
       ? workspaceText(locale, "Загрузите фото или видео только для этой сцены.", "Upload a photo or video only for this scene.")
-      : isPromptUpscaleMode
-        ? workspaceText(locale, "Текущий кадр будет заменен улучшенной версией.", "The current shot will be replaced with an improved version.")
+      : isPromptInfographicMode
+        ? workspaceText(locale, "Создайте прозрачный визуальный слой и разместите его прямо в кадре.", "Create a transparent visual layer and place it directly in the shot.")
         : isPromptSceneSoundMode
           ? workspaceText(locale, "Опишите атмосферу, шумы и музыкальные акценты для текущей сцены.", "Describe ambience, effects, and musical accents for the current scene.")
         : isPromptTalkingPhotoMode
@@ -33904,24 +34362,26 @@ export function WorkspacePage({
                       workspaceText(locale, "Оживить фото голосом", "Animate with voice"),
                     )}
                   </button>
+                  {isSegmentInfographicFeatureEnabled ? (
                     <button
-                      className={getSegmentEditorPromptVisualToolButtonClass("image_upscale")}
+                      className={getSegmentEditorPromptVisualToolButtonClass("infographic")}
                       type="button"
-                      aria-label={workspaceText(locale, "Улучшить качество", "Upscale image")}
-                      disabled={!canSelectSegmentEditorPromptVisualTool("image_upscale")}
-                    title={workspaceText(locale, "Улучшить качество", "Upscale image")}
-                    onPointerEnter={() => clearSegmentEditorPromptToolHoverRelease("image_upscale")}
-                    onPointerLeave={() => clearSegmentEditorPromptToolHoverRelease("image_upscale")}
-                    onClick={(event) => {
-                      handleSegmentEditorPromptVisualToolButtonClick(event, "image_upscale");
-                    }}
-                  >
-                    {renderSegmentEditorPromptToolButtonContent(
-                      "image_upscale",
-                      workspaceText(locale, "Улучшить качество", "Upscale image"),
-                        workspaceText(locale, "Повысить разрешение", "Increase resolution"),
+                      aria-label={workspaceText(locale, "Инфографика", "Infographic")}
+                      disabled={!canSelectSegmentEditorPromptVisualTool("infographic")}
+                      title={workspaceText(locale, "Добавить инфографику", "Add infographic")}
+                      onPointerEnter={() => clearSegmentEditorPromptToolHoverRelease("infographic")}
+                      onPointerLeave={() => clearSegmentEditorPromptToolHoverRelease("infographic")}
+                      onClick={(event) => {
+                        handleSegmentEditorPromptVisualToolButtonClick(event, "infographic");
+                      }}
+                    >
+                      {renderSegmentEditorPromptToolButtonContent(
+                        "infographic",
+                        workspaceText(locale, "Инфографика", "Infographic"),
+                        workspaceText(locale, "Интерактивный слой", "Interactive overlay"),
                       )}
                     </button>
+                  ) : null}
                   </div>
                 </div>
               </div>
@@ -34172,17 +34632,142 @@ export function WorkspacePage({
                         <small>{activeSegmentVoiceoverCost} ⚡</small>
                       </button>
                     </div>
-                  ) : isPromptUploadMode || isPromptUpscaleMode ? (
+                  ) : isPromptInfographicMode ? (
+                    <div className="studio-segment-editor__infographic-form">
+                      <label className="studio-segment-editor__infographic-field">
+                        <span>
+                          <strong>{workspaceText(locale, "Текст инфографики", "Infographic text")}</strong>
+                          <small>{getWorkspaceSegmentInfographicCharacterCount(activeSegmentInfographicText)}/{WORKSPACE_SEGMENT_INFOGRAPHIC_TEXT_MAX_CHARS}</small>
+                        </span>
+                        <textarea
+                          value={activeSegmentInfographicText}
+                          rows={4}
+                          placeholder={workspaceText(locale, "Например: Рост продаж на 47%", "For example: Sales increased by 47%")}
+                          onChange={(event) => {
+                            const value = truncateWorkspaceSegmentInfographicText(
+                              event.target.value,
+                              WORKSPACE_SEGMENT_INFOGRAPHIC_TEXT_MAX_CHARS,
+                            );
+                            setSegmentEditorVideoError(null);
+                            if (activeSegment) {
+                              updateSegmentEditorDraftSegmentByIndex(activeSegment.index, (segment) => ({
+                                ...segment,
+                                infographicTextDraft: value,
+                              }));
+                            }
+                          }}
+                        />
+                      </label>
+                      <label className="studio-segment-editor__infographic-field">
+                        <span>
+                          <strong>{workspaceText(locale, "Стиль инфографики — необязательно", "Infographic style — optional")}</strong>
+                          <small>{getWorkspaceSegmentInfographicCharacterCount(activeSegmentInfographicStylePrompt)}/{WORKSPACE_SEGMENT_INFOGRAPHIC_STYLE_MAX_CHARS}</small>
+                        </span>
+                        <textarea
+                          value={activeSegmentInfographicStylePrompt}
+                          rows={3}
+                          placeholder={workspaceText(locale, "Например: минимализм, белый текст, голубые акценты", "For example: minimal, white text, blue accents")}
+                          onChange={(event) => {
+                            const value = truncateWorkspaceSegmentInfographicText(
+                              event.target.value,
+                              WORKSPACE_SEGMENT_INFOGRAPHIC_STYLE_MAX_CHARS,
+                            );
+                            setSegmentEditorVideoError(null);
+                            if (activeSegment) {
+                              updateSegmentEditorDraftSegmentByIndex(activeSegment.index, (segment) => ({
+                                ...segment,
+                                infographicStylePromptDraft: value,
+                              }));
+                            }
+                          }}
+                        />
+                      </label>
+                      <p className="studio-segment-editor__infographic-hint">
+                        <span aria-hidden="true">✦</span>
+                        {workspaceText(
+                          locale,
+                          "Если стиль не указан, ИИ автоматически подберёт его под сцену.",
+                          "If no style is provided, AI will match it to the scene automatically.",
+                        )}
+                      </p>
+                      <div className="studio-segment-editor__infographic-history-actions">
+                        <button
+                          type="button"
+                          disabled={!activeSegment || !(segmentInfographicHistory[activeSegment.index]?.past.length)}
+                          onClick={() => activeSegment && undoSegmentEditorInfographic(activeSegment.index)}
+                        >
+                          {workspaceText(locale, "Отменить", "Undo")}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!activeSegment || !(segmentInfographicHistory[activeSegment.index]?.future.length)}
+                          onClick={() => activeSegment && redoSegmentEditorInfographic(activeSegment.index)}
+                        >
+                          {workspaceText(locale, "Вернуть", "Redo")}
+                        </button>
+                      </div>
+                      {activeSegment?.infographic &&
+                      isWorkspaceSegmentInfographicStale(
+                        activeSegment.infographic,
+                        getWorkspaceSegmentInfographicSourceVisualIdentity(
+                          getWorkspaceSegmentSceneSoundVisualAssetId(activeSegment),
+                        ),
+                      ) &&
+                      activeSegment.infographicSourceWarningDismissedForIdentity !==
+                        getWorkspaceSegmentInfographicSourceVisualIdentity(
+                          getWorkspaceSegmentSceneSoundVisualAssetId(activeSegment),
+                        ) ? (
+                        <div className="studio-segment-editor__infographic-stale" role="status">
+                          <div>
+                            <strong>{workspaceText(locale, "Создана для предыдущего визуала", "Created for the previous visual")}</strong>
+                            <span>{workspaceText(locale, "Можно оставить слой или создать новый под текущую сцену.", "Keep the layer or create a new one for this shot.")}</span>
+                          </div>
+                          <div className="studio-segment-editor__infographic-stale-actions">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!activeSegment) return;
+                                const identity = getWorkspaceSegmentInfographicSourceVisualIdentity(
+                                  getWorkspaceSegmentSceneSoundVisualAssetId(activeSegment),
+                                );
+                                updateSegmentEditorDraftSegmentByIndex(activeSegment.index, (segment) => ({
+                                  ...segment,
+                                  infographicSourceWarningDismissedForIdentity: identity,
+                                }));
+                              }}
+                            >
+                              {workspaceText(locale, "Оставить", "Keep")}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isSegmentInfographicCurrentSegment || !activeSegmentInfographicText.trim()}
+                              onClick={() => {
+                                if (activeSegment) void handleSegmentEditorInfographicGenerate(activeSegment.index);
+                              }}
+                            >
+                              {workspaceText(locale, "Создать заново · 2 ⚡", "Create again · 2 ⚡")}
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
+                      {activeSegment?.infographic ? (
+                        <button
+                          className="studio-segment-editor__infographic-remove"
+                          type="button"
+                          disabled={isSegmentInfographicCurrentSegment}
+                          onClick={() => deleteSegmentEditorInfographicByIndex(activeSegment.index)}
+                        >
+                          {workspaceText(locale, "Удалить инфографику", "Delete infographic")}
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : isPromptUploadMode ? (
                     <div className="studio-segment-editor__prompt-info-card studio-segment-editor__prompt-info-card--action-card">
                       <strong>
-                        {isPromptUploadMode
-                          ? segmentAiPhotoModalCustomFileLabel ?? workspaceText(locale, "Свой визуал", "Custom visual")
-                          : workspaceText(locale, "Улучшить качество", "Upscale image")}
+                        {segmentAiPhotoModalCustomFileLabel ?? workspaceText(locale, "Свой визуал", "Custom visual")}
                       </strong>
                       <span>
-                        {isPromptUploadMode
-                          ? workspaceText(locale, "Загрузите фото или видео для текущего сегмента.", "Upload a photo or video for the current segment.")
-                          : workspaceText(locale, "Улучшение качества изображения.", "Image quality upscaling.")}
+                        {workspaceText(locale, "Загрузите фото или видео для текущего сегмента.", "Upload a photo or video for the current segment.")}
                       </span>
                     </div>
                   ) : (
@@ -34830,6 +35415,10 @@ export function WorkspacePage({
                                   segmentEditorUpscalingImageRunIds,
                                   segment.index,
                                 );
+                                const isInfographicGenerationPending = hasWorkspaceSegmentVisualRun(
+                                  segmentEditorGeneratingInfographicRunIds,
+                                  segment.index,
+                                );
                                 const isVisualGenerationPending =
                                   isAiPhotoGenerationPending ||
                                   isImageEditGenerationPending ||
@@ -35139,6 +35728,30 @@ export function WorkspacePage({
                                           )}
                                         />
                                       ) : null}
+                                      {segment.infographic ? (
+                                        <WorkspaceSegmentInfographicOverlay
+                                          canRedo={Boolean(segmentInfographicHistory[segment.index]?.future.length)}
+                                          canUndo={Boolean(segmentInfographicHistory[segment.index]?.past.length)}
+                                          editable={
+                                            isActiveCard &&
+                                            segmentEditorFullPreviewStatus === "idle" &&
+                                            !isInfographicGenerationPending
+                                          }
+                                          infographic={segment.infographic}
+                                          isPlaying={isSubtitlePreviewPlaying}
+                                          localTimeSeconds={subtitlePreviewTime}
+                                          segmentDurationSeconds={Math.max(0, segment.endTime - segment.startTime)}
+                                          onDelete={() => deleteSegmentEditorInfographicByIndex(segment.index)}
+                                          onInteractionStart={() => {
+                                            resetSegmentEditorPreviewPlaybackState();
+                                          }}
+                                          onRedo={() => redoSegmentEditorInfographic(segment.index)}
+                                          onTransformCommit={(transform) => {
+                                            updateSegmentEditorInfographicTransform(segment.index, transform);
+                                          }}
+                                          onUndo={() => undoSegmentEditorInfographic(segment.index)}
+                                        />
+                                      ) : null}
                                       {shouldShowEditableSubtitleOverlay ? (
                                         <WorkspaceSegmentSubtitleOverlay
                                           clipCurrentTime={subtitlePreviewTime}
@@ -35181,6 +35794,12 @@ export function WorkspacePage({
                                               `Scene ${segmentNumber} will update automatically`,
                                             )}
                                           </span>
+                                        </div>
+                                      ) : null}
+                                      {isInfographicGenerationPending ? (
+                                        <div className="studio-segment-infographic__refreshing" role="status" aria-live="polite">
+                                          <span className="studio-segment-editor__prompt-action-spinner" aria-hidden="true" />
+                                          {workspaceText(locale, "Создаём новую", "Creating new")}
                                         </div>
                                       ) : null}
                                       <div className={`studio-segment-editor__card-overlay${isActiveCard ? " is-active" : ""}`}>
@@ -36460,27 +37079,29 @@ export function WorkspacePage({
                                 setSegmentAiPhotoModalTab("image_edit");
                               },
                             })}
-                            {renderSegmentAiPhotoModalSourceButton({
-                              title: workspaceText(locale, "Улучшить качество", "Upscale image"),
-                              description: workspaceText(locale, "Апскейл выбранного фото", "Upscale selected photo"),
-                              isActive: segmentAiPhotoModalTab === "image_upscale",
-                              disabled: !canUpscaleSegmentImage,
-                              buttonTitle: !canUpscaleSegmentImage
-                                ? segmentPhotoToolUnavailableReason
-                                : workspaceText(locale, "Улучшить качество выбранного фото", "Upscale selected photo"),
-                              footer: canUpscaleSegmentImage ? (
-                                segmentAiPhotoModalUpscaleStatus ? (
-                                  <span className={`studio-ai-photo-modal__source-status is-${segmentAiPhotoModalUpscaleStatus.tone}`}>
-                                    <span className="studio-ai-photo-modal__source-status-dot" aria-hidden="true"></span>
-                                    {segmentAiPhotoModalUpscaleStatus.label}
-                                  </span>
-                                ) : null
-                              ) : null,
-                              onClick: () => {
-                                setSegmentEditorVideoError(null);
-                                setSegmentAiPhotoModalTab("image_upscale");
-                              },
-                            })}
+                            {isSegmentInfographicFeatureEnabled
+                              ? renderSegmentAiPhotoModalSourceButton({
+                                  title: workspaceText(locale, "Инфографика", "Infographic"),
+                                  description: workspaceText(locale, "Интерактивный слой поверх сцены", "Interactive scene overlay"),
+                                  isActive: segmentAiPhotoModalTab === "infographic",
+                                  disabled: !canCreateSegmentInfographic,
+                                  buttonTitle: !canCreateSegmentInfographic
+                                    ? workspaceText(locale, "Сначала добавьте визуал", "Add a visual first")
+                                    : workspaceText(locale, "Добавить инфографику", "Add infographic"),
+                                  footer: canCreateSegmentInfographic ? (
+                                    segmentAiPhotoModalInfographicStatus ? (
+                                      <span className={`studio-ai-photo-modal__source-status is-${segmentAiPhotoModalInfographicStatus.tone}`}>
+                                        <span className="studio-ai-photo-modal__source-status-dot" aria-hidden="true"></span>
+                                        {segmentAiPhotoModalInfographicStatus.label}
+                                      </span>
+                                    ) : null
+                                  ) : null,
+                                  onClick: () => {
+                                    setSegmentEditorVideoError(null);
+                                    setSegmentAiPhotoModalTab("infographic");
+                                  },
+                                })
+                              : null}
                             </div>
                           </section>
 
@@ -36837,43 +37458,78 @@ export function WorkspacePage({
                             </button>
                           </div>
                         </div>
-                      ) : segmentAiPhotoModalTab === "image_upscale" ? (
+                      ) : segmentAiPhotoModalTab === "infographic" ? (
                         <div className="studio-ai-photo-modal__tab-panel">
                           <div className="studio-ai-photo-modal__tab-panel-head">
-                            <strong>{workspaceText(locale, "Улучшить качество", "Upscale image")}</strong>
-                            <p>{workspaceText(locale, "Повышает детализацию и чёткость текущего фото сегмента.", "Increases detail and sharpness for the current segment photo.")}</p>
+                            <strong>{workspaceText(locale, "Инфографика", "Infographic")}</strong>
+                            <p>{workspaceText(locale, "Создайте прозрачный слой поверх фото или видео.", "Create a transparent layer over the photo or video.")}</p>
                           </div>
 
-                          <div className="studio-ai-photo-modal__info-card">
-                            <strong>{workspaceText(locale, "Используем текущее фото сегмента", "Using current segment photo")}</strong>
-                            <p>{workspaceText(locale, "После обработки фото в сегменте заменится на улучшенную версию.", "After processing, the segment photo will be replaced with the upscaled version.")}</p>
+                          <div className="studio-ai-photo-modal__prompt-field studio-ai-photo-modal__infographic-fields">
+                            <label>
+                              <span>{workspaceText(locale, "Текст инфографики", "Infographic text")}</span>
+                              <textarea
+                                className="studio-ai-photo-modal__textarea"
+                                rows={4}
+                                value={segmentAiPhotoModalSegment.infographicTextDraft}
+                                onChange={(event) => {
+                                  const value = truncateWorkspaceSegmentInfographicText(
+                                    event.target.value,
+                                    WORKSPACE_SEGMENT_INFOGRAPHIC_TEXT_MAX_CHARS,
+                                  );
+                                  updateSegmentEditorDraftSegmentByIndex(segmentAiPhotoModalSegment.index, (segment) => ({
+                                    ...segment,
+                                    infographicTextDraft: value,
+                                  }));
+                                }}
+                              />
+                            </label>
+                            <label>
+                              <span>{workspaceText(locale, "Стиль инфографики — необязательно", "Infographic style — optional")}</span>
+                              <textarea
+                                className="studio-ai-photo-modal__textarea"
+                                rows={3}
+                                value={segmentAiPhotoModalSegment.infographicStylePromptDraft}
+                                onChange={(event) => {
+                                  const value = truncateWorkspaceSegmentInfographicText(
+                                    event.target.value,
+                                    WORKSPACE_SEGMENT_INFOGRAPHIC_STYLE_MAX_CHARS,
+                                  );
+                                  updateSegmentEditorDraftSegmentByIndex(segmentAiPhotoModalSegment.index, (segment) => ({
+                                    ...segment,
+                                    infographicStylePromptDraft: value,
+                                  }));
+                                }}
+                              />
+                            </label>
+                            <p>{workspaceText(locale, "Если стиль не указан, ИИ автоматически подберёт его под сцену.", "If no style is provided, AI will match it to the scene automatically.")}</p>
                           </div>
 
                           <div className="studio-ai-photo-modal__tab-actions">
                             <button
                               className="studio-ai-photo-modal__action studio-ai-photo-modal__action--primary studio-ai-photo-modal__action--paid"
                               type="button"
-                              aria-label={workspaceText(locale, `Улучшить качество за ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST)}`, `Upscale image for ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST)}`)}
-                              title={workspaceText(locale, `Улучшить качество за ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST)}`, `Upscale image for ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST)}`)}
+                              aria-label={workspaceText(locale, `Создать инфографику за ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_INFOGRAPHIC_CREDIT_COST)}`, `Create infographic for ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_INFOGRAPHIC_CREDIT_COST)}`)}
+                              title={workspaceText(locale, `Создать инфографику за ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_INFOGRAPHIC_CREDIT_COST)}`, `Create infographic for ${formatSegmentVisualCreditsLabel(STUDIO_SEGMENT_INFOGRAPHIC_CREDIT_COST)}`)}
                               disabled={
-                                !canUpscaleSegmentImage ||
+                                !canCreateSegmentInfographic ||
+                                !segmentAiPhotoModalSegment.infographicTextDraft.trim() ||
                                 isSegmentAiPhotoModalSegmentVisualJobBusy ||
-                                isSegmentAiPhotoModalPreparingCustomVideo ||
-                                isSegmentAiPhotoPromptImproving
+                                isSegmentAiPhotoModalPreparingCustomVideo
                               }
                               onClick={() => {
                                 handleSegmentAiPhotoModalPaidAction((snapshot) =>
-                                  handleSegmentAiPhotoModalUpscaleImage({
-                                    segmentIndex: snapshot.segmentIndex,
-                                  }),
+                                  handleSegmentEditorInfographicGenerate(snapshot.segmentIndex ?? undefined),
                                 );
                               }}
                             >
                               {renderSegmentPaidActionContent(
-                                workspaceText(locale, "Улучшить качество", "Upscale image"),
-                                STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST,
-                                isSegmentImageUpscaleCurrentSegment,
-                                workspaceText(locale, "Улучшаем...", "Upscaling..."),
+                                segmentAiPhotoModalSegment.infographic
+                                  ? workspaceText(locale, "Создать заново", "Create again")
+                                  : workspaceText(locale, "Создать инфографику", "Create infographic"),
+                                STUDIO_SEGMENT_INFOGRAPHIC_CREDIT_COST,
+                                isSegmentInfographicCurrentSegment,
+                                workspaceText(locale, "Создаём...", "Creating..."),
                               )}
                             </button>
                           </div>

@@ -77,6 +77,28 @@ export type WorkspaceSegmentSourceKind = "ai_generated" | "stock" | "upload" | "
 
 export type WorkspaceSegmentCustomVisualSource = "upload" | "media-library";
 
+export type WorkspaceSegmentInfographicTransform = {
+  centerX: number;
+  centerY: number;
+  width: number;
+};
+
+export type WorkspaceSegmentInfographic = {
+  animation: {
+    durationSeconds: number;
+    type: "fade";
+  };
+  inputHash: string;
+  intrinsicHeight: number;
+  intrinsicWidth: number;
+  mediaAssetId: number;
+  sourceVisualIdentity: string;
+  stylePrompt: string | null;
+  text: string;
+  transform: WorkspaceSegmentInfographicTransform;
+  version: 1;
+};
+
 export type WorkspaceSegmentEditorSpeechWord = {
   confidence: number;
   endTime: number;
@@ -112,6 +134,7 @@ export type WorkspaceSegmentEditorSegment = {
   duration_sync_mode_user_selected?: boolean | null;
   endTime: number;
   index: number;
+  infographic?: WorkspaceSegmentInfographic | null;
   manualDurationSeconds?: number | null;
   mediaType: WorkspaceSegmentMediaType;
   originalAsset: WorkspaceMediaAssetRef | null;
@@ -199,6 +222,10 @@ export type WorkspaceSegmentEditorDraftSegment = WorkspaceSegmentEditorSegment &
   imageEditGeneratedFromPrompt: string | null;
   imageEditPrompt: string;
   imageEditPromptInitialized: boolean;
+  infographicRemoved: boolean;
+  infographicSourceWarningDismissedForIdentity: string | null;
+  infographicStylePromptDraft: string;
+  infographicTextDraft: string;
   durationSyncMode?: WorkspaceSegmentDurationSyncMode | null;
   durationSyncModeUserSelected?: boolean | null;
   duration_sync_mode_user_selected?: boolean | null;
@@ -231,7 +258,7 @@ export type WorkspaceSegmentEditorMediaUploadScope = {
   segmentIndex?: number;
 };
 
-export type WorkspaceSegmentTimelineHistoryKind = "visual" | "music" | "voice" | "sound" | "text" | "subtitle";
+export type WorkspaceSegmentTimelineHistoryKind = "visual" | "infographic" | "music" | "voice" | "sound" | "text" | "subtitle";
 
 export type StudioVoiceOption = {
   badgeLabel?: string;

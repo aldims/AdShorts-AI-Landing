@@ -24,6 +24,7 @@ import {
   studioVoiceOptionsByLanguage,
 } from "./workspace-segment-editor";
 import { getStudioSubtitleStyleDisplayLabel } from "./workspace-subtitle-preview-helpers";
+import { areWorkspaceSegmentInfographicsEqual } from "./workspace-infographic-helpers";
 import { studioMusicOptions } from "./workspace-studio-options";
 import { formatWorkspaceSegmentDurationInputValue } from "./workspace-utils";
 import type {
@@ -54,6 +55,13 @@ export const isWorkspaceSegmentDraftSubtitleEdited = (
     getWorkspaceSegmentSubtitleColorOverrideId(segment) !== getWorkspaceSegmentSubtitleColorOverrideId(baselineSegment)
   );
 };
+
+export const isWorkspaceSegmentDraftInfographicEdited = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  baselineSegment: WorkspaceSegmentEditorDraftSegment | null | undefined,
+) =>
+  segment.infographicRemoved === true ||
+  !areWorkspaceSegmentInfographicsEqual(segment.infographic, baselineSegment?.infographic);
 
 const isWorkspaceSegmentDraftVisualEdited = (segment: WorkspaceSegmentEditorDraftSegment) => {
   if (isWorkspaceSegmentServerPhotoAnimationOverride(segment)) {
@@ -199,6 +207,7 @@ export const getWorkspaceSegmentEditorPendingInsertedSegmentIndices = (
       !isWorkspaceSegmentDraftTextEdited(segment) &&
       !isWorkspaceSegmentDraftSubtitleEdited(segment, null) &&
       !isWorkspaceSegmentDraftVisualEdited(segment) &&
+      !isWorkspaceSegmentDraftInfographicEdited(segment, null) &&
       !isWorkspaceSegmentDraftDurationEdited(segment, null)
     ) {
       pendingSegmentIndices.add(segment.index);
@@ -231,6 +240,7 @@ export type WorkspaceSegmentEditorChecklistItem =
       kind: "segment";
       label: string;
       resetDuration: boolean;
+      resetInfographic: boolean;
       resetText: boolean;
       resetSubtitle: boolean;
       resetSceneSound: boolean;
@@ -624,6 +634,19 @@ const getWorkspaceSegmentEditorChecklistSceneSoundLabel = (
   return "обновлен звук сцены";
 };
 
+const getWorkspaceSegmentEditorChecklistInfographicLabel = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  baselineSegment: WorkspaceSegmentEditorDraftSegment | null | undefined,
+) => {
+  if (segment.infographic && !baselineSegment?.infographic) {
+    return "добавлена инфографика";
+  }
+  if (!segment.infographic && baselineSegment?.infographic) {
+    return "удалена инфографика";
+  }
+  return "обновлена инфографика";
+};
+
 const getWorkspaceSegmentEditorChecklistSceneVoiceLabel = (segment: WorkspaceSegmentEditorDraftSegment) => {
   const voiceId = getWorkspaceSegmentVoiceOverrideId(segment);
   if (segment.voiceoverAsset) {
@@ -787,6 +810,7 @@ export const buildWorkspaceSegmentEditorChangeChecklist = (
     const segmentNumber = index + 1;
     const segmentChanges: string[] = [];
     let resetDuration = false;
+    let resetInfographic = false;
     let resetText = false;
     let resetVisual = false;
     let restoreVisual = false;
@@ -806,6 +830,11 @@ export const buildWorkspaceSegmentEditorChangeChecklist = (
       segmentChanges.push(getWorkspaceSegmentEditorChecklistVisualLabel(segment));
       resetVisual = isVisualEdited;
       restoreVisual = isVisualResetChange;
+    }
+
+    if (isWorkspaceSegmentDraftInfographicEdited(segment, baselineSegment)) {
+      segmentChanges.push(getWorkspaceSegmentEditorChecklistInfographicLabel(segment, baselineSegment));
+      resetInfographic = true;
     }
 
     if (isWorkspaceSegmentDraftSceneSoundEdited(segment, baselineSegment)) {
@@ -834,6 +863,7 @@ export const buildWorkspaceSegmentEditorChangeChecklist = (
         kind: "segment",
         label: `Сегмент ${segmentNumber}: ${segmentChanges.join(", ")}`,
         resetDuration,
+        resetInfographic,
         resetSceneSound,
         resetSubtitle,
         resetText,
