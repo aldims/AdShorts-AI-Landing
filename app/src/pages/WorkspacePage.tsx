@@ -12541,7 +12541,7 @@ export function WorkspacePage({
       preserveSourceTimelineEnd?: boolean;
     },
   ) => {
-    updateSegmentEditorDraft((currentDraft) => {
+    return updateSegmentEditorDraft((currentDraft) => {
       const hasTargetSegmentIndex = currentDraft.segments.some(
         (draftSegment) => draftSegment.index === targetSegmentIndex,
       );
@@ -14408,6 +14408,8 @@ export function WorkspacePage({
   };
 
   const resetSegmentEditorInfographicByIndex = (targetSegmentIndex: number) => {
+    const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+    const currentSegment = currentDraft?.segments.find((segment) => segment.index === targetSegmentIndex) ?? null;
     const baselineSegment = segmentEditorChecklistBaseSession?.segments.find(
       (segment) => segment.index === targetSegmentIndex,
     );
@@ -14416,7 +14418,7 @@ export function WorkspacePage({
     updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => ({
       ...segment,
       infographic: cloneWorkspaceSegmentInfographic(baselineSegment?.infographic),
-      infographicRemoved: false,
+      infographicRemoved: !baselineSegment?.infographic && Boolean(currentSegment?.infographic),
       infographicSourceWarningDismissedForIdentity: null,
       infographicStylePromptDraft: baselineSegment?.infographic?.stylePrompt ?? "",
       infographicTextDraft: baselineSegment?.infographic?.text ?? "",
@@ -14440,7 +14442,10 @@ export function WorkspacePage({
     updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (currentSegment) => ({
       ...currentSegment,
       infographic: null,
-      infographicRemoved: Boolean(baselineSegment?.infographic),
+      // Explicit removal also matters for a newly generated layer that has not
+      // reached the persisted project snapshot yet. The API can then distinguish
+      // an intentional delete from a client draft that accidentally omitted it.
+      infographicRemoved: true,
       infographicSourceWarningDismissedForIdentity: null,
     }));
   };
@@ -18468,7 +18473,7 @@ export function WorkspacePage({
             text: job.text,
           });
           captureSegmentEditorInfographicHistory(job.segmentIndex);
-          updateSegmentEditorDraftSegmentByIndex(job.segmentIndex, (segment) => ({
+          const nextDraft = updateSegmentEditorDraftSegmentByIndex(job.segmentIndex, (segment) => ({
             ...segment,
             infographic: nextInfographic,
             infographicRemoved: false,
@@ -18476,6 +18481,14 @@ export function WorkspacePage({
             infographicStylePromptDraft: job.stylePrompt,
             infographicTextDraft: job.text,
           }));
+          if (!nextDraft) {
+            throw new Error("Не удалось применить инфографику к текущей сцене.");
+          }
+          // Persist synchronously at the job completion boundary. Bootstrap and
+          // media-library refreshes can finish in the same frame; relying only on
+          // the layout effect leaves a race where the durable asset is ready but
+          // the render snapshot still contains the old segment.
+          persistSegmentEditorDraftSnapshot(nextDraft);
           removeStoredWorkspaceSegmentInfographicJob(session.email, safeJobId);
           return;
         }
@@ -21951,6 +21964,9 @@ export function WorkspacePage({
           segmentVoiceTypes: effectiveSegmentEditorBuild.payload.segments.map((segment) => segment.voiceType ?? null),
           segmentVoiceoverAssetIds: effectiveSegmentEditorBuild.payload.segments.map(
             (segment) => segment.voiceoverAssetId ?? null,
+          ),
+          segmentInfographicAssetIds: effectiveSegmentEditorBuild.payload.segments.map(
+            (segment) => segment.infographic?.mediaAssetId ?? null,
           ),
           uploadCount: effectiveSegmentEditorBuild.uploads.length,
         });

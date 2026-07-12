@@ -258,6 +258,35 @@ const createProjectVoiceoverDraft = (
   voiceType: DEFAULT_STUDIO_VOICE_ID.ru,
 });
 
+describe("segment infographic refresh isolation", () => {
+  it("preserves a generated layer when a concurrent fresh session still has no infographic", () => {
+    const baselineSegment = createProjectVoiceoverSegment({ index: 0 });
+    const infographic = {
+      animation: { durationSeconds: 0.35 as const, type: "fade" as const },
+      inputHash: "b".repeat(64),
+      intrinsicHeight: 400,
+      intrinsicWidth: 800,
+      mediaAssetId: 8952,
+      sourceVisualIdentity: "asset:7824",
+      stylePrompt: null,
+      text: "Рост продаж на 42%",
+      transform: { centerX: 0.5, centerY: 0.3, width: 0.7 },
+      version: 1 as const,
+    };
+    const liveDraft = createProjectVoiceoverDraft([
+      { ...baselineSegment, infographic, infographicTextDraft: infographic.text },
+    ]);
+    const baseline = createProjectVoiceoverDraft([baselineSegment]);
+    const freshSession = createProjectVoiceoverDraft([baselineSegment]);
+
+    const refreshed = refreshWorkspaceSegmentEditorDraftWithFreshSession(liveDraft, freshSession, {
+      baselineSession: baseline,
+    });
+
+    expect(refreshed.segments[0]?.infographic).toEqual(infographic);
+  });
+});
+
 it("recognizes talking photo assets by library kind", () => {
   expect(
     isWorkspaceTalkingPhotoMediaAsset({
