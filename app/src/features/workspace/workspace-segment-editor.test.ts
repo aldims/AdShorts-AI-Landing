@@ -5308,6 +5308,66 @@ describe("workspace segment editor project voiceover timeline", () => {
     );
   });
 
+  it("drops every stale voice source alias when edited text rebuilds the final scene", () => {
+    const text = "Город встречал героя, а Барсик просто играл со своей игрушкой.";
+    const segment = createProjectVoiceoverSegment({
+      customVideo: {
+        durationSeconds: 5,
+        fileName: "scene-five.mp4",
+        fileSize: 1024,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/505/playback",
+        source: "upload",
+      },
+      duration: 9.7,
+      endTime: 24.4,
+      index: 4,
+      mediaType: "video",
+      speechDuration: 9.7,
+      speechEndTime: 24.4,
+      speechStartTime: 14.7,
+      startTime: 14.7,
+      text,
+      videoAction: "custom",
+      voiceSourceDuration: 9.7,
+      voiceSourceEndTime: 24.4,
+      voiceSourceStartTime: 14.7,
+      voice_source_duration: 9.7,
+      voice_source_end_time: 24.4,
+      voice_source_start_time: 14.7,
+      _voice_source_duration: 9.7,
+      _voice_source_end_time: 24.4,
+      _voice_source_start_time: 14.7,
+      _voice_render_source_end_time: 24.4,
+      _voice_render_source_start_time: 14.7,
+    });
+    const session = createProjectVoiceoverDraft([segment]);
+
+    const cleared = clearWorkspaceSegmentEditorVoiceoverGenerationState(segment, {
+      preserveUserSelectedVisualDuration: false,
+      previousText: "Старый короткий текст",
+      resetTimelineToEstimatedVoiceover: true,
+      session,
+    });
+
+    expect(cleared.duration).toBeLessThan(5);
+    expect(cleared.endTime).toBeCloseTo(14.7 + cleared.duration, 3);
+    expect(cleared.durationExtensionSourceDurationSeconds).toBe(5);
+    expect(cleared).toEqual(expect.objectContaining({
+      voiceSourceDuration: null,
+      voiceSourceEndTime: null,
+      voiceSourceStartTime: null,
+      voice_source_duration: null,
+      voice_source_end_time: null,
+      voice_source_start_time: null,
+      _voice_source_duration: null,
+      _voice_source_end_time: null,
+      _voice_source_start_time: null,
+      _voice_render_source_end_time: null,
+      _voice_render_source_start_time: null,
+    }));
+  });
+
   it("ignores a stale pending voiceover estimate from another text", () => {
     const segment = createProjectVoiceoverSegment({
       estimatedVoiceoverDurationSeconds: 9,

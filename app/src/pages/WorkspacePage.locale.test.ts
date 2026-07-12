@@ -4398,7 +4398,7 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(getWorkspaceSegmentVisualAudioDurationMismatchInfo(segment, createDraftSession(segment))).toBeNull();
   });
 
-  it("warns before generation when estimated voiceover can exceed the video within the TTS uncertainty range", () => {
+  it("does not warn before generation when the estimated voiceover fits the video", () => {
     const segment = createDraftSegment({
       aiVideoAsset: {
         durationSeconds: 4,
@@ -4418,11 +4418,7 @@ describe("WorkspacePage studio locale defaults", () => {
       resolveWorkspaceSegmentTimelineVisualAudioMismatchInfo(segment, createDraftSession(segment), {
         includeAnyVideoVisual: true,
       }),
-    ).toEqual({
-      visualDurationSeconds: 4,
-      voiceoverDurationSeconds: 4.59,
-      voiceoverDurationSource: "estimated",
-    });
+    ).toBeNull();
   });
 
   it("can suppress estimated video and voiceover mismatch until voiceover timings are known", () => {
