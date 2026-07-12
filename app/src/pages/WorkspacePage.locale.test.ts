@@ -4398,6 +4398,33 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(getWorkspaceSegmentVisualAudioDurationMismatchInfo(segment, createDraftSession(segment))).toBeNull();
   });
 
+  it("warns before generation when estimated voiceover can exceed the video within the TTS uncertainty range", () => {
+    const segment = createDraftSegment({
+      aiVideoAsset: {
+        durationSeconds: 4,
+        fileName: "segment-ai-video.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/studio/segment-ai-video/jobs/job/video",
+      },
+      duration: 4,
+      endTime: 4,
+      mediaType: "photo",
+      text: "один два три четыре пять шесть семь восемь девять десять",
+      videoAction: "ai",
+    });
+
+    expect(
+      resolveWorkspaceSegmentTimelineVisualAudioMismatchInfo(segment, createDraftSession(segment), {
+        includeAnyVideoVisual: true,
+      }),
+    ).toEqual({
+      visualDurationSeconds: 4,
+      voiceoverDurationSeconds: 4.59,
+      voiceoverDurationSource: "estimated",
+    });
+  });
+
   it("can suppress estimated video and voiceover mismatch until voiceover timings are known", () => {
     const segment = createDraftSegment({
       aiVideoAsset: {

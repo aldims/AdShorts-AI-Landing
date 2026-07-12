@@ -83,6 +83,12 @@ export const WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS = 0.075;
 const WORKSPACE_SEGMENT_STALE_AUTO_VISUAL_REPAIR_THRESHOLD_SECONDS = 0.75;
 
 const WORKSPACE_SEGMENT_DURATION_WARNING_EPSILON_SECONDS = 0.25;
+// TTS duration cannot be known exactly before generation. Short scene phrases are
+// especially sensitive to the selected voice's cadence, pauses and pronunciation,
+// so warnings use a conservative upper bound while the UI still labels it as an
+// estimate. Once audio exists, the measured duration is used without this margin.
+const WORKSPACE_SEGMENT_ESTIMATED_DURATION_WARNING_HEADROOM_RATIO = 0.35;
+const WORKSPACE_SEGMENT_ESTIMATED_DURATION_WARNING_MIN_HEADROOM_SECONDS = 0.65;
 
 export const WORKSPACE_SEGMENT_VOICE_PREVIEW_LEAD_SECONDS = 0.08;
 
@@ -5735,13 +5741,24 @@ export const getWorkspaceSegmentVisualAudioDurationMismatchInfo = (
     return null;
   }
 
-  if (voiceoverDurationInfo.durationSeconds <= visualDurationSeconds + WORKSPACE_SEGMENT_DURATION_WARNING_EPSILON_SECONDS) {
+  const warningVoiceoverDurationSeconds =
+    voiceoverDurationInfo.source === "estimated"
+      ? roundWorkspaceSegmentTimelineSeconds(
+          voiceoverDurationInfo.durationSeconds +
+            Math.max(
+              WORKSPACE_SEGMENT_ESTIMATED_DURATION_WARNING_MIN_HEADROOM_SECONDS,
+              voiceoverDurationInfo.durationSeconds * WORKSPACE_SEGMENT_ESTIMATED_DURATION_WARNING_HEADROOM_RATIO,
+            ),
+        )
+      : voiceoverDurationInfo.durationSeconds;
+
+  if (warningVoiceoverDurationSeconds <= visualDurationSeconds + WORKSPACE_SEGMENT_DURATION_WARNING_EPSILON_SECONDS) {
     return null;
   }
 
   return {
     visualDurationSeconds: roundWorkspaceSegmentTimelineSeconds(visualDurationSeconds),
-    voiceoverDurationSeconds: roundWorkspaceSegmentTimelineSeconds(voiceoverDurationInfo.durationSeconds),
+    voiceoverDurationSeconds: roundWorkspaceSegmentTimelineSeconds(warningVoiceoverDurationSeconds),
     voiceoverDurationSource: voiceoverDurationInfo.source,
   };
 };
