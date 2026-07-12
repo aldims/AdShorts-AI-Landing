@@ -34387,7 +34387,11 @@ export function WorkspacePage({
               </div>
             <div className="studio-canvas-prompt__input-row">
               <div className="studio-canvas-prompt__input-main">
-                <div className="studio-segment-editor__prompt-visual-panel">
+                <div
+                  className={`studio-segment-editor__prompt-visual-panel${
+                    isPromptInfographicMode ? " is-infographic" : ""
+                  }`}
+                >
                   <input
                     ref={segmentAiPhotoModalFileInputRef}
                     className="studio-segment-editor__prompt-file-input"

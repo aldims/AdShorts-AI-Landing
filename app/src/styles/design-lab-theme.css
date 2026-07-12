@@ -46588,3 +46588,32 @@ html, body {
     transform: translateX(0) scale(1);
   }
 }
+
+/* Keep the infographic CTA reachable inside the fixed-height visual workspace. */
+.studio-canvas-main.is-segment-editor
+  .studio-segment-editor__prompt-visual-panel.is-infographic {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  align-content: stretch;
+  overflow: hidden;
+}
+
+.studio-canvas-main.is-segment-editor
+  .studio-segment-editor__prompt-visual-panel.is-infographic
+  .studio-segment-editor__infographic-form {
+  min-height: 0;
+  padding: 2px 5px 2px 2px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.studio-canvas-main.is-segment-editor
+  .studio-segment-editor__prompt-visual-panel.is-infographic
+  > .studio-segment-editor__prompt-action-row {
+  z-index: 2;
+  padding-top: 8px;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+  background: linear-gradient(180deg, rgba(4, 9, 18, 0), rgba(4, 9, 18, 0.88) 36%);
+}
