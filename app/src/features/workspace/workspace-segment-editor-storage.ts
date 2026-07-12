@@ -69,6 +69,7 @@ export type StoredWorkspaceSegmentImageEditJob = {
 export type StoredWorkspaceSegmentSceneSoundJob = {
   createdAt: number;
   jobId: string;
+  previousAssetId?: number | null;
   projectId: number;
   prompt: string;
   segmentIndex: number;
@@ -1219,14 +1220,32 @@ const isStoredWorkspaceSegmentSceneSoundJob = (value: unknown): value is StoredW
 
 const normalizeStoredWorkspaceSegmentSceneSoundJob = (
   value: StoredWorkspaceSegmentSceneSoundJob,
-): StoredWorkspaceSegmentSceneSoundJob => ({
-  createdAt: Number.isFinite(Number(value.createdAt)) ? Number(value.createdAt) : Date.now(),
-  jobId: String(value.jobId ?? "").trim(),
-  projectId: Math.max(0, Math.trunc(Number(value.projectId))),
-  prompt: normalizeWorkspaceSegmentAiPhotoPrompt(value.prompt),
-  segmentIndex: Math.trunc(Number(value.segmentIndex)),
-  status: String(value.status ?? "queued").trim() || "queued",
-});
+): StoredWorkspaceSegmentSceneSoundJob => {
+  const normalizedJob: StoredWorkspaceSegmentSceneSoundJob = {
+    createdAt: Number.isFinite(Number(value.createdAt)) ? Number(value.createdAt) : Date.now(),
+    jobId: String(value.jobId ?? "").trim(),
+    projectId: Math.max(0, Math.trunc(Number(value.projectId))),
+    prompt: normalizeWorkspaceSegmentAiPhotoPrompt(value.prompt),
+    segmentIndex: Math.trunc(Number(value.segmentIndex)),
+    status: String(value.status ?? "queued").trim() || "queued",
+  };
+  if (Object.prototype.hasOwnProperty.call(value, "previousAssetId")) {
+    normalizedJob.previousAssetId = getPositiveWorkspaceMediaAssetId(value.previousAssetId);
+  }
+  return normalizedJob;
+};
+
+export const hasStoredWorkspaceSegmentSceneSoundAssetChangedSinceStart = (
+  job: StoredWorkspaceSegmentSceneSoundJob,
+  currentAssetId: number | null | undefined,
+) => {
+  const normalizedCurrentAssetId = getPositiveWorkspaceMediaAssetId(currentAssetId);
+  return (
+    Object.prototype.hasOwnProperty.call(job, "previousAssetId") &&
+    normalizedCurrentAssetId !== null &&
+    normalizedCurrentAssetId !== getPositiveWorkspaceMediaAssetId(job.previousAssetId)
+  );
+};
 
 export const readStoredWorkspaceSegmentSceneSoundJobs = (
   email: string | null | undefined,

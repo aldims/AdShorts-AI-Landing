@@ -225,6 +225,7 @@ import {
   getWorkspaceSegmentPreviewKind,
   getWorkspaceSegmentRecommendedDurationSeconds,
   getWorkspaceSegmentSceneSoundRefreshPrompt,
+  getWorkspaceSegmentSceneSoundStateAssetId,
   getWorkspaceSegmentSelectedVisualPreviewKind,
   getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds,
   getWorkspaceSegmentSubtitleColorOverrideId,
@@ -731,6 +732,7 @@ import {
   readStoredWorkspaceSegmentPhotoAnimationJobs,
   readStoredWorkspaceSegmentSceneSoundJobs,
   readStoredWorkspaceSegmentTalkingPhotoJobs,
+  hasStoredWorkspaceSegmentSceneSoundAssetChangedSinceStart,
   readWorkspaceSegmentVisualDurationCache,
   removeStoredWorkspaceSegmentAiPhotoJob,
   removeStoredWorkspaceSegmentAiPhotoJobsForSegment,
@@ -15836,6 +15838,7 @@ export function WorkspacePage({
     initialStatus = "queued",
     options: {
       createdAt?: number;
+      previousAssetId?: number | null;
       prompt: string;
       projectId?: number;
       runId: number;
@@ -15875,6 +15878,9 @@ export function WorkspacePage({
           upsertStoredWorkspaceSegmentSceneSoundJob(session.email, {
             createdAt: startedAt,
             jobId: safeJobId,
+            ...(Object.prototype.hasOwnProperty.call(options, "previousAssetId")
+              ? { previousAssetId: options.previousAssetId }
+              : {}),
             projectId: options.projectId,
             prompt: options.prompt,
             segmentIndex: options.segmentIndex,
@@ -15943,7 +15949,12 @@ export function WorkspacePage({
       return false;
     }
 
-    if (targetSegment.sceneSoundGeneratedFromPrompt === job.prompt && createWorkspaceSegmentSceneSoundAsset(targetSegment, targetSegment.index)) {
+    if (
+      hasStoredWorkspaceSegmentSceneSoundAssetChangedSinceStart(
+        job,
+        getWorkspaceSegmentSceneSoundStateAssetId(targetSegment),
+      )
+    ) {
       removeStoredWorkspaceSegmentSceneSoundJob(session.email, job.jobId);
       return false;
     }
@@ -15967,6 +15978,9 @@ export function WorkspacePage({
 
     void pollSegmentEditorSceneSoundJob(job.jobId, job.status || "queued", {
       createdAt: job.createdAt,
+      ...(Object.prototype.hasOwnProperty.call(job, "previousAssetId")
+        ? { previousAssetId: job.previousAssetId }
+        : {}),
       projectId: job.projectId,
       prompt: job.prompt,
       runId,
@@ -18307,10 +18321,12 @@ export function WorkspacePage({
       applyWorkspaceProfile(payload.data.profile);
       const pendingJobCreatedAt = Date.now();
       const pendingProjectId = sceneSoundProjectId ?? currentDraft.projectId ?? 0;
+      const previousAssetId = getWorkspaceSegmentSceneSoundStateAssetId(targetSegment);
       if (Number.isInteger(pendingProjectId) && pendingProjectId >= 0) {
         upsertStoredWorkspaceSegmentSceneSoundJob(session.email, {
           createdAt: pendingJobCreatedAt,
           jobId: payload.data.jobId,
+          previousAssetId,
           projectId: pendingProjectId,
           prompt: normalizedPrompt,
           segmentIndex: targetSegmentIndex,
@@ -18320,6 +18336,7 @@ export function WorkspacePage({
       pollStarted = true;
       await pollSegmentEditorSceneSoundJob(payload.data.jobId, payload.data.status, {
         createdAt: pendingJobCreatedAt,
+        previousAssetId,
         prompt: normalizedPrompt,
         projectId: pendingProjectId,
         runId,

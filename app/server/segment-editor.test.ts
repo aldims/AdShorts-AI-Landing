@@ -345,6 +345,73 @@ describe("segment editor asset lifecycle mapping", () => {
     }));
   });
 
+  it("prefers the current scene sound media asset over stale embedded sound metadata", () => {
+    const segment = buildWorkspaceSegmentEditorSegment(
+      4178,
+      {
+        current_video: "current-marker",
+        duration: 5,
+        index: 1,
+        scene_sound: {
+          download_url: "/api/media/8798/download",
+          file_name: "old-scene-sound.wav",
+          media_asset_id: 8798,
+          mime_type: "audio/wav",
+        },
+        scene_sound_asset_id: 8798,
+        text: "Segment",
+      },
+      {
+        currentEntries: [],
+        originalEntries: [],
+        projectMediaAssets: [
+          createMediaAsset({
+            assetId: 8798,
+            downloadPath: "/api/media/8798/download",
+            isCurrent: false,
+            kind: "segment_sound",
+            libraryKind: "scene_sound",
+            playbackUrl: "/api/media/8798/download",
+            role: "segment_sound",
+            segmentIndex: 1,
+            sourceKind: "ai_scene_sound",
+            storageKey: "projects/4178/segment-2-sound-8798.wav",
+          }),
+          createMediaAsset({
+            assetId: 8800,
+            createdAt: "2026-07-12T00:28:19.000Z",
+            downloadPath: "/api/media/8800/download",
+            isCurrent: true,
+            kind: "segment_sound",
+            libraryKind: "scene_sound",
+            playbackUrl: "/api/media/8800/download",
+            role: "segment_sound",
+            segmentIndex: 1,
+            sourceKind: "ai_scene_sound",
+            storageKey: "projects/4178/segment-2-sound-8800.wav",
+          }),
+        ],
+        projectMediaByAssetId: new Map(),
+        projectMediaLoaded: true,
+        sceneSoundEntries: [
+          {
+            download_url: "/api/media/8798/download",
+            media_asset_id: 8798,
+            media_type: "audio",
+            role: "segment_sound",
+            segment_index: 1,
+          },
+        ],
+      },
+    );
+
+    expect(segment?.sceneSoundAssetId).toBe(8800);
+    expect(segment?.scene_sound).toEqual(expect.objectContaining({
+      download_url: "/api/media/8800/download",
+      media_asset_id: 8800,
+    }));
+  });
+
   it("restores embedded scene sound metadata from the upstream segment payload", () => {
     const segment = buildWorkspaceSegmentEditorSegment(
       42,

@@ -18,6 +18,7 @@ import {
 } from "../features/workspace/workspace-segment-editor";
 import { resolveStudioSceneVoiceIdOnSettingsOpen } from "../features/workspace/workspace-studio-defaults-helpers";
 import {
+  hasStoredWorkspaceSegmentSceneSoundAssetChangedSinceStart,
   readStoredWorkspaceSegmentEditorDraft,
   readStoredWorkspaceSegmentEditorDrafts,
   readStoredWorkspaceSegmentEditorSession,
@@ -1522,6 +1523,7 @@ describe("WorkspacePage segment editor draft persistence", () => {
       upsertStoredWorkspaceSegmentSceneSoundJob("Scratch@Example.test", {
         createdAt: Date.now(),
         jobId: "scratch-scene-sound",
+        previousAssetId: 8798,
         projectId: 0,
         prompt: "tiny footsteps",
         segmentIndex: 2,
@@ -1549,12 +1551,25 @@ describe("WorkspacePage segment editor draft persistence", () => {
       expect(readStoredWorkspaceSegmentSceneSoundJobs("scratch@example.test")).toEqual([
         expect.objectContaining({
           jobId: "scratch-scene-sound",
+          previousAssetId: 8798,
           projectId: 0,
           prompt: "tiny footsteps",
           segmentIndex: 2,
           status: "processing",
         }),
       ]);
+      const [storedSceneSoundJob] = readStoredWorkspaceSegmentSceneSoundJobs("scratch@example.test");
+      expect(hasStoredWorkspaceSegmentSceneSoundAssetChangedSinceStart(storedSceneSoundJob!, 8798)).toBe(false);
+      expect(hasStoredWorkspaceSegmentSceneSoundAssetChangedSinceStart(storedSceneSoundJob!, 8800)).toBe(true);
+      expect(hasStoredWorkspaceSegmentSceneSoundAssetChangedSinceStart(storedSceneSoundJob!, null)).toBe(false);
+      expect(hasStoredWorkspaceSegmentSceneSoundAssetChangedSinceStart({
+        createdAt: Date.now(),
+        jobId: "legacy-scene-sound",
+        projectId: 0,
+        prompt: "tiny footsteps",
+        segmentIndex: 2,
+        status: "processing",
+      }, 8798)).toBe(false);
     } finally {
       if (originalLocalStorage) {
         Object.defineProperty(window, "localStorage", originalLocalStorage);

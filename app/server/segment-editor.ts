@@ -637,12 +637,34 @@ const buildWorkspaceSegmentSceneSoundRefFromAsset = (
   };
 };
 
+const findCurrentProjectAudioMediaAsset = (
+  assets: WorkspaceMediaAssetRef[],
+  segmentIndex: number,
+  predicate: (asset?: WorkspaceMediaAssetRef | null) => boolean,
+) => {
+  const matchingAssets = assets.filter(
+    (asset) => normalizeInteger(asset?.segmentIndex) === segmentIndex && predicate(asset),
+  );
+  const currentAssets = matchingAssets.filter((asset) => asset.isCurrent === true);
+  const eligibleAssets = currentAssets.length > 0
+    ? currentAssets
+    : matchingAssets.filter((asset) => asset.isCurrent === null);
+
+  return eligibleAssets
+    .slice()
+    .sort((left, right) => {
+      const createdAtDelta = (Date.parse(right.createdAt ?? "") || 0) - (Date.parse(left.createdAt ?? "") || 0);
+      if (createdAtDelta !== 0) {
+        return createdAtDelta;
+      }
+      return (normalizePositiveProjectId(right.assetId) ?? 0) - (normalizePositiveProjectId(left.assetId) ?? 0);
+    })[0] ?? null;
+};
+
 const findProjectSceneSoundMediaAsset = (
   assets: WorkspaceMediaAssetRef[],
   segmentIndex: number,
-) =>
-  assets.find((asset) => normalizeInteger(asset?.segmentIndex) === segmentIndex && isWorkspaceSceneSoundMediaAsset(asset)) ??
-  null;
+) => findCurrentProjectAudioMediaAsset(assets, segmentIndex, isWorkspaceSceneSoundMediaAsset);
 
 const findProjectVoiceoverMediaAsset = (
   assets: WorkspaceMediaAssetRef[],
@@ -2861,11 +2883,17 @@ export const buildWorkspaceSegmentEditorSegment = (
     index,
   );
   const projectSceneSoundAsset = findProjectSceneSoundMediaAsset(projectMediaAssets, index);
+  const authoritativeProjectSceneSound =
+    projectMediaLoaded && projectSceneSoundAsset?.isCurrent === true
+      ? buildWorkspaceSegmentSceneSoundRefFromAsset(projectSceneSoundAsset)
+      : null;
   const sceneSound =
+    authoritativeProjectSceneSound ??
     explicitSceneSound ??
     buildWorkspaceSegmentSceneSoundRef(projectSceneSoundEntry) ??
     buildWorkspaceSegmentSceneSoundRefFromAsset(projectSceneSoundAsset);
   const sceneSoundAssetId =
+    authoritativeProjectSceneSound?.media_asset_id ??
     normalizePositiveProjectId(payload.scene_sound_asset_id) ??
     sceneSound?.media_asset_id ??
     normalizePositiveProjectId(projectSceneSoundAsset?.assetId) ??
