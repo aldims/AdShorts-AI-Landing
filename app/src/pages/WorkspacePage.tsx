@@ -18500,8 +18500,8 @@ export function WorkspacePage({
             isContentValidationFailure
               ? workspaceText(
                   locale,
-                  "ИИ не смог точно воспроизвести текст инфографики. 2 кредита возвращены — попробуйте ещё раз.",
-                  "AI could not reproduce the infographic text exactly. 2 credits were refunded — please try again.",
+                  "Инфографика не прошла проверку качества. 2 кредита возвращены — попробуйте ещё раз.",
+                  "The infographic did not pass quality checks. 2 credits were refunded — please try again.",
                 )
               : rawError || workspaceText(
                   locale,
