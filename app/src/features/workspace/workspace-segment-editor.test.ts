@@ -262,7 +262,7 @@ describe("segment infographic refresh isolation", () => {
   it("preserves a generated layer when a concurrent fresh session still has no infographic", () => {
     const baselineSegment = createProjectVoiceoverSegment({ index: 0 });
     const infographic = {
-      animation: { durationSeconds: 0.35 as const, type: "fade" as const },
+      animation: { durationSeconds: 0.55 as const, type: "fade" as const },
       inputHash: "b".repeat(64),
       intrinsicHeight: 400,
       intrinsicWidth: 800,

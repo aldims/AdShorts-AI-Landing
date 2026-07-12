@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { normalizeStudioSegmentEditorPayload } from "./studio.js";
 
 const infographic = {
-  animation: { durationSeconds: 0.35, type: "fade" },
+  animation: { durationSeconds: 0.55, type: "fade" },
   inputHash: "a".repeat(64),
   intrinsicHeight: 600,
   intrinsicWidth: 1200,

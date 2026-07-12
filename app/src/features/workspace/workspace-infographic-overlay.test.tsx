@@ -33,6 +33,36 @@ beforeAll(() => {
 });
 
 describe("WorkspaceSegmentInfographicOverlay", () => {
+  it("renders three staggered visual parts while playback is active", () => {
+    const infographic = createWorkspaceSegmentInfographic({
+      inputHash: "c".repeat(64),
+      intrinsicHeight: 512,
+      intrinsicWidth: 1024,
+      mediaAssetId: 57,
+      sourceVisualIdentity: "asset:12",
+      text: "Part reveal",
+    });
+    const view = render(
+      <WorkspaceSegmentInfographicOverlay
+        editable={false}
+        infographic={infographic}
+        isPlaying
+        localTimeSeconds={0.275}
+        segmentDurationSeconds={5}
+      />,
+    );
+    const overlay = view.getByTestId("segment-infographic-overlay");
+    const parts = overlay.querySelectorAll(".studio-segment-infographic__image");
+
+    expect(parts).toHaveLength(3);
+    expect(Number(overlay.style.getPropertyValue("--workspace-infographic-part-0-opacity"))).toBeGreaterThan(
+      Number(overlay.style.getPropertyValue("--workspace-infographic-part-1-opacity")),
+    );
+    expect(Number(overlay.style.getPropertyValue("--workspace-infographic-part-1-opacity"))).toBeGreaterThan(
+      Number(overlay.style.getPropertyValue("--workspace-infographic-part-2-opacity")),
+    );
+  });
+
   it("commits one transform after any number of pointer moves", () => {
     const onTransformCommit = vi.fn();
     const infographic = createWorkspaceSegmentInfographic({
