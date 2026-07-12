@@ -18492,7 +18492,23 @@ export function WorkspacePage({
 
         if (isWorkspaceSegmentGenerationJobFailedStatus(latestStatus)) {
           removeStoredWorkspaceSegmentInfographicJob(session.email, safeJobId);
-          throw new Error(payload.data.error ?? "Не удалось создать инфографику. Кредиты возвращены.");
+          const rawError = String(payload.data.error ?? "").trim();
+          const isContentValidationFailure =
+            rawError.includes("Generated infographic did not pass content validation") ||
+            rawError.includes("Infographic validation failed after the technical retry");
+          throw new Error(
+            isContentValidationFailure
+              ? workspaceText(
+                  locale,
+                  "ИИ не смог точно воспроизвести текст инфографики. 2 кредита возвращены — попробуйте ещё раз.",
+                  "AI could not reproduce the infographic text exactly. 2 credits were refunded — please try again.",
+                )
+              : rawError || workspaceText(
+                  locale,
+                  "Не удалось создать инфографику. 2 кредита возвращены.",
+                  "Failed to create the infographic. 2 credits were refunded.",
+                ),
+          );
         }
         if (isWorkspaceSegmentGenerationJobDoneStatus(latestStatus)) {
           doneWithoutAssetFailures += 1;
