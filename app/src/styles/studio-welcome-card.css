@@ -23,7 +23,7 @@
 
 .studio-canvas-route:not(.is-segment-editor)
   .studio-canvas-preview.is-creative-brief:has(.studio-canvas-preview__placeholder.has-welcome-card) {
-  height: min(390px, var(--studio-preview-available-height)) !important;
+  height: min(468px, var(--studio-preview-available-height)) !important;
 }
 
 .studio-canvas-route:not(.is-segment-editor) .studio-welcome-card {
@@ -455,10 +455,18 @@
   outline-offset: 3px;
 }
 
+@media (min-width: 761px) {
+  .studio-canvas-route:not(.is-segment-editor)
+    .studio-canvas-preview.is-creative-brief:has(.studio-canvas-preview__placeholder.has-welcome-card) {
+    width: min(1176px, calc(100vw - 48px)) !important;
+    max-width: 1176px !important;
+  }
+}
+
 @media (min-width: 900px) and (min-height: 761px) {
   .studio-canvas-route:not(.is-segment-editor)
     .studio-canvas-preview.is-creative-brief:has(.studio-canvas-preview__placeholder.has-welcome-card) {
-    height: min(420px, var(--studio-preview-available-height)) !important;
+    height: min(504px, var(--studio-preview-available-height)) !important;
   }
 
   .studio-canvas-route:not(.is-segment-editor) .studio-welcome-card {
