@@ -15947,7 +15947,7 @@ export function WorkspacePage({
           });
         }
 
-        if (payload.data.asset) {
+        if (payload.data.asset && isWorkspaceSegmentGenerationJobDoneStatus(latestStatus)) {
           const sceneSoundAsset = payload.data.asset;
           const sceneSoundAssetId = getPositiveWorkspaceMediaAssetId(sceneSoundAsset.assetId);
           const sceneSoundPayload = buildWorkspaceSegmentSceneSoundPayloadFromAsset(sceneSoundAsset, sceneSoundAssetId);
