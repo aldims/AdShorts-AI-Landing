@@ -23,7 +23,7 @@
 
 .studio-canvas-route:not(.is-segment-editor)
   .studio-canvas-preview.is-creative-brief:has(.studio-canvas-preview__placeholder.has-welcome-card) {
-  height: min(421px, var(--studio-preview-available-height)) !important;
+  height: min(463px, var(--studio-preview-available-height)) !important;
 }
 
 .studio-canvas-route:not(.is-segment-editor) .studio-welcome-card {
@@ -466,7 +466,7 @@
 @media (min-width: 900px) and (min-height: 761px) {
   .studio-canvas-route:not(.is-segment-editor)
     .studio-canvas-preview.is-creative-brief:has(.studio-canvas-preview__placeholder.has-welcome-card) {
-    height: min(454px, var(--studio-preview-available-height)) !important;
+    height: min(500px, var(--studio-preview-available-height)) !important;
   }
 
   .studio-canvas-route:not(.is-segment-editor) .studio-welcome-card {
