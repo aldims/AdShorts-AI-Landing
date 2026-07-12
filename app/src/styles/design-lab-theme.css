@@ -45997,7 +45997,7 @@ html, body {
   height: 11px;
 }
 
-.studio-segment-editor__timeline-row--sound .studio-segment-editor__timeline-history {
+.studio-segment-editor__timeline-row .studio-segment-editor__timeline-history {
   top: 0;
   padding: 0;
   border-color: transparent;
