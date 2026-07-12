@@ -80,6 +80,7 @@ export type WorkspaceSegmentEditorPayloadSegment = {
   manualDurationSeconds?: number | null;
   resetVisual?: boolean;
   sceneSoundAssetId?: number;
+  sceneSoundRemoved?: boolean;
   startTime?: number;
   subtitleColor?: string | null;
   subtitleStyle?: string | null;
@@ -489,6 +490,7 @@ export const buildWorkspaceSegmentEditorPayload = async (
       manualDurationSeconds: roundedManualDurationSeconds,
       resetVisual: Boolean(segment.visualReset),
       sceneSoundAssetId,
+      sceneSoundRemoved: segment.sceneSoundReset === true,
       startTime: roundedStartTime,
       ...(segmentSubtitleColor ? { subtitleColor: segmentSubtitleColor } : {}),
       ...(segmentSubtitleStyle ? { subtitleStyle: segmentSubtitleStyle } : {}),

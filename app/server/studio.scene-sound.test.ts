@@ -178,6 +178,43 @@ describe("studio scene sound jobs", () => {
       }),
     );
   });
+
+  it("persists an explicit scene sound selection or removal", async () => {
+    const { setStudioSegmentSceneSoundSelection } = await loadStudioModule();
+    const calls: Array<{ body: Record<string, unknown>; pathname: string }> = [];
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(String(input));
+        const body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {};
+        calls.push({ body, pathname: url.pathname });
+
+        if (url.pathname.startsWith("/api/admin/users")) {
+          return jsonResponse({ items: [] });
+        }
+        if (url.pathname === "/api/web/segment-scene-sound/selection") {
+          return jsonResponse({
+            asset_id: body.asset_id ?? null,
+            project_id: body.project_id,
+            segment_index: body.segment_index,
+            success: true,
+          });
+        }
+        return jsonResponse({ detail: `unexpected ${url.pathname}` }, 500);
+      }),
+    );
+
+    const user = { email: "alex@example.test", name: "Alex" };
+    await setStudioSegmentSceneSoundSelection(3576, 1, null, user);
+    await setStudioSegmentSceneSoundSelection(3576, 1, 909, user);
+
+    const selectionCalls = calls.filter((call) => call.pathname === "/api/web/segment-scene-sound/selection");
+    expect(selectionCalls.map((call) => call.body)).toEqual([
+      expect.objectContaining({ asset_id: null, project_id: 3576, segment_index: 1 }),
+      expect.objectContaining({ asset_id: 909, project_id: 3576, segment_index: 1 }),
+    ]);
+  });
 });
 
 describe("studio segment voiceover jobs", () => {

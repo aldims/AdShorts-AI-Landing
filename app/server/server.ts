@@ -110,6 +110,7 @@ import {
   createStudioSegmentImageUpscaleJob,
   createStudioSegmentPhotoAnimationJob,
   createStudioSegmentSceneSoundJob,
+  setStudioSegmentSceneSoundSelection,
   createStudioBatchVoiceoverJob,
   createStudioProjectVoiceoverJob,
   createStudioSegmentVoiceoverJob,
@@ -5125,6 +5126,41 @@ app.get("/api/studio/segment-talking-photo/jobs/:jobId/poster", async (req, res)
     });
     res.status(502).json({
       error: error instanceof Error ? error.message : "Failed to load generated segment talking character poster.",
+    });
+  }
+});
+
+app.put("/api/studio/projects/:projectId/segments/:segmentIndex/scene-sound", async (req, res) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+
+  if (!session?.user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const projectId = normalizeRequestPositiveInteger(req.params.projectId);
+  const segmentIndex = normalizeRequestNonNegativeInteger(req.params.segmentIndex);
+  const hasAssetId = Object.prototype.hasOwnProperty.call(req.body ?? {}, "assetId") ||
+    Object.prototype.hasOwnProperty.call(req.body ?? {}, "asset_id");
+  const rawAssetId = req.body?.assetId ?? req.body?.asset_id;
+  const assetId = rawAssetId === null || rawAssetId === undefined
+    ? null
+    : normalizeRequestPositiveInteger(rawAssetId);
+
+  if (!projectId || segmentIndex === undefined || (hasAssetId && rawAssetId !== null && assetId === undefined)) {
+    res.status(400).json({ error: "Valid project id, segment index and optional asset id are required." });
+    return;
+  }
+
+  try {
+    const selection = await setStudioSegmentSceneSoundSelection(projectId, segmentIndex, assetId, session.user);
+    res.json({ data: selection });
+  } catch (error) {
+    console.error("[studio] Failed to update segment scene sound selection", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to update segment scene sound selection.",
     });
   }
 });

@@ -2599,6 +2599,7 @@ export const clearWorkspaceSegmentSceneSoundState = <T extends WorkspaceSegmentE
     sceneSoundGeneratedFromPrompt: null,
     sceneSoundPrompt: "",
     sceneSoundPromptInitialized: false,
+    sceneSoundReset: true,
   }) as T;
 
 export const restoreWorkspaceSegmentSceneSoundState = <T extends WorkspaceSegmentEditorDraftSegment>(
@@ -2616,6 +2617,13 @@ export const restoreWorkspaceSegmentSceneSoundState = <T extends WorkspaceSegmen
       ? source.sceneSoundGeneratedFromPrompt
       : null;
   const sceneSoundPrompt = typeof source.sceneSoundPrompt === "string" ? source.sceneSoundPrompt : "";
+  const hasSourceSceneSound = Boolean(
+    sceneSoundAsset ||
+      sceneSoundAssetId ||
+      source.sceneSound ||
+      source.scene_sound ||
+      source.scene_sound_asset_id,
+  );
 
   return {
     ...segment,
@@ -2636,6 +2644,7 @@ export const restoreWorkspaceSegmentSceneSoundState = <T extends WorkspaceSegmen
         sceneSoundAsset ||
         sceneSoundAssetId,
     ),
+    sceneSoundReset: !hasSourceSceneSound,
   } as T;
 };
 
@@ -2896,6 +2905,7 @@ export const cloneWorkspaceSegmentEditorDraftSegment = (
       : null,
   sceneSoundPrompt: typeof segment.sceneSoundPrompt === "string" ? segment.sceneSoundPrompt : "",
   sceneSoundPromptInitialized: Boolean(segment.sceneSoundPromptInitialized),
+  sceneSoundReset: segment.sceneSoundReset === true,
   subtitleColor: getWorkspaceSegmentSubtitleColorOverrideId(segment),
   subtitleStyle: getWorkspaceSegmentSubtitleStyleOverrideId(segment),
   subtitleType: getWorkspaceSegmentSubtitleTypeOverrideId(segment),
@@ -7719,6 +7729,7 @@ export const createWorkspaceSegmentEditorDraftSession = (
           sceneSoundGeneratedFromPrompt: null,
           sceneSoundPrompt: "",
           sceneSoundPromptInitialized: Boolean(sceneSoundAsset),
+          sceneSoundReset: false,
           subtitleColor: getWorkspaceSegmentSubtitleColorOverrideId(segment),
           subtitleStyle: getWorkspaceSegmentSubtitleStyleOverrideId(segment),
           subtitleType: getWorkspaceSegmentSubtitleTypeOverrideId(segment),
@@ -8140,15 +8151,22 @@ export const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
   const liveSceneSoundAsset =
     cloneStudioCustomVideoFile(liveSegment.sceneSoundAsset) ??
     cloneStudioCustomVideoFile(liveSegment.sceneSound ?? null);
-  const nextSceneSoundAsset = freshSceneSoundAsset ?? liveSceneSoundAsset;
+  const shouldPreserveSceneSoundReset = liveSegment.sceneSoundReset === true;
+  const nextSceneSoundAsset = shouldPreserveSceneSoundReset
+    ? null
+    : freshSceneSoundAsset ?? liveSceneSoundAsset;
   const nextSceneSoundAssetId =
-    freshSceneSoundAssetId ??
-    getWorkspaceSegmentSceneSoundStateAssetId(liveSegment) ??
-    null;
+    shouldPreserveSceneSoundReset
+      ? null
+      : freshSceneSoundAssetId ??
+        getWorkspaceSegmentSceneSoundStateAssetId(liveSegment) ??
+        null;
   const nextSceneSoundPayload =
-    freshSceneSoundPayload ??
-    cloneWorkspaceSegmentSceneSoundPayload(liveSegment.scene_sound) ??
-    buildWorkspaceSegmentSceneSoundPayloadFromAsset(nextSceneSoundAsset, nextSceneSoundAssetId);
+    shouldPreserveSceneSoundReset
+      ? null
+      : freshSceneSoundPayload ??
+        cloneWorkspaceSegmentSceneSoundPayload(liveSegment.scene_sound) ??
+        buildWorkspaceSegmentSceneSoundPayloadFromAsset(nextSceneSoundAsset, nextSceneSoundAssetId);
 
   return {
     ...normalizedFreshSegment,
@@ -8224,7 +8242,12 @@ export const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
     scene_sound_asset_id: nextSceneSoundAssetId ?? nextSceneSoundPayload?.media_asset_id ?? null,
     sceneSoundGeneratedFromPrompt: liveSegment.sceneSoundGeneratedFromPrompt,
     sceneSoundPrompt: liveSegment.sceneSoundPrompt,
-    sceneSoundPromptInitialized: freshSceneSoundAsset ? true : liveSegment.sceneSoundPromptInitialized,
+    sceneSoundPromptInitialized: shouldPreserveSceneSoundReset
+      ? false
+      : freshSceneSoundAsset
+        ? true
+        : liveSegment.sceneSoundPromptInitialized,
+    sceneSoundReset: shouldPreserveSceneSoundReset,
     speechDuration: freshProjectVoiceoverDuration ?? normalizedFreshSegment.speechDuration,
     speechDurationSource: freshProjectVoiceoverDuration !== null ? "audio" : normalizedFreshSegment.speechDurationSource ?? null,
     voiceSourceDuration: freshVoiceSourceDuration,

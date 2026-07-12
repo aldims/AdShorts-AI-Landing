@@ -212,6 +212,7 @@ export type WorkspaceSegmentEditorDraftSegment = WorkspaceSegmentEditorSegment &
   sceneSoundGeneratedFromPrompt: string | null;
   sceneSoundPrompt: string;
   sceneSoundPromptInitialized: boolean;
+  sceneSoundReset?: boolean;
   textByLanguage: WorkspaceSegmentEditorLocalizedTextMap;
   voiceoverAsset: StudioCustomVideoFile | null;
   voiceoverLanguage: string | null;

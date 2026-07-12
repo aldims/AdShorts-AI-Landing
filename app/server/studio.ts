@@ -892,6 +892,7 @@ export type StudioSegmentEditorSegment = {
   manualDurationSeconds?: number | null;
   resetVisual?: boolean;
   sceneSoundAssetId?: number;
+  sceneSoundRemoved?: boolean;
   startTime?: number;
   subtitleColor?: string | null;
   subtitleStyle?: string | null;
@@ -6543,6 +6544,7 @@ export async function createStudioGenerationJob(
                 manual_duration_seconds: manualDurationSeconds,
                 reset_visual: Boolean(segment.resetVisual),
                 scene_sound_asset_id: segment.sceneSoundAssetId,
+                scene_sound_removed: segment.sceneSoundRemoved === true,
                 source_duration_seconds: sourceDurationSeconds,
                 start_time: segment.startTime,
                 startTime: segment.startTime,
@@ -8168,6 +8170,42 @@ export async function createStudioSegmentSceneSoundJob(
     ),
     status: String(payload.status ?? "queued"),
   };
+}
+
+export async function setStudioSegmentSceneSoundSelection(
+  projectId: number,
+  segmentIndex: number,
+  assetId: number | null | undefined,
+  user: StudioUser,
+) {
+  assertAdsflowConfigured();
+
+  const normalizedProjectId = normalizePositiveInteger(projectId);
+  const normalizedSegmentIndex = normalizeNonNegativeInteger(segmentIndex);
+  const normalizedAssetId = normalizePositiveInteger(assetId);
+  if (!normalizedProjectId || normalizedSegmentIndex === undefined) {
+    throw new Error("Project id and segment index are required.");
+  }
+
+  const externalUserId = await resolveStudioExternalUserId(user);
+  return postAdsflowJson<{
+    asset_id?: number | null;
+    project_id: number;
+    segment_index: number;
+    success: boolean;
+  }>("/api/web/segment-scene-sound/selection", {
+    admin_token: env.adsflowAdminToken,
+    asset_id: normalizedAssetId ?? null,
+    external_user_id: externalUserId,
+    language: normalizeStudioLanguage(undefined),
+    project_id: normalizedProjectId,
+    segment_index: normalizedSegmentIndex,
+    user_email: user.email ?? undefined,
+    user_name: user.name ?? undefined,
+  }, {
+    retryDelaysMs: [],
+    timeoutMs: ADSFLOW_MUTATION_TIMEOUT_MS,
+  });
 }
 
 export async function createStudioSegmentVoiceoverJob(

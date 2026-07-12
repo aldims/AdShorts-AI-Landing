@@ -1834,7 +1834,7 @@ describe("WorkspacePage segment editor draft persistence", () => {
     expect(checklist).toHaveLength(0);
   });
 
-  it("clears scene sound ids when deleting a sound from the timeline", () => {
+  it("clears scene sound ids when deleting a sound from the timeline", async () => {
     const segment = createDraftSegment({
       index: 0,
       sceneSound: {
@@ -1871,7 +1871,10 @@ describe("WorkspacePage segment editor draft persistence", () => {
     expect(cleared.sceneSoundAssetId).toBeNull();
     expect(cleared.scene_sound).toBeNull();
     expect(cleared.scene_sound_asset_id).toBeNull();
+    expect(cleared.sceneSoundReset).toBe(true);
     expect(tracks.rows.find((row) => row.kind === "sound")?.spans[0]?.isEmpty).toBe(true);
+    const payload = await buildWorkspaceSegmentEditorPayload(createDraftSession(cleared), { language: "ru" });
+    expect(payload.payload.segments[0]?.sceneSoundRemoved).toBe(true);
   });
 
   it("restores scene sound ids from a timeline snapshot", () => {
@@ -1896,6 +1899,7 @@ describe("WorkspacePage segment editor draft persistence", () => {
     expect(restored.sceneSoundAssetId).toBe(404);
     expect(restored.scene_sound_asset_id).toBe(404);
     expect(restored.sceneSoundPrompt).toBe("soft rain");
+    expect(restored.sceneSoundReset).toBe(false);
   });
 
   it("treats a manual photo duration change as a Shorts edit", () => {

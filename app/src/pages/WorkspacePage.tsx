@@ -2490,6 +2490,7 @@ export function WorkspacePage({
   const segmentTimelineSoundButtonRefs = useRef<Record<number, HTMLButtonElement | null>>({});
   const segmentTimelineSoundMenuRef = useRef<HTMLDivElement | null>(null);
   const segmentTimelineSoundMenuTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const segmentSceneSoundSelectionSyncRef = useRef<Record<number, Promise<void>>>({});
   const segmentTimelineTextButtonRefs = useRef<Record<number, HTMLButtonElement | null>>({});
   const segmentTimelineTextMenuRef = useRef<HTMLDivElement | null>(null);
   const segmentThumbDragStateRef = useRef<WorkspaceSegmentThumbDragState | null>(null);
@@ -14316,6 +14317,50 @@ export function WorkspacePage({
     );
   };
 
+  const persistSegmentEditorSceneSoundSelection = (
+    targetSegmentIndex: number,
+    assetId: number | null,
+  ) => {
+    const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+    const projectId = getPositiveWorkspaceMediaAssetId(currentDraft?.projectId);
+    if (!projectId) {
+      return;
+    }
+
+    const jobBinding = getSegmentEditorVisualJobBinding(targetSegmentIndex);
+    if (!jobBinding.isPersisted || jobBinding.segmentIndex === undefined) {
+      return;
+    }
+    const persistedSegmentIndex = jobBinding.segmentIndex;
+    const previousSync = segmentSceneSoundSelectionSyncRef.current[targetSegmentIndex] ?? Promise.resolve();
+    const nextSync = previousSync
+      .catch(() => undefined)
+      .then(async () => {
+        const response = await fetch(
+          `/api/studio/projects/${projectId}/segments/${persistedSegmentIndex}/scene-sound`,
+          {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ assetId }),
+          },
+        );
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        if (!response.ok) {
+          throw new Error(payload?.error ?? "Не удалось сохранить состояние звука сцены.");
+        }
+      });
+
+    segmentSceneSoundSelectionSyncRef.current[targetSegmentIndex] = nextSync;
+    void nextSync.catch((error) => {
+      if (segmentSceneSoundSelectionSyncRef.current[targetSegmentIndex] !== nextSync) {
+        return;
+      }
+      setSegmentEditorVideoError(
+        error instanceof Error ? error.message : "Не удалось сохранить состояние звука сцены.",
+      );
+    });
+  };
+
   const resetSegmentEditorSceneSoundByIndex = (targetSegmentIndex: number) => {
     const baselineSegment = segmentEditorChecklistBaseSession?.segments.find(
       (segment) => segment.index === targetSegmentIndex,
@@ -14331,8 +14376,13 @@ export function WorkspacePage({
     );
 
     setSegmentEditorVideoError(null);
+    cancelPendingSegmentSceneSoundRun(targetSegmentIndex);
     updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) =>
       restoreWorkspaceSegmentSceneSoundState(segment, baselineSegment ?? null),
+    );
+    persistSegmentEditorSceneSoundSelection(
+      targetSegmentIndex,
+      getWorkspaceSegmentSceneSoundStateAssetId(baselineSegment) ?? null,
     );
 
     if (activeSegment?.index === targetSegmentIndex || segmentAiPhotoModalSegmentIndex === targetSegmentIndex) {
@@ -14663,6 +14713,14 @@ export function WorkspacePage({
         restoreWorkspaceSegmentTimelineSnapshot(segment, snapshot.segment, snapshot.kind),
       );
 
+      if (snapshot.kind === "sound") {
+        cancelPendingSegmentSceneSoundRun(snapshot.segmentIndex);
+        persistSegmentEditorSceneSoundSelection(
+          snapshot.segmentIndex,
+          getWorkspaceSegmentSceneSoundStateAssetId(snapshot.segment) ?? null,
+        );
+      }
+
       if (
         snapshot.kind === "sound" &&
         (activeSegment?.index === snapshot.segmentIndex || segmentAiPhotoModalSegmentIndex === snapshot.segmentIndex)
@@ -14742,6 +14800,7 @@ export function WorkspacePage({
     if (kind === "sound") {
       cancelPendingSegmentSceneSoundRun(safeSegmentIndex);
       updateSegmentEditorDraftSegmentByIndex(safeSegmentIndex, clearWorkspaceSegmentSceneSoundState);
+      persistSegmentEditorSceneSoundSelection(safeSegmentIndex, null);
       if (activeSegment?.index === safeSegmentIndex || segmentAiPhotoModalSegmentIndex === safeSegmentIndex) {
         setSegmentSceneSoundModalPrompt("");
       }
@@ -15902,6 +15961,7 @@ export function WorkspacePage({
             sceneSoundGeneratedFromPrompt: options.prompt,
             sceneSoundPrompt: options.prompt,
             sceneSoundPromptInitialized: true,
+            sceneSoundReset: false,
           }));
           setSegmentSceneSoundModalPrompt(options.prompt);
           removeStoredWorkspaceSegmentSceneSoundJob(session.email, safeJobId);

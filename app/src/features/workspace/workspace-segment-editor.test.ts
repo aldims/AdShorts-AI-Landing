@@ -88,6 +88,44 @@ describe("getWorkspaceSegmentEditorBulkSceneSoundCreditCost", () => {
   });
 });
 
+describe("scene sound refresh isolation", () => {
+  it("does not restore a server sound after the user cleared that scene", () => {
+    const baselineSegment = createProjectVoiceoverSegment({
+      index: 0,
+      sceneSoundAsset: null,
+      sceneSoundReset: false,
+    });
+    const liveSegment = {
+      ...baselineSegment,
+      sceneSoundReset: true,
+    };
+    const freshSegment = {
+      ...baselineSegment,
+      sceneSoundAsset: {
+        assetId: 812,
+        fileName: "stale-scene-sound.wav",
+        fileSize: 100,
+        mimeType: "audio/wav",
+        remoteUrl: "/api/workspace/media-assets/812",
+        source: "media-library" as const,
+      },
+      sceneSoundAssetId: 812,
+      scene_sound_asset_id: 812,
+    };
+    const baseline = createProjectVoiceoverDraft([baselineSegment]);
+    const refreshed = refreshWorkspaceSegmentEditorDraftWithFreshSession(
+      createProjectVoiceoverDraft([liveSegment]),
+      createProjectVoiceoverDraft([freshSegment]),
+      { baselineSession: baseline },
+    );
+
+    expect(refreshed.segments[0]?.sceneSoundAsset).toBeNull();
+    expect(refreshed.segments[0]?.sceneSoundAssetId).toBeNull();
+    expect(refreshed.segments[0]?.scene_sound_asset_id).toBeNull();
+    expect(refreshed.segments[0]?.sceneSoundReset).toBe(true);
+  });
+});
+
 const createProjectVoiceoverSegment = (
   overrides: Partial<WorkspaceSegmentEditorDraftSegment> = {},
 ): WorkspaceSegmentEditorDraftSegment => {
