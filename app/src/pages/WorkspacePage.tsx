@@ -14431,9 +14431,6 @@ export function WorkspacePage({
     if (!segment?.infographic) {
       return;
     }
-    const baselineSegment = segmentEditorChecklistBaseSession?.segments.find(
-      (item) => item.index === targetSegmentIndex,
-    );
     if (!window.confirm(workspaceText(locale, "Удалить инфографику из этой сцены?", "Delete the infographic from this scene?"))) {
       return;
     }
@@ -35819,7 +35816,7 @@ export function WorkspacePage({
                                       {isInfographicGenerationPending ? (
                                         <div className="studio-segment-infographic__refreshing" role="status" aria-live="polite">
                                           <span className="studio-segment-editor__prompt-action-spinner" aria-hidden="true" />
-                                          {workspaceText(locale, "Создаём новую", "Creating new")}
+                                          {workspaceText(locale, "Создаем инфографику", "Creating infographic")}
                                         </div>
                                       ) : null}
                                       <div className={`studio-segment-editor__card-overlay${isActiveCard ? " is-active" : ""}`}>
