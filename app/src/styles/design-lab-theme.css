@@ -45997,6 +45997,14 @@ html, body {
   height: 11px;
 }
 
+.studio-segment-editor__timeline-row--sound .studio-segment-editor__timeline-history {
+  top: 0;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
 @media (max-width: 640px) {
   .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-heading {
     align-items: flex-start !important;
