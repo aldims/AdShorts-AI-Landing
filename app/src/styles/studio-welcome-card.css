@@ -490,11 +490,19 @@
     position: absolute;
     top: 23px;
     left: 36px;
+    min-height: 32px;
     margin-bottom: 0;
+    padding-inline: 13px;
+    font-size: 0.72rem;
+  }
+
+  .studio-welcome-card__eyebrow strong {
+    font-size: 0.7rem;
   }
 
   .studio-welcome-card__hero h2 {
     max-width: none;
+    font-size: clamp(2.15rem, 4.5cqw, 2.7rem);
   }
 
   .studio-welcome-card__hero h2 em {
@@ -505,7 +513,7 @@
   .studio-welcome-card__hero-copy > p {
     max-width: none;
     margin-top: 11px;
-    font-size: 0.94rem;
+    font-size: 1.06rem;
     text-wrap: wrap;
   }
 
@@ -527,11 +535,32 @@
   }
 
   .studio-welcome-card__mode-copy strong {
-    font-size: 1rem;
+    font-size: 1.14rem;
   }
 
   .studio-welcome-card__mode-copy small {
-    font-size: 0.76rem;
+    font-size: 0.86rem;
+  }
+
+  .studio-welcome-card__mode-kicker {
+    font-size: 0.62rem;
+  }
+
+  .studio-welcome-card__mode-state {
+    font-size: 0.56rem;
+  }
+
+  .studio-welcome-card__mode-state.is-featured {
+    font-size: 0.53rem;
+  }
+
+  .studio-welcome-card__mode-capabilities > span {
+    min-height: 36px;
+    font-size: 0.72rem;
+  }
+
+  .studio-welcome-card__mode-capabilities > span::before {
+    font-size: 0.48rem;
   }
 
 }
