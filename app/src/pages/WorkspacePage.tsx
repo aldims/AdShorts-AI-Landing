@@ -323,6 +323,7 @@ import {
   getWorkspaceSegmentVisualTimelineHistoryState,
   getWorkspaceSegmentEditorPendingInsertedSegmentIndices,
   getWorkspaceSegmentVoiceOverrideForLanguage,
+  hasOnlyWorkspaceSegmentEditorDurationChecklistChanges,
   isWorkspaceSegmentAppliedVisualResetChange,
   isWorkspaceSegmentDraftSceneSoundEdited,
   isWorkspaceSegmentDraftSubtitleEdited,
@@ -1074,6 +1075,7 @@ export {
 export {
   buildWorkspaceSegmentEditorChangeChecklist,
   getWorkspaceSegmentDraftVisualStatus,
+  hasOnlyWorkspaceSegmentEditorDurationChecklistChanges,
   isWorkspaceSegmentDraftVisualChangedFromBaseline,
   isWorkspaceSegmentDraftVisualResettable,
   resolveWorkspaceSegmentEditorChangeDisplayBaselineSession,
@@ -11393,8 +11395,15 @@ export function WorkspacePage({
   const hasOnlyStaleSegmentEditorSourceDurationDrift = (
     draft: WorkspaceSegmentEditorDraftSession | null | undefined,
     baseline: WorkspaceSegmentEditorDraftSession | null | undefined,
+    changeChecklist: WorkspaceSegmentEditorChecklistItem[] | null | undefined,
   ) => {
-    if (!draft || !baseline || draft.projectId !== baseline.projectId || draft.segments.length !== baseline.segments.length) {
+    if (
+      !draft ||
+      !baseline ||
+      draft.projectId !== baseline.projectId ||
+      draft.segments.length !== baseline.segments.length ||
+      !hasOnlyWorkspaceSegmentEditorDurationChecklistChanges(changeChecklist)
+    ) {
       return false;
     }
 
@@ -11823,7 +11832,11 @@ export function WorkspacePage({
               subtitleStyleOptions,
             })
           : null;
-        const hasOnlyStaleLiveDraftDurationDrift = hasOnlyStaleSegmentEditorSourceDurationDrift(liveDraft, nextDraft);
+        const hasOnlyStaleLiveDraftDurationDrift = hasOnlyStaleSegmentEditorSourceDurationDrift(
+          liveDraft,
+          nextDraft,
+          liveDraftChangeChecklist,
+        );
         const hasUnreflectedLiveGeneratedVideo = hasWorkspaceSegmentEditorUnreflectedLiveGeneratedVideo(
           liveDraft,
           normalizedSession,
@@ -12316,7 +12329,11 @@ export function WorkspacePage({
     const shouldPreferFreshRouteSessionOverStoredDraft =
       Boolean(storedDraftForRoute && storedSessionForRoute) &&
       ((storedDraftChangeChecklist !== null && storedDraftChangeChecklist.length === 0) ||
-        hasOnlyStaleSegmentEditorSourceDurationDrift(storedDraftForRoute, storedSessionDraftForRoute));
+        hasOnlyStaleSegmentEditorSourceDurationDrift(
+          storedDraftForRoute,
+          storedSessionDraftForRoute,
+          storedDraftChangeChecklist,
+        ));
 
     logSegmentEditorDiagnostics("client.segment-editor.route.restore-check", {
       requestedProjectId: routeProjectId,

@@ -73,6 +73,7 @@ import {
   getStudioLanguageForVoiceId,
   getStudioVoiceCreditCost,
   getWorkspaceGenerationRequiredCredits,
+  hasOnlyWorkspaceSegmentEditorDurationChecklistChanges,
   getNextWorkspaceReferenceDefaultName,
   buildWorkspaceReferenceGenerationMediaScope,
   formatWorkspaceSegmentEditorSegmentDurationLabel,
@@ -1765,6 +1766,67 @@ describe("WorkspacePage segment editor draft persistence", () => {
         projectId: baseline.projectId + 1,
       }),
     ).toBe(draft);
+  });
+
+  it("does not classify a concurrent custom-video replacement as duration-only drift", () => {
+    const baselineSegment = createDraftSegment({
+      duration: 4,
+      durationMode: "manual",
+      endTime: 4,
+      manualDurationSeconds: 4,
+      mediaType: "video",
+    });
+    const uploadedSegment = createDraftSegment({
+      ...baselineSegment,
+      customVideo: {
+        assetId: 9028,
+        durationSeconds: 6,
+        fileName: "scene-1-upload.mp4",
+        fileSize: 1024,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/9028/playback",
+        source: "upload",
+      },
+      duration: 6,
+      endTime: 6,
+      manualDurationSeconds: 6,
+      videoAction: "custom",
+    });
+    const checklist = buildWorkspaceSegmentEditorChangeChecklist(
+      createDraftSession(uploadedSegment),
+      createDraftSession(baselineSegment),
+    );
+
+    expect(checklist).toEqual([
+      expect.objectContaining({
+        kind: "segment",
+        resetDuration: true,
+        resetVisual: true,
+      }),
+    ]);
+    expect(hasOnlyWorkspaceSegmentEditorDurationChecklistChanges(checklist)).toBe(false);
+  });
+
+  it("recognizes a genuine duration-only draft change", () => {
+    const baselineSegment = createDraftSegment({
+      duration: 4,
+      durationMode: "manual",
+      endTime: 4,
+      manualDurationSeconds: 4,
+      mediaType: "video",
+    });
+    const durationOnlySegment = createDraftSegment({
+      ...baselineSegment,
+      duration: 6,
+      endTime: 6,
+      manualDurationSeconds: 6,
+    });
+    const checklist = buildWorkspaceSegmentEditorChangeChecklist(
+      createDraftSession(durationOnlySegment),
+      createDraftSession(baselineSegment),
+    );
+
+    expect(hasOnlyWorkspaceSegmentEditorDurationChecklistChanges(checklist)).toBe(true);
   });
 
   it("treats an added scene sound as a Shorts edit", () => {

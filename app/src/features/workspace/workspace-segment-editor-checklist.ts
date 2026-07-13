@@ -267,6 +267,25 @@ export type WorkspaceSegmentEditorChecklistBuildOptions = {
   subtitleStyleOptions?: StudioSubtitleStyleOption[];
 };
 
+export const hasOnlyWorkspaceSegmentEditorDurationChecklistChanges = (
+  items: WorkspaceSegmentEditorChecklistItem[] | null | undefined,
+) =>
+  Boolean(
+    items?.length &&
+      items.every(
+        (item) =>
+          item.kind === "segment" &&
+          item.resetDuration &&
+          !item.resetInfographic &&
+          !item.resetSceneSound &&
+          !item.resetSubtitle &&
+          !item.resetText &&
+          !item.resetVoice &&
+          !item.resetVisual &&
+          !item.restoreVisual,
+      ),
+  );
+
 const getWorkspaceSegmentEditorSettingsSnapshot = (session?: WorkspaceSegmentEditorDraftSession | null) => {
   const voiceEnabled = normalizeWorkspaceSegmentEditorSetting(session?.voiceType) !== "none";
   const subtitleEnabled = voiceEnabled && normalizeWorkspaceSegmentEditorSetting(session?.subtitleType) !== "none";
