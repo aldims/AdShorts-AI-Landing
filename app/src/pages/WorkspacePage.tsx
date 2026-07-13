@@ -471,6 +471,7 @@ import {
   WorkspaceProjectDeleteModal,
   WorkspaceSegmentEditorBulkSceneSoundModal,
   WorkspaceSegmentEditorDeleteConfirmModal,
+  WorkspaceSegmentEditorInfographicDeleteConfirmModal,
   WorkspaceSegmentEditorVoiceoverGenerationRequiredModal,
   WorkspaceSegmentEditorResetConfirmModal,
   WorkspaceSegmentEditorStartFreshConfirmModal,
@@ -2066,6 +2067,8 @@ export function WorkspacePage({
     Record<number, { durationSeconds: number; sourceUrl: string }>
   >({});
   const [segmentEditorPendingDeleteIndex, setSegmentEditorPendingDeleteIndex] = useState<number | null>(null);
+  const [segmentEditorPendingInfographicDeleteIndex, setSegmentEditorPendingInfographicDeleteIndex] =
+    useState<number | null>(null);
   const [isSegmentEditorResetConfirmOpen, setIsSegmentEditorResetConfirmOpen] = useState(false);
   const [isSegmentEditorStartFreshConfirmOpen, setIsSegmentEditorStartFreshConfirmOpen] = useState(false);
   const [isSegmentEditorVoiceoverPreviewRequiredModalOpen, setIsSegmentEditorVoiceoverPreviewRequiredModalOpen] = useState(false);
@@ -3737,6 +3740,7 @@ export function WorkspacePage({
     isSegmentEditorResetConfirmOpen ||
     isSegmentEditorStartFreshConfirmOpen ||
     segmentEditorPendingDeleteIndex !== null ||
+    segmentEditorPendingInfographicDeleteIndex !== null ||
     Boolean(mediaLibraryPendingDeleteItem) ||
     Boolean(projectPendingDelete) ||
     Boolean(insufficientCreditsContext);
@@ -3889,6 +3893,10 @@ export function WorkspacePage({
     setSegmentEditorPendingDeleteIndex(null);
   };
 
+  const closeSegmentEditorInfographicDeleteModal = () => {
+    setSegmentEditorPendingInfographicDeleteIndex(null);
+  };
+
   const closeSegmentEditorResetModal = () => {
     setIsSegmentEditorResetConfirmOpen(false);
   };
@@ -3962,6 +3970,10 @@ export function WorkspacePage({
           closeSegmentEditorDeleteModal();
           return;
         }
+        if (segmentEditorPendingInfographicDeleteIndex !== null) {
+          closeSegmentEditorInfographicDeleteModal();
+          return;
+        }
         if (isSegmentEditorResetConfirmOpen) {
           closeSegmentEditorResetModal();
           return;
@@ -4009,6 +4021,7 @@ export function WorkspacePage({
     mediaLibraryPendingDeleteItem,
     projectPendingDelete,
     segmentEditorPendingDeleteIndex,
+    segmentEditorPendingInfographicDeleteIndex,
     isSegmentEditorVoiceoverPreviewRequiredModalOpen,
     isProjectDeleteSubmitting,
     isMediaLibraryDeleteSubmitting,
@@ -4023,6 +4036,7 @@ export function WorkspacePage({
       setProjectPendingDelete(null);
       setProjectPendingDeleteProjects([]);
       setSegmentEditorPendingDeleteIndex(null);
+      setSegmentEditorPendingInfographicDeleteIndex(null);
       setIsSegmentEditorResetConfirmOpen(false);
       setIsSegmentEditorStartFreshConfirmOpen(false);
       closeSegmentEditorVoiceoverPreviewRequiredModal();
@@ -4109,6 +4123,7 @@ export function WorkspacePage({
     setProjectPendingDelete(null);
     setProjectPendingDeleteProjects([]);
     setSegmentEditorPendingDeleteIndex(null);
+    setSegmentEditorPendingInfographicDeleteIndex(null);
     setIsSegmentEditorResetConfirmOpen(false);
     setIsProjectDeleteSubmitting(false);
     pendingProjectDeleteIdsRef.current.clear();
@@ -7107,6 +7122,19 @@ export function WorkspacePage({
         { isFirstSegment: segmentEditorPendingDeleteDisplayNumber === 1 },
       )}`
     : "";
+  const segmentEditorPendingInfographicDeleteSegment =
+    typeof segmentEditorPendingInfographicDeleteIndex === "number"
+      ? segmentEditorDraft?.segments.find(
+          (segment) => segment.index === segmentEditorPendingInfographicDeleteIndex,
+        ) ?? null
+      : null;
+  const segmentEditorPendingInfographicDeleteDisplayNumber =
+    segmentEditorDraft && segmentEditorPendingInfographicDeleteSegment
+      ? getWorkspaceSegmentEditorDisplayNumber(
+          segmentEditorDraft.segments,
+          segmentEditorPendingInfographicDeleteSegment.index,
+        )
+      : null;
   const segmentSubtitleBulkTextDefault = segmentEditorDraft
     ? buildWorkspaceSegmentBulkSubtitleText(segmentEditorDraft.segments)
     : "";
@@ -7282,6 +7310,17 @@ export function WorkspacePage({
       setSegmentEditorPendingDeleteIndex(null);
     }
   }, [segmentEditorPendingDeleteIndex, segmentEditorPendingDeleteSegment]);
+  useEffect(() => {
+    if (
+      segmentEditorPendingInfographicDeleteIndex !== null &&
+      !segmentEditorPendingInfographicDeleteSegment?.infographic
+    ) {
+      setSegmentEditorPendingInfographicDeleteIndex(null);
+    }
+  }, [
+    segmentEditorPendingInfographicDeleteIndex,
+    segmentEditorPendingInfographicDeleteSegment,
+  ]);
   const currentSegmentEditorBrandSettings: StudioBrandSettingsSnapshot = {
     brandLogoFile: segmentEditorBrandLogo,
     brandText: normalizeStudioBrandSettingsText(segmentEditorBrandText),
@@ -14498,7 +14537,18 @@ export function WorkspacePage({
     if (!segment?.infographic) {
       return;
     }
-    if (!window.confirm(workspaceText(locale, "Удалить инфографику из этой сцены?", "Delete the infographic from this scene?"))) {
+    setSegmentEditorPendingInfographicDeleteIndex(targetSegmentIndex);
+  };
+
+  const confirmDeleteSegmentEditorInfographic = () => {
+    if (segmentEditorPendingInfographicDeleteIndex === null) {
+      return;
+    }
+    const targetSegmentIndex = segmentEditorPendingInfographicDeleteIndex;
+    setSegmentEditorPendingInfographicDeleteIndex(null);
+    const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+    const segment = currentDraft?.segments.find((item) => item.index === targetSegmentIndex) ?? null;
+    if (!segment?.infographic) {
       return;
     }
     captureSegmentEditorInfographicHistory(targetSegmentIndex);
@@ -37116,6 +37166,18 @@ export function WorkspacePage({
           onClose={closeSegmentEditorDeleteModal}
           onConfirm={confirmDeleteSegmentEditorSegment}
           segmentSummary={segmentEditorPendingDeleteSummary}
+        />
+
+        <WorkspaceSegmentEditorInfographicDeleteConfirmModal
+          infographicText={segmentEditorPendingInfographicDeleteSegment?.infographic?.text ?? ""}
+          isOpen={Boolean(segmentEditorPendingInfographicDeleteSegment?.infographic)}
+          locale={locale}
+          onClose={closeSegmentEditorInfographicDeleteModal}
+          onConfirm={confirmDeleteSegmentEditorInfographic}
+          segmentNumber={
+            segmentEditorPendingInfographicDeleteDisplayNumber ??
+            (segmentEditorPendingInfographicDeleteSegment?.index ?? 0) + 1
+          }
         />
 
         <WorkspaceMediaLibraryDeleteConfirmModal

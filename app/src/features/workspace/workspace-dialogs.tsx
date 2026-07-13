@@ -676,6 +676,114 @@ export function WorkspaceSegmentEditorDeleteConfirmModal({
   );
 }
 
+type WorkspaceSegmentEditorInfographicDeleteConfirmModalProps = {
+  infographicText: string;
+  isOpen: boolean;
+  locale: Locale;
+  onClose: () => void;
+  onConfirm: () => void;
+  segmentNumber: number;
+};
+
+export function WorkspaceSegmentEditorInfographicDeleteConfirmModal({
+  infographicText,
+  isOpen,
+  locale,
+  onClose,
+  onConfirm,
+  segmentNumber,
+}: WorkspaceSegmentEditorInfographicDeleteConfirmModalProps) {
+  if (!isOpen || typeof document === "undefined") {
+    return null;
+  }
+
+  const titleId = "workspace-infographic-delete-title";
+  const descriptionId = "workspace-infographic-delete-description";
+
+  return createPortal(
+    <div
+      className="workspace-confirm-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      aria-describedby={descriptionId}
+    >
+      <button
+        className="workspace-confirm-modal__backdrop route-close"
+        type="button"
+        aria-label={workspaceText(
+          locale,
+          "Закрыть подтверждение удаления инфографики",
+          "Close infographic deletion confirmation",
+        )}
+        onClick={onClose}
+      />
+      <div className="workspace-confirm-modal__panel" role="document">
+        <button
+          className="workspace-confirm-modal__close route-close"
+          type="button"
+          aria-label={workspaceText(
+            locale,
+            "Закрыть подтверждение удаления инфографики",
+            "Close infographic deletion confirmation",
+          )}
+          onClick={onClose}
+        >
+          ×
+        </button>
+
+        <div className="workspace-confirm-modal__header">
+          <div className="workspace-confirm-modal__icon" aria-hidden="true">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
+              <path d="M4 7h16" strokeLinecap="round" />
+              <path d="M9 3h6" strokeLinecap="round" />
+              <path d="M10 11v6" strokeLinecap="round" />
+              <path d="M14 11v6" strokeLinecap="round" />
+              <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+          <div className="workspace-confirm-modal__copy">
+            <h2 className="workspace-confirm-modal__title" id={titleId}>
+              {workspaceText(locale, "Удалить инфографику?", "Delete infographic?")}
+            </h2>
+            <p className="workspace-confirm-modal__message" id={descriptionId}>
+              {workspaceText(
+                locale,
+                "Слой исчезнет из этой сцены. Кредиты за его создание не возвращаются.",
+                "The layer will be removed from this scene. Credits spent on its creation are not refunded.",
+              )}
+            </p>
+          </div>
+        </div>
+
+        <p className="workspace-confirm-modal__project">
+          {workspaceText(locale, `Сцена ${segmentNumber}`, `Scene ${segmentNumber}`)}
+          {infographicText ? ` · «${infographicText}»` : ""}
+        </p>
+
+        <div className="workspace-confirm-modal__actions">
+          <button
+            className="workspace-confirm-modal__action workspace-confirm-modal__action--secondary"
+            type="button"
+            onClick={onClose}
+            autoFocus
+          >
+            {workspaceText(locale, "Отмена", "Cancel")}
+          </button>
+          <button
+            className="workspace-confirm-modal__action workspace-confirm-modal__action--danger"
+            type="button"
+            onClick={onConfirm}
+          >
+            {workspaceText(locale, "Удалить", "Delete")}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 type WorkspaceSegmentEditorVoiceoverGenerationRequiredModalProps = {
   disabledReason: string | null;
   generateCostLabel?: string;
