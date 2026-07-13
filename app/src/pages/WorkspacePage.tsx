@@ -28911,6 +28911,7 @@ export function WorkspacePage({
         shouldPauseWorkspaceSegmentEditorFullPreviewCompanionTrack({
           hasVoiceClockHold: options?.pauseCompanionTracks === true,
           isVoiceTrack,
+          trackKind: track.kind,
         })
       ) {
         if (!element.paused) {

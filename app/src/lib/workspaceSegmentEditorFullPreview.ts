@@ -1417,7 +1417,8 @@ export const isWorkspaceSegmentEditorFullPreviewAudioPlaybackComplete = ({
 export const shouldPauseWorkspaceSegmentEditorFullPreviewCompanionTrack = (options: {
   hasVoiceClockHold: boolean;
   isVoiceTrack: boolean;
-}) => options.hasVoiceClockHold && !options.isVoiceTrack;
+  trackKind: string;
+}) => options.hasVoiceClockHold && !options.isVoiceTrack && options.trackKind !== "music";
 
 export const shouldShowWorkspaceSegmentEditorFullPreviewBuffering = (options: {
   delayMs: number;

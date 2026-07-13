@@ -1476,17 +1476,26 @@ describe("workspace segment editor full preview", () => {
     ).toBe(false);
   });
 
-  it("pauses companion audio while the voice clock is holding", () => {
+  it("keeps global music continuous while the voice clock is holding", () => {
     expect(
       shouldPauseWorkspaceSegmentEditorFullPreviewCompanionTrack({
         hasVoiceClockHold: true,
         isVoiceTrack: false,
+        trackKind: "music",
+      }),
+    ).toBe(false);
+    expect(
+      shouldPauseWorkspaceSegmentEditorFullPreviewCompanionTrack({
+        hasVoiceClockHold: true,
+        isVoiceTrack: false,
+        trackKind: "sound",
       }),
     ).toBe(true);
     expect(
       shouldPauseWorkspaceSegmentEditorFullPreviewCompanionTrack({
         hasVoiceClockHold: true,
         isVoiceTrack: true,
+        trackKind: "voice",
       }),
     ).toBe(false);
   });
