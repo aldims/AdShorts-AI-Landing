@@ -2610,7 +2610,10 @@ export const restoreWorkspaceSegmentSceneSoundState = <T extends WorkspaceSegmen
   source: WorkspaceSegmentEditorDraftSegment | null | undefined,
 ): T => {
   if (!source) {
-    return clearWorkspaceSegmentSceneSoundState(segment);
+    return {
+      ...clearWorkspaceSegmentSceneSoundState(segment),
+      sceneSoundReset: false,
+    };
   }
 
   const sceneSoundAsset = cloneStudioCustomVideoFile(source.sceneSoundAsset);
@@ -2620,13 +2623,6 @@ export const restoreWorkspaceSegmentSceneSoundState = <T extends WorkspaceSegmen
       ? source.sceneSoundGeneratedFromPrompt
       : null;
   const sceneSoundPrompt = typeof source.sceneSoundPrompt === "string" ? source.sceneSoundPrompt : "";
-  const hasSourceSceneSound = Boolean(
-    sceneSoundAsset ||
-      sceneSoundAssetId ||
-      source.sceneSound ||
-      source.scene_sound ||
-      source.scene_sound_asset_id,
-  );
 
   return {
     ...segment,
@@ -2647,8 +2643,24 @@ export const restoreWorkspaceSegmentSceneSoundState = <T extends WorkspaceSegmen
         sceneSoundAsset ||
         sceneSoundAssetId,
     ),
-    sceneSoundReset: !hasSourceSceneSound,
+    sceneSoundReset: false,
   } as T;
+};
+
+export const getWorkspaceSegmentSceneSoundSelectionSyncKey = (
+  projectId: number,
+  segmentIndex: number,
+) => `${projectId}:${segmentIndex}`;
+
+export const waitForWorkspaceSegmentSceneSoundSelectionSync = async (
+  syncs: Record<string, Promise<void>>,
+  projectId: number,
+) => {
+  const projectPrefix = `${projectId}:`;
+  const pendingSyncs = Object.entries(syncs)
+    .filter(([key]) => key.startsWith(projectPrefix))
+    .map(([, sync]) => sync);
+  await Promise.all(pendingSyncs);
 };
 
 const restoreWorkspaceSegmentTimelineDurationState = (

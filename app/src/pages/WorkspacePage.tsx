@@ -225,6 +225,7 @@ import {
   getWorkspaceSegmentPreviewKind,
   getWorkspaceSegmentRecommendedDurationSeconds,
   getWorkspaceSegmentSceneSoundRefreshPrompt,
+  getWorkspaceSegmentSceneSoundSelectionSyncKey,
   getWorkspaceSegmentSceneSoundStateAssetId,
   getWorkspaceSegmentSelectedVisualPreviewKind,
   getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds,
@@ -311,6 +312,7 @@ import {
   studioVoiceOptionsByLanguage,
   syncWorkspaceSegmentMeasuredVideoVisualDuration,
   truncateStudioCustomAssetName,
+  waitForWorkspaceSegmentSceneSoundSelectionSync,
   WORKSPACE_SEGMENT_AI_EXTENSION_STEP_SECONDS,
   WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS,
   WORKSPACE_SEGMENT_EDITOR_MAX_VISUAL_DURATION_SECONDS,
@@ -2552,7 +2554,7 @@ export function WorkspacePage({
   const segmentTimelineSoundButtonRefs = useRef<Record<number, HTMLButtonElement | null>>({});
   const segmentTimelineSoundMenuRef = useRef<HTMLDivElement | null>(null);
   const segmentTimelineSoundMenuTextareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const segmentSceneSoundSelectionSyncRef = useRef<Record<number, Promise<void>>>({});
+  const segmentSceneSoundSelectionSyncRef = useRef<Record<string, Promise<void>>>({});
   const segmentTimelineTextButtonRefs = useRef<Record<number, HTMLButtonElement | null>>({});
   const segmentTimelineTextMenuRef = useRef<HTMLDivElement | null>(null);
   const segmentThumbDragStateRef = useRef<WorkspaceSegmentThumbDragState | null>(null);
@@ -14620,7 +14622,8 @@ export function WorkspacePage({
       return;
     }
     const persistedSegmentIndex = jobBinding.segmentIndex;
-    const previousSync = segmentSceneSoundSelectionSyncRef.current[targetSegmentIndex] ?? Promise.resolve();
+    const syncKey = getWorkspaceSegmentSceneSoundSelectionSyncKey(projectId, persistedSegmentIndex);
+    const previousSync = segmentSceneSoundSelectionSyncRef.current[syncKey] ?? Promise.resolve();
     const nextSync = previousSync
       .catch(() => undefined)
       .then(async () => {
@@ -14638,9 +14641,17 @@ export function WorkspacePage({
         }
       });
 
-    segmentSceneSoundSelectionSyncRef.current[targetSegmentIndex] = nextSync;
+    segmentSceneSoundSelectionSyncRef.current[syncKey] = nextSync;
+    void nextSync.then(
+      () => {
+        if (segmentSceneSoundSelectionSyncRef.current[syncKey] === nextSync) {
+          delete segmentSceneSoundSelectionSyncRef.current[syncKey];
+        }
+      },
+      () => undefined,
+    );
     void nextSync.catch((error) => {
-      if (segmentSceneSoundSelectionSyncRef.current[targetSegmentIndex] !== nextSync) {
+      if (segmentSceneSoundSelectionSyncRef.current[syncKey] !== nextSync) {
         return;
       }
       setSegmentEditorVideoError(
@@ -21943,6 +21954,21 @@ export function WorkspacePage({
         workspaceText(locale, "Генерация недоступна", "Generation unavailable"),
       );
       return;
+    }
+
+    if (options?.segmentEditorSession?.projectId) {
+      try {
+        await waitForWorkspaceSegmentSceneSoundSelectionSync(
+          segmentSceneSoundSelectionSyncRef.current,
+          options.segmentEditorSession.projectId,
+        );
+      } catch (error) {
+        reportGeneratePreflightFailure(
+          error instanceof Error ? error.message : "Не удалось сохранить состояние звука сцены.",
+          workspaceText(locale, "Звук сцены не сохранён", "Scene sound was not saved"),
+        );
+        return;
+      }
     }
 
     const currentComposerSourceIdea = isWorkspaceContentPlanSourceIdeaSynchronized(safeTopic, composerSourceIdea)

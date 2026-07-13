@@ -13,6 +13,7 @@ import {
   getWorkspaceSegmentEditorProjectVoiceType,
   getWorkspaceSegmentEditorGenerationRequiredCredits,
   getWorkspaceSegmentEditorBulkSceneSoundCreditCost,
+  getWorkspaceSegmentSceneSoundSelectionSyncKey,
   getWorkspaceSegmentEditorVisibleTimelineDisplayRange,
   getWorkspaceSegmentEstimatedVoiceoverLabelDurationSeconds,
   getStudioSceneSoundAssetPreviewUrl,
@@ -41,6 +42,7 @@ import {
   restoreWorkspaceSegmentStaleMeasuredRenderedPhotoDuration,
   restoreWorkspaceSegmentEditorDraftProjectTtsAsset,
   restoreWorkspaceSegmentEffectiveVoiceFromBaseline,
+  restoreWorkspaceSegmentSceneSoundState,
   resetWorkspaceSegmentDraftVisualToOriginal,
   resolveWorkspaceSegmentEditorSegmentsAfterDelete,
   resolveWorkspaceSegmentSceneSoundPrompt,
@@ -50,6 +52,7 @@ import {
   shouldAutoTrimWorkspaceSegmentVideoToVoiceover,
   shouldIgnoreWorkspaceSegmentMeasuredVoiceoverDuration,
   syncWorkspaceSegmentMeasuredVideoVisualDuration,
+  waitForWorkspaceSegmentSceneSoundSelectionSync,
 } from "./workspace-segment-editor";
 import {
   applyWorkspaceSegmentSceneSoundVisualAssetId,
@@ -86,6 +89,44 @@ describe("getWorkspaceSegmentEditorBulkSceneSoundCreditCost", () => {
 
   it("returns zero when there are no scenes", () => {
     expect(getWorkspaceSegmentEditorBulkSceneSoundCreditCost([])).toBe(0);
+  });
+});
+
+describe("scene sound removal intent", () => {
+  it("does not mark an originally empty scene as explicitly removed", () => {
+    const segment = createProjectVoiceoverSegment({
+      index: 0,
+      sceneSoundAsset: null,
+      sceneSoundReset: true,
+    });
+
+    const restored = restoreWorkspaceSegmentSceneSoundState(segment, null);
+
+    expect(restored.sceneSoundAsset).toBeNull();
+    expect(restored.sceneSoundReset).toBe(false);
+  });
+
+  it("waits only for selection writes from the rendered project", async () => {
+    const currentProjectSync = Promise.resolve();
+    const otherProjectSync = new Promise<void>(() => undefined);
+    const syncs = {
+      [getWorkspaceSegmentSceneSoundSelectionSyncKey(42, 0)]: currentProjectSync,
+      [getWorkspaceSegmentSceneSoundSelectionSyncKey(99, 0)]: otherProjectSync,
+    };
+
+    await expect(waitForWorkspaceSegmentSceneSoundSelectionSync(syncs, 42)).resolves.toBeUndefined();
+  });
+
+  it("blocks rendering when the current project selection write failed", async () => {
+    const syncs = {
+      [getWorkspaceSegmentSceneSoundSelectionSyncKey(42, 1)]: Promise.reject(
+        new Error("selection failed"),
+      ),
+    };
+
+    await expect(waitForWorkspaceSegmentSceneSoundSelectionSync(syncs, 42)).rejects.toThrow(
+      "selection failed",
+    );
   });
 });
 
