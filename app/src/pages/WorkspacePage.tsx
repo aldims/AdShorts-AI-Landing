@@ -603,6 +603,7 @@ import {
   SEGMENT_EDITOR_REQUEST_TIMEOUT_MS,
   SEGMENT_EDITOR_PREPARING_RETRY_DELAY_MS,
   SEGMENT_EDITOR_TIMELINE_STANDARD_FIT_SLOTS,
+  getWorkspaceSegmentEditorSessionUrl,
   WORKSPACE_CHECKOUT_REQUEST_TIMEOUT_MS,
   isWorkspaceSegmentEditorNotFoundError,
   isWorkspaceSegmentEditorProjectUnavailableError,
@@ -11754,9 +11755,7 @@ export function WorkspacePage({
     setIsSegmentEditorLoading(true);
 
     try {
-      const shouldRefreshSegmentEditorFromServer = true;
-      const segmentEditorUrl =
-        `/api/workspace/projects/${projectId}/segment-editor${shouldRefreshSegmentEditorFromServer ? "/reload" : ""}`;
+      const segmentEditorUrl = getWorkspaceSegmentEditorSessionUrl(projectId, options);
       let payload: WorkspaceSegmentEditorResponse | null = null;
       const startedAt = Date.now();
       const maxPreparingAttempts = Math.max(
@@ -20005,6 +20004,7 @@ export function WorkspacePage({
   };
 
   const showSegmentEditorCreateShortsGenerationUi = () => {
+    cancelPendingSegmentEditorLoad("segment-editor-generation-started");
     activeGenerationJobIdRef.current = SEGMENT_EDITOR_CREATE_SHORTS_PREPARING_JOB_ID;
     stopSegmentEditorCreateShortsPlayback();
     flushSync(() => {

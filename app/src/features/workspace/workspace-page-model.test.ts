@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  getWorkspaceSegmentEditorSessionUrl,
   getPublishBootstrapForPlatform,
   getPublishChannelsForPlatform,
   isWorkspaceSegmentCustomVisualUploadBusy,
@@ -14,6 +15,20 @@ import {
   shouldShowWorkspaceSegmentEditorFullPreviewBusyIndicator,
   type WorkspacePublishBootstrapPayload,
 } from "./workspace-page-model";
+
+describe("segment editor session loading", () => {
+  it("uses the cached endpoint unless a fresh session was explicitly requested", () => {
+    expect(getWorkspaceSegmentEditorSessionUrl(4213)).toBe(
+      "/api/workspace/projects/4213/segment-editor",
+    );
+    expect(getWorkspaceSegmentEditorSessionUrl(4213, { bypassCache: true })).toBe(
+      "/api/workspace/projects/4213/segment-editor/reload",
+    );
+    expect(getWorkspaceSegmentEditorSessionUrl(4213, { forceRefresh: true })).toBe(
+      "/api/workspace/projects/4213/segment-editor/reload",
+    );
+  });
+});
 
 describe("studio creation mode switching", () => {
   it("restores a detached scenes draft after leaving the editor", () => {

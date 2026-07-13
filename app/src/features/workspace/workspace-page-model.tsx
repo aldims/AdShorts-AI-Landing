@@ -1134,6 +1134,17 @@ export const SEGMENT_EDITOR_PREPARING_RETRY_DELAY_MS = 1_500;
 export const SEGMENT_EDITOR_TIMELINE_STANDARD_FIT_SLOTS = 8;
 export const WORKSPACE_CHECKOUT_REQUEST_TIMEOUT_MS = 20_000;
 
+export const getWorkspaceSegmentEditorSessionUrl = (
+  projectId: number,
+  options?: {
+    bypassCache?: boolean;
+    forceRefresh?: boolean;
+  },
+) =>
+  `/api/workspace/projects/${projectId}/segment-editor${
+    options?.bypassCache || options?.forceRefresh ? "/reload" : ""
+  }`;
+
 export const isWorkspaceSegmentEditorNotFoundError = (value: string) => {
   const normalized = value.trim().toLowerCase();
   return normalized === "not found" || normalized.includes("404");
