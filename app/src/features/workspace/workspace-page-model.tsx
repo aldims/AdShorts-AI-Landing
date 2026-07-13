@@ -630,6 +630,17 @@ export type WorkspaceSegmentInfographicJobAsset = StudioCustomVideoFile & {
   intrinsic_width?: number | null;
   sourceVisualIdentity?: string | null;
   source_visual_identity?: string | null;
+  parts?: Array<{
+    frame?: { height?: number | null; width?: number | null; x?: number | null; y?: number | null } | null;
+    intrinsicHeight?: number | null;
+    intrinsicWidth?: number | null;
+    intrinsic_height?: number | null;
+    intrinsic_width?: number | null;
+    mediaAssetId?: number | null;
+    media_asset_id?: number | null;
+    reveal?: { delaySeconds?: number | null; delay_seconds?: number | null; durationSeconds?: number | null; duration_seconds?: number | null } | null;
+    text?: string | null;
+  }> | null;
 };
 
 export type WorkspaceSegmentInfographicJobStatusResponse = {

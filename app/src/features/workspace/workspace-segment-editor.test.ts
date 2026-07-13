@@ -267,6 +267,7 @@ describe("segment infographic refresh isolation", () => {
       intrinsicHeight: 400,
       intrinsicWidth: 800,
       mediaAssetId: 8952,
+      parts: [],
       sourceVisualIdentity: "asset:7824",
       stylePrompt: null,
       text: "Рост продаж на 42%",

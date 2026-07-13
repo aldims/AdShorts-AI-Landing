@@ -18547,6 +18547,7 @@ export function WorkspacePage({
             intrinsicHeight: asset.intrinsicHeight ?? asset.intrinsic_height,
             intrinsicWidth: asset.intrinsicWidth ?? asset.intrinsic_width,
             mediaAssetId,
+            parts: asset.parts,
             previousTransform: targetSegment.infographic?.transform,
             sourceVisualIdentity,
             stylePrompt: job.stylePrompt,

@@ -83,6 +83,15 @@ export type WorkspaceSegmentInfographicTransform = {
   width: number;
 };
 
+export type WorkspaceSegmentInfographicPart = {
+  frame: { height: number; width: number; x: number; y: number };
+  intrinsicHeight: number;
+  intrinsicWidth: number;
+  mediaAssetId: number;
+  reveal: { delaySeconds: number; durationSeconds: number };
+  text: string;
+};
+
 export type WorkspaceSegmentInfographic = {
   animation: {
     durationSeconds: number;
@@ -92,6 +101,7 @@ export type WorkspaceSegmentInfographic = {
   intrinsicHeight: number;
   intrinsicWidth: number;
   mediaAssetId: number;
+  parts: WorkspaceSegmentInfographicPart[];
   sourceVisualIdentity: string;
   stylePrompt: string | null;
   text: string;

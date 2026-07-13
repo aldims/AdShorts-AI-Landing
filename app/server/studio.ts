@@ -318,6 +318,14 @@ type AdsflowSegmentAiPhotoAssetPayload = {
     width?: number | string | null;
   } | null;
   source_visual_identity?: string | null;
+  parts?: Array<{
+    frame?: { height?: number | string | null; width?: number | string | null; x?: number | string | null; y?: number | string | null } | null;
+    intrinsic_height?: number | string | null;
+    intrinsic_width?: number | string | null;
+    media_asset_id?: number | string | null;
+    reveal?: { delay_seconds?: number | string | null; duration_seconds?: number | string | null } | null;
+    text?: string | null;
+  }> | null;
 };
 
 type AdsflowSegmentAiPhotoGenerateResponse = {
@@ -578,6 +586,7 @@ export type StudioGeneratedImageAsset = {
     width: number;
   };
   sourceVisualIdentity?: string;
+  parts?: StudioSegmentInfographic["parts"];
 };
 
 export type StudioGeneratedVideoAsset = {
@@ -913,6 +922,14 @@ export type StudioSegmentInfographic = {
   intrinsicHeight: number;
   intrinsicWidth: number;
   mediaAssetId: number;
+  parts: Array<{
+    frame: { height: number; width: number; x: number; y: number };
+    intrinsicHeight: number;
+    intrinsicWidth: number;
+    mediaAssetId: number;
+    reveal: { delaySeconds: number; durationSeconds: number };
+    text: string;
+  }>;
   sourceVisualIdentity: string;
   stylePrompt: string | null;
   text: string;
@@ -2047,12 +2064,56 @@ const normalizeStudioSegmentInfographic = (value: unknown): StudioSegmentInfogra
     throw new Error("Segment infographic must stay inside the video frame.");
   }
 
+  const parts: StudioSegmentInfographic["parts"] = [];
+  if (record.parts !== undefined && record.parts !== null) {
+    if (!Array.isArray(record.parts) || record.parts.length > 4) {
+      throw new Error("Segment infographic parts are invalid.");
+    }
+    let previousDelay = -1;
+    for (const rawPart of record.parts) {
+      if (!rawPart || typeof rawPart !== "object") {
+        throw new Error("Segment infographic part is invalid.");
+      }
+      const part = rawPart as Record<string, unknown>;
+      const partFrame = part.frame && typeof part.frame === "object" ? part.frame as Record<string, unknown> : {};
+      const partReveal = part.reveal && typeof part.reveal === "object" ? part.reveal as Record<string, unknown> : {};
+      const partAssetId = normalizePositiveInteger(part.mediaAssetId ?? part.media_asset_id);
+      const partWidth = normalizePositiveInteger(part.intrinsicWidth ?? part.intrinsic_width);
+      const partHeight = normalizePositiveInteger(part.intrinsicHeight ?? part.intrinsic_height);
+      const x = normalizeNumber(partFrame.x);
+      const y = normalizeNumber(partFrame.y);
+      const frameWidth = normalizeNumber(partFrame.width);
+      const frameHeight = normalizeNumber(partFrame.height);
+      const delaySeconds = normalizeNumber(partReveal.delaySeconds ?? partReveal.delay_seconds);
+      const partText = String(part.text ?? "").trim();
+      if (!(
+        partAssetId && partWidth && partHeight && partText &&
+        x !== null && y !== null && frameWidth !== null && frameHeight !== null && delaySeconds !== null &&
+        x >= 0 && y >= 0 && frameWidth > 0 && frameHeight > 0 &&
+        x + frameWidth <= 1.0001 && y + frameHeight <= 1.0001 &&
+        delaySeconds >= previousDelay
+      )) {
+        throw new Error("Segment infographic part is invalid.");
+      }
+      previousDelay = delaySeconds;
+      parts.push({
+        frame: { height: frameHeight, width: frameWidth, x, y },
+        intrinsicHeight: partHeight,
+        intrinsicWidth: partWidth,
+        mediaAssetId: partAssetId,
+        reveal: { delaySeconds, durationSeconds: 0.65 },
+        text: partText,
+      });
+    }
+  }
+
   return {
     animation: { durationSeconds: 1.1, type: "fade" },
     inputHash,
     intrinsicHeight,
     intrinsicWidth,
     mediaAssetId,
+    parts,
     sourceVisualIdentity,
     stylePrompt: stylePrompt || null,
     text,
@@ -4378,6 +4439,34 @@ const normalizeAdsflowSegmentAiPhotoAsset = async (
   const initialCenterX = Number(rawInitialTransform?.center_x);
   const initialCenterY = Number(rawInitialTransform?.center_y);
   const initialWidth = Number(rawInitialTransform?.width);
+  const infographicParts: StudioSegmentInfographic["parts"] = [];
+  for (const rawPart of payload?.parts ?? []) {
+    const mediaAssetId = normalizePositiveInteger(rawPart?.media_asset_id);
+    const intrinsicWidth = normalizePositiveInteger(rawPart?.intrinsic_width);
+    const intrinsicHeight = normalizePositiveInteger(rawPart?.intrinsic_height);
+    const x = normalizeNumber(rawPart?.frame?.x);
+    const y = normalizeNumber(rawPart?.frame?.y);
+    const width = normalizeNumber(rawPart?.frame?.width);
+    const height = normalizeNumber(rawPart?.frame?.height);
+    const delaySeconds = normalizeNumber(rawPart?.reveal?.delay_seconds);
+    const text = String(rawPart?.text ?? "").trim();
+    if (
+      mediaAssetId && intrinsicWidth && intrinsicHeight && text &&
+      x !== null && y !== null && width !== null && height !== null && delaySeconds !== null
+    ) {
+      infographicParts.push({
+        frame: { height, width, x, y },
+        intrinsicHeight,
+        intrinsicWidth,
+        mediaAssetId,
+        reveal: { delaySeconds, durationSeconds: 0.65 },
+        text,
+      });
+    }
+  }
+  if ((payload?.parts?.length ?? 0) !== infographicParts.length) {
+    throw new Error("AdsFlow returned invalid infographic reveal parts.");
+  }
   const infographicMetadata = {
     intrinsicHeight: normalizePositiveInteger(payload?.intrinsic_height) ?? undefined,
     intrinsicWidth: normalizePositiveInteger(payload?.intrinsic_width) ?? undefined,
@@ -4387,6 +4476,7 @@ const normalizeAdsflowSegmentAiPhotoAsset = async (
         ? { centerX: initialCenterX, centerY: initialCenterY, width: initialWidth }
         : undefined,
     sourceVisualIdentity: normalizeGenerationText(payload?.source_visual_identity) || undefined,
+    parts: infographicParts,
   };
 
   if (!assetId && !inlineDataUrl && !remoteUrl) {

@@ -220,6 +220,14 @@ export type WorkspaceSegmentInfographic = {
   intrinsicHeight: number;
   intrinsicWidth: number;
   mediaAssetId: number;
+  parts: Array<{
+    frame: { height: number; width: number; x: number; y: number };
+    intrinsicHeight: number;
+    intrinsicWidth: number;
+    mediaAssetId: number;
+    reveal: { delaySeconds: number; durationSeconds: number };
+    text: string;
+  }>;
   sourceVisualIdentity: string;
   stylePrompt: string | null;
   text: string;
@@ -2956,6 +2964,49 @@ const normalizeWorkspaceSegmentInfographic = (value: unknown): WorkspaceSegmentI
     record.sourceVisualIdentity ?? record.source_visual_identity,
   );
   const stylePrompt = String(record.stylePrompt ?? record.style_prompt ?? "").trim();
+  const parts: WorkspaceSegmentInfographic["parts"] = [];
+  let partsValid = record.parts === undefined || record.parts === null || Array.isArray(record.parts);
+  if (Array.isArray(record.parts)) {
+    if (record.parts.length > 4) partsValid = false;
+    let previousDelay = -1;
+    for (const rawPart of record.parts.slice(0, 4)) {
+      if (!rawPart || typeof rawPart !== "object") {
+        partsValid = false;
+        continue;
+      }
+      const part = rawPart as Record<string, unknown>;
+      const frame = part.frame && typeof part.frame === "object" ? part.frame as Record<string, unknown> : {};
+      const reveal = part.reveal && typeof part.reveal === "object" ? part.reveal as Record<string, unknown> : {};
+      const partAssetId = normalizePositiveProjectId(part.mediaAssetId ?? part.media_asset_id);
+      const partWidth = normalizePositiveProjectId(part.intrinsicWidth ?? part.intrinsic_width);
+      const partHeight = normalizePositiveProjectId(part.intrinsicHeight ?? part.intrinsic_height);
+      const x = normalizeNumber(frame.x);
+      const y = normalizeNumber(frame.y);
+      const frameWidth = normalizeNumber(frame.width);
+      const frameHeight = normalizeNumber(frame.height);
+      const delaySeconds = normalizeNumber(reveal.delaySeconds ?? reveal.delay_seconds);
+      const partText = String(part.text ?? "").trim();
+      if (!(
+        partAssetId && partWidth && partHeight && partText && x !== null && y !== null &&
+        frameWidth !== null && frameHeight !== null && delaySeconds !== null &&
+        x >= 0 && y >= 0 && frameWidth > 0 && frameHeight > 0 &&
+        x + frameWidth <= 1.0001 && y + frameHeight <= 1.0001 &&
+        delaySeconds >= previousDelay
+      )) {
+        partsValid = false;
+        continue;
+      }
+      previousDelay = delaySeconds;
+      parts.push({
+        frame: { height: frameHeight, width: frameWidth, x, y },
+        intrinsicHeight: partHeight,
+        intrinsicWidth: partWidth,
+        mediaAssetId: partAssetId,
+        reveal: { delaySeconds, durationSeconds: 0.65 },
+        text: partText,
+      });
+    }
+  }
 
   if (
     !mediaAssetId ||
@@ -2964,6 +3015,7 @@ const normalizeWorkspaceSegmentInfographic = (value: unknown): WorkspaceSegmentI
     centerX === null ||
     centerY === null ||
     width === null ||
+    !partsValid ||
     !text ||
     !/^[0-9a-f]{64}$/i.test(inputHash) ||
     !/^asset:[1-9]\d*$/.test(sourceVisualIdentity)
@@ -2977,6 +3029,7 @@ const normalizeWorkspaceSegmentInfographic = (value: unknown): WorkspaceSegmentI
     intrinsicHeight,
     intrinsicWidth,
     mediaAssetId,
+    parts,
     sourceVisualIdentity,
     stylePrompt: stylePrompt || null,
     text,

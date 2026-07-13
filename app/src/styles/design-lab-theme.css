@@ -42475,6 +42475,13 @@ html, body {
   -webkit-user-drag: none;
 }
 
+.studio-segment-infographic__image.is-part {
+  position: absolute;
+  max-height: none;
+  object-fit: fill;
+  opacity: var(--workspace-infographic-part-opacity, 1);
+}
+
 .studio-segment-infographic.is-editable {
   pointer-events: none;
 }

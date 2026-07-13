@@ -58,6 +58,63 @@ describe("WorkspaceSegmentInfographicOverlay", () => {
     expect(Number(overlay.style.getPropertyValue("--workspace-infographic-opacity"))).toBeCloseTo(0.5);
   });
 
+  it("reveals semantic parts independently and shows all parts while paused", () => {
+    const infographic = createWorkspaceSegmentInfographic({
+      inputHash: "e".repeat(64),
+      intrinsicHeight: 800,
+      intrinsicWidth: 1000,
+      mediaAssetId: 70,
+      parts: [
+        {
+          frame: { height: 0.4, width: 0.9, x: 0.05, y: 0.05 },
+          intrinsicHeight: 320,
+          intrinsicWidth: 900,
+          mediaAssetId: 71,
+          reveal: { delaySeconds: 0, durationSeconds: 0.65 },
+          text: "Не пьёт таблетки?",
+        },
+        {
+          frame: { height: 0.35, width: 0.75, x: 0.125, y: 0.6 },
+          intrinsicHeight: 280,
+          intrinsicWidth: 750,
+          mediaAssetId: 72,
+          reveal: { delaySeconds: 0.85, durationSeconds: 0.65 },
+          text: "Есть решение",
+        },
+      ],
+      sourceVisualIdentity: "asset:14",
+      text: "Не пьёт таблетки? Есть решение",
+    });
+    const view = render(
+      <WorkspaceSegmentInfographicOverlay
+        editable={false}
+        infographic={infographic}
+        isPlaying
+        localTimeSeconds={0.4}
+        segmentDurationSeconds={5}
+      />,
+    );
+    const images = view.container.querySelectorAll<HTMLElement>(".studio-segment-infographic__image.is-part");
+
+    expect(images).toHaveLength(2);
+    expect(Number(images[0]?.style.getPropertyValue("--workspace-infographic-part-opacity"))).toBeGreaterThan(0.5);
+    expect(Number(images[1]?.style.getPropertyValue("--workspace-infographic-part-opacity"))).toBe(0);
+
+    view.rerender(
+      <WorkspaceSegmentInfographicOverlay
+        editable={false}
+        infographic={infographic}
+        isPlaying={false}
+        localTimeSeconds={0}
+        segmentDurationSeconds={5}
+      />,
+    );
+    const pausedImages = view.container.querySelectorAll<HTMLElement>(".studio-segment-infographic__image.is-part");
+    expect(Array.from(pausedImages).map((image) => Number(
+      image.style.getPropertyValue("--workspace-infographic-part-opacity"),
+    ))).toEqual([1, 1]);
+  });
+
   it("commits one transform after any number of pointer moves", () => {
     const onTransformCommit = vi.fn();
     const infographic = createWorkspaceSegmentInfographic({

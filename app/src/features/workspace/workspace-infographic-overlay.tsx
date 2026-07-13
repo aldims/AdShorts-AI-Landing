@@ -9,6 +9,7 @@ import {
   clampWorkspaceSegmentInfographicTransform,
   getWorkspaceSegmentInfographicAssetUrl,
   getWorkspaceSegmentInfographicOpacity,
+  getWorkspaceSegmentInfographicPartOpacity,
   resizeWorkspaceSegmentInfographicFromCorner,
 } from "./workspace-infographic-helpers";
 import type {
@@ -183,6 +184,9 @@ export const WorkspaceSegmentInfographicOverlay = ({
     "--workspace-infographic-opacity": opacity,
     "--workspace-infographic-width": `${transientTransform.width * 100}%`,
   } as CSSProperties;
+  const objectStyle = infographic.parts.length > 0
+    ? { aspectRatio: `${infographic.intrinsicWidth} / ${infographic.intrinsicHeight}` }
+    : undefined;
 
   return (
     <div
@@ -198,6 +202,7 @@ export const WorkspaceSegmentInfographicOverlay = ({
     >
       <div
         className="studio-segment-infographic__object"
+        style={objectStyle}
         data-infographic-handle="move"
         role={editable ? "group" : undefined}
         aria-label={editable ? `Инфографика: ${infographic.text}. Перетащите для изменения положения.` : undefined}
@@ -238,12 +243,40 @@ export const WorkspaceSegmentInfographicOverlay = ({
           onTransformCommit?.(nextTransform);
         }}
       >
-        <img
-          className="studio-segment-infographic__image"
-          src={getWorkspaceSegmentInfographicAssetUrl(infographic.mediaAssetId)}
-          alt={infographic.text}
-          draggable={false}
-        />
+        {infographic.parts.length > 0 ? infographic.parts.map((part, partIndex) => {
+          const partOpacity = isPlaying && !isInteracting
+            ? getWorkspaceSegmentInfographicPartOpacity(
+                part,
+                localTimeSeconds,
+                segmentDurationSeconds,
+                infographic.animation.durationSeconds,
+              )
+            : 1;
+          const partStyle = {
+            "--workspace-infographic-part-opacity": partOpacity,
+            height: `${part.frame.height * 100}%`,
+            left: `${part.frame.x * 100}%`,
+            top: `${part.frame.y * 100}%`,
+            width: `${part.frame.width * 100}%`,
+          } as CSSProperties;
+          return (
+            <img
+              className="studio-segment-infographic__image is-part"
+              src={getWorkspaceSegmentInfographicAssetUrl(part.mediaAssetId)}
+              alt={part.text}
+              draggable={false}
+              key={`${part.mediaAssetId}:${partIndex}`}
+              style={partStyle}
+            />
+          );
+        }) : (
+          <img
+            className="studio-segment-infographic__image"
+            src={getWorkspaceSegmentInfographicAssetUrl(infographic.mediaAssetId)}
+            alt={infographic.text}
+            draggable={false}
+          />
+        )}
         {editable ? (
           <>
             {(["nw", "ne", "sw", "se"] as const).map((handle) => (

@@ -1,6 +1,7 @@
 import type {
   WorkspaceSegmentEditorDraftSegment,
   WorkspaceSegmentInfographic,
+  WorkspaceSegmentInfographicPart,
   WorkspaceSegmentInfographicTransform,
 } from "./workspace-types";
 
@@ -10,6 +11,7 @@ export const WORKSPACE_SEGMENT_INFOGRAPHIC_DEFAULT_WIDTH = 0.7;
 export const WORKSPACE_SEGMENT_INFOGRAPHIC_MIN_WIDTH = 0.12;
 export const WORKSPACE_SEGMENT_INFOGRAPHIC_MAX_WIDTH = 0.96;
 export const WORKSPACE_SEGMENT_INFOGRAPHIC_FADE_SECONDS = 1.1;
+export const WORKSPACE_SEGMENT_INFOGRAPHIC_PART_REVEAL_SECONDS = 0.65;
 export const WORKSPACE_SEGMENT_INFOGRAPHIC_FRAME_ASPECT_RATIO = 9 / 16;
 export const WORKSPACE_SEGMENT_INFOGRAPHIC_HISTORY_LIMIT = 40;
 
@@ -58,6 +60,54 @@ const isWorkspaceSegmentInfographicInputHash = (value: string) => /^[0-9a-f]{64}
 const isWorkspaceSegmentInfographicSourceIdentity = (value: string) => /^asset:[1-9]\d*$/.test(value);
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+const normalizeWorkspaceSegmentInfographicParts = (value: unknown): WorkspaceSegmentInfographicPart[] => {
+  if (!Array.isArray(value) || value.length > 4) {
+    return [];
+  }
+  const parts: WorkspaceSegmentInfographicPart[] = [];
+  let previousDelay = -1;
+  for (const rawPart of value) {
+    if (!rawPart || typeof rawPart !== "object") {
+      return [];
+    }
+    const record = rawPart as Record<string, unknown>;
+    const frame = record.frame && typeof record.frame === "object"
+      ? record.frame as Record<string, unknown>
+      : {};
+    const reveal = record.reveal && typeof record.reveal === "object"
+      ? record.reveal as Record<string, unknown>
+      : {};
+    const mediaAssetId = positiveInteger(record.mediaAssetId ?? record.media_asset_id);
+    const intrinsicWidth = positiveInteger(record.intrinsicWidth ?? record.intrinsic_width);
+    const intrinsicHeight = positiveInteger(record.intrinsicHeight ?? record.intrinsic_height);
+    const text = String(record.text ?? "").trim();
+    const x = finiteNumber(frame.x, Number.NaN);
+    const y = finiteNumber(frame.y, Number.NaN);
+    const width = finiteNumber(frame.width, Number.NaN);
+    const height = finiteNumber(frame.height, Number.NaN);
+    const delaySeconds = finiteNumber(reveal.delaySeconds ?? reveal.delay_seconds, Number.NaN);
+    if (
+      !mediaAssetId || !intrinsicWidth || !intrinsicHeight || !text ||
+      ![x, y, width, height, delaySeconds].every(Number.isFinite) ||
+      x < 0 || y < 0 || width <= 0 || height <= 0 ||
+      x + width > 1.000001 || y + height > 1.000001 ||
+      delaySeconds < previousDelay
+    ) {
+      return [];
+    }
+    previousDelay = delaySeconds;
+    parts.push({
+      frame: { height, width, x, y },
+      intrinsicHeight,
+      intrinsicWidth,
+      mediaAssetId,
+      reveal: { delaySeconds, durationSeconds: WORKSPACE_SEGMENT_INFOGRAPHIC_PART_REVEAL_SECONDS },
+      text,
+    });
+  }
+  return parts;
+};
 
 export const getWorkspaceInfographicNormalizedHeight = (
   infographic: Pick<WorkspaceSegmentInfographic, "intrinsicHeight" | "intrinsicWidth" | "transform">,
@@ -181,6 +231,7 @@ export const normalizeWorkspaceSegmentInfographic = (value: unknown): WorkspaceS
     record.transform && typeof record.transform === "object"
       ? (record.transform as Partial<WorkspaceSegmentInfographicTransform>)
       : null;
+  const parts = normalizeWorkspaceSegmentInfographicParts(record.parts);
 
   return {
     animation: {
@@ -191,6 +242,7 @@ export const normalizeWorkspaceSegmentInfographic = (value: unknown): WorkspaceS
     intrinsicHeight,
     intrinsicWidth,
     mediaAssetId,
+    parts,
     sourceVisualIdentity,
     stylePrompt: rawStylePrompt
       ? truncateWorkspaceSegmentInfographicText(rawStylePrompt, WORKSPACE_SEGMENT_INFOGRAPHIC_STYLE_MAX_CHARS)
@@ -209,6 +261,11 @@ export const cloneWorkspaceSegmentInfographic = (
     ? {
         ...normalized,
         animation: { ...normalized.animation },
+        parts: normalized.parts.map((part) => ({
+          ...part,
+          frame: { ...part.frame },
+          reveal: { ...part.reveal },
+        })),
         transform: { ...normalized.transform },
       }
     : null;
@@ -220,6 +277,7 @@ export const createWorkspaceSegmentInfographic = (options: {
   intrinsicWidth?: number | null;
   initialTransform?: Partial<WorkspaceSegmentInfographicTransform> | null;
   mediaAssetId: number;
+  parts?: unknown;
   previousTransform?: WorkspaceSegmentInfographicTransform | null;
   sourceVisualIdentity: string;
   stylePrompt?: string | null;
@@ -250,6 +308,7 @@ export const createWorkspaceSegmentInfographic = (options: {
     intrinsicHeight,
     intrinsicWidth,
     mediaAssetId,
+    parts: normalizeWorkspaceSegmentInfographicParts(options.parts),
     sourceVisualIdentity,
     stylePrompt: stylePrompt || null,
     text,
@@ -273,6 +332,7 @@ export const getWorkspaceSegmentInfographicIdentityKey = (
   return normalized
     ? JSON.stringify([
         normalized.mediaAssetId,
+        normalized.parts,
         normalized.text,
         normalized.stylePrompt,
         normalized.sourceVisualIdentity,
@@ -326,6 +386,34 @@ export const getWorkspaceSegmentInfographicOpacity = (
     return 1;
   }
   return clamp(Math.min(time / fade, (duration - time) / fade), 0, 1);
+};
+
+export const getWorkspaceSegmentInfographicPartOpacity = (
+  part: WorkspaceSegmentInfographicPart,
+  localTimeSeconds: number,
+  segmentDurationSeconds: number,
+  configuredFadeSeconds = WORKSPACE_SEGMENT_INFOGRAPHIC_FADE_SECONDS,
+) => {
+  const duration = Math.max(0, finiteNumber(segmentDurationSeconds, 0));
+  if (duration <= 0) {
+    return 1;
+  }
+  const time = clamp(finiteNumber(localTimeSeconds, 0), 0, duration);
+  const fadeOutDuration = getWorkspaceSegmentInfographicFadeDuration(duration, configuredFadeSeconds);
+  const availableBeforeOut = Math.max(0.05, duration - fadeOutDuration);
+  const delay = Math.min(
+    Math.max(0, finiteNumber(part.reveal.delaySeconds, 0)),
+    availableBeforeOut * 0.72,
+  );
+  const revealDuration = Math.min(
+    WORKSPACE_SEGMENT_INFOGRAPHIC_PART_REVEAL_SECONDS,
+    Math.max(0.05, availableBeforeOut - delay),
+  );
+  const fadeInOpacity = clamp((time - delay) / revealDuration, 0, 1);
+  const fadeOutOpacity = fadeOutDuration > 0
+    ? clamp((duration - time) / fadeOutDuration, 0, 1)
+    : 1;
+  return Math.min(fadeInOpacity, fadeOutOpacity);
 };
 
 export const getWorkspaceSegmentInfographicAssetUrl = (mediaAssetId: number) =>
