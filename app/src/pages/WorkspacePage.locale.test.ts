@@ -5508,6 +5508,66 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(source.audioUrl).toBe("/api/workspace/media-assets/9129/playback");
   });
 
+  it("keeps auto-timed project voiceover on the shared source when the scene includes natural tail padding", () => {
+    const segment = createDraftSegment({
+      duration: 5.06,
+      durationMode: "auto",
+      endTime: 5.06,
+      index: 0,
+      manualDurationSeconds: null,
+      speechDuration: 4.88,
+      speechEndTime: 4.88,
+      speechStartTime: 0,
+      startTime: 0,
+      text: "First",
+    });
+    const session = {
+      ...createDraftSession(segment),
+      projectId: 4212,
+      ttsAssetId: 9129,
+    };
+    const previewRange = getWorkspaceSegmentVoiceoverPreviewRange(segment, session);
+
+    expect(
+      shouldUseWorkspaceSegmentProjectVoiceoverSegmentProxyInFullPreview(segment, session, {
+        hasProjectVoiceoverAsset: true,
+        previewRange,
+        timelineEndTime: 5.06,
+        timelineStartTime: 0,
+      }),
+    ).toBe(false);
+  });
+
+  it("does not treat natural tail padding as a manual voice pause after visual duration hydration", () => {
+    const segment = createDraftSegment({
+      duration: 5.06,
+      durationMode: "manual",
+      endTime: 5.06,
+      index: 0,
+      manualDurationSeconds: 5.06,
+      speechDuration: 4.88,
+      speechEndTime: 4.88,
+      speechStartTime: 0,
+      startTime: 0,
+      text: "First",
+    });
+    const session = {
+      ...createDraftSession(segment),
+      projectId: 4212,
+      ttsAssetId: 9129,
+    };
+    const previewRange = getWorkspaceSegmentVoiceoverPreviewRange(segment, session);
+
+    expect(
+      shouldUseWorkspaceSegmentProjectVoiceoverSegmentProxyInFullPreview(segment, session, {
+        hasProjectVoiceoverAsset: true,
+        previewRange,
+        timelineEndTime: 5.06,
+        timelineStartTime: 0,
+      }),
+    ).toBe(false);
+  });
+
   it("uses segment voiceover proxy in full preview when a manual visual slot creates a voice pause", () => {
     const segment = createDraftSegment({
       duration: 10,

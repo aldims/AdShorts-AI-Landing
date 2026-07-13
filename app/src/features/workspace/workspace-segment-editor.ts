@@ -6500,11 +6500,12 @@ export const shouldUseWorkspaceSegmentProjectVoiceoverSegmentProxyInFullPreview 
     previewStartTime !== null &&
     Math.abs(timelineStartTime - previewStartTime) > WORKSPACE_SEGMENT_PROJECT_VOICE_SOURCE_TIMELINE_DRIFT_SECONDS;
   const hasManualVoicePause =
+    normalizeWorkspaceSegmentDurationMode(segment.durationMode) === "manual" &&
     timelineDuration !== null &&
     previewDuration !== null &&
-    timelineDuration > previewDuration + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS;
+    timelineDuration >
+      previewDuration + WORKSPACE_SEGMENT_PROJECT_VOICE_SOURCE_TIMELINE_DRIFT_SECONDS;
 
-  void options?.hasProjectVoiceoverAsset;
   if (Boolean(options?.hasPriorNonProjectVoiceover) || hasShiftedProjectSourceStart || hasManualVoicePause) {
     return true;
   }
