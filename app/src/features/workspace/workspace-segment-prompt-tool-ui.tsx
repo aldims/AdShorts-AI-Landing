@@ -50,13 +50,15 @@ export const renderSegmentEditorPromptToolIcon = (
                 ? "/icons/segment-image-edit-icon-generated.png"
                 : kind === "image_upscale"
                   ? "/icons/segment-image-upscale-icon-generated.png"
-                  : kind === "scene_sound"
-                    ? "/icons/segment-scene-sound-icon-generated.png"
-                  : kind === "voiceover"
-                    ? "/icons/segment-voiceover-icon-generated.png"
-                  : kind === "brand"
-                    ? "/icons/segment-brand-icon-generated.png"
-                    : null;
+                  : kind === "infographic"
+                    ? "/icons/segment-infographic-icon-generated.png"
+                    : kind === "scene_sound"
+                      ? "/icons/segment-scene-sound-icon-generated.png"
+                      : kind === "voiceover"
+                        ? "/icons/segment-voiceover-icon-generated.png"
+                        : kind === "brand"
+                          ? "/icons/segment-brand-icon-generated.png"
+                          : null;
   const renderIconSvg = (children: ReactNode) => (
     <span className={iconClassName} aria-hidden="true">
       {aiBadge}
