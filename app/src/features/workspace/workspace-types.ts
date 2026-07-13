@@ -202,6 +202,7 @@ export type WorkspaceSegmentEditorSession = {
   subtitleType: string;
   title: string;
   ttsAssetId?: number | null;
+  voiceoverSourceProjectId?: number | null;
   voiceType: string;
 };
 

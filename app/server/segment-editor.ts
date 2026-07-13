@@ -78,6 +78,7 @@ type AdsflowSegmentEditorSegmentPayload = {
 };
 
 export type AdsflowSegmentEditorResponse = {
+  _voiceover_source_project_id?: number | string | null;
   description?: string | null;
   language?: string | null;
   music_asset_id?: number | string | null;
@@ -299,6 +300,7 @@ export type WorkspaceSegmentEditorSession = {
   subtitleType: string;
   title: string;
   ttsAssetId: number | null;
+  voiceoverSourceProjectId?: number | null;
   voiceType: string;
 };
 
@@ -369,6 +371,10 @@ const normalizePositiveProjectId = (value: unknown) => {
   const normalized = normalizeInteger(value);
   return normalized !== null && normalized > 0 ? normalized : null;
 };
+
+export const resolveWorkspaceSegmentEditorVoiceoverProjectId = (
+  session: Pick<WorkspaceSegmentEditorSession, "projectId" | "voiceoverSourceProjectId">,
+) => normalizePositiveProjectId(session.voiceoverSourceProjectId) ?? session.projectId;
 
 const normalizeMediaType = (value: unknown): WorkspaceSegmentEditorMediaType =>
   String(value ?? "").trim().toLowerCase() === "photo" ? "photo" : "video";
@@ -1211,6 +1217,9 @@ const hydrateSegmentEditorPayloadWithInheritedAudio = (
 
   return {
     ...payload,
+    _voiceover_source_project_id: shouldReconcileFinalVoice
+      ? getProjectDetailsSourceProjectId(projectDetailsPayload)
+      : normalizePositiveProjectId(payload._voiceover_source_project_id),
     music_asset_id: inheritedMusicAssetId ?? payload.music_asset_id,
     music_name: pickSegmentEditorText(payload.music_name, projectDetailsPayload?.music_name, sourcePayload?.music_name),
     music_type: pickSegmentEditorText(payload.music_type, projectDetailsPayload?.music_type, sourcePayload?.music_type),
@@ -2310,8 +2319,11 @@ export async function getWorkspaceProjectSegmentVoiceoverDuration(
   },
 ) {
   assertAdsflowConfigured();
-  await assertWorkspaceProjectAccess(user, options.projectId);
-  return fetchWorkspaceProjectSegmentVoiceoverDuration(options.projectId, options.segmentIndex);
+  const session = await getWorkspaceSegmentEditorSessionInternal(user, options.projectId);
+  return fetchWorkspaceProjectSegmentVoiceoverDuration(
+    resolveWorkspaceSegmentEditorVoiceoverProjectId(session),
+    options.segmentIndex,
+  );
 }
 
 const enrichWorkspaceSegmentEditorSessionWithVoiceoverDurations = async (
@@ -2349,7 +2361,10 @@ const enrichWorkspaceSegmentEditorSessionWithVoiceoverDurations = async (
   const measuredProjectVoiceoverDurations = await Promise.all(
     projectVoiceoverSegmentsNeedingMeasurement.map(async (segment) => {
       try {
-        const durationSeconds = await fetchWorkspaceProjectSegmentVoiceoverDuration(session.projectId, segment.index);
+        const durationSeconds = await fetchWorkspaceProjectSegmentVoiceoverDuration(
+          resolveWorkspaceSegmentEditorVoiceoverProjectId(session),
+          segment.index,
+        );
         return [segment.index, durationSeconds] as const;
       } catch (error) {
         console.warn("[segment-editor] Failed to measure segment voiceover duration", {
@@ -2914,6 +2929,7 @@ export const buildWorkspaceSegmentEditorSessionFromPayload = (
     subtitleType: normalizeText(payload.subtitle_type),
     title: normalizeText(payload.title) || `Проект #${sessionProjectId}`,
     ttsAssetId,
+    voiceoverSourceProjectId: normalizePositiveProjectId(payload._voiceover_source_project_id),
     voiceType: normalizeText(payload.voice_type),
   };
 };
@@ -3463,13 +3479,14 @@ export async function getWorkspaceProjectSegmentVoiceoverProxyTarget(
   },
 ) {
   assertAdsflowConfigured();
-  await assertWorkspaceProjectAccess(user, options.projectId);
+  const session = await getWorkspaceSegmentEditorSessionInternal(user, options.projectId);
+  const voiceoverProjectId = resolveWorkspaceSegmentEditorVoiceoverProjectId(session);
 
   return {
     headers: {
       "X-Admin-Token": env.adsflowAdminToken ?? "",
     },
-    url: buildAdsflowUrl(`/api/projects/${options.projectId}/segments/${options.segmentIndex}/voiceover`),
+    url: buildAdsflowUrl(`/api/projects/${voiceoverProjectId}/segments/${options.segmentIndex}/voiceover`),
   };
 }
 

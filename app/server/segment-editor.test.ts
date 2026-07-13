@@ -5,6 +5,7 @@ import {
   buildWorkspaceSegmentEditorSegment,
   getWorkspaceSegmentEditorSessionForAccessibleProject,
   readWorkspaceAudioDurationSecondsFromBuffer,
+  resolveWorkspaceSegmentEditorVoiceoverProjectId,
   resolveWorkspaceSegmentEditorCustomMusicMetadata,
 } from "./segment-editor.js";
 import type { WorkspaceMediaAssetRef } from "../shared/workspace-media-assets.js";
@@ -2015,6 +2016,9 @@ describe("segment editor asset lifecycle mapping", () => {
 
     expect(session.ttsAssetId).toBe(9003);
     expect(session.voiceType).toBe("Anastasia");
+    expect(session.voiceoverSourceProjectId).toBe(4203);
+    expect(resolveWorkspaceSegmentEditorVoiceoverProjectId(session)).toBe(4203);
+    expect(resolveWorkspaceSegmentEditorVoiceoverProjectId({ projectId: 4204 })).toBe(4204);
     expect(session.segments[0]).toEqual(expect.objectContaining({
       speechDuration: 6.04,
       speechEndTime: 6.04,
