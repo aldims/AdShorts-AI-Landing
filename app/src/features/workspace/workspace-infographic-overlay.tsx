@@ -148,16 +148,19 @@ export const WorkspaceSegmentInfographicOverlay = ({
     }
     event.preventDefault();
     event.stopPropagation();
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-    dragRef.current = null;
-    setIsInteracting(false);
     const nextTransform = cancelled
       ? drag.origin
       : pendingTransformRef.current ?? transientTransform;
+    // Clear the active drag before releasing capture. Browsers dispatch
+    // lostpointercapture after releasePointerCapture(), and that event must not
+    // finish (and commit) the same interaction a second time.
+    dragRef.current = null;
     pendingTransformRef.current = null;
+    setIsInteracting(false);
     setTransientTransform(nextTransform);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
     if (!cancelled && (
       nextTransform.centerX !== drag.origin.centerX ||
       nextTransform.centerY !== drag.origin.centerY ||
@@ -189,6 +192,7 @@ export const WorkspaceSegmentInfographicOverlay = ({
       data-testid="segment-infographic-overlay"
       onPointerCancel={(event) => finishInteraction(event, true)}
       onPointerDown={beginInteraction}
+      onLostPointerCapture={(event) => finishInteraction(event)}
       onPointerMove={updateInteraction}
       onPointerUp={(event) => finishInteraction(event)}
     >

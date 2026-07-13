@@ -86,8 +86,45 @@ describe("WorkspaceSegmentInfographicOverlay", () => {
     fireEvent.pointerMove(overlay, { clientX: 145, clientY: 135, pointerId: 7 });
     fireEvent.pointerMove(overlay, { clientX: 160, clientY: 150, pointerId: 7 });
     fireEvent.pointerUp(overlay, { clientX: 160, clientY: 150, pointerId: 7 });
+    fireEvent.lostPointerCapture(overlay, { pointerId: 7 });
 
     expect(onTransformCommit).toHaveBeenCalledTimes(1);
+  });
+
+  it("commits the latest transform when pointer capture is lost", () => {
+    const onTransformCommit = vi.fn();
+    const infographic = createWorkspaceSegmentInfographic({
+      inputHash: "d".repeat(64),
+      intrinsicHeight: 1024,
+      intrinsicWidth: 1024,
+      mediaAssetId: 58,
+      sourceVisualIdentity: "asset:13",
+      text: "Position",
+    });
+    const view = render(
+      <WorkspaceSegmentInfographicOverlay
+        editable
+        infographic={infographic}
+        isPlaying={false}
+        localTimeSeconds={0}
+        onTransformCommit={onTransformCommit}
+        segmentDurationSeconds={5}
+      />,
+    );
+    const overlay = view.getByTestId("segment-infographic-overlay");
+    const image = view.getByAltText("Position");
+
+    fireEvent.pointerDown(image, { button: 0, clientX: 100, clientY: 100, pointerId: 9 });
+    fireEvent.pointerMove(overlay, { clientX: 136, clientY: 164, pointerId: 9 });
+    fireEvent.lostPointerCapture(overlay, { pointerId: 9 });
+
+    expect(onTransformCommit).toHaveBeenCalledTimes(1);
+    expect(onTransformCommit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        centerX: expect.closeTo(infographic.transform.centerX + 0.1, 5),
+        centerY: expect.closeTo(infographic.transform.centerY + 0.1, 5),
+      }),
+    );
   });
 
   it("stops playback through the interaction callback and keeps the drag active", () => {

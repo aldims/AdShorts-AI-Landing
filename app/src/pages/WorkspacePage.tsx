@@ -14469,7 +14469,7 @@ export function WorkspacePage({
     transform: WorkspaceSegmentInfographicTransform,
   ) => {
     captureSegmentEditorInfographicHistory(targetSegmentIndex);
-    updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) =>
+    const nextDraft = updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) =>
       segment.infographic
         ? {
             ...segment,
@@ -14480,6 +14480,24 @@ export function WorkspacePage({
             infographicRemoved: false,
           }
         : segment,
+    );
+    if (!nextDraft) {
+      return;
+    }
+
+    // This is the final user-owned position used by the renderer. Persist it at
+    // the interaction boundary so navigation or generation in the next frame
+    // cannot restore the previous transform from storage.
+    persistSegmentEditorDraftSnapshot(nextDraft);
+    logSegmentEditorDiagnostics(
+      "client.segment-editor.infographic.transform.commit",
+      {
+        centerX: transform.centerX,
+        centerY: transform.centerY,
+        segmentIndex: targetSegmentIndex,
+        width: transform.width,
+      },
+      { draft: nextDraft },
     );
   };
 
@@ -21997,6 +22015,16 @@ export function WorkspacePage({
           ),
           segmentInfographicAssetIds: effectiveSegmentEditorBuild.payload.segments.map(
             (segment) => segment.infographic?.mediaAssetId ?? null,
+          ),
+          segmentInfographicTransforms: effectiveSegmentEditorBuild.payload.segments.map((segment) =>
+            segment.infographic
+              ? {
+                  centerX: segment.infographic.transform.centerX,
+                  centerY: segment.infographic.transform.centerY,
+                  index: segment.index,
+                  width: segment.infographic.transform.width,
+                }
+              : null,
           ),
           uploadCount: effectiveSegmentEditorBuild.uploads.length,
         });
