@@ -47,7 +47,7 @@ describe("WorkspaceSegmentInfographicOverlay", () => {
         editable={false}
         infographic={infographic}
         isPlaying
-        localTimeSeconds={0.275}
+        localTimeSeconds={0.55}
         segmentDurationSeconds={5}
       />,
     );

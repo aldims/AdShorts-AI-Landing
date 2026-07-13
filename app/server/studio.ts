@@ -2048,7 +2048,7 @@ const normalizeStudioSegmentInfographic = (value: unknown): StudioSegmentInfogra
   }
 
   return {
-    animation: { durationSeconds: 0.55, type: "fade" },
+    animation: { durationSeconds: 1.1, type: "fade" },
     inputHash,
     intrinsicHeight,
     intrinsicWidth,

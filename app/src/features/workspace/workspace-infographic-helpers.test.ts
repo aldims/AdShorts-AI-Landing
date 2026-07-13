@@ -94,6 +94,7 @@ describe("workspace infographic helpers", () => {
     });
 
     expect(infographic).not.toBeNull();
+    expect(infographic?.animation.durationSeconds).toBe(1.1);
     expect(infographic?.mediaAssetId).toBe(42);
     expect(infographic?.transform.width).toBe(0.96);
     expect(infographic?.transform.centerX).toBe(0.48);
@@ -169,10 +170,10 @@ describe("workspace infographic helpers", () => {
   });
 
   it("uses symmetric fades and shortens them for short segments", () => {
-    expect(getWorkspaceSegmentInfographicFadeDuration(0.5)).toBeCloseTo(0.1);
-    expect(getWorkspaceSegmentInfographicFadeDuration(5)).toBeCloseTo(0.55);
+    expect(getWorkspaceSegmentInfographicFadeDuration(0.5)).toBeCloseTo(0.2);
+    expect(getWorkspaceSegmentInfographicFadeDuration(5)).toBeCloseTo(1.1);
     expect(getWorkspaceSegmentInfographicOpacity(0, 5)).toBe(0);
-    expect(getWorkspaceSegmentInfographicOpacity(0.275, 5)).toBeCloseTo(0.5);
+    expect(getWorkspaceSegmentInfographicOpacity(0.55, 5)).toBeCloseTo(0.5);
     expect(getWorkspaceSegmentInfographicOpacity(2.5, 5)).toBe(1);
     expect(getWorkspaceSegmentInfographicOpacity(5, 5)).toBe(0);
   });

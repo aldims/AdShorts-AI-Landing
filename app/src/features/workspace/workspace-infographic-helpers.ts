@@ -9,7 +9,7 @@ export const WORKSPACE_SEGMENT_INFOGRAPHIC_STYLE_MAX_CHARS = 300;
 export const WORKSPACE_SEGMENT_INFOGRAPHIC_DEFAULT_WIDTH = 0.7;
 export const WORKSPACE_SEGMENT_INFOGRAPHIC_MIN_WIDTH = 0.12;
 export const WORKSPACE_SEGMENT_INFOGRAPHIC_MAX_WIDTH = 0.96;
-export const WORKSPACE_SEGMENT_INFOGRAPHIC_FADE_SECONDS = 0.55;
+export const WORKSPACE_SEGMENT_INFOGRAPHIC_FADE_SECONDS = 1.1;
 export const WORKSPACE_SEGMENT_INFOGRAPHIC_FRAME_ASPECT_RATIO = 9 / 16;
 export const WORKSPACE_SEGMENT_INFOGRAPHIC_HISTORY_LIMIT = 40;
 
@@ -309,7 +309,7 @@ export const isWorkspaceSegmentInfographicStale = (
 export const getWorkspaceSegmentInfographicFadeDuration = (
   segmentDurationSeconds: number,
   configuredDurationSeconds = WORKSPACE_SEGMENT_INFOGRAPHIC_FADE_SECONDS,
-) => Math.max(0, Math.min(configuredDurationSeconds, Math.max(0, segmentDurationSeconds) * 0.2));
+) => Math.max(0, Math.min(configuredDurationSeconds, Math.max(0, segmentDurationSeconds) * 0.4));
 
 export const getWorkspaceSegmentInfographicOpacity = (
   localTimeSeconds: number,
