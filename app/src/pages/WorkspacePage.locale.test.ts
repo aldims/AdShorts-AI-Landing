@@ -4579,6 +4579,31 @@ describe("WorkspacePage studio locale defaults", () => {
     });
   });
 
+  it("warns when a 5.2 second voiceover loops a 5 second video", () => {
+    const segment = createDraftSegment({
+      aiVideoAsset: {
+        durationSeconds: 5,
+        fileName: "segment-ai-video.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/studio/segment-ai-video/jobs/job/video",
+      },
+      duration: 5.2,
+      endTime: 5.2,
+      mediaType: "photo",
+      speechDuration: 5.2,
+      videoAction: "ai",
+    });
+
+    expect(
+      getWorkspaceSegmentVisualAudioDurationMismatchInfo(segment, createDraftSession(segment)),
+    ).toEqual({
+      visualDurationSeconds: 5,
+      voiceoverDurationSeconds: 5.2,
+      voiceoverDurationSource: "actual",
+    });
+  });
+
   it("detects persisted AI-generated video shorter than voiceover from measured metadata", () => {
     const segment = createDraftSegment({
       currentAsset: createMediaAsset(3429, {

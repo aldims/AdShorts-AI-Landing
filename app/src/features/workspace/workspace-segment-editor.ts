@@ -87,8 +87,6 @@ export const WORKSPACE_SEGMENT_EDITOR_MAX_VISUAL_DURATION_SECONDS = 50;
 export const WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS = 0.075;
 const WORKSPACE_SEGMENT_STALE_AUTO_VISUAL_REPAIR_THRESHOLD_SECONDS = 0.75;
 
-const WORKSPACE_SEGMENT_DURATION_WARNING_EPSILON_SECONDS = 0.25;
-
 export const WORKSPACE_SEGMENT_VOICE_PREVIEW_LEAD_SECONDS = 0.08;
 
 export const WORKSPACE_SEGMENT_VOICE_PREVIEW_TAIL_SECONDS = 0.45;
@@ -5767,7 +5765,7 @@ export const getWorkspaceSegmentVisualAudioDurationMismatchInfo = (
 
   const warningVoiceoverDurationSeconds = voiceoverDurationInfo.durationSeconds;
 
-  if (warningVoiceoverDurationSeconds <= visualDurationSeconds + WORKSPACE_SEGMENT_DURATION_WARNING_EPSILON_SECONDS) {
+  if (warningVoiceoverDurationSeconds <= visualDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS) {
     return null;
   }
 
