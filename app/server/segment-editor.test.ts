@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -1138,6 +1140,150 @@ describe("segment editor asset lifecycle mapping", () => {
     const fetchedUrls = fetchMock.mock.calls.map(([input]) => String(input));
     expect(fetchedUrls.some((url) => url.includes("/segments/0/voiceover"))).toBe(false);
     expect(fetchedUrls.some((url) => url.includes("/segments/1/voiceover"))).toBe(false);
+  });
+
+  it("restores unchanged per-scene voiceovers from a matching render contract", async () => {
+    const texts = [
+      "It was an ordinary day in the animal city.",
+      "Suddenly a huge monster appeared.",
+      "But Barsik noticed only the red dot.",
+      "One jump, and the monster was defeated.",
+      "The city welcomed its unexpected hero.",
+    ];
+    const timelineDurations = [4.7, 5.2, 4.4, 4.6, 5];
+    const voiceoverDurations = [4.696, 4.504, 4.42, 3.9, 4.96];
+    const voiceoverAssetIds = [9137, 9138, 9139, 9140, 9141];
+    let timelineCursor = 0;
+    const timelineSegments = texts.map((text, index) => {
+      const startTime = timelineCursor;
+      timelineCursor += timelineDurations[index] ?? 0;
+      return {
+        duration: timelineDurations[index],
+        end_time: timelineCursor,
+        index,
+        start_time: startTime,
+        text,
+      };
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
+      const url = String(input);
+      const voiceoverAssetIndex = voiceoverAssetIds.findIndex((assetId) => (
+        url.includes(`/api/media/${assetId}/download`)
+      ));
+      if (voiceoverAssetIndex >= 0) {
+        return new Response(createPcmWavBuffer(voiceoverDurations[voiceoverAssetIndex] ?? 0), {
+          headers: { "Content-Type": "audio/wav" },
+          status: 200,
+        });
+      }
+
+      if (url.includes("/api/projects/4214/segment-editor")) {
+        return new Response(JSON.stringify({
+          language: "en",
+          project_id: 4214,
+          segments: timelineSegments.map((segment, index) => ({
+            ...segment,
+            speech_duration: index === 4 ? 16.991 : voiceoverDurations[index],
+            speech_end_time: index === 4 ? 21.551 : voiceoverDurations[index],
+            speech_start_time: index === 4 ? 4.56 : 0,
+            voice_source_duration: index === 4 ? 16.991 : voiceoverDurations[index],
+            voice_source_end_time: index === 4 ? 21.551 : voiceoverDurations[index],
+            voice_source_start_time: index === 4 ? 4.56 : 0,
+          })),
+          title: "Barsik",
+          tts_asset_id: 9129,
+          voice_type: "Liam_Timing",
+        }), {
+          headers: { "Content-Type": "application/json" },
+          status: 200,
+        });
+      }
+
+      if (url.includes("/api/projects/4214/media")) {
+        return new Response(JSON.stringify({ assets: [], project_id: 4214 }), {
+          headers: { "Content-Type": "application/json" },
+          status: 200,
+        });
+      }
+
+      return new Response(JSON.stringify({
+        generation_settings: {
+          original_video_segments: timelineSegments,
+          segment_render_contract: {
+            segments: texts.map((text, index) => ({
+              segment_index: index,
+              text_sha256: createHash("sha256").update(text, "utf8").digest("hex"),
+              voice: { voiceover_asset_id: voiceoverAssetIds[index] },
+            })),
+          },
+          tts_asset_id: 9129,
+          voice_type: "Liam_Timing",
+        },
+        project_id: 4214,
+        voice_type: "Liam_Timing",
+      }), {
+        headers: { "Content-Type": "application/json" },
+        status: 200,
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const session = await getWorkspaceSegmentEditorSessionForAccessibleProject(
+      { id: "project-4214-owner" },
+      4214,
+      { bypassCache: true },
+    );
+
+    expect(session.segments.map((segment) => segment.voiceoverAssetId)).toEqual(voiceoverAssetIds);
+    expect(session.segments.map((segment) => segment.speechDuration)).toEqual(voiceoverDurations);
+    expect(session.segments.map((segment) => segment.voiceSourceDuration)).toEqual(voiceoverDurations);
+    expect(session.segments.map((segment) => segment.voiceSourceStartTime)).toEqual([0, 0, 0, 0, 0]);
+    expect(session.segments.map((segment) => segment.voiceSourceEndTime)).toEqual(voiceoverDurations);
+    expect(session.segments[4]).toEqual(expect.objectContaining({
+      duration: 5,
+      endTime: 23.9,
+      speechDuration: 4.96,
+      voiceSourceDuration: 4.96,
+    }));
+    const fetchedUrls = fetchMock.mock.calls.map(([input]) => String(input));
+    expect(voiceoverAssetIds.every((assetId) => (
+      fetchedUrls.some((url) => url.includes(`/api/media/${assetId}/download`))
+    ))).toBe(true);
+    const voiceoverAssetFetch = fetchMock.mock.calls.find(([input]) => (
+      String(input).includes("/api/media/9137/download")
+    ));
+    expect(voiceoverAssetFetch?.[1]?.headers).toEqual(expect.objectContaining({
+      "X-Admin-Token": expect.any(String),
+    }));
+  });
+
+  it("does not restore render-contract voiceovers after scene text changes", () => {
+    const session = buildWorkspaceSegmentEditorSessionFromPayload(
+      4214,
+      {
+        project_id: 4214,
+        segments: [{ duration: 5, end_time: 5, index: 0, start_time: 0, text: "Changed text" }],
+      },
+      {
+        projectDetailsPayload: {
+          generation_settings: {
+            original_video_segments: [
+              { duration: 5, end_time: 5, index: 0, start_time: 0, text: "Changed text" },
+            ],
+            segment_render_contract: {
+              segments: [{
+                segment_index: 0,
+                text_sha256: createHash("sha256").update("Original text", "utf8").digest("hex"),
+                voice: { voiceover_asset_id: 9137 },
+              }],
+            },
+          },
+        },
+      },
+    );
+
+    expect(session.segments[0]?.voiceoverAssetId).toBeNull();
+    expect(session.segments[0]?.voiceover).toBeNull();
   });
 
   it("recovers playable voiceover proxies for a completed project without a TTS asset id", async () => {

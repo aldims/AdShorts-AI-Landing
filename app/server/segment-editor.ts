@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { env } from "./env.js";
 import { getWorkspaceProjects } from "./projects.js";
 import {
@@ -61,6 +63,7 @@ type AdsflowSegmentEditorSegmentPayload = {
   speech_duration?: number | string | null;
   speech_end_time?: number | string | null;
   speech_start_time?: number | string | null;
+  speech_text?: string | null;
   speech_words?: AdsflowSegmentEditorSpeechWordPayload[] | null;
   start_time?: number | string | null;
   sourceDurationSeconds?: number | string | null;
@@ -75,6 +78,14 @@ type AdsflowSegmentEditorSegmentPayload = {
   voiceover_text_hash?: string | null;
   voiceover_voice_type?: string | null;
   voice_type?: string | null;
+};
+
+type AdsflowSegmentRenderContractSegmentPayload = {
+  segment_index?: number | string | null;
+  text_sha256?: string | null;
+  voice?: {
+    voiceover_asset_id?: number | string | null;
+  } | null;
 };
 
 export type AdsflowSegmentEditorResponse = {
@@ -161,6 +172,9 @@ type AdsflowProjectGenerationSettingsPayload = {
   project_title?: string | null;
   requested_language?: string | null;
   segment_scene_sounds?: AdsflowProjectMediaEntryPayload[] | null;
+  segment_render_contract?: {
+    segments?: AdsflowSegmentRenderContractSegmentPayload[] | null;
+  } | null;
   segment_voiceover_assets?: AdsflowProjectMediaEntryPayload[] | null;
   source_project_id?: number | string | null;
   source_video_urls?: AdsflowProjectMediaEntryPayload[] | null;
@@ -535,16 +549,16 @@ const isProjectSceneSoundMediaEntry = (entry?: AdsflowProjectMediaEntryPayload |
 };
 
 const isProjectVoiceoverMediaEntry = (entry?: AdsflowProjectMediaEntryPayload | null) => {
-  if (!isProjectMediaEntryAudio(entry)) {
-    return false;
-  }
-
   const roleText = getProjectMediaEntryRoleText(entry).replace(/-/g, "_");
-  return (
+  const hasVoiceoverRole = (
     roleText.includes("voiceover") ||
     roleText.includes("segment_voice") ||
     roleText.includes("segment_tts") ||
     roleText.includes("tts")
+  );
+  return hasVoiceoverRole && (
+    isProjectMediaEntryAudio(entry) ||
+    normalizePositiveProjectId(getProjectMediaEntryAssetId(entry)) !== null
   );
 };
 
@@ -880,6 +894,76 @@ const pickProjectDetailSegments = (
   }
 
   return [] as AdsflowSegmentEditorSegmentPayload[];
+};
+
+const getProjectSegmentRenderContractText = (
+  segment: AdsflowSegmentEditorSegmentPayload | null | undefined,
+) => String(segment?.text ?? segment?.speech_text ?? "").trim();
+
+const recoverProjectVoiceoverEntriesFromRenderContract = (
+  settings: AdsflowProjectGenerationSettingsPayload | null | undefined,
+): AdsflowProjectMediaEntryPayload[] => {
+  if (!settings) {
+    return [];
+  }
+
+  const declaredEntries = normalizeProjectMediaEntries(settings.segment_voiceover_assets);
+  const hasDeclaredVoiceoverAsset = declaredEntries.some((entry) => (
+    normalizePositiveProjectId(getProjectMediaEntryAssetId(entry)) !== null ||
+    Boolean(normalizeText(entry.download_url) || normalizeText(entry.url))
+  ));
+  if (hasDeclaredVoiceoverAsset) {
+    return declaredEntries;
+  }
+
+  const contractSegments = settings.segment_render_contract?.segments;
+  if (!Array.isArray(contractSegments) || contractSegments.length === 0) {
+    return [];
+  }
+
+  const candidateSegmentLists = [settings.original_video_segments, settings.video_segments];
+  const matchingSegments = candidateSegmentLists.find((candidate) => {
+    if (!Array.isArray(candidate) || candidate.length !== contractSegments.length) {
+      return false;
+    }
+
+    return contractSegments.every((contractSegment, index) => {
+      if (!contractSegment || typeof contractSegment !== "object") {
+        return false;
+      }
+
+      const expectedHash = normalizeText(contractSegment.text_sha256).toLowerCase();
+      if (!/^[0-9a-f]{64}$/.test(expectedHash)) {
+        return false;
+      }
+
+      const currentText = getProjectSegmentRenderContractText(candidate[index]);
+      const currentHash = createHash("sha256").update(currentText, "utf8").digest("hex");
+      return currentHash === expectedHash;
+    });
+  });
+  if (!matchingSegments) {
+    return [];
+  }
+
+  return contractSegments.flatMap((contractSegment, index) => {
+    const voiceoverAssetId = normalizePositiveProjectId(contractSegment.voice?.voiceover_asset_id);
+    if (voiceoverAssetId === null) {
+      return [];
+    }
+
+    const segmentIndex = normalizeInteger(contractSegment.segment_index) ?? index;
+    return [{
+      library_kind: "segment_voiceover",
+      media_asset_id: voiceoverAssetId,
+      media_type: "audio",
+      mime_type: "audio/wav",
+      role: "segment_voiceover",
+      segment_index: segmentIndex,
+      source: "segment_voiceover",
+      source_kind: "ai_voiceover",
+    } satisfies AdsflowProjectMediaEntryPayload];
+  });
 };
 
 const mergeProjectDetailTimelineIntoSegmentEditorPayload = (
@@ -2293,10 +2377,11 @@ const fetchWorkspaceVoiceoverAssetDuration = async (assetId: number, projectId: 
   }
 
   const response = await fetchUpstreamResponse(
-    buildAdsflowUrl(`/api/media/${assetId}/download`, {
-      admin_token: env.adsflowAdminToken ?? "",
-    }),
+    buildAdsflowUrl(`/api/media/${assetId}/download`),
     {
+      headers: {
+        "X-Admin-Token": env.adsflowAdminToken ?? "",
+      },
       signal: AbortSignal.timeout(SEGMENT_EDITOR_VOICEOVER_DURATION_FETCH_TIMEOUT_MS),
     },
     upstreamPolicies.proxyInteractive,
@@ -2418,6 +2503,11 @@ const enrichWorkspaceSegmentEditorSessionWithVoiceoverDurations = async (
       .filter((entry): entry is readonly [number, number] => entry[1] !== null)
       .map(([segmentIndex]) => segmentIndex),
   );
+  const measuredVoiceoverAssetSegmentIndexes = new Set(
+    measuredVoiceoverAssetDurations
+      .filter((entry): entry is readonly [number, number] => entry[1] !== null)
+      .map(([segmentIndex]) => segmentIndex),
+  );
   if (durationBySegmentIndex.size === 0) {
     return session;
   }
@@ -2430,14 +2520,17 @@ const enrichWorkspaceSegmentEditorSessionWithVoiceoverDurations = async (
         return segment;
       }
 
+      const hasStandaloneVoiceoverAsset = measuredVoiceoverAssetSegmentIndexes.has(segment.index);
       const speechWordsRange = getSegmentEditorSpeechWordsRange(segment);
-      const speechStartTime =
-        normalizeNumber(segment.voiceSourceStartTime) ??
-        normalizeNumber(segment.speechStartTime) ??
-        speechWordsRange?.startTime ??
-        segment.startTime;
-      const voiceSourceDuration =
-        Math.max(normalizeNumber(segment.voiceSourceDuration) ?? 0, durationSeconds);
+      const speechStartTime = hasStandaloneVoiceoverAsset
+        ? 0
+        : normalizeNumber(segment.voiceSourceStartTime) ??
+          normalizeNumber(segment.speechStartTime) ??
+          speechWordsRange?.startTime ??
+          segment.startTime;
+      const voiceSourceDuration = hasStandaloneVoiceoverAsset
+        ? durationSeconds
+        : Math.max(normalizeNumber(segment.voiceSourceDuration) ?? 0, durationSeconds);
       const recoveredProjectVoiceover =
         session.ttsAssetId === null && recoveredProjectVoiceoverSegmentIndexes.has(segment.index)
           ? {
@@ -2453,6 +2546,12 @@ const enrichWorkspaceSegmentEditorSessionWithVoiceoverDurations = async (
         speechEndTime: speechStartTime + durationSeconds,
         speechStartTime,
         voiceSourceDuration,
+        voiceSourceEndTime: hasStandaloneVoiceoverAsset
+          ? durationSeconds
+          : segment.voiceSourceEndTime,
+        voiceSourceStartTime: hasStandaloneVoiceoverAsset
+          ? 0
+          : segment.voiceSourceStartTime,
         voiceover: recoveredProjectVoiceover,
         voiceoverLanguage: recoveredProjectVoiceover ? session.language : segment.voiceoverLanguage,
         voiceoverTextHash: recoveredProjectVoiceover ? normalizeText(segment.text).toLowerCase() : segment.voiceoverTextHash,
@@ -2851,7 +2950,7 @@ export const buildWorkspaceSegmentEditorSessionFromPayload = (
   const originalEntries = getProjectOriginalMediaEntries(projectDetailsPayload);
   const currentEntries = getProjectCurrentMediaEntries(projectDetailsPayload, originalEntries);
   const sceneSoundEntries = pickProjectMediaEntries(generationSettings?.segment_scene_sounds);
-  const voiceoverEntries = pickProjectMediaEntries(generationSettings?.segment_voiceover_assets);
+  const voiceoverEntries = recoverProjectVoiceoverEntriesFromRenderContract(generationSettings);
   const authoritativeTimelineSegmentsByIndex = new Map(
     pickProjectDetailSegments(generationSettings).map((segment, fallbackIndex) => [
       getSegmentEditorSegmentIndex(segment, fallbackIndex),
