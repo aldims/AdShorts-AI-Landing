@@ -57,6 +57,7 @@ const normalizePositiveProjectId = (value) => {
     const normalized = normalizeInteger(value);
     return normalized !== null && normalized > 0 ? normalized : null;
 };
+export const resolveWorkspaceSegmentEditorVoiceoverProjectId = (session) => normalizePositiveProjectId(session.voiceoverSourceProjectId) ?? session.projectId;
 const normalizeMediaType = (value) => String(value ?? "").trim().toLowerCase() === "photo" ? "photo" : "video";
 const normalizeUrl = (value) => {
     const normalized = typeof value === "string" ? value.trim() : "";
@@ -257,8 +258,23 @@ const buildWorkspaceSegmentSceneSoundRefFromAsset = (asset) => {
         url: normalizeText(asset.originalUrl) || null,
     };
 };
-const findProjectSceneSoundMediaAsset = (assets, segmentIndex) => assets.find((asset) => normalizeInteger(asset?.segmentIndex) === segmentIndex && isWorkspaceSceneSoundMediaAsset(asset)) ??
-    null;
+const findCurrentProjectAudioMediaAsset = (assets, segmentIndex, predicate) => {
+    const matchingAssets = assets.filter((asset) => normalizeInteger(asset?.segmentIndex) === segmentIndex && predicate(asset));
+    const currentAssets = matchingAssets.filter((asset) => asset.isCurrent === true);
+    const eligibleAssets = currentAssets.length > 0
+        ? currentAssets
+        : matchingAssets.filter((asset) => asset.isCurrent === null);
+    return eligibleAssets
+        .slice()
+        .sort((left, right) => {
+        const createdAtDelta = (Date.parse(right.createdAt ?? "") || 0) - (Date.parse(left.createdAt ?? "") || 0);
+        if (createdAtDelta !== 0) {
+            return createdAtDelta;
+        }
+        return (normalizePositiveProjectId(right.assetId) ?? 0) - (normalizePositiveProjectId(left.assetId) ?? 0);
+    })[0] ?? null;
+};
+const findProjectSceneSoundMediaAsset = (assets, segmentIndex) => findCurrentProjectAudioMediaAsset(assets, segmentIndex, isWorkspaceSceneSoundMediaAsset);
 const findProjectVoiceoverMediaAsset = (assets, segmentIndex) => assets.find((asset) => normalizeInteger(asset?.segmentIndex) === segmentIndex && isWorkspaceVoiceoverMediaAsset(asset)) ??
     null;
 const normalizeWorkspaceProjectMediaUrl = (entry, value) => {
@@ -481,12 +497,42 @@ const doSegmentEditorGlobalVoicesMatch = (payload, sourcePayload) => {
     const sourceVoiceType = normalizeSegmentEditorComparableText(sourcePayload?.voice_type);
     return !voiceType || !sourceVoiceType || voiceType === sourceVoiceType;
 };
-const canReuseSourceSegmentEditorProjectTts = (payload, sourcePayload) => {
+const getProjectDetailsFinalVoiceIdentity = (projectDetailsPayload) => {
+    const generationSettings = projectDetailsPayload?.generation_settings && typeof projectDetailsPayload.generation_settings === "object"
+        ? projectDetailsPayload.generation_settings
+        : null;
+    return {
+        ttsAssetId: normalizePositiveProjectId(projectDetailsPayload?.tts_asset_id) ??
+            normalizePositiveProjectId(generationSettings?.tts_asset_id),
+        voiceType: pickSegmentEditorText(projectDetailsPayload?.voice_type, generationSettings?.voice_type),
+    };
+};
+const shouldReconcileSegmentEditorFinalVoice = (payload, sourcePayload, projectDetailsPayload) => {
+    const finalVoiceIdentity = getProjectDetailsFinalVoiceIdentity(projectDetailsPayload);
+    const sourceTtsAssetId = normalizePositiveProjectId(sourcePayload?.tts_asset_id);
+    const finalVoiceType = normalizeSegmentEditorComparableText(finalVoiceIdentity.voiceType);
+    const sourceVoiceType = normalizeSegmentEditorComparableText(sourcePayload?.voice_type);
+    const payloadVoiceType = normalizeSegmentEditorComparableText(payload.voice_type);
+    const hasStaleVoice = payloadVoiceType !== finalVoiceType ||
+        (payload.segments ?? []).some((segment) => {
+            const segmentVoiceType = normalizeSegmentEditorComparableText(segment.voiceover_voice_type || segment.voice_type);
+            return Boolean(segmentVoiceType) && segmentVoiceType !== finalVoiceType;
+        });
+    return (finalVoiceIdentity.ttsAssetId !== null &&
+        finalVoiceIdentity.ttsAssetId === sourceTtsAssetId &&
+        Boolean(finalVoiceType) &&
+        finalVoiceType === sourceVoiceType &&
+        hasStaleVoice &&
+        doSegmentEditorSegmentTextsMatch(payload.segments, sourcePayload?.segments));
+};
+const canReuseSourceSegmentEditorProjectTts = (payload, sourcePayload, projectDetailsPayload) => {
     const payloadTtsAssetId = normalizePositiveProjectId(payload.tts_asset_id);
     const sourceTtsAssetId = normalizePositiveProjectId(sourcePayload?.tts_asset_id);
+    const shouldReconcileFinalVoice = shouldReconcileSegmentEditorFinalVoice(payload, sourcePayload, projectDetailsPayload);
     return (sourceTtsAssetId !== null &&
-        (payloadTtsAssetId === null || payloadTtsAssetId === sourceTtsAssetId) &&
-        doSegmentEditorGlobalVoicesMatch(payload, sourcePayload) &&
+        (shouldReconcileFinalVoice ||
+            ((payloadTtsAssetId === null || payloadTtsAssetId === sourceTtsAssetId) &&
+                doSegmentEditorGlobalVoicesMatch(payload, sourcePayload))) &&
         doSegmentEditorSegmentTextsMatch(payload.segments, sourcePayload?.segments));
 };
 const canReuseSourceSegmentEditorMusic = (payload, projectDetailsPayload, sourcePayload) => {
@@ -538,11 +584,15 @@ const hydrateSegmentEditorPayloadWithInheritedAudio = (payload, projectDetailsPa
     const generationSettings = projectDetailsPayload?.generation_settings && typeof projectDetailsPayload.generation_settings === "object"
         ? projectDetailsPayload.generation_settings
         : null;
-    const shouldReuseSourceTts = canReuseSourceSegmentEditorProjectTts(payload, sourcePayload);
+    const shouldReuseSourceTts = canReuseSourceSegmentEditorProjectTts(payload, sourcePayload, projectDetailsPayload);
+    const shouldReconcileFinalVoice = shouldReconcileSegmentEditorFinalVoice(payload, sourcePayload, projectDetailsPayload);
     const shouldReuseSourceMusic = canReuseSourceSegmentEditorMusic(payload, projectDetailsPayload, sourcePayload);
-    const inheritedTtsAssetId = shouldReuseSourceTts
-        ? normalizePositiveProjectId(sourcePayload?.tts_asset_id)
-        : normalizePositiveProjectId(payload.tts_asset_id);
+    const finalVoiceIdentity = getProjectDetailsFinalVoiceIdentity(projectDetailsPayload);
+    const inheritedTtsAssetId = shouldReconcileFinalVoice
+        ? finalVoiceIdentity.ttsAssetId ?? normalizePositiveProjectId(sourcePayload?.tts_asset_id)
+        : shouldReuseSourceTts
+            ? normalizePositiveProjectId(sourcePayload?.tts_asset_id)
+            : normalizePositiveProjectId(payload.tts_asset_id);
     const inheritedMusicAssetId = shouldReuseSourceMusic
         ? normalizePositiveProjectId(sourcePayload?.music_asset_id)
         : normalizePositiveProjectId(payload.music_asset_id);
@@ -550,8 +600,10 @@ const hydrateSegmentEditorPayloadWithInheritedAudio = (payload, projectDetailsPa
     const sourceSegmentsByIndex = shouldReuseSourceTts
         ? getSegmentEditorSegmentMapByIndex(sourcePayload?.segments)
         : new Map();
-    const rawEffectiveVoiceType = pickSegmentEditorText(payload.voice_type, projectDetailsPayload?.voice_type, generationSettings?.voice_type, sourcePayload?.voice_type);
-    const effectiveVoiceType = inferSegmentEditorPayloadProjectVoiceType(payload, rawEffectiveVoiceType);
+    const rawEffectiveVoiceType = shouldReconcileFinalVoice
+        ? pickSegmentEditorText(finalVoiceIdentity.voiceType, sourcePayload?.voice_type, payload.voice_type)
+        : pickSegmentEditorText(payload.voice_type, projectDetailsPayload?.voice_type, generationSettings?.voice_type, sourcePayload?.voice_type);
+    const effectiveVoiceType = inferSegmentEditorPayloadProjectVoiceType(shouldReconcileFinalVoice && sourcePayload ? sourcePayload : payload, rawEffectiveVoiceType);
     const effectiveLanguage = normalizeWorkspaceSegmentEditorLanguage(payload.language) ||
         normalizeWorkspaceSegmentEditorLanguage(generationSettings?.content_language) ||
         normalizeWorkspaceSegmentEditorLanguage(generationSettings?.requested_language) ||
@@ -560,6 +612,9 @@ const hydrateSegmentEditorPayloadWithInheritedAudio = (payload, projectDetailsPa
     const canHydrateProjectVoiceover = inheritedTtsAssetId !== null && Boolean(effectiveVoiceType);
     return {
         ...payload,
+        _voiceover_source_project_id: shouldReconcileFinalVoice
+            ? getProjectDetailsSourceProjectId(projectDetailsPayload)
+            : normalizePositiveProjectId(payload._voiceover_source_project_id),
         music_asset_id: inheritedMusicAssetId ?? payload.music_asset_id,
         music_name: pickSegmentEditorText(payload.music_name, projectDetailsPayload?.music_name, sourcePayload?.music_name),
         music_type: pickSegmentEditorText(payload.music_type, projectDetailsPayload?.music_type, sourcePayload?.music_type),
@@ -579,15 +634,21 @@ const hydrateSegmentEditorPayloadWithInheritedAudio = (payload, projectDetailsPa
             const sourceVoiceSourceStartTime = pickSegmentEditorVoiceSourceStartTime(sourceRecord);
             const sourceVoiceSourceEndTime = pickSegmentEditorVoiceSourceEndTime(sourceRecord);
             const sourceVoiceSourceDuration = pickSegmentEditorVoiceSourceDuration(sourceRecord);
-            const voiceSourceStartTime = shouldReuseSourceTts
-                ? pickSegmentEditorNumber(detailVoiceSourceStartTime, sourceVoiceSourceStartTime, sourceSegment?.speech_start_time, segmentVoiceSourceStartTime)
-                : pickSegmentEditorNumber(segmentVoiceSourceStartTime, detailVoiceSourceStartTime, sourceVoiceSourceStartTime);
-            const voiceSourceEndTime = shouldReuseSourceTts
-                ? pickSegmentEditorNumber(detailVoiceSourceEndTime, sourceVoiceSourceEndTime, sourceSegment?.speech_end_time, segmentVoiceSourceEndTime)
-                : pickSegmentEditorNumber(segmentVoiceSourceEndTime, detailVoiceSourceEndTime, sourceVoiceSourceEndTime);
-            const voiceSourceDuration = (shouldReuseSourceTts
-                ? pickSegmentEditorNumber(detailVoiceSourceDuration, sourceVoiceSourceDuration, sourceSegment?.speech_duration, segmentVoiceSourceDuration)
-                : pickSegmentEditorNumber(segmentVoiceSourceDuration, detailVoiceSourceDuration, sourceVoiceSourceDuration)) ??
+            const voiceSourceStartTime = shouldReconcileFinalVoice
+                ? pickSegmentEditorNumber(sourceVoiceSourceStartTime, sourceSegment?.speech_start_time, detailVoiceSourceStartTime, segmentVoiceSourceStartTime)
+                : shouldReuseSourceTts
+                    ? pickSegmentEditorNumber(detailVoiceSourceStartTime, sourceVoiceSourceStartTime, sourceSegment?.speech_start_time, segmentVoiceSourceStartTime)
+                    : pickSegmentEditorNumber(segmentVoiceSourceStartTime, detailVoiceSourceStartTime, sourceVoiceSourceStartTime);
+            const voiceSourceEndTime = shouldReconcileFinalVoice
+                ? pickSegmentEditorNumber(sourceVoiceSourceEndTime, sourceSegment?.speech_end_time, detailVoiceSourceEndTime, segmentVoiceSourceEndTime)
+                : shouldReuseSourceTts
+                    ? pickSegmentEditorNumber(detailVoiceSourceEndTime, sourceVoiceSourceEndTime, sourceSegment?.speech_end_time, segmentVoiceSourceEndTime)
+                    : pickSegmentEditorNumber(segmentVoiceSourceEndTime, detailVoiceSourceEndTime, sourceVoiceSourceEndTime);
+            const voiceSourceDuration = (shouldReconcileFinalVoice
+                ? pickSegmentEditorNumber(sourceVoiceSourceDuration, sourceSegment?.speech_duration, detailVoiceSourceDuration, segmentVoiceSourceDuration)
+                : shouldReuseSourceTts
+                    ? pickSegmentEditorNumber(detailVoiceSourceDuration, sourceVoiceSourceDuration, sourceSegment?.speech_duration, segmentVoiceSourceDuration)
+                    : pickSegmentEditorNumber(segmentVoiceSourceDuration, detailVoiceSourceDuration, sourceVoiceSourceDuration)) ??
                 (voiceSourceStartTime !== null && voiceSourceEndTime !== null
                     ? Math.max(0, voiceSourceEndTime - voiceSourceStartTime)
                     : null);
@@ -627,6 +688,7 @@ const hydrateSegmentEditorPayloadWithInheritedAudio = (payload, projectDetailsPa
                 : rawSegmentVoiceType || null;
             return {
                 ...segment,
+                _skip_project_voiceover_asset: shouldReconcileFinalVoice,
                 _voice_source_duration: voiceSourceDuration,
                 _voice_source_end_time: voiceSourceEndTime,
                 _voice_source_start_time: voiceSourceStartTime,
@@ -635,6 +697,10 @@ const hydrateSegmentEditorPayloadWithInheritedAudio = (payload, projectDetailsPa
                 speech_start_time: speechStartTime,
                 speech_words: speechWords,
                 text: segmentText,
+                voiceover: shouldReconcileFinalVoice ? sourceSegment?.voiceover ?? null : segment.voiceover,
+                voiceover_asset_id: shouldReconcileFinalVoice
+                    ? normalizePositiveProjectId(sourceSegment?.voiceover_asset_id)
+                    : segment.voiceover_asset_id,
                 voice_type: segmentVoiceType,
                 voiceover_language: pickSegmentEditorText(...(hasProjectVoiceoverTiming
                     ? [
@@ -739,6 +805,7 @@ const buildSegmentEditorPayloadFromProjectDetails = (requestedProjectId, payload
             duration_sync_mode_user_selected: durationSyncModeUserSelected,
             end_time: endTime,
             index,
+            infographic: record.infographic,
             manual_duration_seconds: normalizeNumber(record.manual_duration_seconds),
             media_type: normalizeMediaType(currentEntry?.media_type ?? originalEntry?.media_type ?? record.media_type),
             original_video: getProjectSegmentMarker(originalEntry, `project:${projectId}:segment:${index}:original`),
@@ -1335,8 +1402,8 @@ const fetchWorkspaceVoiceoverAssetDuration = async (assetId, projectId) => {
 };
 export async function getWorkspaceProjectSegmentVoiceoverDuration(user, options) {
     assertAdsflowConfigured();
-    await assertWorkspaceProjectAccess(user, options.projectId);
-    return fetchWorkspaceProjectSegmentVoiceoverDuration(options.projectId, options.segmentIndex);
+    const session = await getWorkspaceSegmentEditorSessionInternal(user, options.projectId);
+    return fetchWorkspaceProjectSegmentVoiceoverDuration(resolveWorkspaceSegmentEditorVoiceoverProjectId(session), options.segmentIndex);
 }
 const enrichWorkspaceSegmentEditorSessionWithVoiceoverDurations = async (session) => {
     if (!session.segments.length) {
@@ -1361,7 +1428,7 @@ const enrichWorkspaceSegmentEditorSessionWithVoiceoverDurations = async (session
     }
     const measuredProjectVoiceoverDurations = await Promise.all(projectVoiceoverSegmentsNeedingMeasurement.map(async (segment) => {
         try {
-            const durationSeconds = await fetchWorkspaceProjectSegmentVoiceoverDuration(session.projectId, segment.index);
+            const durationSeconds = await fetchWorkspaceProjectSegmentVoiceoverDuration(resolveWorkspaceSegmentEditorVoiceoverProjectId(session), segment.index);
             return [segment.index, durationSeconds];
         }
         catch (error) {
@@ -1542,7 +1609,18 @@ const shouldLoadSourceSegmentEditorPayload = (payload, projectDetailsPayload) =>
             const durationMode = normalizeSegmentDurationMode(segment?.duration_mode);
             return durationMode === "manual" || normalizeManualDurationSeconds(segment?.manual_duration_seconds) !== null;
         });
-    return needsTts || needsMusic || needsSourceVoiceRanges ? sourceProjectId : null;
+    const finalVoiceIdentity = getProjectDetailsFinalVoiceIdentity(projectDetailsPayload);
+    const payloadVoiceType = normalizeSegmentEditorComparableText(payload.voice_type);
+    const finalVoiceType = normalizeSegmentEditorComparableText(finalVoiceIdentity.voiceType);
+    const needsFinalVoiceReconciliation = Boolean(finalVoiceType) &&
+        (payloadVoiceType !== finalVoiceType ||
+            (payload.segments ?? []).some((segment) => {
+                const segmentVoiceType = normalizeSegmentEditorComparableText(segment.voiceover_voice_type || segment.voice_type);
+                return Boolean(segmentVoiceType) && segmentVoiceType !== finalVoiceType;
+            }));
+    return needsTts || needsMusic || needsSourceVoiceRanges || needsFinalVoiceReconciliation
+        ? sourceProjectId
+        : null;
 };
 const loadSourceSegmentEditorPayload = async (projectId, sourceProjectId) => {
     try {
@@ -1765,7 +1843,95 @@ export const buildWorkspaceSegmentEditorSessionFromPayload = (requestedProjectId
         subtitleType: normalizeText(payload.subtitle_type),
         title: normalizeText(payload.title) || `Проект #${sessionProjectId}`,
         ttsAssetId,
+        voiceoverSourceProjectId: normalizePositiveProjectId(payload._voiceover_source_project_id),
         voiceType: normalizeText(payload.voice_type),
+    };
+};
+const normalizeWorkspaceSegmentInfographic = (value) => {
+    if (!value || typeof value !== "object") {
+        return null;
+    }
+    const record = value;
+    const rawTransform = record.transform;
+    const transform = rawTransform && typeof rawTransform === "object"
+        ? rawTransform
+        : {};
+    const mediaAssetId = normalizePositiveProjectId(record.mediaAssetId ?? record.media_asset_id);
+    const intrinsicWidth = normalizePositiveProjectId(record.intrinsicWidth ?? record.intrinsic_width);
+    const intrinsicHeight = normalizePositiveProjectId(record.intrinsicHeight ?? record.intrinsic_height);
+    const centerX = normalizeNumber(transform.centerX ?? transform.center_x);
+    const centerY = normalizeNumber(transform.centerY ?? transform.center_y);
+    const width = normalizeNumber(transform.width);
+    const text = String(record.text ?? "").trim();
+    const inputHash = normalizeText(record.inputHash ?? record.input_hash);
+    const sourceVisualIdentity = normalizeText(record.sourceVisualIdentity ?? record.source_visual_identity);
+    const stylePrompt = String(record.stylePrompt ?? record.style_prompt ?? "").trim();
+    const parts = [];
+    let partsValid = record.parts === undefined || record.parts === null || Array.isArray(record.parts);
+    if (Array.isArray(record.parts)) {
+        if (record.parts.length > 4)
+            partsValid = false;
+        let previousDelay = -1;
+        for (const rawPart of record.parts.slice(0, 4)) {
+            if (!rawPart || typeof rawPart !== "object") {
+                partsValid = false;
+                continue;
+            }
+            const part = rawPart;
+            const frame = part.frame && typeof part.frame === "object" ? part.frame : {};
+            const reveal = part.reveal && typeof part.reveal === "object" ? part.reveal : {};
+            const partAssetId = normalizePositiveProjectId(part.mediaAssetId ?? part.media_asset_id);
+            const partWidth = normalizePositiveProjectId(part.intrinsicWidth ?? part.intrinsic_width);
+            const partHeight = normalizePositiveProjectId(part.intrinsicHeight ?? part.intrinsic_height);
+            const x = normalizeNumber(frame.x);
+            const y = normalizeNumber(frame.y);
+            const frameWidth = normalizeNumber(frame.width);
+            const frameHeight = normalizeNumber(frame.height);
+            const delaySeconds = normalizeNumber(reveal.delaySeconds ?? reveal.delay_seconds);
+            const partText = String(part.text ?? "").trim();
+            if (!(partAssetId && partWidth && partHeight && partText && x !== null && y !== null &&
+                frameWidth !== null && frameHeight !== null && delaySeconds !== null &&
+                x >= 0 && y >= 0 && frameWidth > 0 && frameHeight > 0 &&
+                x + frameWidth <= 1.0001 && y + frameHeight <= 1.0001 &&
+                delaySeconds >= previousDelay)) {
+                partsValid = false;
+                continue;
+            }
+            previousDelay = delaySeconds;
+            parts.push({
+                frame: { height: frameHeight, width: frameWidth, x, y },
+                intrinsicHeight: partHeight,
+                intrinsicWidth: partWidth,
+                mediaAssetId: partAssetId,
+                reveal: { delaySeconds, durationSeconds: 0.65 },
+                text: partText,
+            });
+        }
+    }
+    if (!mediaAssetId ||
+        !intrinsicWidth ||
+        !intrinsicHeight ||
+        centerX === null ||
+        centerY === null ||
+        width === null ||
+        !partsValid ||
+        !text ||
+        !/^[0-9a-f]{64}$/i.test(inputHash) ||
+        !/^asset:[1-9]\d*$/.test(sourceVisualIdentity)) {
+        return null;
+    }
+    return {
+        animation: { durationSeconds: 1.1, type: "fade" },
+        inputHash,
+        intrinsicHeight,
+        intrinsicWidth,
+        mediaAssetId,
+        parts,
+        sourceVisualIdentity,
+        stylePrompt: stylePrompt || null,
+        text,
+        transform: { centerX, centerY, width },
+        version: 1,
     };
 };
 export const buildWorkspaceSegmentEditorSegment = (projectId, payload, projectSources) => {
@@ -1836,20 +2002,30 @@ export const buildWorkspaceSegmentEditorSegment = (projectId, payload, projectSo
         ...(projectSources?.originalEntries ?? []),
     ], index);
     const projectSceneSoundAsset = findProjectSceneSoundMediaAsset(projectMediaAssets, index);
-    const sceneSound = explicitSceneSound ??
+    const authoritativeProjectSceneSound = projectMediaLoaded && projectSceneSoundAsset?.isCurrent === true
+        ? buildWorkspaceSegmentSceneSoundRefFromAsset(projectSceneSoundAsset)
+        : null;
+    const sceneSound = authoritativeProjectSceneSound ??
+        explicitSceneSound ??
         buildWorkspaceSegmentSceneSoundRef(projectSceneSoundEntry) ??
         buildWorkspaceSegmentSceneSoundRefFromAsset(projectSceneSoundAsset);
-    const sceneSoundAssetId = normalizePositiveProjectId(payload.scene_sound_asset_id) ??
+    const sceneSoundAssetId = authoritativeProjectSceneSound?.media_asset_id ??
+        normalizePositiveProjectId(payload.scene_sound_asset_id) ??
         sceneSound?.media_asset_id ??
         normalizePositiveProjectId(projectSceneSoundAsset?.assetId) ??
         null;
     const explicitVoiceover = buildWorkspaceSegmentSceneSoundRef(payload.voiceover);
-    const projectVoiceoverEntry = findProjectVoiceoverMediaEntry([
-        ...(projectSources?.voiceoverEntries ?? []),
-        ...(projectSources?.currentEntries ?? []),
-        ...(projectSources?.originalEntries ?? []),
-    ], index);
-    const projectVoiceoverAsset = findProjectVoiceoverMediaAsset(projectMediaAssets, index);
+    const shouldSkipProjectVoiceoverAsset = payload._skip_project_voiceover_asset === true;
+    const projectVoiceoverEntry = shouldSkipProjectVoiceoverAsset
+        ? null
+        : findProjectVoiceoverMediaEntry([
+            ...(projectSources?.voiceoverEntries ?? []),
+            ...(projectSources?.currentEntries ?? []),
+            ...(projectSources?.originalEntries ?? []),
+        ], index);
+    const projectVoiceoverAsset = shouldSkipProjectVoiceoverAsset
+        ? null
+        : findProjectVoiceoverMediaAsset(projectMediaAssets, index);
     const voiceover = explicitVoiceover ??
         buildWorkspaceSegmentSceneSoundRef(projectVoiceoverEntry) ??
         buildWorkspaceSegmentSceneSoundRefFromAsset(projectVoiceoverAsset);
@@ -1888,6 +2064,7 @@ export const buildWorkspaceSegmentEditorSegment = (projectId, payload, projectSo
         duration_sync_mode_user_selected: durationSyncModeUserSelected,
         endTime,
         index,
+        infographic: normalizeWorkspaceSegmentInfographic(payload.infographic),
         manualDurationSeconds,
         mediaType: resolvedMediaType,
         originalAsset,
@@ -2122,12 +2299,13 @@ export async function getWorkspaceProjectMusicAudioProxyTarget(user, options) {
 }
 export async function getWorkspaceProjectSegmentVoiceoverProxyTarget(user, options) {
     assertAdsflowConfigured();
-    await assertWorkspaceProjectAccess(user, options.projectId);
+    const session = await getWorkspaceSegmentEditorSessionInternal(user, options.projectId);
+    const voiceoverProjectId = resolveWorkspaceSegmentEditorVoiceoverProjectId(session);
     return {
         headers: {
             "X-Admin-Token": env.adsflowAdminToken ?? "",
         },
-        url: buildAdsflowUrl(`/api/projects/${options.projectId}/segments/${options.segmentIndex}/voiceover`),
+        url: buildAdsflowUrl(`/api/projects/${voiceoverProjectId}/segments/${options.segmentIndex}/voiceover`),
     };
 }
 export async function getWorkspaceProjectSegmentVideoAsset(user, options) {

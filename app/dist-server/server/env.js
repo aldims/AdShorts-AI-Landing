@@ -165,6 +165,8 @@ export const env = {
     openrouterMainModel: trim(process.env.OPENROUTER_MAIN_MODEL) ?? "google/gemini-3-flash-preview",
     openrouterFallbackModel: trim(process.env.OPENROUTER_FALLBACK_MODEL) ?? "openai/gpt-4o-mini",
     redisUrl: trim(process.env.REDIS_URL),
+    studioSegmentInfographicEnabled: toBoolean(process.env.STUDIO_SEGMENT_INFOGRAPHIC_ENABLED, process.env.NODE_ENV !== "production"),
+    studioSegmentInfographicCohort: trim(process.env.STUDIO_SEGMENT_INFOGRAPHIC_COHORT),
     disableBackgroundWarming: toBoolean(process.env.DISABLE_BACKGROUND_WARMING, false),
     upstreamBootstrapTimeoutMs: toNumber(process.env.UPSTREAM_BOOTSTRAP_TIMEOUT_MS, 5_500),
     upstreamProjectsTimeoutMs: toNumber(process.env.UPSTREAM_PROJECTS_TIMEOUT_MS, 12_000),

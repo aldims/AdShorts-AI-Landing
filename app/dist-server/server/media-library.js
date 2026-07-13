@@ -202,6 +202,11 @@ const WORKSPACE_MEDIA_LIBRARY_SOURCE_INPUT_CLASSIFIERS = new Set([
     "segment_source",
     "source_upload",
 ]);
+const WORKSPACE_MEDIA_LIBRARY_EDITOR_ONLY_CLASSIFIERS = new Set([
+    "ai_generated_infographic",
+    "infographic",
+    "segment_infographic",
+]);
 const WORKSPACE_MEDIA_LIBRARY_AI_GENERATED_CLASSIFIERS = new Set([
     "ai",
     "ai_generated",
@@ -283,6 +288,12 @@ const isWorkspaceDurableSourceInputAsset = (asset) => {
     }
     return getWorkspaceDurableAssetClassifiers(asset).some((classifier) => WORKSPACE_MEDIA_LIBRARY_SOURCE_INPUT_CLASSIFIERS.has(classifier));
 };
+const isWorkspaceDurableEditorOnlyAsset = (asset) => {
+    if (!asset) {
+        return false;
+    }
+    return getWorkspaceDurableAssetClassifiers(asset).some((classifier) => WORKSPACE_MEDIA_LIBRARY_EDITOR_ONLY_CLASSIFIERS.has(classifier));
+};
 const isWorkspaceAiGeneratedClassifier = (classifier) => WORKSPACE_MEDIA_LIBRARY_AI_GENERATED_CLASSIFIERS.has(classifier);
 const isWorkspaceNonAiClassifier = (classifier) => WORKSPACE_MEDIA_LIBRARY_NON_AI_CLASSIFIERS.has(classifier) ||
     classifier.includes("custom") ||
@@ -320,6 +331,7 @@ export const getWorkspaceMediaLibraryKindFromDurableAsset = (asset) => {
     if (!asset ||
         isWorkspaceDurableFinalVideoAsset(asset) ||
         isWorkspaceDurableSourceInputAsset(asset) ||
+        isWorkspaceDurableEditorOnlyAsset(asset) ||
         !isWorkspaceDurableAiGeneratedAsset(asset)) {
         return null;
     }
