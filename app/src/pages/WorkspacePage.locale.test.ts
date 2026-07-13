@@ -4823,6 +4823,7 @@ describe("WorkspacePage studio locale defaults", () => {
         fileSize: 700_000,
         mimeType: "video/mp4",
         objectUrl: "blob:http://localhost/uploaded-scene",
+        posterUrl: `data:image/jpeg;base64,${"p".repeat(900_000)}`,
         remoteUrl: "blob:http://localhost/uploaded-scene",
         source: "upload",
       },
@@ -4837,10 +4838,12 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(asset?.assetId).toBe(404);
     expect(asset?.dataUrl).toBeUndefined();
     expect(asset?.objectUrl).toBeUndefined();
+    expect(asset?.posterUrl).toBe("/api/workspace/media-assets/404/poster");
     expect(asset?.remoteUrl).toBe("/api/workspace/media-assets/404/playback");
     expect(normalizedSegment && getWorkspaceSegmentDraftVideoUrl(normalizedSegment)).toBe("/api/workspace/media-assets/404/playback");
     expect(JSON.stringify(normalized)).not.toContain("blob:http://localhost/uploaded-scene");
     expect(JSON.stringify(normalized)).not.toContain("data:video/mp4");
+    expect(JSON.stringify(normalized)).not.toContain("data:image/jpeg");
   });
 
   it("preserves manual duration in stored drafts and rebuilds the draft timeline", () => {

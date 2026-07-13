@@ -153,6 +153,7 @@ type WorkspaceSegmentEditorStorageEntry = WorkspaceSegmentEditorStorageCandidate
 };
 
 const WORKSPACE_SEGMENT_EDITOR_STORAGE_NAMES: WorkspaceSegmentEditorStorageName[] = ["localStorage", "sessionStorage"];
+const WORKSPACE_SEGMENT_EDITOR_STORAGE_READ_PRIORITY: WorkspaceSegmentEditorStorageName[] = ["sessionStorage", "localStorage"];
 
 const getWorkspaceSegmentEditorBrowserStorage = (storageName: WorkspaceSegmentEditorStorageName) => {
   if (typeof window === "undefined") {
@@ -254,7 +255,7 @@ export const removeWorkspaceSegmentEditorStorageValue = (storageKey: string) => 
 export const readWorkspaceSegmentEditorStorageCandidates = (storageKey: string): WorkspaceSegmentEditorStorageCandidate[] => {
   const candidates: WorkspaceSegmentEditorStorageCandidate[] = [];
 
-  WORKSPACE_SEGMENT_EDITOR_STORAGE_NAMES.forEach((storageName) => {
+  WORKSPACE_SEGMENT_EDITOR_STORAGE_READ_PRIORITY.forEach((storageName) => {
     const storage = getWorkspaceSegmentEditorBrowserStorage(storageName);
     if (!storage) {
       return;
@@ -330,9 +331,11 @@ export const writeWorkspaceSegmentEditorStorageValue = (storageKey: string, rawV
   try {
     if (didWriteLocalStorage) {
       sessionStorage.removeItem(storageKey);
-    } else {
-      sessionStorage.setItem(storageKey, rawValue);
+      return;
     }
+
+    sessionStorage.setItem(storageKey, rawValue);
+    removeWorkspaceSegmentEditorStorageValueFrom("localStorage", storageKey);
   } catch {
     // Ignore storage write errors.
   }
@@ -521,7 +524,12 @@ const normalizePersistedStudioCustomVideoFile = (value: StudioCustomVideoFile | 
   const fileSize = Number.isFinite(value.fileSize) ? Math.max(0, value.fileSize) : 0;
   const libraryItemKey = typeof value.libraryItemKey === "string" ? value.libraryItemKey.trim() : "";
   const mimeType = typeof value.mimeType === "string" && value.mimeType.trim() ? value.mimeType : "application/octet-stream";
-  const posterUrl = typeof value.posterUrl === "string" ? value.posterUrl.trim() : "";
+  const rawPosterUrl = typeof value.posterUrl === "string" ? value.posterUrl.trim() : "";
+  const posterUrl = isWorkspaceSegmentEditorPersistableRemoteUrl(rawPosterUrl)
+    ? rawPosterUrl
+    : assetId && getWorkspaceSegmentCustomPreviewKind(value) === "video"
+      ? `/api/workspace/media-assets/${assetId}/poster`
+      : "";
   const rawRemoteUrl = typeof value.remoteUrl === "string" ? value.remoteUrl.trim() : "";
   const remoteUrl = getWorkspaceMediaAssetDurablePreviewUrl({
     assetId,
