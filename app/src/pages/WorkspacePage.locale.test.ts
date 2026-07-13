@@ -5471,6 +5471,43 @@ describe("WorkspacePage studio locale defaults", () => {
     ).toBe(true);
   });
 
+  it("keeps aligned project voiceover on the shared cached audio source in full preview", () => {
+    const segment = createDraftSegment({
+      duration: 4.4,
+      endTime: 4.4,
+      index: 0,
+      speechDuration: 4.4,
+      speechEndTime: 4.4,
+      speechStartTime: 0,
+      startTime: 0,
+      text: "First",
+    });
+    const session = {
+      ...createDraftSession(segment),
+      projectId: 4212,
+      ttsAssetId: 9129,
+    };
+    const previewRange = getWorkspaceSegmentVoiceoverPreviewRange(segment, session);
+    const preferSegmentProxy = shouldUseWorkspaceSegmentProjectVoiceoverSegmentProxyInFullPreview(segment, session, {
+      hasProjectVoiceoverAsset: true,
+      previewRange,
+      timelineEndTime: 4.4,
+      timelineStartTime: 0,
+    });
+    const source = getWorkspaceSegmentVoiceoverAudioPreviewSource({
+      isVoiceAudioStale: false,
+      preferSegmentProxy,
+      segment,
+      session,
+      voiceEnabled: true,
+      voiceOption: null,
+    });
+
+    expect(preferSegmentProxy).toBe(false);
+    expect(source.sourceKind).toBe("project");
+    expect(source.audioUrl).toBe("/api/workspace/media-assets/9129/playback");
+  });
+
   it("uses segment voiceover proxy in full preview when a manual visual slot creates a voice pause", () => {
     const segment = createDraftSegment({
       duration: 10,
@@ -5565,7 +5602,7 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(shouldUseWorkspaceSegmentProjectVoiceoverSegmentProxyInFullPreview(segment, session)).toBe(true);
   });
 
-  it("uses segment voiceover proxy in full preview when the scene voice still matches the project voice", () => {
+  it("keeps the shared project voiceover source when the scene voice still matches the project voice", () => {
     const segment = createDraftSegment({
       index: 0,
       text: "First",
@@ -5576,7 +5613,7 @@ describe("WorkspacePage studio locale defaults", () => {
       voiceType: "boris",
     };
 
-    expect(shouldUseWorkspaceSegmentProjectVoiceoverSegmentProxyInFullPreview(segment, session)).toBe(true);
+    expect(shouldUseWorkspaceSegmentProjectVoiceoverSegmentProxyInFullPreview(segment, session)).toBe(false);
   });
 
   it("uses a segment voiceover proxy when a preview explicitly prefers scene-isolated audio", () => {

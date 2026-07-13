@@ -307,6 +307,7 @@ import {
   shouldIgnoreWorkspaceSegmentMeasuredVoiceoverDuration,
   shouldShowWorkspaceSegmentAiDurationExtensionVoiceoverTrim,
   shouldSuppressWorkspaceSegmentEditorEmptyDraftChanges,
+  shouldUseWorkspaceSegmentProjectVoiceoverSegmentProxyInFullPreview,
   studioVoiceOptionsByLanguage,
   syncWorkspaceSegmentMeasuredVideoVisualDuration,
   truncateStudioCustomAssetName,
@@ -26605,7 +26606,8 @@ export function WorkspacePage({
     const allowVoiceOverflow = options?.allowVoiceOverflow === true;
     const includeProjectVoiceEndGrace = options?.includeProjectVoiceEndGrace === true;
     const voiceTracks: WorkspaceSegmentEditorFullPreviewAudioTrack[] = [];
-    const voiceoverInfos = segmentEditorDraft.segments.map((segment) => {
+    let hasPriorNonProjectVoiceover = false;
+    const voiceoverInfos = segmentEditorDraft.segments.map((segment, arrayIndex) => {
       const hasProjectTimelineVoiceover = canReuseWorkspaceSegmentProjectTimelineVoiceover(segment, segmentEditorDraft, {
         baselineSession: segmentEditorChangeDisplayBaseSession,
         isGlobalVoiceEdited: isSegmentTimelineGlobalVoiceEdited,
@@ -26614,16 +26616,42 @@ export function WorkspacePage({
       const isVoiceAudioStale =
         !isWorkspaceSegmentVoiceoverPlaybackFresh(segment, segmentEditorDraft) && !hasProjectTimelineVoiceover;
       const voiceOption = getSegmentTimelineVoiceOption(segment);
-      const voiceoverAudioPreviewSource = getWorkspaceSegmentVoiceoverAudioPreviewSource({
+      const sourceOptions = {
         allowFinalVideoStaleProjectTimelineFallback,
         allowProjectTimelineFallback: hasProjectTimelineVoiceover,
         isVoiceAudioStale,
-        preferSegmentProxy: true,
         segment,
         session: segmentEditorDraft,
         voiceEnabled: studioSidebarVoiceEnabled,
         voiceOption,
-      });
+      };
+      const projectVoiceoverPreviewSource = getWorkspaceSegmentVoiceoverAudioPreviewSource(sourceOptions);
+      const previewSegment = previewSegments[arrayIndex] ?? null;
+      const fallbackSpan = getSegmentEditorFullPreviewSegmentSpan(arrayIndex);
+      const timelineStartTime =
+        previewSegment?.startTime ?? fallbackSpan?.startTime ?? getWorkspaceSegmentEditorDisplayStartTime(segment);
+      const timelineEndTime =
+        previewSegment?.endTime ?? fallbackSpan?.endTime ?? getWorkspaceSegmentEditorDisplayEndTime(segment);
+      const preferSegmentProxy = shouldUseWorkspaceSegmentProjectVoiceoverSegmentProxyInFullPreview(
+        segment,
+        segmentEditorDraft,
+        {
+          hasPriorNonProjectVoiceover,
+          hasProjectVoiceoverAsset: projectVoiceoverPreviewSource.projectVoiceoverAudioUrl !== null,
+          previewRange: projectVoiceoverPreviewSource.previewRange,
+          timelineEndTime,
+          timelineStartTime,
+        },
+      );
+      const voiceoverAudioPreviewSource = preferSegmentProxy
+        ? getWorkspaceSegmentVoiceoverAudioPreviewSource({ ...sourceOptions, preferSegmentProxy: true })
+        : projectVoiceoverPreviewSource;
+      if (
+        voiceoverAudioPreviewSource.sourceKind !== null &&
+        voiceoverAudioPreviewSource.sourceKind !== "project"
+      ) {
+        hasPriorNonProjectVoiceover = true;
+      }
       const voiceoverAudioUrl = voiceoverAudioPreviewSource.audioUrl;
       const fallbackVoiceoverDurationSeconds = getWorkspaceSegmentVoiceoverDurationSeconds(segment, segmentEditorDraft);
       const measuredVoiceoverDurationSeconds =

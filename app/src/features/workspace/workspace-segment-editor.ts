@@ -6482,15 +6482,39 @@ export const shouldUseWorkspaceSegmentProjectVoiceoverSegmentProxyInFullPreview 
     timelineStartTime?: number | null;
   },
 ) => {
-  void options;
-  void session;
-
   const segmentVoiceOverrideId = getWorkspaceSegmentVoiceOverrideId(segment);
-  if (!segmentVoiceOverrideId || segmentVoiceOverrideId === "none") {
+  const timelineStartTime = normalizeWorkspaceSegmentVoicePreviewTime(options?.timelineStartTime);
+  const timelineEndTime = normalizeWorkspaceSegmentVoicePreviewTime(options?.timelineEndTime);
+  const previewStartTime = normalizeWorkspaceSegmentVoicePreviewTime(options?.previewRange?.startTime);
+  const previewEndTime = normalizeWorkspaceSegmentVoicePreviewTime(options?.previewRange?.endTime);
+  const timelineDuration =
+    timelineStartTime !== null && timelineEndTime !== null && timelineEndTime > timelineStartTime
+      ? timelineEndTime - timelineStartTime
+      : null;
+  const previewDuration =
+    previewStartTime !== null && previewEndTime !== null && previewEndTime > previewStartTime
+      ? previewEndTime - previewStartTime
+      : null;
+  const hasShiftedProjectSourceStart =
+    timelineStartTime !== null &&
+    previewStartTime !== null &&
+    Math.abs(timelineStartTime - previewStartTime) > WORKSPACE_SEGMENT_PROJECT_VOICE_SOURCE_TIMELINE_DRIFT_SECONDS;
+  const hasManualVoicePause =
+    timelineDuration !== null &&
+    previewDuration !== null &&
+    timelineDuration > previewDuration + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS;
+
+  void options?.hasProjectVoiceoverAsset;
+  if (Boolean(options?.hasPriorNonProjectVoiceover) || hasShiftedProjectSourceStart || hasManualVoicePause) {
     return true;
   }
 
-  return true;
+  if (!segmentVoiceOverrideId || segmentVoiceOverrideId === "none") {
+    return false;
+  }
+
+  const sessionVoiceId = normalizeWorkspaceSegmentEditorSetting(session?.voiceType);
+  return segmentVoiceOverrideId !== sessionVoiceId;
 };
 
 export const isWorkspaceSegmentProjectVoiceoverTimingFresh = (
