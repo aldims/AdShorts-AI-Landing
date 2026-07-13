@@ -3,7 +3,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import {
+  readStoredWorkspaceSegmentEditorExplicitReset,
   readWorkspaceSegmentEditorStorageCandidates,
+  removeStoredWorkspaceSegmentEditorExplicitReset,
+  writeStoredWorkspaceSegmentEditorExplicitReset,
   writeWorkspaceSegmentEditorStorageValue,
 } from "./workspace-segment-editor-storage";
 
@@ -64,5 +67,17 @@ describe("workspace segment editor storage fallback", () => {
       { rawValue: "latest-scene-video", storageName: "sessionStorage" },
       { rawValue: "stale-scene-video", storageName: "localStorage" },
     ]);
+  });
+
+  it("persists an explicit reset marker until it is deliberately cleared", () => {
+    expect(readStoredWorkspaceSegmentEditorExplicitReset("editor@example.test", 4205)).toBe(false);
+
+    writeStoredWorkspaceSegmentEditorExplicitReset("editor@example.test", 4205);
+
+    expect(readStoredWorkspaceSegmentEditorExplicitReset("EDITOR@example.test", 4205)).toBe(true);
+
+    removeStoredWorkspaceSegmentEditorExplicitReset("editor@example.test", 4205);
+
+    expect(readStoredWorkspaceSegmentEditorExplicitReset("editor@example.test", 4205)).toBe(false);
   });
 });

@@ -428,6 +428,7 @@ export const WORKSPACE_SEGMENT_EDITOR_DRAFT_STORAGE_KEY_PREFIX = "adshorts.segme
 export const WORKSPACE_SEGMENT_EDITOR_SCRATCH_DRAFT_STORAGE_KEY_PREFIX = "adshorts.segment-editor-scratch-draft:";
 export const WORKSPACE_SEGMENT_EDITOR_SCRATCH_BASELINE_STORAGE_KEY_PREFIX = "adshorts.segment-editor-scratch-baseline:";
 const WORKSPACE_SEGMENT_EDITOR_EXPLICIT_STRUCTURE_STORAGE_KEY_PREFIX = "adshorts.segment-editor-explicit-structure:";
+const WORKSPACE_SEGMENT_EDITOR_EXPLICIT_RESET_STORAGE_KEY_PREFIX = "adshorts.segment-editor-explicit-reset:";
 const WORKSPACE_SEGMENT_EDITOR_BRAND_STORAGE_KEY_PREFIX = "adshorts.segment-editor-brand:";
 const WORKSPACE_SEGMENT_EDITOR_CONSUMED_SOURCE_STORAGE_KEY_PREFIX = "adshorts.segment-editor-consumed-source:";
 const WORKSPACE_SEGMENT_EDITOR_DRAFT_STORAGE_VERSION = 3;
@@ -473,6 +474,9 @@ const getWorkspaceSegmentEditorScratchBaselineStorageKey = (email: string) =>
 
 const getWorkspaceSegmentEditorExplicitStructureStorageKey = (email: string, projectId: number) =>
   `${WORKSPACE_SEGMENT_EDITOR_EXPLICIT_STRUCTURE_STORAGE_KEY_PREFIX}${email}:${projectId}`;
+
+const getWorkspaceSegmentEditorExplicitResetStorageKey = (email: string, projectId: number) =>
+  `${WORKSPACE_SEGMENT_EDITOR_EXPLICIT_RESET_STORAGE_KEY_PREFIX}${email}:${projectId}`;
 
 export const getWorkspaceSegmentEditorBrandStorageKey = (email: string, projectId: number) =>
   `${WORKSPACE_SEGMENT_EDITOR_BRAND_STORAGE_KEY_PREFIX}${email}:${projectId}`;
@@ -2306,6 +2310,63 @@ export const removeStoredWorkspaceSegmentEditorExplicitStructureChange = (
   );
 };
 
+export const readStoredWorkspaceSegmentEditorExplicitReset = (
+  email: string | null | undefined,
+  projectId: number | null | undefined,
+) => {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const normalizedEmail = normalizeWorkspaceSegmentEditorStorageEmail(email);
+  const normalizedProjectId = Number(projectId);
+  if (!normalizedEmail || !Number.isInteger(normalizedProjectId) || normalizedProjectId <= 0) {
+    return false;
+  }
+
+  const storageKey = getWorkspaceSegmentEditorExplicitResetStorageKey(normalizedEmail, normalizedProjectId);
+  return readWorkspaceSegmentEditorStorageCandidates(storageKey).some((candidate) => candidate.rawValue === "1");
+};
+
+export const writeStoredWorkspaceSegmentEditorExplicitReset = (
+  email: string | null | undefined,
+  projectId: number | null | undefined,
+) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const normalizedEmail = normalizeWorkspaceSegmentEditorStorageEmail(email);
+  const normalizedProjectId = Number(projectId);
+  if (!normalizedEmail || !Number.isInteger(normalizedProjectId) || normalizedProjectId <= 0) {
+    return;
+  }
+
+  writeWorkspaceSegmentEditorStorageValue(
+    getWorkspaceSegmentEditorExplicitResetStorageKey(normalizedEmail, normalizedProjectId),
+    "1",
+  );
+};
+
+export const removeStoredWorkspaceSegmentEditorExplicitReset = (
+  email: string | null | undefined,
+  projectId: number | null | undefined,
+) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const normalizedEmail = normalizeWorkspaceSegmentEditorStorageEmail(email);
+  const normalizedProjectId = Number(projectId);
+  if (!normalizedEmail || !Number.isInteger(normalizedProjectId) || normalizedProjectId <= 0) {
+    return;
+  }
+
+  removeWorkspaceSegmentEditorStorageValue(
+    getWorkspaceSegmentEditorExplicitResetStorageKey(normalizedEmail, normalizedProjectId),
+  );
+};
+
 export const readStoredWorkspaceSegmentEditorConsumedSourceProject = (
   email: string | null | undefined,
   projectId: number | null | undefined,
@@ -2401,6 +2462,7 @@ export const clearStoredWorkspaceSegmentEditorTemporaryStateExcept = (
 
   clearStoragePrefix(`${WORKSPACE_SEGMENT_EDITOR_DRAFT_STORAGE_KEY_PREFIX}${normalizedEmail}:`);
   clearStoragePrefix(`${WORKSPACE_SEGMENT_EDITOR_EXPLICIT_STRUCTURE_STORAGE_KEY_PREFIX}${normalizedEmail}:`);
+  clearStoragePrefix(`${WORKSPACE_SEGMENT_EDITOR_EXPLICIT_RESET_STORAGE_KEY_PREFIX}${normalizedEmail}:`);
 
   const nextAiPhotoJobs = readStoredWorkspaceSegmentAiPhotoJobs(normalizedEmail).filter((job) => {
     const shouldKeep = keptProjectIds.has(job.projectId);

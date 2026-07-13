@@ -416,6 +416,7 @@ import {
   getStudioViewFromRouteSection,
   resolveWorkspaceSegmentEditorScratchDraftOpenSource,
   resolveWorkspaceSegmentEditorPendingRouteSync,
+  shouldPreserveWorkspaceSegmentEditorExplicitReset,
   shouldResetWorkspaceSegmentEditorConsumedSourceProject,
   shouldRequestWorkspaceSegmentEditorOpenRouteRefresh,
   shouldRequestWorkspaceSegmentEditorFreshRouteSession,
@@ -725,6 +726,7 @@ import {
   readStoredWorkspaceSegmentEditorConsumedSourceProject,
   readStoredWorkspaceSegmentEditorDraft,
   readStoredWorkspaceSegmentEditorDrafts,
+  readStoredWorkspaceSegmentEditorExplicitReset,
   readStoredWorkspaceSegmentEditorExplicitStructureChange,
   readStoredWorkspaceSegmentEditorScratchBaseline,
   readStoredWorkspaceSegmentEditorScratchDraft,
@@ -743,6 +745,7 @@ import {
   removeStoredWorkspaceSegmentAiVideoJobsForSegment,
   removeStoredWorkspaceSegmentBatchVoiceoverJob,
   removeStoredWorkspaceSegmentEditorDraft,
+  removeStoredWorkspaceSegmentEditorExplicitReset,
   removeStoredWorkspaceSegmentEditorExplicitStructureChange,
   removeStoredWorkspaceSegmentEditorScratchBaseline,
   removeStoredWorkspaceSegmentEditorScratchDraft,
@@ -771,6 +774,7 @@ import {
   writeStoredWorkspaceSegmentEditorDraft,
   writeStoredWorkspaceSegmentEditorConsumedSourceProject,
   writeStoredWorkspaceSegmentEditorExplicitStructureChange,
+  writeStoredWorkspaceSegmentEditorExplicitReset,
   writeStoredWorkspaceSegmentEditorScratchBaseline,
   writeStoredWorkspaceSegmentEditorScratchDraft,
   writeStoredWorkspaceSegmentEditorSession,
@@ -1104,6 +1108,7 @@ export {
 export {
   resolveWorkspaceSegmentEditorScratchDraftOpenSource,
   resolveWorkspaceSegmentEditorPendingRouteSync,
+  shouldPreserveWorkspaceSegmentEditorExplicitReset,
   shouldResetWorkspaceSegmentEditorConsumedSourceProject,
   shouldRequestWorkspaceSegmentEditorOpenRouteRefresh,
   shouldRequestWorkspaceSegmentEditorFreshRouteSession,
@@ -11528,6 +11533,7 @@ export function WorkspacePage({
       }
       removeStoredWorkspaceSegmentEditorDraft(session.email, projectId);
       removeStoredWorkspaceSegmentEditorSession(session.email, projectId);
+      removeStoredWorkspaceSegmentEditorExplicitReset(session.email, projectId);
       setStoredSegmentEditorDrafts((currentDrafts) => currentDrafts.filter((draft) => draft.projectId !== projectId));
       if (segmentEditorDraftRef.current?.projectId === projectId) {
         segmentEditorDraftRef.current = null;
@@ -11837,6 +11843,26 @@ export function WorkspacePage({
           nextDraft,
           liveDraftChangeChecklist,
         );
+        const shouldPreserveExplicitReset = shouldPreserveWorkspaceSegmentEditorExplicitReset(
+          readStoredWorkspaceSegmentEditorExplicitReset(session.email, projectId),
+          liveDraftChangeChecklist?.length ?? null,
+          hasOnlyStaleLiveDraftDurationDrift,
+        );
+        if (shouldPreserveExplicitReset) {
+          logSegmentEditorDiagnostics(
+            "client.segment-editor.load.preserve-explicit-reset",
+            {
+              projectId,
+              requestedSegmentIndex,
+            },
+            {
+              includeOrder: true,
+              draft: liveDraft,
+            },
+          );
+          persistSegmentEditorDraftSnapshot(liveDraft);
+          return liveDraft;
+        }
         const hasUnreflectedLiveGeneratedVideo = hasWorkspaceSegmentEditorUnreflectedLiveGeneratedVideo(
           liveDraft,
           normalizedSession,
@@ -12112,6 +12138,7 @@ export function WorkspacePage({
         removeStoredWorkspaceSegmentEditorScratchBaseline(session.email);
       } else {
         removeStoredWorkspaceSegmentEditorDraft(session.email, currentDraft.projectId);
+        removeStoredWorkspaceSegmentEditorExplicitReset(session.email, currentDraft.projectId);
         removeStoredWorkspaceSegmentEditorBrandSnapshot(session.email, currentDraft.projectId);
         clearSegmentEditorExplicitStructureChange(currentDraft.projectId);
         setStoredSegmentEditorDrafts((currentDrafts) =>
@@ -12307,6 +12334,9 @@ export function WorkspacePage({
     const storedDraftForRoute = shouldResetConsumedRouteState
       ? null
       : readStoredWorkspaceSegmentEditorDraft(session.email, routeProjectId);
+    const hasStoredExplicitResetForRoute = shouldResetConsumedRouteState
+      ? false
+      : readStoredWorkspaceSegmentEditorExplicitReset(session.email, routeProjectId);
     const storedSessionForRoute = shouldResetConsumedRouteState
       ? null
       : segmentEditorLoadedSession?.projectId === routeProjectId
@@ -12328,6 +12358,7 @@ export function WorkspacePage({
       : null;
     const shouldPreferFreshRouteSessionOverStoredDraft =
       Boolean(storedDraftForRoute && storedSessionForRoute) &&
+      !hasStoredExplicitResetForRoute &&
       ((storedDraftChangeChecklist !== null && storedDraftChangeChecklist.length === 0) ||
         hasOnlyStaleSegmentEditorSourceDurationDrift(
           storedDraftForRoute,
@@ -13087,6 +13118,7 @@ export function WorkspacePage({
     const baselineSubtitleColorId = normalizeWorkspaceSegmentEditorSetting(nextDraft.subtitleColor);
     const baselineVoiceType = normalizeWorkspaceSegmentEditorSetting(nextDraft.voiceType);
 
+    cancelPendingSegmentEditorLoad("segment-editor-reset");
     clearSegmentEditorExplicitStructureChange(nextDraft.projectId);
     resetSegmentEditorPreviewPlaybackState({ clearRefs: true });
     stopSegmentTimelineVoicePreview();
@@ -13117,6 +13149,9 @@ export function WorkspacePage({
     // so that a mode switch or reopening through "Улучшить" cannot restore an
     // earlier detached/local snapshot while React is committing the state update.
     persistSegmentEditorDraftSnapshot(resetDraft);
+    if (!isWorkspaceSegmentEditorScratchDraft(resetDraft)) {
+      writeStoredWorkspaceSegmentEditorExplicitReset(session.email, resetDraft.projectId);
+    }
     if (detachedSegmentEditorDraftRef.current?.draft.projectId === resetDraft.projectId) {
       detachedSegmentEditorDraftRef.current = {
         activeSegmentIndex: safeNextActiveSegmentIndex,
@@ -20518,6 +20553,7 @@ export function WorkspacePage({
 
     removeStoredWorkspaceSegmentEditorDraft(session.email, normalizedProjectId);
     removeStoredWorkspaceSegmentEditorSession(session.email, normalizedProjectId);
+    removeStoredWorkspaceSegmentEditorExplicitReset(session.email, normalizedProjectId);
     removeStoredWorkspaceSegmentEditorExplicitStructureChange(session.email, normalizedProjectId);
     removeStoredWorkspaceSegmentEditorBrandSnapshot(session.email, normalizedProjectId);
     setStoredSegmentEditorDrafts((currentDrafts) =>

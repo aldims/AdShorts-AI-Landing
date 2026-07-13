@@ -105,6 +105,12 @@ export const shouldRequestWorkspaceSegmentEditorOpenRouteRefresh = (
   hasSegmentEditorError: boolean,
 ) => !didReachPendingRoute && !isSegmentEditorLoading && !hasSegmentEditorError;
 
+export const shouldPreserveWorkspaceSegmentEditorExplicitReset = (
+  hasExplicitReset: boolean,
+  changeCount: number | null,
+  hasOnlyStaleDurationDrift: boolean,
+) => hasExplicitReset && (changeCount === 0 || hasOnlyStaleDurationDrift);
+
 export type WorkspaceSegmentEditorScratchDraftOpenSource = "current" | "stored" | "fresh";
 
 export const resolveWorkspaceSegmentEditorScratchDraftOpenSource = (

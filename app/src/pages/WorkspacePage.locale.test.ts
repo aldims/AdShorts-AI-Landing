@@ -151,6 +151,7 @@ import {
   resolveWorkspaceSegmentEditorPendingRouteSync,
   resolveWorkspaceSegmentEditorScratchDraftOpenSource,
   shouldResetWorkspaceSegmentEditorConsumedSourceProject,
+  shouldPreserveWorkspaceSegmentEditorExplicitReset,
   shouldRequestWorkspaceSegmentEditorOpenRouteRefresh,
   shouldRequestWorkspaceSegmentEditorFreshRouteSession,
   shouldSyncWorkspaceSegmentMeasuredVoiceoverDurationToDraft,
@@ -3045,6 +3046,13 @@ describe("WorkspacePage studio route transitions", () => {
     expect(shouldRequestWorkspaceSegmentEditorFreshRouteSession("3731:1", null, "3731:1")).toBe(false);
     expect(shouldRequestWorkspaceSegmentEditorFreshRouteSession("3731:2", null, "3731:1")).toBe(true);
     expect(shouldRequestWorkspaceSegmentEditorFreshRouteSession("", null, null)).toBe(false);
+  });
+
+  it("keeps an explicit reset authoritative during a delayed server refresh", () => {
+    expect(shouldPreserveWorkspaceSegmentEditorExplicitReset(true, 0, false)).toBe(true);
+    expect(shouldPreserveWorkspaceSegmentEditorExplicitReset(true, 1, true)).toBe(true);
+    expect(shouldPreserveWorkspaceSegmentEditorExplicitReset(true, 1, false)).toBe(false);
+    expect(shouldPreserveWorkspaceSegmentEditorExplicitReset(false, 0, false)).toBe(false);
   });
 
   it("does not refresh an already open edit route after local scene navigation", () => {
