@@ -7,7 +7,6 @@ import {
   buildWorkspaceSegmentEditorSegment,
   getWorkspaceSegmentEditorSessionForAccessibleProject,
   readWorkspaceAudioDurationSecondsFromBuffer,
-  resolveWorkspaceSegmentEditorVoiceoverProjectId,
   resolveWorkspaceSegmentEditorCustomMusicMetadata,
 } from "./segment-editor.js";
 import type { WorkspaceMediaAssetRef } from "../shared/workspace-media-assets.js";
@@ -1077,7 +1076,7 @@ describe("segment editor asset lifecycle mapping", () => {
     expect(session.segments[0]?.currentAsset?.assetId).toBe(7788);
   });
 
-  it("does not probe segment voiceover durations without a project TTS asset", async () => {
+  it("rejects voiced projects without standalone scene audio", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes("/segments/") && url.includes("/voiceover")) {
@@ -1129,14 +1128,16 @@ describe("segment editor asset lifecycle mapping", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const session = await getWorkspaceSegmentEditorSessionForAccessibleProject(
-      { email: "alexmamondi@gmail.com", id: "8160048802147561000" },
-      3647,
-      { bypassCache: true },
-    );
-
-    expect(session.ttsAssetId).toBeNull();
-    expect(session.segments).toHaveLength(2);
+    await expect(
+      getWorkspaceSegmentEditorSessionForAccessibleProject(
+        { email: "alexmamondi@gmail.com", id: "8160048802147561000" },
+        3647,
+        { bypassCache: true },
+      ),
+    ).rejects.toMatchObject({
+      message: "Этот проект создан в старом формате озвучки и не поддерживает редактирование по сценам.",
+      statusCode: 409,
+    });
     const fetchedUrls = fetchMock.mock.calls.map(([input]) => String(input));
     expect(fetchedUrls.some((url) => url.includes("/segments/0/voiceover"))).toBe(false);
     expect(fetchedUrls.some((url) => url.includes("/segments/1/voiceover"))).toBe(false);
@@ -1286,7 +1287,7 @@ describe("segment editor asset lifecycle mapping", () => {
     expect(session.segments[0]?.voiceover).toBeNull();
   });
 
-  it("recovers playable voiceover proxies for a completed project without a TTS asset id", async () => {
+  it("rejects completed legacy projects without standalone scene audio", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes("/segments/0/voiceover")) {
@@ -1318,26 +1319,19 @@ describe("segment editor asset lifecycle mapping", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const session = await getWorkspaceSegmentEditorSessionForAccessibleProject(
-      { id: "completed-project-user" },
-      4178,
-      { bypassCache: true },
-    );
-
-    expect(session.ttsAssetId).toBeNull();
-    expect(session.segments[0]).toEqual(expect.objectContaining({
-      speechDuration: 3.25,
-      voiceoverLanguage: "",
-      voiceoverTextHash: "first scene.",
-      voiceoverVoiceType: "Liam_Timing",
-    }));
-    expect(session.segments[0]?.voiceover).toEqual(expect.objectContaining({
-      download_url: "/api/workspace/project-segment-voiceover?projectId=4178&segmentIndex=0",
-      mime_type: "audio/wav",
-    }));
+    await expect(
+      getWorkspaceSegmentEditorSessionForAccessibleProject(
+        { id: "completed-project-user" },
+        4178,
+        { bypassCache: true },
+      ),
+    ).rejects.toMatchObject({
+      message: "Этот проект создан в старом формате озвучки и не поддерживает редактирование по сценам.",
+      statusCode: 409,
+    });
   });
 
-  it("does not use segment timeline bounds as project TTS ranges when exact voice timing is missing", async () => {
+  it("rejects common TTS projects instead of guessing scene ranges", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes("/segments/") && url.includes("/voiceover")) {
@@ -1391,41 +1385,22 @@ describe("segment editor asset lifecycle mapping", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const session = await getWorkspaceSegmentEditorSessionForAccessibleProject(
-      { email: "alexmamondi@gmail.com", id: "8160048802147561000" },
-      3727,
-      { bypassCache: true },
-    );
-
-    expect(session.ttsAssetId).toBe(4946);
-    expect(session.segments[0]).toEqual(expect.objectContaining({
-      speechDuration: null,
-      speechEndTime: null,
-      speechStartTime: null,
-      voiceSourceDuration: null,
-      voiceSourceEndTime: null,
-      voiceSourceStartTime: null,
-      voiceType: null,
-      voiceoverTextHash: null,
-      voiceoverVoiceType: null,
-    }));
-    expect(session.segments[1]).toEqual(expect.objectContaining({
-      speechDuration: null,
-      speechEndTime: null,
-      speechStartTime: null,
-      voiceSourceDuration: null,
-      voiceSourceEndTime: null,
-      voiceSourceStartTime: null,
-      voiceType: null,
-      voiceoverTextHash: null,
-      voiceoverVoiceType: null,
-    }));
+    await expect(
+      getWorkspaceSegmentEditorSessionForAccessibleProject(
+        { email: "alexmamondi@gmail.com", id: "8160048802147561000" },
+        3727,
+        { bypassCache: true },
+      ),
+    ).rejects.toMatchObject({
+      message: "Этот проект создан в старом формате озвучки и не поддерживает редактирование по сценам.",
+      statusCode: 409,
+    });
     const fetchedUrls = fetchMock.mock.calls.map(([input]) => String(input));
     expect(fetchedUrls.some((url) => url.includes("/segments/0/voiceover"))).toBe(false);
     expect(fetchedUrls.some((url) => url.includes("/segments/1/voiceover"))).toBe(false);
   });
 
-  it("uses current project voice metadata when project TTS replaces stale scene voice metadata", async () => {
+  it("rejects common TTS after a project voice change", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
 
@@ -1485,25 +1460,19 @@ describe("segment editor asset lifecycle mapping", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const session = await getWorkspaceSegmentEditorSessionForAccessibleProject(
-      { email: "alexmamondi@gmail.com", id: "8160048802147561000" },
-      3661,
-      { bypassCache: true },
-    );
-
-    expect(session.ttsAssetId).toBe(9001);
-    expect(session.voiceType).toBe("Gleb");
-    expect(session.segments[0]).toEqual(expect.objectContaining({
-      speechDuration: 3.4,
-      speechEndTime: 3.4,
-      speechStartTime: 0,
-      voiceoverLanguage: "ru",
-      voiceoverTextHash: "first scene.",
-      voiceoverVoiceType: "Gleb",
-    }));
+    await expect(
+      getWorkspaceSegmentEditorSessionForAccessibleProject(
+        { email: "alexmamondi@gmail.com", id: "8160048802147561000" },
+        3661,
+        { bypassCache: true },
+      ),
+    ).rejects.toMatchObject({
+      message: "Этот проект создан в старом формате озвучки и не поддерживает редактирование по сценам.",
+      statusCode: 409,
+    });
   });
 
-  it("does not measure the project TTS asset as a per-scene voiceover duration", async () => {
+  it("does not accept the project TTS asset as standalone scene audio", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
 
@@ -1596,29 +1565,16 @@ describe("segment editor asset lifecycle mapping", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const session = await getWorkspaceSegmentEditorSessionForAccessibleProject(
-      { email: "alexmamondi@gmail.com", id: "8160048802147561000" },
-      3732,
-      { bypassCache: true },
-    );
-
-    expect(session.ttsAssetId).toBe(4980);
-    expect(session.segments[0]).toEqual(expect.objectContaining({
-      speechDuration: 10.739,
-      speechDurationSource: null,
-      speechEndTime: null,
-      speechStartTime: null,
-      voiceSourceDuration: null,
-      voiceoverAssetId: 4980,
-    }));
-    expect(session.segments[1]).toEqual(expect.objectContaining({
-      speechDuration: 2.508,
-      speechDurationSource: null,
-      speechEndTime: null,
-      speechStartTime: null,
-      voiceSourceDuration: null,
-      voiceoverAssetId: null,
-    }));
+    await expect(
+      getWorkspaceSegmentEditorSessionForAccessibleProject(
+        { email: "alexmamondi@gmail.com", id: "8160048802147561000" },
+        3732,
+        { bypassCache: true },
+      ),
+    ).rejects.toMatchObject({
+      message: "Этот проект создан в старом формате озвучки и не поддерживает редактирование по сценам.",
+      statusCode: 409,
+    });
     const fetchedUrls = fetchMock.mock.calls.map(([input]) => String(input));
     expect(fetchedUrls.some((url) => url.includes("/api/media/4980/download"))).toBe(false);
   });
@@ -1643,6 +1599,8 @@ describe("segment editor asset lifecycle mapping", () => {
                 start_time: 0,
                 text: "Первый сегмент.",
                 voice_type: "Russian_BrightHeroine",
+                voiceover_asset_id: 7001,
+                voiceover_voice_type: "Russian_BrightHeroine",
               },
               {
                 duration: 4,
@@ -1654,6 +1612,8 @@ describe("segment editor asset lifecycle mapping", () => {
                 start_time: 5,
                 text: "Второй сегмент.",
                 voice_type: "Russian_BrightHeroine",
+                voiceover_asset_id: 7002,
+                voiceover_voice_type: "Russian_BrightHeroine",
               },
             ],
             title: "Uniform segment voice",
@@ -1705,7 +1665,7 @@ describe("segment editor asset lifecycle mapping", () => {
     ]);
   });
 
-  it("inherits source project audio and source voice ranges for edited project previews", async () => {
+  it("rejects edited projects that only inherit common source audio", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
 
@@ -1840,46 +1800,23 @@ describe("segment editor asset lifecycle mapping", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const session = await getWorkspaceSegmentEditorSessionForAccessibleProject(
-      { email: "alexmamondi@gmail.com", id: "8160048802147561000" },
-      3647,
-      { bypassCache: true },
-    );
-
-    expect(session.ttsAssetId).toBe(4467);
-    expect(session.musicAssetId).toBe(4468);
-    expect(session.musicName).toBe("energetic_7.mp3");
-    expect(session.segments[0]).toEqual(expect.objectContaining({
-      endTime: 10,
-      speechEndTime: 4,
-      speechStartTime: 0,
-      startTime: 0,
-      voiceSourceDuration: 4,
-      voiceSourceEndTime: 4,
-      voiceSourceStartTime: 0,
-      voiceoverTextHash: "first scene.",
-      voiceoverVoiceType: "Bys_24000",
-    }));
-    expect(session.segments[1]).toEqual(expect.objectContaining({
-      endTime: 13.3,
-      speechDuration: 3.8,
-      speechEndTime: 7.8,
-      speechStartTime: 4,
-      startTime: 10,
-      voiceSourceDuration: 3.8,
-      voiceSourceEndTime: 7.8,
-      voiceSourceStartTime: 4,
-      voiceoverTextHash: "second scene.",
-      voiceoverVoiceType: "Bys_24000",
-    }));
-    expect(session.segments[1]?.speechWords).toHaveLength(2);
+    await expect(
+      getWorkspaceSegmentEditorSessionForAccessibleProject(
+        { email: "alexmamondi@gmail.com", id: "8160048802147561000" },
+        3647,
+        { bypassCache: true },
+      ),
+    ).rejects.toMatchObject({
+      message: "Этот проект создан в старом формате озвучки и не поддерживает редактирование по сценам.",
+      statusCode: 409,
+    });
     const fetchedUrls = fetchMock.mock.calls.map(([input]) => String(input));
     expect(fetchedUrls.some((url) => url.includes("/api/projects/3646/segment-editor"))).toBe(true);
     expect(fetchedUrls.some((url) => url.includes("/segments/0/voiceover"))).toBe(false);
     expect(fetchedUrls.some((url) => url.includes("/segments/1/voiceover"))).toBe(false);
   });
 
-  it("inherits source voice ranges when the edited project already exposes the reused TTS asset", async () => {
+  it("rejects edited projects that expose only the reused common TTS asset", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
 
@@ -2002,44 +1939,23 @@ describe("segment editor asset lifecycle mapping", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const session = await getWorkspaceSegmentEditorSessionForAccessibleProject(
-      { email: "alexmamondi@gmail.com", id: "8160048802147561000" },
-      3653,
-      { bypassCache: true },
-    );
-
-    expect(session.ttsAssetId).toBe(4467);
-    expect(session.segments[0]).toEqual(expect.objectContaining({
-      duration: 10,
-      durationMode: "manual",
-      endTime: 10,
-      manualDurationSeconds: 10,
-      speechDuration: 4,
-      speechEndTime: 4,
-      speechStartTime: 0,
-      startTime: 0,
-      voiceSourceDuration: 4,
-      voiceSourceEndTime: 4,
-      voiceSourceStartTime: 0,
-    }));
-    expect(session.segments[1]).toEqual(expect.objectContaining({
-      endTime: 13.3,
-      speechDuration: 3.8,
-      speechEndTime: 7.8,
-      speechStartTime: 4,
-      startTime: 10,
-      voiceSourceDuration: 3.8,
-      voiceSourceEndTime: 7.8,
-      voiceSourceStartTime: 4,
-    }));
-    expect(session.segments[1]?.speechWords).toHaveLength(2);
+    await expect(
+      getWorkspaceSegmentEditorSessionForAccessibleProject(
+        { email: "alexmamondi@gmail.com", id: "8160048802147561000" },
+        3653,
+        { bypassCache: true },
+      ),
+    ).rejects.toMatchObject({
+      message: "Этот проект создан в старом формате озвучки и не поддерживает редактирование по сценам.",
+      statusCode: 409,
+    });
     const fetchedUrls = fetchMock.mock.calls.map(([input]) => String(input));
-    expect(fetchedUrls.some((url) => url.includes("/api/projects/3646/segment-editor"))).toBe(true);
+    expect(fetchedUrls.some((url) => url.includes("/api/projects/3646/segment-editor"))).toBe(false);
     expect(fetchedUrls.some((url) => url.includes("/segments/0/voiceover"))).toBe(false);
     expect(fetchedUrls.some((url) => url.includes("/segments/1/voiceover"))).toBe(false);
   });
 
-  it("restores the finalized source voice when a later draft left stale segment voiceovers", async () => {
+  it("keeps current standalone scene audio instead of reconciling it with source TTS", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
 
@@ -2160,27 +2076,10 @@ describe("segment editor asset lifecycle mapping", () => {
       { bypassCache: true },
     );
 
+    expect(session.voiceType).toBe("Alisa");
     expect(session.ttsAssetId).toBe(9003);
-    expect(session.voiceType).toBe("Anastasia");
-    expect(session.voiceoverSourceProjectId).toBe(4203);
-    expect(resolveWorkspaceSegmentEditorVoiceoverProjectId(session)).toBe(4203);
-    expect(resolveWorkspaceSegmentEditorVoiceoverProjectId({ projectId: 4204 })).toBe(4204);
-    expect(session.segments[0]).toEqual(expect.objectContaining({
-      speechDuration: 6.04,
-      speechEndTime: 6.04,
-      speechStartTime: 0,
-      voiceSourceDuration: 6.04,
-      voiceoverAssetId: null,
-      voiceoverVoiceType: "Anastasia",
-    }));
-    expect(session.segments[1]).toEqual(expect.objectContaining({
-      speechDuration: 6.74,
-      speechEndTime: 12.78,
-      speechStartTime: 6.04,
-      voiceSourceDuration: 6.74,
-      voiceoverAssetId: null,
-      voiceoverVoiceType: "Anastasia",
-    }));
+    expect(session.segments.map((segment) => segment.voiceoverAssetId)).toEqual([9051, 9052]);
+    expect(session.segments.map((segment) => segment.speechDuration)).toEqual([7.32, 7.74]);
     const fetchedUrls = fetchMock.mock.calls.map(([input]) => String(input));
     expect(fetchedUrls.some((url) => url.includes("/api/projects/4203/segment-editor"))).toBe(true);
   });
@@ -2502,6 +2401,53 @@ describe("segment editor asset lifecycle mapping", () => {
       ),
     ).rejects.toMatchObject({
       message: preparingMessage,
+      name: "WorkspaceSegmentEditorError",
+      statusCode: 409,
+    });
+  });
+
+  it("does not bypass an old-format voiceover error with project details", async () => {
+    const oldFormatMessage =
+      "Этот проект создан в старом формате озвучки и не поддерживает редактирование по сценам.";
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/segment-editor")) {
+        return new Response(JSON.stringify({ detail: oldFormatMessage }), {
+          headers: { "Content-Type": "application/json" },
+          status: 409,
+        });
+      }
+      if (url.includes("/media")) {
+        return new Response(JSON.stringify({ assets: [], project_id: 4322 }), {
+          headers: { "Content-Type": "application/json" },
+          status: 200,
+        });
+      }
+      return new Response(JSON.stringify({
+        final_video_asset_id: 9001,
+        generation_settings: {
+          original_video_segments: [
+            { duration: 3, end_time: 3, segment_index: 0, start_time: 0, text: "Legacy scene." },
+          ],
+          tts_asset_id: 9000,
+          voice_type: "Liam_Timing",
+        },
+        project_id: 4322,
+      }), {
+        headers: { "Content-Type": "application/json" },
+        status: 200,
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      getWorkspaceSegmentEditorSessionForAccessibleProject(
+        { id: "user-old-format" },
+        4322,
+        { bypassCache: true },
+      ),
+    ).rejects.toMatchObject({
+      message: oldFormatMessage,
       name: "WorkspaceSegmentEditorError",
       statusCode: 409,
     });
