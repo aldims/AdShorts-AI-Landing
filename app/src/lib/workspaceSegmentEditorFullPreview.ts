@@ -109,6 +109,30 @@ export type WorkspaceSegmentEditorFullPreviewActiveAudioPreparationOptions = {
   isReady: boolean;
 };
 
+export type WorkspaceSegmentEditorFullPreviewAudioUnlockAction = "hold-inactive" | "play" | "skip";
+
+export type WorkspaceSegmentEditorFullPreviewAudioUnlockOptions = {
+  hasFailedTrack: boolean;
+  isActiveTrack: boolean;
+  isEnded: boolean;
+  isPaused: boolean;
+  isUnlockPending: boolean;
+  isUnlocked: boolean;
+  isVoiceTrack: boolean;
+};
+
+export type WorkspaceSegmentEditorFullPreviewAudioPrimeOptions = {
+  fromUserGesture: boolean;
+  isActiveTrack: boolean;
+  isVoiceTrack: boolean;
+};
+
+export type WorkspaceSegmentEditorFullPreviewPreparedAudioSourceOptions = {
+  isUnlockPending: boolean;
+  isUnlocked: boolean;
+  preservePrimedSource: boolean;
+};
+
 export type WorkspaceSegmentEditorFullPreviewAudioClockTrack = {
   sourceKind: "isolated" | "timeline";
   sourceStartTime: number;
@@ -1256,6 +1280,44 @@ export const shouldStartWorkspaceSegmentEditorFullPreviewActiveAudio = ({
   isReady,
 }: WorkspaceSegmentEditorFullPreviewActiveAudioPreparationOptions) =>
   !hasFailedTrack && !hasMediaError && (allowPlayBeforeReady || isReady);
+
+export const resolveWorkspaceSegmentEditorFullPreviewAudioUnlockAction = ({
+  hasFailedTrack,
+  isActiveTrack,
+  isEnded,
+  isPaused,
+  isUnlockPending,
+  isUnlocked,
+  isVoiceTrack,
+}: WorkspaceSegmentEditorFullPreviewAudioUnlockOptions): WorkspaceSegmentEditorFullPreviewAudioUnlockAction => {
+  if (hasFailedTrack || isUnlockPending) {
+    return "skip";
+  }
+
+  if (isUnlocked && isVoiceTrack && !isActiveTrack) {
+    return "hold-inactive";
+  }
+
+  if (isUnlocked && !isPaused && !isEnded) {
+    return "skip";
+  }
+
+  return "play";
+};
+
+export const shouldPrimeWorkspaceSegmentEditorFullPreviewAudioTrack = ({
+  fromUserGesture,
+  isActiveTrack,
+  isVoiceTrack,
+}: WorkspaceSegmentEditorFullPreviewAudioPrimeOptions) =>
+  !isVoiceTrack || isActiveTrack || fromUserGesture;
+
+export const shouldPreserveWorkspaceSegmentEditorFullPreviewPreparedAudioSource = ({
+  isUnlockPending,
+  isUnlocked,
+  preservePrimedSource,
+}: WorkspaceSegmentEditorFullPreviewPreparedAudioSourceOptions) =>
+  preservePrimedSource && (isUnlockPending || isUnlocked);
 
 export const resolveWorkspaceSegmentEditorFullPreviewRejectedAudioPreparationResult = ({
   activeTrackCount,

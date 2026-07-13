@@ -29,6 +29,7 @@ import {
   resolveWorkspaceSegmentEditorFullPreviewProjectVoiceSourceStartTime,
   resolveWorkspaceSegmentEditorFullPreviewProjectVoiceTimelineEndTime,
   resolveWorkspaceSegmentEditorFullPreviewProjectVoiceTrackTimelineEndTime,
+  resolveWorkspaceSegmentEditorFullPreviewAudioUnlockAction,
   resolveWorkspaceSegmentEditorFullPreviewSharedAudioSourceStartTimes,
   resolveWorkspaceSegmentEditorFullPreviewVoiceAlignedSegments,
   resolveWorkspaceSegmentEditorFullPreviewVoiceTrackQueue,
@@ -36,6 +37,8 @@ import {
   resolveWorkspaceSegmentEditorFullPreviewVoiceClockHoldTime,
   serializeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges,
   shouldPauseWorkspaceSegmentEditorFullPreviewCompanionTrack,
+  shouldPreserveWorkspaceSegmentEditorFullPreviewPreparedAudioSource,
+  shouldPrimeWorkspaceSegmentEditorFullPreviewAudioTrack,
   shouldShowWorkspaceSegmentEditorFullPreviewBuffering,
   selectWorkspaceSegmentEditorFullPreviewRequiredAudioTracksForStart,
   selectWorkspaceSegmentEditorFullPreviewAudibleTracksForVoiceStart,
@@ -1141,6 +1144,72 @@ describe("workspace segment editor full preview", () => {
         isReady: false,
       }),
     ).toBe(true);
+  });
+
+  it("primes future scene voices only from the original user gesture", () => {
+    expect(
+      shouldPrimeWorkspaceSegmentEditorFullPreviewAudioTrack({
+        fromUserGesture: true,
+        isActiveTrack: false,
+        isVoiceTrack: true,
+      }),
+    ).toBe(true);
+    expect(
+      shouldPrimeWorkspaceSegmentEditorFullPreviewAudioTrack({
+        fromUserGesture: false,
+        isActiveTrack: false,
+        isVoiceTrack: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("does not interrupt a pending voice unlock or restart an inactive unlocked voice", () => {
+    const baseOptions = {
+      hasFailedTrack: false,
+      isActiveTrack: false,
+      isEnded: false,
+      isPaused: false,
+      isUnlocked: false,
+      isVoiceTrack: true,
+    };
+
+    expect(
+      resolveWorkspaceSegmentEditorFullPreviewAudioUnlockAction({
+        ...baseOptions,
+        isUnlockPending: true,
+      }),
+    ).toBe("skip");
+    expect(
+      resolveWorkspaceSegmentEditorFullPreviewAudioUnlockAction({
+        ...baseOptions,
+        isUnlockPending: false,
+        isUnlocked: true,
+      }),
+    ).toBe("hold-inactive");
+  });
+
+  it("keeps a user-primed source while preload switches other tracks to blob URLs", () => {
+    expect(
+      shouldPreserveWorkspaceSegmentEditorFullPreviewPreparedAudioSource({
+        isUnlockPending: true,
+        isUnlocked: false,
+        preservePrimedSource: true,
+      }),
+    ).toBe(true);
+    expect(
+      shouldPreserveWorkspaceSegmentEditorFullPreviewPreparedAudioSource({
+        isUnlockPending: false,
+        isUnlocked: true,
+        preservePrimedSource: true,
+      }),
+    ).toBe(true);
+    expect(
+      shouldPreserveWorkspaceSegmentEditorFullPreviewPreparedAudioSource({
+        isUnlockPending: false,
+        isUnlocked: false,
+        preservePrimedSource: true,
+      }),
+    ).toBe(false);
   });
 
   it("does not treat a browser audio-unlock rejection as a ready full preview", () => {

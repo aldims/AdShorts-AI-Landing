@@ -952,6 +952,7 @@ import {
   resolveWorkspaceSegmentEditorFullPreviewIsolatedVoiceTimelineEndTime,
   resolveWorkspaceSegmentEditorFullPreviewVoiceDurationSeconds,
   resolveWorkspaceSegmentEditorFullPreviewRejectedAudioPreparationResult,
+  resolveWorkspaceSegmentEditorFullPreviewAudioUnlockAction,
   resolveWorkspaceSegmentEditorFullPreviewVoiceClockHoldTime,
   resolveWorkspaceSegmentEditorFullPreviewAudioStartGate,
   resolveWorkspaceSegmentEditorFullPreviewSegment,
@@ -964,6 +965,8 @@ import {
   shouldHoldWorkspaceSegmentEditorFullPreviewAudioStartGate,
   shouldLoadWorkspaceSegmentEditorFullPreviewMediaElement,
   shouldPauseWorkspaceSegmentEditorFullPreviewCompanionTrack,
+  shouldPreserveWorkspaceSegmentEditorFullPreviewPreparedAudioSource,
+  shouldPrimeWorkspaceSegmentEditorFullPreviewAudioTrack,
   shouldShowWorkspaceSegmentEditorFullPreviewBuffering,
   shouldStartWorkspaceSegmentEditorFullPreviewActiveAudio,
   shouldUseWorkspaceSegmentEditorFullPreviewVoiceTrackForSegment,
@@ -2490,6 +2493,8 @@ export function WorkspacePage({
     promise: Promise<SegmentEditorFullPreviewAudioPreflightResult>;
     signature: string;
   } | null>(null);
+  const segmentEditorFullPreviewAudioUnlockRequestCounterRef = useRef(0);
+  const segmentEditorFullPreviewAudioUnlockRequestIdsRef = useRef<Map<string, number>>(new Map());
   const segmentEditorFullPreviewUnlockedAudioKeysRef = useRef<Set<string>>(new Set());
   const segmentEditorFullPreviewAudioUnlockRequiredRef = useRef(false);
   const shouldStartSegmentEditorFullPreviewAfterVoiceoverRef = useRef(false);
@@ -9633,6 +9638,7 @@ export function WorkspacePage({
   const stopSegmentEditorFullPreviewMediaElements = (options?: { clearRefs?: boolean; resetMedia?: boolean }) => {
     segmentEditorFullPreviewAudioPlayingKeysRef.current.clear();
     segmentEditorFullPreviewAudioStartReleasedKeysRef.current.clear();
+    segmentEditorFullPreviewAudioUnlockRequestIdsRef.current.clear();
     segmentEditorFullPreviewAudioStartGateSinceRef.current = {};
     segmentEditorFullPreviewVoiceClockProgressRef.current = {};
     Object.values(segmentEditorFullPreviewAudioRefs.current).forEach((element) => {
@@ -9672,6 +9678,7 @@ export function WorkspacePage({
     delete segmentEditorFullPreviewAudioRefs.current[key];
     segmentEditorFullPreviewAudioPlayingKeysRef.current.delete(key);
     segmentEditorFullPreviewAudioStartReleasedKeysRef.current.delete(key);
+    segmentEditorFullPreviewAudioUnlockRequestIdsRef.current.delete(key);
     segmentEditorFullPreviewUnlockedAudioKeysRef.current.delete(key);
     segmentEditorFullPreviewFailedAudioKeysRef.current.delete(key);
     delete segmentEditorFullPreviewAudioStartGateSinceRef.current[key];
@@ -9697,6 +9704,11 @@ export function WorkspacePage({
     retainKnownKeys(segmentEditorFullPreviewAudioPlayingKeysRef.current);
     retainKnownKeys(segmentEditorFullPreviewAudioStartReleasedKeysRef.current);
     retainKnownKeys(segmentEditorFullPreviewFailedAudioKeysRef.current);
+    Array.from(segmentEditorFullPreviewAudioUnlockRequestIdsRef.current.keys()).forEach((key) => {
+      if (!nextKeys.has(key)) {
+        segmentEditorFullPreviewAudioUnlockRequestIdsRef.current.delete(key);
+      }
+    });
     if (segmentEditorFullPreviewActiveRef.current) {
       retainKnownKeys(segmentEditorFullPreviewUnlockedAudioKeysRef.current);
     } else {
@@ -9739,6 +9751,7 @@ export function WorkspacePage({
       segmentEditorFullPreviewAudioTracksRef.current = [];
       segmentEditorFullPreviewFailedAudioKeysRef.current.clear();
       segmentEditorFullPreviewAudioSignatureRef.current = null;
+      segmentEditorFullPreviewAudioUnlockRequestIdsRef.current.clear();
       segmentEditorFullPreviewUnlockedAudioKeysRef.current.clear();
       segmentEditorFullPreviewAudioStartReleasedKeysRef.current.clear();
       segmentEditorFullPreviewVisualWarmupAtByKeyRef.current = {};
@@ -27135,6 +27148,8 @@ export function WorkspacePage({
     segmentEditorFullPreviewFailedAudioKeysRef.current.add(track.key);
     segmentEditorFullPreviewAudioPlayingKeysRef.current.delete(track.key);
     segmentEditorFullPreviewAudioStartReleasedKeysRef.current.delete(track.key);
+    segmentEditorFullPreviewAudioUnlockRequestIdsRef.current.delete(track.key);
+    segmentEditorFullPreviewUnlockedAudioKeysRef.current.delete(track.key);
     delete segmentEditorFullPreviewAudioStartGateSinceRef.current[track.key];
     if (element) {
       element.pause();
@@ -27566,7 +27581,7 @@ export function WorkspacePage({
   };
   const applySegmentEditorFullPreviewPreparedAudioSources = (
     currentTime: number,
-    options?: { preserveActiveUnlockedSource?: boolean },
+    options?: { preservePrimedSource?: boolean },
   ) => {
     segmentEditorFullPreviewAudioTracksRef.current.forEach((track) => {
       const preparedSource = segmentEditorFullPreviewPreparedAudioSourcesRef.current[track.url];
@@ -27579,13 +27594,15 @@ export function WorkspacePage({
         return;
       }
 
-      const shouldPreserveActiveUnlockedSource =
-        options?.preserveActiveUnlockedSource === true &&
-        isSegmentEditorFullPreviewAudioTrackActive(track, currentTime, element) &&
-        segmentEditorFullPreviewUnlockedAudioKeysRef.current.has(track.key) &&
-        !element.paused &&
-        !element.ended;
-      if (shouldPreserveActiveUnlockedSource) {
+      // Safari can revoke the user-granted playback permission when a primed
+      // media element is switched to a different source after the click.
+      const shouldPreservePrimedSource =
+        shouldPreserveWorkspaceSegmentEditorFullPreviewPreparedAudioSource({
+          isUnlockPending: segmentEditorFullPreviewAudioUnlockRequestIdsRef.current.has(track.key),
+          isUnlocked: segmentEditorFullPreviewUnlockedAudioKeysRef.current.has(track.key),
+          preservePrimedSource: options?.preservePrimedSource === true,
+        });
+      if (shouldPreservePrimedSource) {
         return;
       }
 
@@ -27593,6 +27610,7 @@ export function WorkspacePage({
       muteSegmentEditorFullPreviewAudioElement(element, track);
       segmentEditorFullPreviewAudioPlayingKeysRef.current.delete(track.key);
       segmentEditorFullPreviewAudioStartReleasedKeysRef.current.delete(track.key);
+      segmentEditorFullPreviewAudioUnlockRequestIdsRef.current.delete(track.key);
       segmentEditorFullPreviewUnlockedAudioKeysRef.current.delete(track.key);
       element.src = preparedSource.objectUrl;
       element.dataset.adshortsFullPreviewOriginalUrl = track.url;
@@ -27918,38 +27936,52 @@ export function WorkspacePage({
     element: HTMLMediaElement,
     options?: { fromUserGesture?: boolean },
   ) => {
-    if (segmentEditorFullPreviewFailedAudioKeysRef.current.has(track.key)) {
-      return;
-    }
-
+    const isVoiceTrack = isSegmentEditorFullPreviewVoiceAudioTrack(track);
     const isActiveAtUnlock = isSegmentEditorFullPreviewAudioTrackActive(
       track,
       segmentEditorFullPreviewTimeRef.current,
       element,
     );
-    if (
-      segmentEditorFullPreviewUnlockedAudioKeysRef.current.has(track.key) &&
-      !element.paused &&
-      !element.ended
-    ) {
-      if (!isActiveAtUnlock && isSegmentEditorFullPreviewVoiceAudioTrack(track)) {
+    const unlockAction = resolveWorkspaceSegmentEditorFullPreviewAudioUnlockAction({
+      hasFailedTrack: segmentEditorFullPreviewFailedAudioKeysRef.current.has(track.key),
+      isActiveTrack: isActiveAtUnlock,
+      isEnded: element.ended,
+      isPaused: element.paused,
+      isUnlockPending: segmentEditorFullPreviewAudioUnlockRequestIdsRef.current.has(track.key),
+      isUnlocked: segmentEditorFullPreviewUnlockedAudioKeysRef.current.has(track.key),
+      isVoiceTrack,
+    });
+    if (unlockAction === "skip") {
+      return;
+    }
+    if (unlockAction === "hold-inactive") {
+      if (!element.paused) {
         element.pause();
         segmentEditorFullPreviewAudioPlayingKeysRef.current.delete(track.key);
-        seekSegmentEditorFullPreviewPreparedAudioElement(
-          track,
-          element,
-          segmentEditorFullPreviewTimeRef.current,
-        );
       }
+      seekSegmentEditorFullPreviewPreparedAudioElement(
+        track,
+        element,
+        segmentEditorFullPreviewTimeRef.current,
+      );
       return;
     }
 
-    segmentEditorFullPreviewUnlockedAudioKeysRef.current.add(track.key);
+    // Pointer, mouse and click handlers can overlap. A request id prevents an
+    // older play rejection from clearing a newer unlock attempt for this track.
+    segmentEditorFullPreviewAudioUnlockRequestCounterRef.current += 1;
+    const unlockRequestId = segmentEditorFullPreviewAudioUnlockRequestCounterRef.current;
+    segmentEditorFullPreviewAudioUnlockRequestIdsRef.current.set(track.key, unlockRequestId);
     muteSegmentEditorFullPreviewAudioElement(element, track, options);
     element.loop = Boolean(track.loop);
     ensureSegmentEditorFullPreviewMediaElementLoading(element, HTMLMediaElement.HAVE_CURRENT_DATA);
     void playSegmentEditorFullPreviewAudioElement(track, element, "unlock").then(
       () => {
+        if (segmentEditorFullPreviewAudioUnlockRequestIdsRef.current.get(track.key) !== unlockRequestId) {
+          return;
+        }
+        segmentEditorFullPreviewAudioUnlockRequestIdsRef.current.delete(track.key);
+        segmentEditorFullPreviewUnlockedAudioKeysRef.current.add(track.key);
         if (
           !track.loop &&
           !isSegmentEditorFullPreviewAudioTrackActive(
@@ -27968,6 +28000,10 @@ export function WorkspacePage({
         }
       },
       () => {
+        if (segmentEditorFullPreviewAudioUnlockRequestIdsRef.current.get(track.key) !== unlockRequestId) {
+          return;
+        }
+        segmentEditorFullPreviewAudioUnlockRequestIdsRef.current.delete(track.key);
         segmentEditorFullPreviewUnlockedAudioKeysRef.current.delete(track.key);
       },
     );
@@ -28457,7 +28493,15 @@ export function WorkspacePage({
       }
 
       element.volume = 0;
-      if (!isVoiceTrack || isActiveTrack) {
+      // Each Safari audio element must be silently started by the original
+      // user gesture; the unlock callback pauses future voices before use.
+      if (
+        shouldPrimeWorkspaceSegmentEditorFullPreviewAudioTrack({
+          fromUserGesture: options?.fromUserGesture === true,
+          isActiveTrack,
+          isVoiceTrack,
+        })
+      ) {
         unlockSegmentEditorFullPreviewAudioElement(track, element, options);
       }
     });
@@ -28628,7 +28672,11 @@ export function WorkspacePage({
       element.loop = Boolean(track.loop);
       ensureSegmentEditorFullPreviewMediaElementLoading(element, startMinimumReadyState);
       seekSegmentEditorFullPreviewPreparedAudioElement(track, element, currentTime);
-      if (isVoiceTrack && !isSegmentEditorFullPreviewAudioTrackActive(track, currentTime, element)) {
+      if (
+        isVoiceTrack &&
+        !isSegmentEditorFullPreviewAudioTrackActive(track, currentTime, element) &&
+        !segmentEditorFullPreviewAudioUnlockRequestIdsRef.current.has(track.key)
+      ) {
         element.pause();
         segmentEditorFullPreviewAudioPlayingKeysRef.current.delete(track.key);
       }
@@ -28643,8 +28691,10 @@ export function WorkspacePage({
           fromUserGesture: segmentEditorFullPreviewUnlockedAudioKeysRef.current.has(track.key),
         });
         element.loop = Boolean(track.loop);
-        element.pause();
-        segmentEditorFullPreviewAudioPlayingKeysRef.current.delete(track.key);
+        if (!isVoiceTrack || !segmentEditorFullPreviewAudioUnlockRequestIdsRef.current.has(track.key)) {
+          element.pause();
+          segmentEditorFullPreviewAudioPlayingKeysRef.current.delete(track.key);
+        }
         if (!isVoiceTrack) {
           unlockSegmentEditorFullPreviewAudioElement(track, element);
         }
@@ -29401,7 +29451,7 @@ export function WorkspacePage({
     }
 
     applySegmentEditorFullPreviewPreparedAudioSources(startTime, {
-      preserveActiveUnlockedSource: options?.fromUserGesture === true,
+      preservePrimedSource: options?.fromUserGesture === true,
     });
     const arePreparedAudioSourcesReady = await waitForSegmentEditorFullPreviewPreparedAudioSources(token);
     if (!arePreparedAudioSourcesReady) {
