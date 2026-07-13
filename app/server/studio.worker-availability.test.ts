@@ -329,7 +329,7 @@ describe("studio generation worker availability", () => {
     );
   });
 
-  it("forwards manual segment timing aliases to AdsFlow generation", async () => {
+  it("forwards manual segment timing and scene sound changes to AdsFlow generation", async () => {
     const { createStudioGenerationJob } = await loadStudioModule();
     const calls: Array<{ body: Record<string, unknown>; pathname: string }> = [];
 
@@ -385,6 +385,7 @@ describe("studio generation worker availability", () => {
               endTime: 10,
               index: 0,
               manualDurationSeconds: 10,
+              sceneSoundRemoved: true,
               startTime: 0,
               text: "Manual opening scene",
               videoAction: "original",
@@ -393,6 +394,7 @@ describe("studio generation worker availability", () => {
               duration: 4,
               endTime: 14,
               index: 1,
+              sceneSoundAssetId: 902,
               startTime: 10,
               text: "Second scene",
               videoAction: "original",
@@ -442,6 +444,7 @@ describe("studio generation worker availability", () => {
         endTime: 10,
         manualDurationSeconds: 10,
         manual_duration_seconds: 10,
+        scene_sound_removed: true,
         source_duration_seconds: 3.26,
         start_time: 0,
         startTime: 0,
@@ -460,6 +463,8 @@ describe("studio generation worker availability", () => {
         duration_seconds: 4,
         end_time: 14,
         manual_duration_seconds: 4,
+        scene_sound_asset_id: 902,
+        scene_sound_removed: false,
         start_time: 10,
         target_duration_seconds: 4,
         timeline_duration_seconds: 4,

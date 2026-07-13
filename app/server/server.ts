@@ -723,6 +723,9 @@ type StudioGenerateMultipartSegment = {
   manual_duration_seconds?: unknown;
   resetVisual?: unknown;
   sceneSoundAssetId?: unknown;
+  sceneSoundRemoved?: unknown;
+  scene_sound_asset_id?: unknown;
+  scene_sound_removed?: unknown;
   startTime?: unknown;
   subtitleColor?: unknown;
   subtitle_color?: unknown;
@@ -1109,7 +1112,12 @@ const parseStudioGenerateMultipartBody = async (req: express.Request) => {
                   segmentRecord.infographicRemoved ?? segmentRecord.infographic_removed,
                 manualDurationSeconds: segmentRecord.manualDurationSeconds ?? segmentRecord.manual_duration_seconds,
                 resetVisual: Boolean(segmentRecord.resetVisual),
-                sceneSoundAssetId: normalizeRequestPositiveInteger(segmentRecord.sceneSoundAssetId),
+                sceneSoundAssetId: normalizeRequestPositiveInteger(
+                  segmentRecord.sceneSoundAssetId ?? segmentRecord.scene_sound_asset_id,
+                ),
+                sceneSoundRemoved: normalizeRequestOptionalBoolean(
+                  segmentRecord.sceneSoundRemoved ?? segmentRecord.scene_sound_removed,
+                ),
                 startTime: segmentRecord.startTime,
                 subtitleColor: segmentRecord.subtitleColor ?? segmentRecord.subtitle_color ?? null,
                 subtitleStyle: segmentRecord.subtitleStyle ?? segmentRecord.subtitle_style ?? null,

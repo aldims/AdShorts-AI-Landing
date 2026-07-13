@@ -245,6 +245,50 @@ describe("studio generation language resolution", () => {
     );
   });
 
+  it("preserves explicit scene sound removals in the normalized generation payload", () => {
+    const normalized = normalizeStudioSegmentEditorPayload(
+      {
+        projectId: 42,
+        segments: [
+          {
+            duration: 5,
+            endTime: 5,
+            index: 1,
+            sceneSoundAssetId: 801,
+            sceneSoundRemoved: true,
+            startTime: 0,
+            text: "Second scene",
+            videoAction: "original",
+          },
+          {
+            duration: 4,
+            endTime: 9,
+            index: 2,
+            scene_sound_asset_id: 802,
+            scene_sound_removed: true,
+            startTime: 5,
+            text: "Third scene",
+            videoAction: "original",
+          },
+        ],
+      },
+      "ru",
+    );
+
+    expect(normalized?.segments).toEqual([
+      expect.objectContaining({
+        index: 1,
+        sceneSoundAssetId: undefined,
+        sceneSoundRemoved: true,
+      }),
+      expect.objectContaining({
+        index: 2,
+        sceneSoundAssetId: undefined,
+        sceneSoundRemoved: true,
+      }),
+    ]);
+  });
+
   it("normalizes segment editor timing drift before forwarding generation payload", () => {
     const normalized = normalizeStudioSegmentEditorPayload(
       {

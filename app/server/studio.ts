@@ -2117,6 +2117,9 @@ export const normalizeStudioSegmentEditorPayload = (
       manual_duration_seconds?: unknown;
       resetVisual?: unknown;
       sceneSoundAssetId?: unknown;
+      sceneSoundRemoved?: unknown;
+      scene_sound_asset_id?: unknown;
+      scene_sound_removed?: unknown;
       startTime?: unknown;
       subtitleColor?: unknown;
       subtitle_color?: unknown;
@@ -2250,6 +2253,9 @@ export const normalizeStudioSegmentEditorPayload = (
     const infographic = infographicRemoved
       ? undefined
       : normalizeStudioSegmentInfographic(segmentRecord.infographic);
+    const sceneSoundRemoved = normalizeWorkspaceBooleanFlag(
+      segmentRecord.sceneSoundRemoved ?? segmentRecord.scene_sound_removed,
+    ) === true;
 
     const attachesCustomVisual = videoAction === "custom" || videoAction === "talking_photo";
     if (attachesCustomVisual && !customVideoAssetId && (!customVideoFileDataUrl || !customVideoFileName)) {
@@ -2272,7 +2278,10 @@ export const normalizeStudioSegmentEditorPayload = (
       infographicRemoved,
       manualDurationSeconds: normalizedManualDurationSeconds,
       resetVisual: Boolean(segmentRecord.resetVisual),
-      sceneSoundAssetId: normalizePositiveInteger(segmentRecord.sceneSoundAssetId) ?? undefined,
+      sceneSoundAssetId: sceneSoundRemoved
+        ? undefined
+        : normalizePositiveInteger(segmentRecord.sceneSoundAssetId ?? segmentRecord.scene_sound_asset_id) ?? undefined,
+      sceneSoundRemoved,
       startTime,
       subtitleColor: segmentSubtitleColor,
       subtitleStyle: segmentSubtitleStyle,
@@ -6772,6 +6781,11 @@ export async function createStudioGenerationJob(
         segmentVoiceoverAssetIds: normalizedSegmentEditorAssetPayload.segments.map(
           (segment) => segment.voiceover_asset_id ?? null,
         ),
+        segmentSceneSounds: normalizedSegmentEditorAssetPayload.segments.map((segment) => ({
+          assetId: segment.scene_sound_asset_id ?? null,
+          index: segment.index,
+          removed: segment.scene_sound_removed === true,
+        })),
       });
     }
 
