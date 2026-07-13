@@ -33,7 +33,7 @@ beforeAll(() => {
 });
 
 describe("WorkspaceSegmentInfographicOverlay", () => {
-  it("renders three staggered visual parts while playback is active", () => {
+  it("fades the complete infographic as one visual while playback is active", () => {
     const infographic = createWorkspaceSegmentInfographic({
       inputHash: "c".repeat(64),
       intrinsicHeight: 512,
@@ -54,13 +54,8 @@ describe("WorkspaceSegmentInfographicOverlay", () => {
     const overlay = view.getByTestId("segment-infographic-overlay");
     const parts = overlay.querySelectorAll(".studio-segment-infographic__image");
 
-    expect(parts).toHaveLength(3);
-    expect(Number(overlay.style.getPropertyValue("--workspace-infographic-part-0-opacity"))).toBeGreaterThan(
-      Number(overlay.style.getPropertyValue("--workspace-infographic-part-1-opacity")),
-    );
-    expect(Number(overlay.style.getPropertyValue("--workspace-infographic-part-1-opacity"))).toBeGreaterThan(
-      Number(overlay.style.getPropertyValue("--workspace-infographic-part-2-opacity")),
-    );
+    expect(parts).toHaveLength(1);
+    expect(Number(overlay.style.getPropertyValue("--workspace-infographic-opacity"))).toBeCloseTo(0.5);
   });
 
   it("commits one transform after any number of pointer moves", () => {

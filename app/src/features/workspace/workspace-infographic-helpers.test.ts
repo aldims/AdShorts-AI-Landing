@@ -10,7 +10,6 @@ import {
   getWorkspaceInfographicNormalizedHeight,
   getWorkspaceSegmentInfographicFadeDuration,
   getWorkspaceSegmentInfographicOpacity,
-  getWorkspaceSegmentInfographicPartOpacities,
   getWorkspaceSegmentInfographicSourceVisualIdentity,
   getWorkspaceSegmentInfographicStatusFailureAction,
   isWorkspaceSegmentInfographicJobResultContextValid,
@@ -176,16 +175,6 @@ describe("workspace infographic helpers", () => {
     expect(getWorkspaceSegmentInfographicOpacity(0.275, 5)).toBeCloseTo(0.5);
     expect(getWorkspaceSegmentInfographicOpacity(2.5, 5)).toBe(1);
     expect(getWorkspaceSegmentInfographicOpacity(5, 5)).toBe(0);
-  });
-
-  it("reveals three infographic parts in a smooth stagger and fades them out together", () => {
-    expect(getWorkspaceSegmentInfographicPartOpacities(0, 5)).toEqual([0, 0, 0]);
-    const halfway = getWorkspaceSegmentInfographicPartOpacities(0.275, 5);
-    expect(halfway[0]).toBeGreaterThan(halfway[1]);
-    expect(halfway[1]).toBeGreaterThan(halfway[2]);
-    expect(halfway[1]).toBeCloseTo(0.5);
-    expect(getWorkspaceSegmentInfographicPartOpacities(1, 5)).toEqual([1, 1, 1]);
-    expect(getWorkspaceSegmentInfographicPartOpacities(5, 5)).toEqual([0, 0, 0]);
   });
 
   it("marks an infographic stale only when the current visual identity changed", () => {

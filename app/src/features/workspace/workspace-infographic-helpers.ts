@@ -10,9 +10,6 @@ export const WORKSPACE_SEGMENT_INFOGRAPHIC_DEFAULT_WIDTH = 0.7;
 export const WORKSPACE_SEGMENT_INFOGRAPHIC_MIN_WIDTH = 0.12;
 export const WORKSPACE_SEGMENT_INFOGRAPHIC_MAX_WIDTH = 0.96;
 export const WORKSPACE_SEGMENT_INFOGRAPHIC_FADE_SECONDS = 0.55;
-export const WORKSPACE_SEGMENT_INFOGRAPHIC_REVEAL_PART_INDICES = [0, 1, 2] as const;
-const WORKSPACE_SEGMENT_INFOGRAPHIC_PART_FADE_RATIO = 0.6;
-const WORKSPACE_SEGMENT_INFOGRAPHIC_PART_STAGGER_RATIO = 0.2;
 export const WORKSPACE_SEGMENT_INFOGRAPHIC_FRAME_ASPECT_RATIO = 9 / 16;
 export const WORKSPACE_SEGMENT_INFOGRAPHIC_HISTORY_LIMIT = 40;
 
@@ -329,30 +326,6 @@ export const getWorkspaceSegmentInfographicOpacity = (
     return 1;
   }
   return clamp(Math.min(time / fade, (duration - time) / fade), 0, 1);
-};
-
-export const getWorkspaceSegmentInfographicPartOpacities = (
-  localTimeSeconds: number,
-  segmentDurationSeconds: number,
-  configuredDurationSeconds = WORKSPACE_SEGMENT_INFOGRAPHIC_FADE_SECONDS,
-): [number, number, number] => {
-  const duration = Math.max(0, finiteNumber(segmentDurationSeconds, 0));
-  if (duration <= 0) {
-    return [1, 1, 1];
-  }
-  const time = clamp(finiteNumber(localTimeSeconds, 0), 0, duration);
-  const revealDuration = getWorkspaceSegmentInfographicFadeDuration(duration, configuredDurationSeconds);
-  if (revealDuration <= 0) {
-    return [1, 1, 1];
-  }
-  const partFadeDuration = revealDuration * WORKSPACE_SEGMENT_INFOGRAPHIC_PART_FADE_RATIO;
-  const partStagger = revealDuration * WORKSPACE_SEGMENT_INFOGRAPHIC_PART_STAGGER_RATIO;
-  const fadeOutOpacity = clamp((duration - time) / revealDuration, 0, 1);
-
-  return WORKSPACE_SEGMENT_INFOGRAPHIC_REVEAL_PART_INDICES.map((partIndex) => {
-    const revealOpacity = clamp((time - partIndex * partStagger) / partFadeDuration, 0, 1);
-    return clamp(revealOpacity * fadeOutOpacity, 0, 1);
-  }) as [number, number, number];
 };
 
 export const getWorkspaceSegmentInfographicAssetUrl = (mediaAssetId: number) =>

@@ -8,9 +8,8 @@ import {
 import {
   clampWorkspaceSegmentInfographicTransform,
   getWorkspaceSegmentInfographicAssetUrl,
-  getWorkspaceSegmentInfographicPartOpacities,
+  getWorkspaceSegmentInfographicOpacity,
   resizeWorkspaceSegmentInfographicFromCorner,
-  WORKSPACE_SEGMENT_INFOGRAPHIC_REVEAL_PART_INDICES,
 } from "./workspace-infographic-helpers";
 import type {
   WorkspaceSegmentInfographic,
@@ -168,19 +167,17 @@ export const WorkspaceSegmentInfographicOverlay = ({
     }
   };
 
-  const partOpacities = isPlaying && !isInteracting
-    ? getWorkspaceSegmentInfographicPartOpacities(
+  const opacity = isPlaying && !isInteracting
+    ? getWorkspaceSegmentInfographicOpacity(
         localTimeSeconds,
         segmentDurationSeconds,
         infographic.animation.durationSeconds,
       )
-    : [1, 1, 1];
+    : 1;
   const style = {
     "--workspace-infographic-center-x": `${transientTransform.centerX * 100}%`,
     "--workspace-infographic-center-y": `${transientTransform.centerY * 100}%`,
-    "--workspace-infographic-part-0-opacity": partOpacities[0],
-    "--workspace-infographic-part-1-opacity": partOpacities[1],
-    "--workspace-infographic-part-2-opacity": partOpacities[2],
+    "--workspace-infographic-opacity": opacity,
     "--workspace-infographic-width": `${transientTransform.width * 100}%`,
   } as CSSProperties;
 
@@ -237,16 +234,12 @@ export const WorkspaceSegmentInfographicOverlay = ({
           onTransformCommit?.(nextTransform);
         }}
       >
-        {WORKSPACE_SEGMENT_INFOGRAPHIC_REVEAL_PART_INDICES.map((partIndex) => (
-          <img
-            aria-hidden={partIndex === 0 ? undefined : true}
-            className={`studio-segment-infographic__image is-part-${partIndex}`}
-            src={getWorkspaceSegmentInfographicAssetUrl(infographic.mediaAssetId)}
-            alt={partIndex === 0 ? infographic.text : ""}
-            draggable={false}
-            key={partIndex}
-          />
-        ))}
+        <img
+          className="studio-segment-infographic__image"
+          src={getWorkspaceSegmentInfographicAssetUrl(infographic.mediaAssetId)}
+          alt={infographic.text}
+          draggable={false}
+        />
         {editable ? (
           <>
             {(["nw", "ne", "sw", "se"] as const).map((handle) => (

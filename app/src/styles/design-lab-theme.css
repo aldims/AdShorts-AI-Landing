@@ -42469,30 +42469,10 @@ html, body {
   width: 100%;
   height: auto;
   max-width: none;
+  opacity: var(--workspace-infographic-opacity, 1);
   pointer-events: none;
   user-select: none;
   -webkit-user-drag: none;
-}
-
-.studio-segment-infographic__image.is-part-0 {
-  clip-path: inset(0 0 66.666% 0);
-  opacity: var(--workspace-infographic-part-0-opacity, 1);
-}
-
-.studio-segment-infographic__image.is-part-1,
-.studio-segment-infographic__image.is-part-2 {
-  position: absolute;
-  inset: 0;
-}
-
-.studio-segment-infographic__image.is-part-1 {
-  clip-path: inset(33.333% 0 33.333% 0);
-  opacity: var(--workspace-infographic-part-1-opacity, 1);
-}
-
-.studio-segment-infographic__image.is-part-2 {
-  clip-path: inset(66.666% 0 0 0);
-  opacity: var(--workspace-infographic-part-2-opacity, 1);
 }
 
 .studio-segment-infographic.is-editable {
