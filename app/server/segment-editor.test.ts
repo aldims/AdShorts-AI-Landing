@@ -1892,6 +1892,149 @@ describe("segment editor asset lifecycle mapping", () => {
     expect(fetchedUrls.some((url) => url.includes("/segments/1/voiceover"))).toBe(false);
   });
 
+  it("restores the finalized source voice when a later draft left stale segment voiceovers", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes("/api/projects/4204/segment-editor")) {
+        return new Response(
+          JSON.stringify({
+            project_id: 4204,
+            segments: [
+              {
+                duration: 7.32,
+                duration_mode: "manual",
+                end_time: 7.32,
+                index: 0,
+                manual_duration_seconds: 7.32,
+                speech_duration: 7.32,
+                speech_end_time: 7.32,
+                speech_start_time: 0,
+                start_time: 0,
+                text: "Первый сегмент.",
+                voiceover_asset_id: 9051,
+                voiceover_voice_type: "Alisa",
+              },
+              {
+                duration: 7.74,
+                duration_mode: "manual",
+                end_time: 15.06,
+                index: 1,
+                manual_duration_seconds: 7.74,
+                speech_duration: 7.74,
+                speech_end_time: 15.06,
+                speech_start_time: 7.32,
+                start_time: 7.32,
+                text: "Второй сегмент.",
+                voiceover_asset_id: 9052,
+                voiceover_voice_type: "Alisa",
+              },
+            ],
+            tts_asset_id: 9003,
+            voice_type: "Alisa",
+          }),
+          {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          },
+        );
+      }
+
+      if (url.includes("/api/projects/4203/segment-editor")) {
+        return new Response(
+          JSON.stringify({
+            project_id: 4203,
+            segments: [
+              {
+                duration: 6.04,
+                end_time: 6.04,
+                index: 0,
+                speech_duration: 6.04,
+                speech_end_time: 6.04,
+                speech_start_time: 0,
+                start_time: 0,
+                text: "Первый сегмент.",
+              },
+              {
+                duration: 6.74,
+                end_time: 12.78,
+                index: 1,
+                speech_duration: 6.74,
+                speech_end_time: 12.78,
+                speech_start_time: 6.04,
+                start_time: 6.04,
+                text: "Второй сегмент.",
+              },
+            ],
+            tts_asset_id: 9003,
+            voice_type: "Anastasia",
+          }),
+          {
+            headers: { "Content-Type": "application/json" },
+            status: 200,
+          },
+        );
+      }
+
+      if (url.includes("/api/projects/4204/media")) {
+        return new Response(JSON.stringify({ assets: [], project_id: 4204 }), {
+          headers: { "Content-Type": "application/json" },
+          status: 200,
+        });
+      }
+
+      return new Response(
+        JSON.stringify({
+          generation_settings: {
+            segment_voiceover_assets: [
+              { media_asset_id: 9051, role: "segment_voiceover", segment_index: 0 },
+              { media_asset_id: 9052, role: "segment_voiceover", segment_index: 1 },
+            ],
+            source_project_id: 4203,
+            tts_asset_id: 9003,
+            voice_type: "Anastasia",
+          },
+          project_id: 4204,
+          source_project_id: 4203,
+          tts_asset_id: 9003,
+          voice_type: "Anastasia",
+        }),
+        {
+          headers: { "Content-Type": "application/json" },
+          status: 200,
+        },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const session = await getWorkspaceSegmentEditorSessionForAccessibleProject(
+      { email: "alexmamondi@gmail.com", id: "8160048802147561000" },
+      4204,
+      { bypassCache: true },
+    );
+
+    expect(session.ttsAssetId).toBe(9003);
+    expect(session.voiceType).toBe("Anastasia");
+    expect(session.segments[0]).toEqual(expect.objectContaining({
+      speechDuration: 6.04,
+      speechEndTime: 6.04,
+      speechStartTime: 0,
+      voiceSourceDuration: 6.04,
+      voiceoverAssetId: null,
+      voiceoverVoiceType: "Anastasia",
+    }));
+    expect(session.segments[1]).toEqual(expect.objectContaining({
+      speechDuration: 6.74,
+      speechEndTime: 12.78,
+      speechStartTime: 6.04,
+      voiceSourceDuration: 6.74,
+      voiceoverAssetId: null,
+      voiceoverVoiceType: "Anastasia",
+    }));
+    const fetchedUrls = fetchMock.mock.calls.map(([input]) => String(input));
+    expect(fetchedUrls.some((url) => url.includes("/api/projects/4203/segment-editor"))).toBe(true);
+  });
+
   it("restores generated music settings from project generation metadata", () => {
     const session = buildWorkspaceSegmentEditorSessionFromPayload(
       42,

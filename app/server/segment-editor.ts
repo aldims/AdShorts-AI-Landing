@@ -31,6 +31,7 @@ type AdsflowSegmentEditorSpeechWordPayload = {
 };
 
 type AdsflowSegmentEditorSegmentPayload = {
+  _skip_project_voiceover_asset?: boolean | null;
   _voice_source_duration?: number | string | null;
   _voice_source_end_time?: number | string | null;
   _voice_source_start_time?: number | string | null;
@@ -1016,16 +1017,71 @@ const doSegmentEditorGlobalVoicesMatch = (
   return !voiceType || !sourceVoiceType || voiceType === sourceVoiceType;
 };
 
+const getProjectDetailsFinalVoiceIdentity = (
+  projectDetailsPayload: AdsflowProjectDetailsResponse | null | undefined,
+) => {
+  const generationSettings =
+    projectDetailsPayload?.generation_settings && typeof projectDetailsPayload.generation_settings === "object"
+      ? projectDetailsPayload.generation_settings
+      : null;
+
+  return {
+    ttsAssetId:
+      normalizePositiveProjectId(projectDetailsPayload?.tts_asset_id) ??
+      normalizePositiveProjectId(generationSettings?.tts_asset_id),
+    voiceType: pickSegmentEditorText(
+      projectDetailsPayload?.voice_type,
+      generationSettings?.voice_type,
+    ),
+  };
+};
+
+const shouldReconcileSegmentEditorFinalVoice = (
+  payload: AdsflowSegmentEditorResponse,
+  sourcePayload: AdsflowSegmentEditorResponse | null | undefined,
+  projectDetailsPayload: AdsflowProjectDetailsResponse | null | undefined,
+) => {
+  const finalVoiceIdentity = getProjectDetailsFinalVoiceIdentity(projectDetailsPayload);
+  const sourceTtsAssetId = normalizePositiveProjectId(sourcePayload?.tts_asset_id);
+  const finalVoiceType = normalizeSegmentEditorComparableText(finalVoiceIdentity.voiceType);
+  const sourceVoiceType = normalizeSegmentEditorComparableText(sourcePayload?.voice_type);
+  const payloadVoiceType = normalizeSegmentEditorComparableText(payload.voice_type);
+  const hasStaleVoice =
+    payloadVoiceType !== finalVoiceType ||
+    (payload.segments ?? []).some((segment) => {
+      const segmentVoiceType = normalizeSegmentEditorComparableText(
+        segment.voiceover_voice_type || segment.voice_type,
+      );
+      return Boolean(segmentVoiceType) && segmentVoiceType !== finalVoiceType;
+    });
+
+  return (
+    finalVoiceIdentity.ttsAssetId !== null &&
+    finalVoiceIdentity.ttsAssetId === sourceTtsAssetId &&
+    Boolean(finalVoiceType) &&
+    finalVoiceType === sourceVoiceType &&
+    hasStaleVoice &&
+    doSegmentEditorSegmentTextsMatch(payload.segments, sourcePayload?.segments)
+  );
+};
+
 const canReuseSourceSegmentEditorProjectTts = (
   payload: AdsflowSegmentEditorResponse,
   sourcePayload: AdsflowSegmentEditorResponse | null | undefined,
+  projectDetailsPayload: AdsflowProjectDetailsResponse | null | undefined,
 ) => {
   const payloadTtsAssetId = normalizePositiveProjectId(payload.tts_asset_id);
   const sourceTtsAssetId = normalizePositiveProjectId(sourcePayload?.tts_asset_id);
+  const shouldReconcileFinalVoice = shouldReconcileSegmentEditorFinalVoice(
+    payload,
+    sourcePayload,
+    projectDetailsPayload,
+  );
   return (
     sourceTtsAssetId !== null &&
-    (payloadTtsAssetId === null || payloadTtsAssetId === sourceTtsAssetId) &&
-    doSegmentEditorGlobalVoicesMatch(payload, sourcePayload) &&
+    (shouldReconcileFinalVoice ||
+      ((payloadTtsAssetId === null || payloadTtsAssetId === sourceTtsAssetId) &&
+        doSegmentEditorGlobalVoicesMatch(payload, sourcePayload))) &&
     doSegmentEditorSegmentTextsMatch(payload.segments, sourcePayload?.segments)
   );
 };
@@ -1105,11 +1161,23 @@ const hydrateSegmentEditorPayloadWithInheritedAudio = (
     projectDetailsPayload?.generation_settings && typeof projectDetailsPayload.generation_settings === "object"
       ? projectDetailsPayload.generation_settings
       : null;
-  const shouldReuseSourceTts = canReuseSourceSegmentEditorProjectTts(payload, sourcePayload);
+  const shouldReuseSourceTts = canReuseSourceSegmentEditorProjectTts(
+    payload,
+    sourcePayload,
+    projectDetailsPayload,
+  );
+  const shouldReconcileFinalVoice = shouldReconcileSegmentEditorFinalVoice(
+    payload,
+    sourcePayload,
+    projectDetailsPayload,
+  );
   const shouldReuseSourceMusic = canReuseSourceSegmentEditorMusic(payload, projectDetailsPayload, sourcePayload);
-  const inheritedTtsAssetId = shouldReuseSourceTts
-    ? normalizePositiveProjectId(sourcePayload?.tts_asset_id)
-    : normalizePositiveProjectId(payload.tts_asset_id);
+  const finalVoiceIdentity = getProjectDetailsFinalVoiceIdentity(projectDetailsPayload);
+  const inheritedTtsAssetId = shouldReconcileFinalVoice
+    ? finalVoiceIdentity.ttsAssetId ?? normalizePositiveProjectId(sourcePayload?.tts_asset_id)
+    : shouldReuseSourceTts
+      ? normalizePositiveProjectId(sourcePayload?.tts_asset_id)
+      : normalizePositiveProjectId(payload.tts_asset_id);
   const inheritedMusicAssetId = shouldReuseSourceMusic
     ? normalizePositiveProjectId(sourcePayload?.music_asset_id)
     : normalizePositiveProjectId(payload.music_asset_id);
@@ -1117,13 +1185,22 @@ const hydrateSegmentEditorPayloadWithInheritedAudio = (
   const sourceSegmentsByIndex = shouldReuseSourceTts
     ? getSegmentEditorSegmentMapByIndex(sourcePayload?.segments)
     : new Map<number, AdsflowSegmentEditorSegmentPayload>();
-  const rawEffectiveVoiceType = pickSegmentEditorText(
-    payload.voice_type,
-    projectDetailsPayload?.voice_type,
-    generationSettings?.voice_type,
-    sourcePayload?.voice_type,
+  const rawEffectiveVoiceType = shouldReconcileFinalVoice
+    ? pickSegmentEditorText(
+        finalVoiceIdentity.voiceType,
+        sourcePayload?.voice_type,
+        payload.voice_type,
+      )
+    : pickSegmentEditorText(
+        payload.voice_type,
+        projectDetailsPayload?.voice_type,
+        generationSettings?.voice_type,
+        sourcePayload?.voice_type,
+      );
+  const effectiveVoiceType = inferSegmentEditorPayloadProjectVoiceType(
+    shouldReconcileFinalVoice && sourcePayload ? sourcePayload : payload,
+    rawEffectiveVoiceType,
   );
-  const effectiveVoiceType = inferSegmentEditorPayloadProjectVoiceType(payload, rawEffectiveVoiceType);
   const effectiveLanguage =
     normalizeWorkspaceSegmentEditorLanguage(payload.language) ||
     normalizeWorkspaceSegmentEditorLanguage(generationSettings?.content_language) ||
@@ -1153,43 +1230,64 @@ const hydrateSegmentEditorPayloadWithInheritedAudio = (
       const sourceVoiceSourceStartTime = pickSegmentEditorVoiceSourceStartTime(sourceRecord);
       const sourceVoiceSourceEndTime = pickSegmentEditorVoiceSourceEndTime(sourceRecord);
       const sourceVoiceSourceDuration = pickSegmentEditorVoiceSourceDuration(sourceRecord);
-      const voiceSourceStartTime = shouldReuseSourceTts
+      const voiceSourceStartTime = shouldReconcileFinalVoice
         ? pickSegmentEditorNumber(
-            detailVoiceSourceStartTime,
             sourceVoiceSourceStartTime,
             sourceSegment?.speech_start_time,
-            segmentVoiceSourceStartTime,
-          )
-        : pickSegmentEditorNumber(
-            segmentVoiceSourceStartTime,
             detailVoiceSourceStartTime,
-            sourceVoiceSourceStartTime,
-          );
-      const voiceSourceEndTime = shouldReuseSourceTts
-        ? pickSegmentEditorNumber(
-            detailVoiceSourceEndTime,
-            sourceVoiceSourceEndTime,
-            sourceSegment?.speech_end_time,
-            segmentVoiceSourceEndTime,
+            segmentVoiceSourceStartTime,
           )
-        : pickSegmentEditorNumber(
-            segmentVoiceSourceEndTime,
-            detailVoiceSourceEndTime,
-            sourceVoiceSourceEndTime,
-          );
-      const voiceSourceDuration =
-        (shouldReuseSourceTts
+        : shouldReuseSourceTts
           ? pickSegmentEditorNumber(
-              detailVoiceSourceDuration,
-              sourceVoiceSourceDuration,
-              sourceSegment?.speech_duration,
-              segmentVoiceSourceDuration,
+              detailVoiceSourceStartTime,
+              sourceVoiceSourceStartTime,
+              sourceSegment?.speech_start_time,
+              segmentVoiceSourceStartTime,
             )
           : pickSegmentEditorNumber(
-              segmentVoiceSourceDuration,
-              detailVoiceSourceDuration,
+              segmentVoiceSourceStartTime,
+              detailVoiceSourceStartTime,
+              sourceVoiceSourceStartTime,
+            );
+      const voiceSourceEndTime = shouldReconcileFinalVoice
+        ? pickSegmentEditorNumber(
+            sourceVoiceSourceEndTime,
+            sourceSegment?.speech_end_time,
+            detailVoiceSourceEndTime,
+            segmentVoiceSourceEndTime,
+          )
+        : shouldReuseSourceTts
+          ? pickSegmentEditorNumber(
+              detailVoiceSourceEndTime,
+              sourceVoiceSourceEndTime,
+              sourceSegment?.speech_end_time,
+              segmentVoiceSourceEndTime,
+            )
+          : pickSegmentEditorNumber(
+              segmentVoiceSourceEndTime,
+              detailVoiceSourceEndTime,
+              sourceVoiceSourceEndTime,
+            );
+      const voiceSourceDuration =
+        (shouldReconcileFinalVoice
+          ? pickSegmentEditorNumber(
               sourceVoiceSourceDuration,
-            )) ??
+              sourceSegment?.speech_duration,
+              detailVoiceSourceDuration,
+              segmentVoiceSourceDuration,
+            )
+          : shouldReuseSourceTts
+            ? pickSegmentEditorNumber(
+                detailVoiceSourceDuration,
+                sourceVoiceSourceDuration,
+                sourceSegment?.speech_duration,
+                segmentVoiceSourceDuration,
+              )
+            : pickSegmentEditorNumber(
+                segmentVoiceSourceDuration,
+                detailVoiceSourceDuration,
+                sourceVoiceSourceDuration,
+              )) ??
         (voiceSourceStartTime !== null && voiceSourceEndTime !== null
           ? Math.max(0, voiceSourceEndTime - voiceSourceStartTime)
           : null);
@@ -1259,6 +1357,7 @@ const hydrateSegmentEditorPayloadWithInheritedAudio = (
 
       return {
         ...segment,
+        _skip_project_voiceover_asset: shouldReconcileFinalVoice,
         _voice_source_duration: voiceSourceDuration,
         _voice_source_end_time: voiceSourceEndTime,
         _voice_source_start_time: voiceSourceStartTime,
@@ -1267,6 +1366,10 @@ const hydrateSegmentEditorPayloadWithInheritedAudio = (
         speech_start_time: speechStartTime,
         speech_words: speechWords,
         text: segmentText,
+        voiceover: shouldReconcileFinalVoice ? sourceSegment?.voiceover ?? null : segment.voiceover,
+        voiceover_asset_id: shouldReconcileFinalVoice
+          ? normalizePositiveProjectId(sourceSegment?.voiceover_asset_id)
+          : segment.voiceover_asset_id,
         voice_type: segmentVoiceType,
         voiceover_language: pickSegmentEditorText(
           ...(hasProjectVoiceoverTiming
@@ -2474,7 +2577,21 @@ const shouldLoadSourceSegmentEditorPayload = (
       const durationMode = normalizeSegmentDurationMode(segment?.duration_mode);
       return durationMode === "manual" || normalizeManualDurationSeconds(segment?.manual_duration_seconds) !== null;
     });
-  return needsTts || needsMusic || needsSourceVoiceRanges ? sourceProjectId : null;
+  const finalVoiceIdentity = getProjectDetailsFinalVoiceIdentity(projectDetailsPayload);
+  const payloadVoiceType = normalizeSegmentEditorComparableText(payload.voice_type);
+  const finalVoiceType = normalizeSegmentEditorComparableText(finalVoiceIdentity.voiceType);
+  const needsFinalVoiceReconciliation =
+    Boolean(finalVoiceType) &&
+    (payloadVoiceType !== finalVoiceType ||
+      (payload.segments ?? []).some((segment) => {
+        const segmentVoiceType = normalizeSegmentEditorComparableText(
+          segment.voiceover_voice_type || segment.voice_type,
+        );
+        return Boolean(segmentVoiceType) && segmentVoiceType !== finalVoiceType;
+      }));
+  return needsTts || needsMusic || needsSourceVoiceRanges || needsFinalVoiceReconciliation
+    ? sourceProjectId
+    : null;
 };
 
 const loadSourceSegmentEditorPayload = async (
@@ -2966,15 +3083,20 @@ export const buildWorkspaceSegmentEditorSegment = (
     normalizePositiveProjectId(projectSceneSoundAsset?.assetId) ??
     null;
   const explicitVoiceover = buildWorkspaceSegmentSceneSoundRef(payload.voiceover);
-  const projectVoiceoverEntry = findProjectVoiceoverMediaEntry(
-    [
-      ...(projectSources?.voiceoverEntries ?? []),
-      ...(projectSources?.currentEntries ?? []),
-      ...(projectSources?.originalEntries ?? []),
-    ],
-    index,
-  );
-  const projectVoiceoverAsset = findProjectVoiceoverMediaAsset(projectMediaAssets, index);
+  const shouldSkipProjectVoiceoverAsset = payload._skip_project_voiceover_asset === true;
+  const projectVoiceoverEntry = shouldSkipProjectVoiceoverAsset
+    ? null
+    : findProjectVoiceoverMediaEntry(
+        [
+          ...(projectSources?.voiceoverEntries ?? []),
+          ...(projectSources?.currentEntries ?? []),
+          ...(projectSources?.originalEntries ?? []),
+        ],
+        index,
+      );
+  const projectVoiceoverAsset = shouldSkipProjectVoiceoverAsset
+    ? null
+    : findProjectVoiceoverMediaAsset(projectMediaAssets, index);
   const voiceover =
     explicitVoiceover ??
     buildWorkspaceSegmentSceneSoundRef(projectVoiceoverEntry) ??
