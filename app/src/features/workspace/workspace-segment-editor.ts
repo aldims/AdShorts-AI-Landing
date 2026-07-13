@@ -43,6 +43,7 @@ import type {
   WorkspaceSegmentEditorSpeechWord,
   WorkspaceSegmentSceneSoundPayload,
   WorkspaceSegmentEditorVideoAction,
+  WorkspaceSegmentInfographicTransform,
   WorkspaceSegmentMediaType,
   WorkspaceSegmentPreviewKind,
   WorkspaceSegmentSourceKind,
@@ -3989,6 +3990,46 @@ export const cloneWorkspaceSegmentEditorDraftSession = (
     segments: repairWorkspaceSegmentEditorSpeechWordBoundaries(
       session.segments.map((segment) => cloneWorkspaceSegmentEditorDraftSegment(segment, fallbackLanguage)),
     ),
+  };
+};
+
+export const applyWorkspaceSegmentPendingInfographicTransforms = (
+  draft: WorkspaceSegmentEditorDraftSession,
+  pendingTransforms: Readonly<Record<number, WorkspaceSegmentInfographicTransform | undefined>>,
+): {
+  changedSegmentIndexes: number[];
+  draft: WorkspaceSegmentEditorDraftSession;
+} => {
+  const changedSegmentIndexes: number[] = [];
+  const segments = draft.segments.map((segment) => {
+    const pendingTransform = pendingTransforms[segment.index];
+    const currentTransform = segment.infographic?.transform;
+    if (
+      !pendingTransform ||
+      !segment.infographic ||
+      (
+        currentTransform?.centerX === pendingTransform.centerX &&
+        currentTransform.centerY === pendingTransform.centerY &&
+        currentTransform.width === pendingTransform.width
+      )
+    ) {
+      return segment;
+    }
+
+    changedSegmentIndexes.push(segment.index);
+    return {
+      ...segment,
+      infographic: {
+        ...segment.infographic,
+        transform: { ...pendingTransform },
+      },
+      infographicRemoved: false,
+    };
+  });
+
+  return {
+    changedSegmentIndexes,
+    draft: changedSegmentIndexes.length > 0 ? { ...draft, segments } : draft,
   };
 };
 

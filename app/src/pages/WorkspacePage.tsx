@@ -244,6 +244,7 @@ import {
   getWorkspaceSegmentVoiceOverrideId,
   formatWorkspaceSegmentEditorMissingVisualScenesMessage,
   applyWorkspaceSegmentEditorGlobalSubtitleSelection,
+  applyWorkspaceSegmentPendingInfographicTransforms,
   hasWorkspaceSegmentProjectVoiceoverTimingData,
   hasWorkspaceSegmentEditorGeneratedShortsFromProject,
   hasWorkspaceSegmentEditorRenderableScratchScene,
@@ -2137,6 +2138,9 @@ export function WorkspacePage({
     Record<number, WorkspaceSegmentInfographicHistory>
   >({});
   const segmentInfographicHistoryRef = useRef<Record<number, WorkspaceSegmentInfographicHistory>>({});
+  const segmentInfographicPendingTransformsRef = useRef<
+    Record<number, WorkspaceSegmentInfographicTransform | undefined>
+  >({});
   const [dismissedSegmentTimelineVisualHistory, setDismissedSegmentTimelineVisualHistory] = useState<
     Record<string, true>
   >({});
@@ -2174,6 +2178,7 @@ export function WorkspacePage({
     setSegmentTimelineVoiceHistory({});
     setDismissedSegmentTimelineVisualHistory({});
     setSegmentInfographicHistory({});
+    segmentInfographicPendingTransformsRef.current = {};
   }, [
     segmentEditorLoadedSession?.projectId,
     setSegmentTimelineRedoSnapshots,
@@ -14486,6 +14491,7 @@ export function WorkspacePage({
     if (!result) {
       return;
     }
+    delete segmentInfographicPendingTransformsRef.current[targetSegmentIndex];
     setSegmentInfographicHistory((current) => ({ ...current, [targetSegmentIndex]: result.history }));
     updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (currentSegment) =>
       applyWorkspaceSegmentInfographicStateSnapshot(currentSegment, result.snapshot),
@@ -14507,6 +14513,7 @@ export function WorkspacePage({
     if (!result) {
       return;
     }
+    delete segmentInfographicPendingTransformsRef.current[targetSegmentIndex];
     setSegmentInfographicHistory((current) => ({ ...current, [targetSegmentIndex]: result.history }));
     updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (currentSegment) =>
       applyWorkspaceSegmentInfographicStateSnapshot(currentSegment, result.snapshot),
@@ -14519,6 +14526,7 @@ export function WorkspacePage({
     const baselineSegment = segmentEditorChecklistBaseSession?.segments.find(
       (segment) => segment.index === targetSegmentIndex,
     );
+    delete segmentInfographicPendingTransformsRef.current[targetSegmentIndex];
     captureSegmentEditorInfographicHistory(targetSegmentIndex);
     cancelPendingSegmentInfographicRun(targetSegmentIndex);
     updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => ({
@@ -14551,6 +14559,7 @@ export function WorkspacePage({
     if (!segment?.infographic) {
       return;
     }
+    delete segmentInfographicPendingTransformsRef.current[targetSegmentIndex];
     captureSegmentEditorInfographicHistory(targetSegmentIndex);
     cancelPendingSegmentInfographicRun(targetSegmentIndex);
     updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (currentSegment) => ({
@@ -14568,6 +14577,7 @@ export function WorkspacePage({
     targetSegmentIndex: number,
     transform: WorkspaceSegmentInfographicTransform,
   ) => {
+    delete segmentInfographicPendingTransformsRef.current[targetSegmentIndex];
     captureSegmentEditorInfographicHistory(targetSegmentIndex);
     const nextDraft = updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) =>
       segment.infographic
@@ -14599,6 +14609,46 @@ export function WorkspacePage({
       },
       { draft: nextDraft },
     );
+  };
+
+  const stageSegmentEditorInfographicTransform = (
+    targetSegmentIndex: number,
+    transform: WorkspaceSegmentInfographicTransform,
+  ) => {
+    segmentInfographicPendingTransformsRef.current[targetSegmentIndex] = { ...transform };
+  };
+
+  const flushPendingSegmentEditorInfographicTransforms = () => {
+    const sourceDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+    if (!sourceDraft) {
+      segmentInfographicPendingTransformsRef.current = {};
+      return null;
+    }
+
+    const pendingTransforms = segmentInfographicPendingTransformsRef.current;
+    segmentInfographicPendingTransformsRef.current = {};
+    const result = applyWorkspaceSegmentPendingInfographicTransforms(sourceDraft, pendingTransforms);
+    if (result.changedSegmentIndexes.length === 0) {
+      return sourceDraft;
+    }
+
+    result.changedSegmentIndexes.forEach((segmentIndex) => {
+      captureSegmentEditorInfographicHistory(segmentIndex);
+    });
+    const nextDraft = updateSegmentEditorDraft(() => result.draft) ?? result.draft;
+    persistSegmentEditorDraftSnapshot(nextDraft);
+    logSegmentEditorDiagnostics(
+      "client.segment-editor.infographic.transform.flush",
+      {
+        segmentIndexes: result.changedSegmentIndexes,
+        transforms: result.changedSegmentIndexes.map((segmentIndex) => ({
+          segmentIndex,
+          transform: nextDraft.segments.find((segment) => segment.index === segmentIndex)?.infographic?.transform ?? null,
+        })),
+      },
+      { draft: nextDraft, level: "warn" },
+    );
+    return nextDraft;
   };
 
   const resetSegmentEditorVisualByIndex = (targetSegmentIndex: number) => {
@@ -18583,7 +18633,11 @@ export function WorkspacePage({
             removeStoredWorkspaceSegmentInfographicJob(session.email, safeJobId);
             throw new Error("Сервер не вернул сохранённый файл инфографики.");
           }
-          const currentDraft = segmentEditorDraftRef.current;
+          // A generation may finish in the same frame as the last drag event.
+          // Preserve the transform that is actually visible before replacing
+          // the asset, otherwise regeneration can restore an older position.
+          const currentDraft =
+            flushPendingSegmentEditorInfographicTransforms() ?? segmentEditorDraftRef.current;
           if (!currentDraft || currentDraft.projectId !== job.projectId) {
             return;
           }
@@ -18686,7 +18740,9 @@ export function WorkspacePage({
       setSegmentEditorVideoError("Создание инфографики пока недоступно для этого аккаунта.");
       return;
     }
-    const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+    const currentDraft = flushPendingSegmentEditorInfographicTransforms() ??
+      segmentEditorDraftRef.current ??
+      segmentEditorDraft;
     const targetSegmentIndex = segmentIndex ?? activeSegment?.index;
     if (!currentDraft || typeof targetSegmentIndex !== "number") {
       return;
@@ -20092,7 +20148,9 @@ export function WorkspacePage({
   };
 
   const handleCreateShortsFromSegmentEditor = async () => {
-    const currentSegmentEditorDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+    const currentSegmentEditorDraft = flushPendingSegmentEditorInfographicTransforms() ??
+      segmentEditorDraftRef.current ??
+      segmentEditorDraft;
     if (!currentSegmentEditorDraft) {
       logSegmentEditorDiagnostics(
         "client.segment-editor.create-shorts.blocked",
@@ -36018,6 +36076,9 @@ export function WorkspacePage({
                                           onRedo={() => redoSegmentEditorInfographic(segment.index)}
                                           onTransformCommit={(transform) => {
                                             updateSegmentEditorInfographicTransform(segment.index, transform);
+                                          }}
+                                          onTransformPreview={(transform) => {
+                                            stageSegmentEditorInfographicTransform(segment.index, transform);
                                           }}
                                           onUndo={() => undoSegmentEditorInfographic(segment.index)}
                                         />

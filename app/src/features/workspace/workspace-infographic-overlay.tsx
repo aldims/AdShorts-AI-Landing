@@ -36,6 +36,7 @@ export type WorkspaceSegmentInfographicOverlayProps = {
   onInteractionStart?: () => void;
   onRedo?: () => void;
   onTransformCommit?: (transform: WorkspaceSegmentInfographicTransform) => void;
+  onTransformPreview?: (transform: WorkspaceSegmentInfographicTransform) => void;
   onUndo?: () => void;
   segmentDurationSeconds: number;
 };
@@ -51,6 +52,7 @@ export const WorkspaceSegmentInfographicOverlay = ({
   onInteractionStart,
   onRedo,
   onTransformCommit,
+  onTransformPreview,
   onUndo,
   segmentDurationSeconds,
 }: WorkspaceSegmentInfographicOverlayProps) => {
@@ -75,6 +77,7 @@ export const WorkspaceSegmentInfographicOverlay = ({
 
   const scheduleTransform = (transform: WorkspaceSegmentInfographicTransform) => {
     pendingTransformRef.current = transform;
+    onTransformPreview?.(transform);
     if (frameRef.current !== null) {
       return;
     }
@@ -152,6 +155,9 @@ export const WorkspaceSegmentInfographicOverlay = ({
     const nextTransform = cancelled
       ? drag.origin
       : pendingTransformRef.current ?? transientTransform;
+    if (cancelled) {
+      onTransformPreview?.(drag.origin);
+    }
     // Clear the active drag before releasing capture. Browsers dispatch
     // lostpointercapture after releasePointerCapture(), and that event must not
     // finish (and commit) the same interaction a second time.

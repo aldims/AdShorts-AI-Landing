@@ -4,6 +4,7 @@ import { DEFAULT_STUDIO_VOICE_ID } from "../../../shared/locales";
 import { STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST } from "../../../shared/studio-credit-costs";
 import {
   applyWorkspaceSegmentEditorGlobalSubtitleSelection,
+  applyWorkspaceSegmentPendingInfographicTransforms,
   applyWorkspaceSegmentEditorGlobalVoiceToSegments,
   applyWorkspaceSegmentEditorSceneVoiceOverride,
   getWorkspaceSegmentEffectiveVoiceId,
@@ -326,6 +327,41 @@ describe("segment infographic refresh isolation", () => {
     });
 
     expect(refreshed.segments[0]?.infographic).toEqual(infographic);
+  });
+
+  it("applies the last visible transform before rendering without changing other scenes", () => {
+    const firstSegment = createProjectVoiceoverSegment({ index: 0 });
+    const secondSegment = createProjectVoiceoverSegment({ index: 1 });
+    const infographic = {
+      animation: { durationSeconds: 1.1 as const, type: "fade" as const },
+      inputHash: "c".repeat(64),
+      intrinsicHeight: 1453,
+      intrinsicWidth: 908,
+      mediaAssetId: 9133,
+      parts: [],
+      sourceVisualIdentity: "asset:7824",
+      stylePrompt: null,
+      text: "Хочешь больше силы? Есть решение!",
+      transform: { centerX: 0.62, centerY: 0.315043, width: 0.7 },
+      version: 1 as const,
+    };
+    const draft = createProjectVoiceoverDraft([
+      { ...firstSegment, infographic },
+      secondSegment,
+    ]);
+
+    const result = applyWorkspaceSegmentPendingInfographicTransforms(draft, {
+      0: { centerX: 0.38, centerY: 0.68, width: 0.52 },
+      1: { centerX: 0.5, centerY: 0.5, width: 0.4 },
+    });
+
+    expect(result.changedSegmentIndexes).toEqual([0]);
+    expect(result.draft.segments[0]?.infographic?.transform).toEqual({
+      centerX: 0.38,
+      centerY: 0.68,
+      width: 0.52,
+    });
+    expect(result.draft.segments[1]).toBe(secondSegment);
   });
 });
 

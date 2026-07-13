@@ -216,4 +216,41 @@ describe("WorkspaceSegmentInfographicOverlay", () => {
     expect(onInteractionStart).toHaveBeenCalledTimes(1);
     expect(onTransformCommit).toHaveBeenCalledTimes(1);
   });
+
+  it("stages the last visible transform before pointerup", () => {
+    const onTransformCommit = vi.fn();
+    const onTransformPreview = vi.fn();
+    const infographic = createWorkspaceSegmentInfographic({
+      inputHash: "f".repeat(64),
+      intrinsicHeight: 1024,
+      intrinsicWidth: 1024,
+      mediaAssetId: 59,
+      sourceVisualIdentity: "asset:15",
+      text: "Position",
+    });
+    const view = render(
+      <WorkspaceSegmentInfographicOverlay
+        editable
+        infographic={infographic}
+        isPlaying={false}
+        localTimeSeconds={0}
+        onTransformCommit={onTransformCommit}
+        onTransformPreview={onTransformPreview}
+        segmentDurationSeconds={5}
+      />,
+    );
+    const overlay = view.getByTestId("segment-infographic-overlay");
+    const image = view.getByAltText("Position");
+
+    fireEvent.pointerDown(image, { button: 0, clientX: 100, clientY: 100, pointerId: 11 });
+    fireEvent.pointerMove(overlay, { clientX: 154, clientY: 164, pointerId: 11 });
+
+    expect(onTransformPreview).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        centerX: expect.closeTo(infographic.transform.centerX + 0.15, 5),
+        centerY: expect.closeTo(infographic.transform.centerY + 0.1, 5),
+      }),
+    );
+    expect(onTransformCommit).not.toHaveBeenCalled();
+  });
 });
