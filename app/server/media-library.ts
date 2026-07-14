@@ -46,7 +46,7 @@ import {
   type WorkspaceMediaIndexProjectEntry,
   type WorkspaceMediaIndexStoredItem,
 } from "./workspace-media-index.js";
-import { postAdsflowJson, upstreamPolicies } from "./upstream-client.js";
+import { buildAdsflowUrl, postAdsflowJson, upstreamPolicies } from "./upstream-client.js";
 
 type MediaLibraryUser = {
   email?: string | null;
@@ -1533,7 +1533,30 @@ export const getWorkspaceMediaLibrarySegmentPreviewUrl = (
   return segment.currentPreviewUrl ?? segment.currentPlaybackUrl ?? segment.originalPreviewUrl ?? segment.originalPlaybackUrl ?? null;
 };
 
-const resolveWorkspaceMediaLibraryPreviewSource = async (
+export const getWorkspaceMediaLibraryPreviewAssetId = (rawPreviewUrl: string) => {
+  const normalizedPreviewUrl = normalizeText(rawPreviewUrl);
+  if (!normalizedPreviewUrl) {
+    return null;
+  }
+
+  try {
+    const resolvedUrl = new URL(normalizedPreviewUrl, env.appUrl);
+    if (resolvedUrl.origin !== new URL(env.appUrl).origin) {
+      return null;
+    }
+
+    const workspaceRouteMatch = resolvedUrl.pathname.match(
+      /^\/api\/workspace\/media-assets\/(\d+)(?:\/(?:playback|poster|preview))?$/i,
+    );
+    const legacyDownloadRouteMatch = resolvedUrl.pathname.match(/^\/api\/media\/(\d+)\/download$/i);
+    const assetId = Number(workspaceRouteMatch?.[1] ?? legacyDownloadRouteMatch?.[1] ?? 0);
+    return Number.isFinite(assetId) && assetId > 0 ? Math.trunc(assetId) : null;
+  } catch {
+    return null;
+  }
+};
+
+export const resolveWorkspaceMediaLibraryPreviewSource = async (
   user: MediaLibraryUser,
   rawPreviewUrl: string,
 ) => {
@@ -1550,6 +1573,19 @@ const resolveWorkspaceMediaLibraryPreviewSource = async (
   }
 
   const version = getWorkspaceMediaLibraryUrlMarker(normalizedPreviewUrl) || normalizedPreviewUrl;
+  const mediaAssetId = getWorkspaceMediaLibraryPreviewAssetId(normalizedPreviewUrl);
+
+  if (mediaAssetId) {
+    const externalUserId = await resolvePreferredExternalUserId(user);
+    return {
+      headers: undefined,
+      upstreamUrl: buildAdsflowUrl(`/api/media/${mediaAssetId}/download`, {
+        admin_token: env.adsflowAdminToken,
+        external_user_id: externalUserId,
+      }),
+      version,
+    };
+  }
 
   if (resolvedUrl.pathname === "/api/workspace/project-segment-video") {
     const projectId = Number(resolvedUrl.searchParams.get("projectId") ?? 0);

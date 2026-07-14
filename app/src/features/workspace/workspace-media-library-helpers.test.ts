@@ -154,6 +154,32 @@ describe("workspace media library tile surfaces", () => {
     });
   });
 
+  it("prefers a durable asset preview over a legacy generated preview proxy", () => {
+    const item = createMediaLibraryItem({
+      assetId: 9262,
+      kind: "ai_photo",
+      previewKind: "image",
+      previewPosterUrl:
+        "/api/workspace/media-library-preview?kind=ai_photo&projectId=4226&segmentIndex=0",
+      previewUrl: "/api/workspace/media-assets/9262",
+    });
+
+    expect(getWorkspaceMediaLibraryTileImageUrl(item)).toBe("/api/workspace/media-assets/9262/preview");
+  });
+
+  it("keeps the legacy generated preview proxy when no durable asset exists", () => {
+    const item = createMediaLibraryItem({
+      assetId: null,
+      kind: "ai_photo",
+      previewKind: "image",
+      previewPosterUrl:
+        "/api/workspace/media-library-preview?kind=ai_photo&projectId=4226&segmentIndex=0",
+      previewUrl: "/api/workspace/project-segment-video?projectId=4226&segmentIndex=0",
+    });
+
+    expect(getWorkspaceMediaLibraryTileImageUrl(item)).toBe(item.previewPosterUrl);
+  });
+
   it("uses a compact poster for video tiles and keeps the full poster in the viewer", () => {
     const item = createMediaLibraryItem({
       assetId: 903,

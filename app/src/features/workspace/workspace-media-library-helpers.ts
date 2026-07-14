@@ -233,12 +233,16 @@ export const getWorkspaceMediaLibraryTileImageUrl = (item: WorkspaceMediaLibrary
     return item.previewUrl;
   }
 
+  const assetId = getWorkspaceMediaLibraryPositiveAssetId(item);
+  if (assetId) {
+    return `/api/workspace/media-assets/${assetId}/preview`;
+  }
+
   if (isWorkspaceMediaLibraryGeneratedPosterProxyUrl(item.previewPosterUrl)) {
     return item.previewPosterUrl ?? item.previewUrl;
   }
 
-  const assetId = getWorkspaceMediaLibraryPositiveAssetId(item);
-  return assetId ? `/api/workspace/media-assets/${assetId}/preview` : item.previewPosterUrl || item.previewUrl;
+  return item.previewPosterUrl || item.previewUrl;
 };
 
 export const getWorkspaceMediaLibraryTilePosterUrl = (item: WorkspaceMediaLibraryItem) => {

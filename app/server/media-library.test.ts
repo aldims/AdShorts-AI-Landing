@@ -9,7 +9,9 @@ import {
   dedupeWorkspaceMediaLibraryPageItems,
   getWorkspaceMediaLibraryKindFromDurableAsset,
   getWorkspaceMediaLibraryNextCursorForPage,
+  getWorkspaceMediaLibraryPreviewAssetId,
   getWorkspaceMediaLibrarySegmentPreviewUrl,
+  resolveWorkspaceMediaLibraryPreviewSource,
 } from "./media-library.js";
 import { buildWorkspaceMediaAssetRef } from "./media-assets.js";
 import {
@@ -671,6 +673,23 @@ describe("media library pagination", () => {
         pageItemCount: 12,
       }),
     ).toBe("36");
+  });
+});
+
+describe("media library preview sources", () => {
+  it("resolves protected workspace asset routes to the authenticated upstream asset", async () => {
+    const source = await resolveWorkspaceMediaLibraryPreviewSource(
+      { email: "media-preview@example.test" },
+      "/api/workspace/media-assets/9262",
+    );
+
+    expect(source?.upstreamUrl.pathname).toBe("/api/media/9262/download");
+    expect(source?.upstreamUrl.searchParams.get("external_user_id")).toBe("email:media-preview@example.test");
+  });
+
+  it("only treats same-origin workspace media routes as protected local assets", () => {
+    expect(getWorkspaceMediaLibraryPreviewAssetId("/api/workspace/media-assets/9262/preview")).toBe(9262);
+    expect(getWorkspaceMediaLibraryPreviewAssetId("https://cdn.example.com/api/workspace/media-assets/9262")).toBeNull();
   });
 });
 
