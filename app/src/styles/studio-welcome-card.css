@@ -326,74 +326,80 @@
   text-wrap: balance;
 }
 
-.studio-welcome-card__idea-flow {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 28px minmax(0, 1fr) 28px minmax(0, 1fr);
-  align-items: center;
-  gap: 3px;
-  margin-top: 25px;
+.studio-welcome-card__showcase {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 2 / 1;
+  margin-top: 17px;
+  overflow: hidden;
+  border: 1px solid rgba(143, 170, 235, 0.2);
+  border-radius: 17px;
+  background: #071124;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 18px 34px -25px rgba(13, 22, 56, 0.92);
 }
 
-.studio-welcome-card__flow-step {
+.studio-welcome-card__showcase::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 25%),
+    linear-gradient(90deg, rgba(60, 106, 255, 0.07), transparent 24%, transparent 76%, rgba(138, 72, 255, 0.06));
+  pointer-events: none;
+}
+
+.studio-welcome-card__showcase img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.studio-welcome-card__showcase--idea img {
+  object-position: center 54%;
+}
+
+.studio-welcome-card__journey {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.studio-welcome-card__journey li {
   display: flex;
   min-width: 0;
-  flex-direction: column;
+  min-height: 39px;
   align-items: center;
-  gap: 9px;
-  color: rgba(241, 244, 255, 0.92);
-  text-align: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border: 1px solid rgba(148, 173, 229, 0.13);
+  border-radius: 10px;
+  background: rgba(17, 29, 54, 0.68);
+  color: rgba(218, 228, 248, 0.8);
+  font-size: clamp(0.56rem, 0.68vw, 0.68rem);
+  font-weight: 570;
+  line-height: 1.15;
 }
 
-.studio-welcome-card__flow-icon {
+.studio-welcome-card__journey b {
   display: inline-flex;
-  width: clamp(60px, 5.6vw, 77px);
-  height: clamp(60px, 5.6vw, 77px);
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(142, 180, 255, 0.62);
-  border-radius: 18px;
-  background:
-    radial-gradient(circle at 24% 0%, rgba(87, 136, 255, 0.26), transparent 60%),
-    linear-gradient(145deg, rgba(20, 39, 81, 0.9), rgba(8, 16, 35, 0.92));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 13px 28px -18px rgba(62, 119, 255, 0.9);
-  color: #c7d7ff;
-}
-
-.studio-welcome-card__flow-step.is-ai .studio-welcome-card__flow-icon {
-  border-color: rgba(164, 105, 255, 0.78);
-  background:
-    radial-gradient(circle at 65% 0%, rgba(178, 84, 255, 0.3), transparent 62%),
-    linear-gradient(145deg, rgba(58, 26, 108, 0.93), rgba(20, 15, 55, 0.94));
-  color: #d5b6ff;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 13px 28px -17px rgba(139, 74, 255, 0.92);
-}
-
-.studio-welcome-card__flow-icon svg {
-  width: 50%;
-  height: 50%;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.6;
-}
-
-.studio-welcome-card__flow-step strong {
-  overflow: hidden;
-  max-width: 100%;
-  font-size: clamp(0.7rem, 0.85vw, 0.82rem);
-  font-weight: 690;
-  line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.studio-welcome-card__flow-arrow {
-  color: rgba(153, 189, 255, 0.92);
-  font-size: 1.8rem;
-  font-weight: 300;
-  line-height: 1;
-  text-align: center;
+  border: 1px solid rgba(137, 156, 255, 0.54);
+  border-radius: 50%;
+  background: rgba(68, 62, 164, 0.48);
+  color: #d9dcff;
+  font-size: 0.62rem;
+  font-weight: 780;
 }
 
 .studio-welcome-card__feature-list {
@@ -404,7 +410,7 @@
 .studio-welcome-card__feature-list--idea {
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 8px;
-  margin-top: 20px;
+  margin-top: 10px;
 }
 
 .studio-welcome-card__feature-list--idea > span {
@@ -435,83 +441,34 @@
   grid-column: 4 / span 2;
 }
 
-.studio-welcome-card__timeline {
-  position: relative;
+.studio-welcome-card__scene-tags {
+  position: absolute;
+  inset: 5.3% 5.25% 8.4%;
+  z-index: 2;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 22px;
-  padding-bottom: 18px;
+  gap: 2.8%;
 }
 
-.studio-welcome-card__timeline::after {
-  content: "";
-  position: absolute;
-  right: 5%;
-  bottom: 3px;
-  left: 5%;
-  height: 3px;
-  border-radius: 999px;
-  background:
-    radial-gradient(circle at 43%, #a77cff 0 4px, transparent 5px),
-    linear-gradient(90deg, rgba(91, 109, 168, 0.62), rgba(123, 88, 229, 0.82) 43%, rgba(91, 109, 168, 0.62));
-  box-shadow: 0 0 15px rgba(127, 89, 238, 0.28);
-}
-
-.studio-welcome-card__timeline-scene {
+.studio-welcome-card__scene-tags > span {
   position: relative;
-  display: block;
   min-width: 0;
-  height: 91px;
-  overflow: hidden;
-  border: 1px solid rgba(171, 189, 234, 0.2);
-  border-radius: 12px;
-  background-color: #10182a;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  border: 1px solid transparent;
+  border-radius: 11px;
 }
 
-.studio-welcome-card__timeline-scene::before,
-.studio-welcome-card__timeline-scene::after {
-  content: "";
+.studio-welcome-card__scene-tags > span:nth-child(2) {
+  border-color: rgba(178, 111, 255, 0.94);
+  box-shadow:
+    inset 0 0 0 1px rgba(96, 176, 255, 0.72),
+    0 0 0 2px rgba(111, 84, 255, 0.18),
+    0 0 23px rgba(122, 83, 255, 0.35);
+}
+
+.studio-welcome-card__scene-tags b,
+.studio-welcome-card__scene-tags small {
   position: absolute;
-  pointer-events: none;
-}
-
-.studio-welcome-card__timeline-scene.is-coffee {
-  background:
-    radial-gradient(ellipse at 50% 55%, #c9834d 0 17%, #5a3527 18% 26%, transparent 27%),
-    linear-gradient(145deg, #5b3b2d, #171016 66%);
-}
-
-.studio-welcome-card__timeline-scene.is-neon {
-  background:
-    radial-gradient(circle at 50% 47%, #f4e9ff 0 6%, #9d68ff 7% 17%, rgba(109, 52, 255, 0.25) 18% 35%, transparent 36%),
-    linear-gradient(150deg, #13285a, #27113d 72%);
-}
-
-.studio-welcome-card__timeline-scene.is-landscape {
-  background:
-    linear-gradient(150deg, transparent 0 46%, rgba(14, 27, 53, 0.95) 47% 66%, transparent 67%),
-    linear-gradient(32deg, transparent 0 43%, rgba(42, 61, 92, 0.95) 44% 63%, transparent 64%),
-    linear-gradient(180deg, #91a2b6, #3d506c 53%, #142139 54%);
-}
-
-.studio-welcome-card__timeline-scene.is-product {
-  background:
-    radial-gradient(ellipse at 56% 83%, rgba(173, 112, 53, 0.7), transparent 34%),
-    radial-gradient(ellipse at 53% 46%, #7c542c 0 9%, #1a1a16 10% 19%, transparent 20%),
-    linear-gradient(145deg, #26381e, #0b100f 72%);
-}
-
-.studio-welcome-card__timeline-scene.is-selected {
-  border-color: rgba(184, 109, 255, 0.95);
-  box-shadow: inset 0 0 0 1px rgba(102, 182, 255, 0.76), 0 0 0 2px rgba(124, 94, 255, 0.2), 0 0 24px rgba(122, 83, 255, 0.32);
-}
-
-.studio-welcome-card__timeline-scene b,
-.studio-welcome-card__timeline-scene small {
-  position: absolute;
-  z-index: 2;
+  z-index: 3;
   display: inline-flex;
   min-width: 24px;
   min-height: 19px;
@@ -524,30 +481,14 @@
   font-weight: 720;
 }
 
-.studio-welcome-card__timeline-scene b {
+.studio-welcome-card__scene-tags b {
   top: 7px;
   left: 7px;
 }
 
-.studio-welcome-card__timeline-scene small {
+.studio-welcome-card__scene-tags small {
   right: 7px;
   bottom: 7px;
-}
-
-.studio-welcome-card__timeline-scene > svg {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  z-index: 1;
-  width: 36px;
-  height: 36px;
-  fill: none;
-  stroke: rgba(239, 228, 255, 0.96);
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.55;
-  filter: drop-shadow(0 0 8px rgba(172, 97, 255, 0.8));
-  transform: translate(-50%, -50%);
 }
 
 .studio-welcome-card__feature-list--studio {
@@ -803,13 +744,9 @@
     min-height: 0;
   }
 
-  .studio-welcome-card__idea-flow {
-    max-width: 520px;
+  .studio-welcome-card__showcase {
+    max-width: 620px;
     align-self: center;
-  }
-
-  .studio-welcome-card__timeline-scene {
-    height: 108px;
   }
 }
 
@@ -877,28 +814,31 @@
     font-size: 1.28rem;
   }
 
-  .studio-welcome-card__idea-flow {
-    grid-template-columns: minmax(0, 1fr) 20px minmax(0, 1fr) 20px minmax(0, 1fr);
-    margin-top: 19px;
+  .studio-welcome-card__showcase {
+    margin-top: 14px;
+    border-radius: 13px;
   }
 
-  .studio-welcome-card__flow-icon {
-    width: 54px;
-    height: 54px;
-    border-radius: 15px;
+  .studio-welcome-card__journey {
+    gap: 4px;
   }
 
-  .studio-welcome-card__flow-step strong {
-    font-size: 0.61rem;
+  .studio-welcome-card__journey li {
+    min-height: 43px;
+    gap: 4px;
+    padding-inline: 5px;
+    font-size: 0.55rem;
   }
 
-  .studio-welcome-card__flow-arrow {
-    font-size: 1.25rem;
+  .studio-welcome-card__journey b {
+    width: 18px;
+    height: 18px;
+    flex-basis: 18px;
   }
 
   .studio-welcome-card__feature-list--idea {
     gap: 6px;
-    margin-top: 15px;
+    margin-top: 9px;
   }
 
   .studio-welcome-card__feature-list--idea > span {
@@ -907,14 +847,15 @@
     font-size: 0.58rem;
   }
 
-  .studio-welcome-card__timeline {
-    gap: 6px;
-    margin-top: 17px;
+  .studio-welcome-card__scene-tags {
+    inset: 5.3% 5.25% 8.4%;
   }
 
-  .studio-welcome-card__timeline-scene {
-    height: 73px;
-    border-radius: 9px;
+  .studio-welcome-card__scene-tags b,
+  .studio-welcome-card__scene-tags small {
+    min-width: 20px;
+    min-height: 17px;
+    font-size: 0.52rem;
   }
 
   .studio-welcome-card__feature-list--studio {
@@ -977,21 +918,17 @@
     padding-block: 18px;
   }
 
-  .studio-welcome-card__idea-flow {
-    margin-top: 17px;
+  .studio-welcome-card__showcase {
+    aspect-ratio: 2.1;
+    margin-top: 12px;
   }
 
-  .studio-welcome-card__flow-icon {
-    width: 58px;
-    height: 58px;
+  .studio-welcome-card__journey {
+    margin-top: 6px;
   }
 
-  .studio-welcome-card__timeline {
-    margin-top: 16px;
-  }
-
-  .studio-welcome-card__timeline-scene {
-    height: 74px;
+  .studio-welcome-card__journey li {
+    min-height: 34px;
   }
 
   .studio-welcome-card__feature-list--studio > span {
