@@ -2407,9 +2407,7 @@ export function WorkspacePage({
   const promptChipsRef = useRef<HTMLDivElement | null>(null);
   const promptSubmitRef = useRef<HTMLDivElement | null>(null);
   const promptTextareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const studioWelcomeCloseButtonRef = useRef<HTMLButtonElement | null>(null);
   const studioWelcomeDontShowAgainRef = useRef(false);
-  const studioWelcomeShouldRestoreFocusRef = useRef(true);
   const segmentAiPhotoModalPanelRef = useRef<HTMLFormElement | null>(null);
   const segmentAiPhotoModalFileInputRef = useRef<HTMLInputElement | null>(null);
   const segmentAiPhotoModalLibraryBodyRef = useRef<HTMLDivElement | null>(null);
@@ -5911,70 +5909,13 @@ export function WorkspacePage({
   const isUserFacingGeneration = isStudioGenerationUserFacing(isGenerating, generationUiSource);
   const shouldShowGenerateError = shouldShowStudioGenerationError(generateError, isGenerating, generationUiSource);
   const shouldShowStudioWelcomeCard =
+    studioView === "create" &&
+    createMode === "default" &&
     !isWorkspaceBootstrapPending &&
     !isUserFacingGeneration &&
     !shouldShowGenerateError &&
     !isStudioWelcomeCardClosed &&
     !isStudioWelcomeCardDismissed;
-  useEffect(() => {
-    if (!shouldShowStudioWelcomeCard || typeof document === "undefined") {
-      return undefined;
-    }
-
-    const previousActiveElement = document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null;
-    const previousBodyOverflow = document.body.style.overflow;
-    studioWelcomeShouldRestoreFocusRef.current = true;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        closeStudioWelcomeCard();
-        return;
-      }
-      if (event.key !== "Tab") {
-        return;
-      }
-
-      const dialog = studioWelcomeCloseButtonRef.current?.closest<HTMLElement>(".studio-welcome-card");
-      const focusableElements = dialog
-        ? Array.from(
-            dialog.querySelectorAll<HTMLElement>(
-              'button:not(:disabled), input:not(:disabled), [href], [tabindex]:not([tabindex="-1"])',
-            ),
-          ).filter((element) => element.getClientRects().length > 0)
-        : [];
-      const firstFocusable = focusableElements[0];
-      const lastFocusable = focusableElements[focusableElements.length - 1];
-      if (!firstFocusable || !lastFocusable) {
-        return;
-      }
-      if (event.shiftKey && document.activeElement === firstFocusable) {
-        event.preventDefault();
-        lastFocusable.focus();
-      } else if (!event.shiftKey && document.activeElement === lastFocusable) {
-        event.preventDefault();
-        firstFocusable.focus();
-      }
-    };
-
-    document.body.style.overflow = "hidden";
-    document.addEventListener("keydown", handleKeyDown);
-    const focusFrame = window.requestAnimationFrame(() => {
-      studioWelcomeCloseButtonRef.current?.focus({ preventScroll: true });
-    });
-
-    return () => {
-      window.cancelAnimationFrame(focusFrame);
-      document.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = previousBodyOverflow;
-      const shouldRestoreFocus = studioWelcomeShouldRestoreFocusRef.current;
-      studioWelcomeShouldRestoreFocusRef.current = true;
-      if (shouldRestoreFocus) {
-        previousActiveElement?.focus({ preventScroll: true });
-      }
-    };
-  }, [closeStudioWelcomeCard, shouldShowStudioWelcomeCard]);
   const isSegmentEditorShortsGeneration = isGenerating && generationUiSource === "segment-editor";
   const shouldShowStudioPreviewGenerationOverlay = isUserFacingGeneration && !visibleGeneratedVideo;
   const isGeneratedVideoPrimaryActionExpanded = generatedVideoActionMode === "expanded";
@@ -5991,8 +5932,7 @@ export function WorkspacePage({
     Boolean(studioInlinePreview) ||
     isWorkspaceBootstrapPending ||
     isUserFacingGeneration ||
-    shouldShowGenerateError ||
-    shouldShowStudioWelcomeCard;
+    shouldShowGenerateError;
   const previewModalPrimaryVideoUrl = isProjectPreviewModalOpen
     ? projectPreviewModal?.videoUrl ?? null
     : isPreviewModalOpen
@@ -10481,8 +10421,7 @@ export function WorkspacePage({
           }
         : undefined;
   const hasLongStudioTopicPrompt = topicInput.trim().length > 72 || /[\r\n]/.test(topicInput);
-  const shouldUseExpandedStudioPrompt =
-    !shouldShowStudioWelcomeCard && (composerSourceIdea !== null || hasLongStudioTopicPrompt);
+  const shouldUseExpandedStudioPrompt = composerSourceIdea !== null || hasLongStudioTopicPrompt;
   const hasStudioPromptAuxiliaryContent =
     shouldUseExpandedStudioPrompt || Boolean(segmentEditorError) || hasAppliedSegmentEditorSession;
   const studioPromptInnerClassName = `studio-canvas-prompt__inner${
@@ -37296,7 +37235,9 @@ export function WorkspacePage({
 
               {createMode !== "segment-editor" ? (
                 <div
-                  className={`studio-canvas-prompt${shouldUseExpandedStudioPrompt ? " has-expanded-prompt" : ""}${
+                  className={`studio-canvas-prompt${shouldShowStudioWelcomeCard ? " has-welcome-card" : ""}${
+                    shouldUseExpandedStudioPrompt ? " has-expanded-prompt" : ""
+                  }${
                     composerSourceIdea ? " has-composer-source" : ""
                   }`}
                 >
@@ -37932,25 +37873,15 @@ export function WorkspacePage({
           </div>
         </main>
 
-        {shouldShowStudioWelcomeCard && typeof document !== "undefined"
-          ? createPortal(
-              <div className="studio-welcome-modal">
-                <button
-                  className="studio-welcome-modal__backdrop"
-                  type="button"
-                  tabIndex={-1}
-                  aria-label={workspaceText(locale, "Закрыть окно выбора режима", "Close creation mode dialog")}
-                  onClick={closeStudioWelcomeCard}
-                ></button>
+        {shouldShowStudioWelcomeCard ? (
+              <div className="studio-welcome-inline">
                 <section
-                  className="studio-canvas-welcome studio-welcome-card"
-                  role="dialog"
-                  aria-modal="true"
+                  className="studio-canvas-welcome studio-welcome-card is-inline"
+                  role="region"
                   aria-labelledby="studio-welcome-title"
                   aria-describedby="studio-welcome-description"
                 >
                   <button
-                    ref={studioWelcomeCloseButtonRef}
                     className="studio-welcome-card__close"
                     type="button"
                     aria-label={workspaceText(locale, "Закрыть", "Close")}
@@ -38015,7 +37946,6 @@ export function WorkspacePage({
                         className="studio-welcome-card__primary-action"
                         type="button"
                         onClick={() => {
-                          studioWelcomeShouldRestoreFocusRef.current = false;
                           closeStudioWelcomeCard();
                           handleStudioCreateIdeaModeSelect();
                           window.requestAnimationFrame(() => {
@@ -38099,7 +38029,6 @@ export function WorkspacePage({
                         className="studio-welcome-card__primary-action"
                         type="button"
                         onClick={() => {
-                          studioWelcomeShouldRestoreFocusRef.current = false;
                           closeStudioWelcomeCard();
                           handleStudioCreateScenesModeSelect();
                         }}
@@ -38114,7 +38043,6 @@ export function WorkspacePage({
                         className="studio-welcome-card__project-link"
                         type="button"
                         onClick={() => {
-                          studioWelcomeShouldRestoreFocusRef.current = false;
                           closeStudioWelcomeCard();
                           setStudioView("projects");
                           syncStudioRouteSection("projects");
@@ -38152,10 +38080,8 @@ export function WorkspacePage({
                     </label>
                   </footer>
                 </section>
-              </div>,
-              document.body,
-            )
-          : null}
+              </div>
+            ) : null}
 
         {segmentThumbDragState && segmentThumbDragSegment && segmentThumbDragGhostStyle && typeof document !== "undefined"
           ? createPortal(
