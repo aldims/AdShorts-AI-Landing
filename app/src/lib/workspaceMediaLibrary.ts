@@ -37,6 +37,10 @@ export type WorkspaceMediaLibraryItem = {
   source: WorkspaceMediaLibraryItemSource;
 };
 
+export const isWorkspaceMediaLibraryDisplayItem = (
+  item: Pick<WorkspaceMediaLibraryItem, "kind">,
+) => item.kind === "ai_photo" || item.kind === "ai_video";
+
 export const normalizeWorkspaceMediaLibraryCreatedAt = (value: number | string | null | undefined) => {
   const timestamp =
     typeof value === "number"

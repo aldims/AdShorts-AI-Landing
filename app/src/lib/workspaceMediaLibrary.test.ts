@@ -7,6 +7,7 @@ import {
   getWorkspaceMediaLibraryDisplayAssetIdentityKey,
   getWorkspaceMediaLibraryHiddenIdentityKeys,
   getWorkspaceMediaLibraryResolvedDedupeKey,
+  isWorkspaceMediaLibraryDisplayItem,
   isWorkspaceMediaLibraryItemHidden,
   sortWorkspaceMediaLibraryItemsNewestFirst,
   type WorkspaceMediaLibraryItem,
@@ -39,6 +40,23 @@ const createMediaLibraryItem = (
 });
 
 describe("workspace media library display identity", () => {
+  it("only displays AI photos and full AI videos in the user media library", () => {
+    const visibleKinds = [
+      "ai_photo",
+      "ai_video",
+      "photo_animation",
+      "talking_photo",
+      "image_edit",
+      "character_reference",
+      "scene_reference",
+    ]
+      .map((kind) => createMediaLibraryItem({ kind: kind as WorkspaceMediaLibraryItem["kind"] }))
+      .filter(isWorkspaceMediaLibraryDisplayItem)
+      .map((item) => item.kind);
+
+    expect(visibleKinds).toEqual(["ai_photo", "ai_video"]);
+  });
+
   it("deduplicates photo animations by their poster image", () => {
     const firstItem = createMediaLibraryItem({
       kind: "photo_animation",

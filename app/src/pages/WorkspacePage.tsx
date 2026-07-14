@@ -945,6 +945,7 @@ import {
   hasWorkspaceMediaLibraryLegacyFallbackDownloadUrl,
   getWorkspaceMediaLibraryHiddenIdentityKeys,
   getWorkspaceProjectDisplayTitle,
+  isWorkspaceMediaLibraryDisplayItem,
   isWorkspaceMediaLibraryItemDurableForStorage,
   isWorkspaceMediaLibraryItemHidden,
   sortWorkspaceMediaLibraryItemsNewestFirst,
@@ -2356,7 +2357,6 @@ export function WorkspacePage({
   const [mediaLibraryItems, setMediaLibraryItems] = useState<WorkspaceMediaLibraryItem[]>([]);
   const [mediaLibraryFilter, setMediaLibraryFilter] = useState<WorkspaceMediaLibraryFilter>("all");
   const [mediaLibraryNextCursor, setMediaLibraryNextCursor] = useState<string | null>(null);
-  const [mediaLibraryTotal, setMediaLibraryTotal] = useState<number | null>(null);
   const [loadedMediaLibraryFingerprint, setLoadedMediaLibraryFingerprint] = useState<string | null>(null);
   const [loadedMediaLibraryReloadToken, setLoadedMediaLibraryReloadToken] = useState(0);
   const [mediaLibraryError, setMediaLibraryError] = useState<string | null>(null);
@@ -4196,7 +4196,6 @@ export function WorkspacePage({
     setGeneratedMediaLibraryEntries(readStoredGeneratedMediaLibraryEntries(session.email));
     setMediaLibraryItems([]);
     setMediaLibraryNextCursor(null);
-    setMediaLibraryTotal(null);
     setLoadedMediaLibraryFingerprint(null);
     setLoadedMediaLibraryReloadToken(0);
     setMediaLibraryError(null);
@@ -5449,7 +5448,6 @@ export function WorkspacePage({
 
         setMediaLibraryItems(mergeWorkspaceMediaLibraryPageItems([], payloadData.items));
         setMediaLibraryNextCursor(payloadData.nextCursor);
-        setMediaLibraryTotal(payloadData.total);
         setLoadedMediaLibraryFingerprint(mediaLibraryProjectsFingerprint);
         setLoadedMediaLibraryReloadToken(mediaLibraryReloadToken);
         setMediaLibraryError(null);
@@ -5529,7 +5527,6 @@ export function WorkspacePage({
 
       setMediaLibraryItems((current) => mergeWorkspaceMediaLibraryPageItems(current, payloadData.items));
       setMediaLibraryNextCursor(payloadData.nextCursor);
-      setMediaLibraryTotal(payloadData.total);
     } catch (error) {
       if (controller.signal.aborted || isAbortLikeError(error)) {
         return;
@@ -6354,30 +6351,18 @@ export function WorkspacePage({
         locale,
       )
     : "";
-  const hiddenLoadedPersistedMediaLibraryItemsCount = useMemo(
+  const visibleMediaLibraryItems = useMemo(
     () =>
       resolvedMediaLibraryItems.filter(
         (item) =>
-          item.source === "persisted" &&
-          isWorkspaceMediaLibraryItemHidden(item, hiddenMediaLibraryItemKeySet),
-      ).length,
-    [hiddenMediaLibraryItemKeySet, resolvedMediaLibraryItems],
-  );
-  const visibleMediaLibraryItems = useMemo(
-    () =>
-      resolvedMediaLibraryItems.filter((item) => !isWorkspaceMediaLibraryItemHidden(item, hiddenMediaLibraryItemKeySet)),
+          isWorkspaceMediaLibraryDisplayItem(item) &&
+          !isWorkspaceMediaLibraryItemHidden(item, hiddenMediaLibraryItemKeySet),
+      ),
     [hiddenMediaLibraryItemKeySet, resolvedMediaLibraryItems],
   );
   const isMediaLibraryInitialLoading = isMediaLibraryLoading && !isMediaLibraryLoadingMore;
-  const mediaLibraryVisiblePersistedTotal =
-    mediaLibraryTotal === null ? null : Math.max(0, mediaLibraryTotal - hiddenLoadedPersistedMediaLibraryItemsCount);
   const mediaLibraryVisibleCount = visibleMediaLibraryItems.length;
-  const mediaLibraryDisplayTotalCount =
-    mediaLibraryVisiblePersistedTotal === null
-      ? null
-      : mediaLibraryNextCursor
-        ? Math.max(mediaLibraryVisiblePersistedTotal, mediaLibraryVisibleCount)
-        : mediaLibraryVisibleCount;
+  const mediaLibraryDisplayTotalCount = mediaLibraryNextCursor ? null : mediaLibraryVisibleCount;
   const mediaLibraryAllPillLabel =
     mediaLibraryDisplayTotalCount === null && isMediaLibraryInitialLoading
       ? workspaceText(locale, "Все", "All")
@@ -6401,12 +6386,7 @@ export function WorkspacePage({
       (Boolean(mediaLibraryNextCursor) &&
         (mediaLibraryDisplayTotalCount === null || mediaLibraryDisplayTotalCount > 0)));
   const visibleAiPhotoMediaItemsCount = visibleMediaLibraryItems.filter((item) => item.kind === "ai_photo").length;
-  const visibleImageEditMediaItemsCount = visibleMediaLibraryItems.filter((item) => item.kind === "image_edit").length;
   const visibleAiVideoMediaItemsCount = visibleMediaLibraryItems.filter((item) => item.kind === "ai_video").length;
-  const visiblePhotoAnimationMediaItemsCount = visibleMediaLibraryItems.filter((item) => item.kind === "photo_animation").length;
-  const visibleTalkingPhotoMediaItemsCount = visibleMediaLibraryItems.filter((item) => item.kind === "talking_photo").length;
-  const visibleCharacterReferenceMediaItemsCount = visibleMediaLibraryItems.filter((item) => item.kind === "character_reference").length;
-  const visibleSceneReferenceMediaItemsCount = visibleMediaLibraryItems.filter((item) => item.kind === "scene_reference").length;
   const allMediaLibraryTypeFilterOptions: Array<{ count: number; filter: WorkspaceMediaLibraryFilter; label: string }> = [
     {
       count: visibleAiPhotoMediaItemsCount,
@@ -6414,34 +6394,9 @@ export function WorkspacePage({
       label: workspaceText(locale, "ИИ фото", "AI photos"),
     },
     {
-      count: visibleImageEditMediaItemsCount,
-      filter: "image_edit",
-      label: workspaceText(locale, "Дорисовка", "Image edits"),
-    },
-    {
       count: visibleAiVideoMediaItemsCount,
       filter: "ai_video",
       label: workspaceText(locale, "ИИ видео", "AI videos"),
-    },
-    {
-      count: visiblePhotoAnimationMediaItemsCount,
-      filter: "photo_animation",
-      label: workspaceText(locale, "Анимация фото", "Photo animations"),
-    },
-    {
-      count: visibleTalkingPhotoMediaItemsCount,
-      filter: "talking_photo",
-      label: workspaceText(locale, "Говорящий персонаж", "Talking character"),
-    },
-    {
-      count: visibleCharacterReferenceMediaItemsCount,
-      filter: "characters",
-      label: workspaceText(locale, "Персонажи", "Characters"),
-    },
-    {
-      count: visibleSceneReferenceMediaItemsCount,
-      filter: "scenes",
-      label: workspaceText(locale, "Сцены", "Scenes"),
     },
   ];
   const mediaLibraryTypeFilterOptions = allMediaLibraryTypeFilterOptions.filter(
@@ -6452,65 +6407,29 @@ export function WorkspacePage({
       ? workspaceText(locale, "медиа", "media")
       : mediaLibraryTypeFilterOptions.find((option) => option.filter === mediaLibraryFilter)?.label ??
         workspaceText(locale, "медиа", "media");
-  const mediaLibraryEmptyTitle =
-    mediaLibraryFilter === "characters"
-      ? workspaceText(locale, "Нет персонажей", "No characters")
-      : mediaLibraryFilter === "scenes"
-        ? workspaceText(locale, "Нет сцен", "No scenes")
-        : workspaceText(locale, `Нет ${mediaLibraryActiveFilterLabel.toLowerCase()}`, `No ${mediaLibraryActiveFilterLabel.toLowerCase()}`);
-  const mediaLibraryEmptyDescription =
-    mediaLibraryFilter === "characters"
-      ? workspaceText(locale, "Сохраненные персонажи появятся здесь после создания или сохранения.", "Saved characters will appear here after creation or saving.")
-      : mediaLibraryFilter === "scenes"
-        ? workspaceText(locale, "Сохраненные сцены появятся здесь после создания или сохранения.", "Saved scenes will appear here after creation or saving.")
-        : workspaceText(
-            locale,
-            `В медиатеке сейчас нет карточек типа «${mediaLibraryActiveFilterLabel}».`,
-            `No ${mediaLibraryActiveFilterLabel.toLowerCase()} items are available in the media library right now.`,
-          );
+  const mediaLibraryEmptyTitle = workspaceText(
+    locale,
+    `Нет ${mediaLibraryActiveFilterLabel.toLowerCase()}`,
+    `No ${mediaLibraryActiveFilterLabel.toLowerCase()}`,
+  );
+  const mediaLibraryEmptyDescription = workspaceText(
+    locale,
+    `В медиатеке сейчас нет карточек типа «${mediaLibraryActiveFilterLabel}».`,
+    `No ${mediaLibraryActiveFilterLabel.toLowerCase()} items are available in the media library right now.`,
+  );
   const filteredVisibleMediaLibraryItems = useMemo(() => {
-    if (mediaLibraryFilter === "photo") {
-      return visibleMediaLibraryItems.filter((item) => item.kind === "ai_photo" || item.kind === "image_edit");
-    }
-
-    if (mediaLibraryFilter === "video") {
-      return visibleMediaLibraryItems.filter(
-        (item) => item.kind === "ai_video" || item.kind === "photo_animation" || item.kind === "talking_photo",
-      );
-    }
-
     if (mediaLibraryFilter === "ai_photo") {
       return visibleMediaLibraryItems.filter((item) => item.kind === "ai_photo");
-    }
-
-    if (mediaLibraryFilter === "image_edit") {
-      return visibleMediaLibraryItems.filter((item) => item.kind === "image_edit");
     }
 
     if (mediaLibraryFilter === "ai_video") {
       return visibleMediaLibraryItems.filter((item) => item.kind === "ai_video");
     }
 
-    if (mediaLibraryFilter === "photo_animation") {
-      return visibleMediaLibraryItems.filter((item) => item.kind === "photo_animation");
-    }
-
-    if (mediaLibraryFilter === "talking_photo") {
-      return visibleMediaLibraryItems.filter((item) => item.kind === "talking_photo");
-    }
-
-    if (mediaLibraryFilter === "characters") {
-      return visibleMediaLibraryItems.filter((item) => item.kind === "character_reference");
-    }
-
-    if (mediaLibraryFilter === "scenes") {
-      return visibleMediaLibraryItems.filter((item) => item.kind === "scene_reference");
-    }
-
     return visibleMediaLibraryItems;
   }, [mediaLibraryFilter, visibleMediaLibraryItems]);
   useEffect(() => {
-    if (mediaLibraryFilter === "photo" || mediaLibraryFilter === "video") {
+    if (mediaLibraryFilter !== "all" && mediaLibraryFilter !== "ai_photo" && mediaLibraryFilter !== "ai_video") {
       setMediaLibraryFilter("all");
     }
   }, [mediaLibraryFilter]);
@@ -37876,8 +37795,8 @@ export function WorkspacePage({
                   <p>
                     {workspaceText(
                       locale,
-                      "Сгенерируйте ИИ фото, ИИ видео или анимацию фото в редакторе сегментов, чтобы они появились здесь сразу.",
-                      "Generate AI photos, AI videos or photo animations in the segment editor and they will appear here.",
+                      "Сгенерируйте ИИ фото или ИИ видео в редакторе сегментов, чтобы они появились здесь сразу.",
+                      "Generate AI photos or AI videos in the segment editor and they will appear here.",
                     )}
                   </p>
                   <button
