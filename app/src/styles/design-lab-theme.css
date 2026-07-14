@@ -10365,7 +10365,7 @@ textarea {
 
 .studio-publish-modal__main {
   display: grid;
-  grid-template-columns: minmax(320px, 0.86fr) minmax(0, 1.14fr);
+  grid-template-columns: minmax(0, 1.14fr) minmax(320px, 0.86fr);
   gap: 16px;
   align-content: start;
   background: transparent;
@@ -10384,6 +10384,14 @@ textarea {
   flex-direction: column;
   gap: 16px;
   min-width: 0;
+}
+
+.studio-publish-modal__details {
+  order: 1;
+}
+
+.studio-publish-modal__destination {
+  order: 2;
 }
 
 .studio-publish-modal__section {
@@ -11455,6 +11463,14 @@ textarea {
 
   .studio-publish-modal__main {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .studio-publish-modal__destination {
+    order: 1;
+  }
+
+  .studio-publish-modal__details {
+    order: 2;
   }
 }
 
