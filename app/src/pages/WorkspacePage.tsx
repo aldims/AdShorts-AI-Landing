@@ -38079,23 +38079,41 @@ export function WorkspacePage({
 
                       <div className="studio-welcome-card__feature-list studio-welcome-card__feature-list--studio">
                         {[
-                          workspaceText(locale, "AI-фото и видео", "AI photos and video"),
-                          workspaceText(locale, "Анимация фото", "Photo animation"),
-                          workspaceText(locale, "Персонажи и липсинк", "Characters and lip sync"),
-                          workspaceText(locale, "Инфографика", "Infographics"),
-                          workspaceText(locale, "Редактор фото", "Photo editor"),
-                          workspaceText(locale, "Озвучка и субтитры", "Voiceover and captions"),
-                        ].map((feature, index) => (
-                          <span key={feature}>
-                            <svg viewBox="0 0 24 24" aria-hidden="true">
-                              {index === 0 ? <><rect x="3" y="5" width="18" height="14" rx="3" /><path d="M8 5v14M16 5v14" /></> : null}
-                              {index === 1 ? <><path d="m12 3 1.7 4.3L18 9l-4.3 1.7L12 15l-1.7-4.3L6 9l4.3-1.7L12 3Z" /><path d="m18.5 14 .9 2.2 2.1.8-2.1.9-.9 2.1-.8-2.1-2.2-.9 2.2-.8.8-2.2Z" /></> : null}
-                              {index === 2 ? <><circle cx="12" cy="8" r="3.5" /><path d="M5.5 20c.8-4 3-6 6.5-6s5.7 2 6.5 6" /></> : null}
-                              {index === 3 ? <><path d="M5 19V9M10 19V5M15 19v-7M20 19V3" /></> : null}
-                              {index === 4 ? <><rect x="3" y="4" width="18" height="16" rx="3" /><path d="m6 16 4-4 3 3 2-2 3 3M16.5 8.5h.01" /></> : null}
-                              {index === 5 ? <><circle cx="12" cy="9" r="4" /><path d="M5 20c.9-4.2 3.2-6.4 7-6.4s6.1 2.2 7 6.4M3 8v4M21 8v4" /></> : null}
-                            </svg>
-                            {feature}
+                          {
+                            icon: "/studio/feature-icons/ai-media.webp",
+                            label: workspaceText(locale, "AI-фото и видео", "AI photos and video"),
+                          },
+                          {
+                            icon: "/studio/feature-icons/photo-animation.webp",
+                            label: workspaceText(locale, "Анимация фото", "Photo animation"),
+                          },
+                          {
+                            icon: "/studio/feature-icons/character-lipsync.webp",
+                            label: workspaceText(locale, "Персонажи и липсинк", "Characters and lip sync"),
+                          },
+                          {
+                            icon: "/studio/feature-icons/infographic.webp",
+                            label: workspaceText(locale, "Инфографика", "Infographics"),
+                          },
+                          {
+                            icon: "/studio/feature-icons/photo-editor.webp",
+                            label: workspaceText(locale, "Редактор фото", "Photo editor"),
+                          },
+                          {
+                            icon: "/studio/feature-icons/voice-subtitles.webp",
+                            label: workspaceText(locale, "Озвучка и субтитры", "Voiceover and captions"),
+                          },
+                        ].map((feature) => (
+                          <span key={feature.label}>
+                            <img
+                              src={feature.icon}
+                              alt=""
+                              width="96"
+                              height="96"
+                              decoding="async"
+                              draggable={false}
+                            />
+                            {feature.label}
                           </span>
                         ))}
                       </div>

@@ -692,15 +692,12 @@
   line-height: 1.18;
 }
 
-.studio-welcome-card__feature-list--studio > span svg {
-  width: 21px;
-  height: 21px;
-  flex: 0 0 21px;
-  fill: none;
-  stroke: #a9b8ff;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.7;
+.studio-welcome-card__feature-list--studio > span img {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 5px rgba(77, 131, 255, 0.28));
 }
 
 .studio-welcome-card__primary-action {
