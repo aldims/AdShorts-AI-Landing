@@ -10,6 +10,8 @@ import {
   getWorkspaceInfographicNormalizedHeight,
   getWorkspaceSegmentInfographicFadeDuration,
   getWorkspaceSegmentInfographicOpacity,
+  getWorkspaceSegmentInfographicPartOpacity,
+  getWorkspaceSegmentInfographicTiming,
   getWorkspaceSegmentInfographicSourceVisualIdentity,
   getWorkspaceSegmentInfographicStatusFailureAction,
   isWorkspaceSegmentInfographicJobResultContextValid,
@@ -203,13 +205,48 @@ describe("workspace infographic helpers", () => {
     expect(resized.centerY - resizedHeight / 2).toBeCloseTo(originalAnchor.y);
   });
 
-  it("uses symmetric fades and shortens them for short segments", () => {
-    expect(getWorkspaceSegmentInfographicFadeDuration(0.5)).toBeCloseTo(0.2);
-    expect(getWorkspaceSegmentInfographicFadeDuration(5)).toBeCloseTo(2);
+  it("holds the complete infographic for two seconds between fade in and fade out", () => {
+    const timing = getWorkspaceSegmentInfographicTiming(8);
+
+    expect(timing.revealEndSeconds).toBeCloseTo(2.2);
+    expect(timing.holdSeconds).toBe(2);
+    expect(timing.fadeOutStartSeconds).toBeCloseTo(4.2);
+    expect(timing.endSeconds).toBeCloseTo(6.4);
+    expect(getWorkspaceSegmentInfographicTiming(5).holdSeconds).toBe(2);
+    expect(getWorkspaceSegmentInfographicFadeDuration(5)).toBeCloseTo(1.5);
     expect(getWorkspaceSegmentInfographicOpacity(0, 5)).toBe(0);
-    expect(getWorkspaceSegmentInfographicOpacity(1, 5)).toBeCloseTo(0.5);
-    expect(getWorkspaceSegmentInfographicOpacity(2.5, 5)).toBe(1);
+    expect(getWorkspaceSegmentInfographicOpacity(1.5, 5)).toBe(1);
+    expect(getWorkspaceSegmentInfographicOpacity(3.5, 5)).toBe(1);
+    expect(getWorkspaceSegmentInfographicOpacity(4.25, 5)).toBeCloseTo(0.5);
     expect(getWorkspaceSegmentInfographicOpacity(5, 5)).toBe(0);
+  });
+
+  it("starts the two-second hold after the final semantic part is fully visible", () => {
+    const parts = [
+      {
+        frame: { height: 0.4, width: 0.9, x: 0.05, y: 0.05 },
+        intrinsicHeight: 320,
+        intrinsicWidth: 900,
+        mediaAssetId: 71,
+        reveal: { delaySeconds: 0, durationSeconds: 1.3 },
+        text: "Не пьёт таблетки?",
+      },
+      {
+        frame: { height: 0.35, width: 0.75, x: 0.125, y: 0.6 },
+        intrinsicHeight: 280,
+        intrinsicWidth: 750,
+        mediaAssetId: 72,
+        reveal: { delaySeconds: 1.7, durationSeconds: 1.3 },
+        text: "Есть решение",
+      },
+    ];
+    const timing = getWorkspaceSegmentInfographicTiming(8, 2.2, parts);
+
+    expect(timing.revealEndSeconds).toBe(3);
+    expect(timing.fadeOutStartSeconds - timing.revealEndSeconds).toBe(2);
+    expect(getWorkspaceSegmentInfographicPartOpacity(parts[1], 3, 8, 2.2, parts)).toBe(1);
+    expect(getWorkspaceSegmentInfographicPartOpacity(parts[1], 5, 8, 2.2, parts)).toBe(1);
+    expect(getWorkspaceSegmentInfographicPartOpacity(parts[1], 6.1, 8, 2.2, parts)).toBeCloseTo(0.5);
   });
 
   it("marks an infographic stale only when the current visual identity changed", () => {

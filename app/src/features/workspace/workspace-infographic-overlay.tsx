@@ -252,6 +252,7 @@ export const WorkspaceSegmentInfographicOverlay = ({
                 localTimeSeconds,
                 segmentDurationSeconds,
                 infographic.animation.durationSeconds,
+                infographic.parts,
               )
             : 1;
           const partStyle = {

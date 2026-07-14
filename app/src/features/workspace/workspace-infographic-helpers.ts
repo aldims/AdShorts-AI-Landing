@@ -11,6 +11,7 @@ export const WORKSPACE_SEGMENT_INFOGRAPHIC_DEFAULT_WIDTH = 0.7;
 export const WORKSPACE_SEGMENT_INFOGRAPHIC_MIN_WIDTH = 0.12;
 export const WORKSPACE_SEGMENT_INFOGRAPHIC_MAX_WIDTH = 0.96;
 export const WORKSPACE_SEGMENT_INFOGRAPHIC_FADE_SECONDS = 2.2;
+export const WORKSPACE_SEGMENT_INFOGRAPHIC_HOLD_SECONDS = 2;
 export const WORKSPACE_SEGMENT_INFOGRAPHIC_PART_REVEAL_SECONDS = 1.3;
 export const WORKSPACE_SEGMENT_INFOGRAPHIC_LEGACY_PART_REVEAL_SECONDS = 0.65;
 export const WORKSPACE_SEGMENT_INFOGRAPHIC_TIMING_SCALE = 2;
@@ -384,7 +385,59 @@ export const isWorkspaceSegmentInfographicStale = (
 export const getWorkspaceSegmentInfographicFadeDuration = (
   segmentDurationSeconds: number,
   configuredDurationSeconds = WORKSPACE_SEGMENT_INFOGRAPHIC_FADE_SECONDS,
-) => Math.max(0, Math.min(configuredDurationSeconds, Math.max(0, segmentDurationSeconds) * 0.4));
+) => getWorkspaceSegmentInfographicTiming(
+  segmentDurationSeconds,
+  configuredDurationSeconds,
+).fadeOutDurationSeconds;
+
+export const getWorkspaceSegmentInfographicTiming = (
+  segmentDurationSeconds: number,
+  configuredFadeSeconds = WORKSPACE_SEGMENT_INFOGRAPHIC_FADE_SECONDS,
+  parts: readonly WorkspaceSegmentInfographicPart[] = [],
+) => {
+  const duration = Math.max(0, finiteNumber(segmentDurationSeconds, 0));
+  const fade = Math.max(0, finiteNumber(configuredFadeSeconds, 0));
+  const naturalRevealEnd = parts.length > 0
+    ? Math.max(...parts.map((part) => (
+        Math.max(0, finiteNumber(part.reveal.delaySeconds, 0)) +
+        Math.max(0.05, finiteNumber(part.reveal.durationSeconds, WORKSPACE_SEGMENT_INFOGRAPHIC_PART_REVEAL_SECONDS))
+      )))
+    : fade;
+  if (duration <= 0 || fade <= 0 || naturalRevealEnd <= 0) {
+    return {
+      endSeconds: duration,
+      fadeOutDurationSeconds: 0,
+      fadeOutStartSeconds: duration,
+      holdSeconds: 0,
+      revealEndSeconds: 0,
+      transitionScale: 0,
+    };
+  }
+
+  // Keep a real fade on both sides even when the segment is shorter than the
+  // preferred reveal + 2-second hold + fade-out sequence. Only transition
+  // timing is compressed; the full-visibility hold remains two seconds when
+  // the segment is long enough to accommodate it.
+  const minimumTransitionBudget = Math.min(duration, 0.1);
+  const holdSeconds = Math.min(
+    WORKSPACE_SEGMENT_INFOGRAPHIC_HOLD_SECONDS,
+    Math.max(0, duration - minimumTransitionBudget),
+  );
+  const transitionBudget = Math.max(0, duration - holdSeconds);
+  const transitionScale = Math.min(1, transitionBudget / (naturalRevealEnd + fade));
+  const revealEndSeconds = naturalRevealEnd * transitionScale;
+  const fadeOutDurationSeconds = fade * transitionScale;
+  const fadeOutStartSeconds = revealEndSeconds + holdSeconds;
+
+  return {
+    endSeconds: Math.min(duration, fadeOutStartSeconds + fadeOutDurationSeconds),
+    fadeOutDurationSeconds,
+    fadeOutStartSeconds,
+    holdSeconds,
+    revealEndSeconds,
+    transitionScale,
+  };
+};
 
 export const getWorkspaceSegmentInfographicOpacity = (
   localTimeSeconds: number,
@@ -396,11 +449,18 @@ export const getWorkspaceSegmentInfographicOpacity = (
     return 1;
   }
   const time = clamp(finiteNumber(localTimeSeconds, 0), 0, duration);
-  const fade = getWorkspaceSegmentInfographicFadeDuration(duration, configuredDurationSeconds);
-  if (fade <= 0) {
+  const timing = getWorkspaceSegmentInfographicTiming(duration, configuredDurationSeconds);
+  const fadeInDuration = timing.revealEndSeconds;
+  if (fadeInDuration <= 0 || timing.fadeOutDurationSeconds <= 0) {
     return 1;
   }
-  return clamp(Math.min(time / fade, (duration - time) / fade), 0, 1);
+  const fadeInOpacity = clamp(time / fadeInDuration, 0, 1);
+  const fadeOutOpacity = clamp(
+    (timing.endSeconds - time) / timing.fadeOutDurationSeconds,
+    0,
+    1,
+  );
+  return Math.min(fadeInOpacity, fadeOutOpacity);
 };
 
 export const getWorkspaceSegmentInfographicPartOpacity = (
@@ -408,25 +468,23 @@ export const getWorkspaceSegmentInfographicPartOpacity = (
   localTimeSeconds: number,
   segmentDurationSeconds: number,
   configuredFadeSeconds = WORKSPACE_SEGMENT_INFOGRAPHIC_FADE_SECONDS,
+  allParts: readonly WorkspaceSegmentInfographicPart[] = [part],
 ) => {
   const duration = Math.max(0, finiteNumber(segmentDurationSeconds, 0));
   if (duration <= 0) {
     return 1;
   }
   const time = clamp(finiteNumber(localTimeSeconds, 0), 0, duration);
-  const fadeOutDuration = getWorkspaceSegmentInfographicFadeDuration(duration, configuredFadeSeconds);
-  const availableBeforeOut = Math.max(0.05, duration - fadeOutDuration);
-  const delay = Math.min(
-    Math.max(0, finiteNumber(part.reveal.delaySeconds, 0)),
-    availableBeforeOut * 0.72,
-  );
-  const revealDuration = Math.min(
-    WORKSPACE_SEGMENT_INFOGRAPHIC_PART_REVEAL_SECONDS,
-    Math.max(0.05, availableBeforeOut - delay),
+  const timing = getWorkspaceSegmentInfographicTiming(duration, configuredFadeSeconds, allParts);
+  const delay = Math.max(0, finiteNumber(part.reveal.delaySeconds, 0)) * timing.transitionScale;
+  const revealDuration = Math.max(
+    0.001,
+    finiteNumber(part.reveal.durationSeconds, WORKSPACE_SEGMENT_INFOGRAPHIC_PART_REVEAL_SECONDS) *
+      timing.transitionScale,
   );
   const fadeInOpacity = clamp((time - delay) / revealDuration, 0, 1);
-  const fadeOutOpacity = fadeOutDuration > 0
-    ? clamp((duration - time) / fadeOutDuration, 0, 1)
+  const fadeOutOpacity = timing.fadeOutDurationSeconds > 0
+    ? clamp((timing.endSeconds - time) / timing.fadeOutDurationSeconds, 0, 1)
     : 1;
   return Math.min(fadeInOpacity, fadeOutOpacity);
 };

@@ -55,7 +55,7 @@ describe("WorkspaceSegmentInfographicOverlay", () => {
     const parts = overlay.querySelectorAll(".studio-segment-infographic__image");
 
     expect(parts).toHaveLength(1);
-    expect(Number(overlay.style.getPropertyValue("--workspace-infographic-opacity"))).toBeCloseTo(0.5);
+    expect(Number(overlay.style.getPropertyValue("--workspace-infographic-opacity"))).toBeCloseTo(2 / 3);
   });
 
   it("reveals semantic parts independently and shows all parts while paused", () => {
