@@ -30,7 +30,6 @@ import {
   normalizeWorkspaceEmail,
   persistDismissedStudioPreviewKey,
   persistDismissedFirstVideoOfferKey,
-  persistDismissedStudioWelcomeCard,
   persistHiddenMediaLibraryItemKeys,
   persistStudioCreateMode,
   persistStudioCreateSettings,
@@ -2020,7 +2019,6 @@ export function WorkspacePage({
   const [isStudioWelcomeCardDismissed, setIsStudioWelcomeCardDismissed] = useState(() =>
     readDismissedStudioWelcomeCard(session.email),
   );
-  const [isStudioWelcomeCardDontShowAgain, setIsStudioWelcomeCardDontShowAgain] = useState(false);
   const [hiddenMediaLibraryItemKeys, setHiddenMediaLibraryItemKeys] = useState<string[]>(() =>
     readHiddenMediaLibraryItemKeys(session.email),
   );
@@ -2407,7 +2405,6 @@ export function WorkspacePage({
   const promptChipsRef = useRef<HTMLDivElement | null>(null);
   const promptSubmitRef = useRef<HTMLDivElement | null>(null);
   const promptTextareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const studioWelcomeDontShowAgainRef = useRef(false);
   const segmentAiPhotoModalPanelRef = useRef<HTMLFormElement | null>(null);
   const segmentAiPhotoModalFileInputRef = useRef<HTMLInputElement | null>(null);
   const segmentAiPhotoModalLibraryBodyRef = useRef<HTMLDivElement | null>(null);
@@ -2859,12 +2856,8 @@ export function WorkspacePage({
     [session.email],
   );
   const closeStudioWelcomeCard = useCallback(() => {
-    if (studioWelcomeDontShowAgainRef.current) {
-      persistDismissedStudioWelcomeCard(session.email, true);
-      setIsStudioWelcomeCardDismissed(true);
-    }
     setIsStudioWelcomeCardClosed(true);
-  }, [session.email]);
+  }, []);
   const handleStudioIdeaPromptImprove = async () => {
     const sourcePrompt = topicInput.trim();
     if (!sourcePrompt || isStudioIdeaPromptImproving) {
@@ -4189,8 +4182,6 @@ export function WorkspacePage({
     setFirstVideoCheckoutError(null);
     setIsStudioWelcomeCardClosed(false);
     setIsStudioWelcomeCardDismissed(readDismissedStudioWelcomeCard(session.email));
-    setIsStudioWelcomeCardDontShowAgain(false);
-    studioWelcomeDontShowAgainRef.current = false;
     setHiddenMediaLibraryItemKeys(readHiddenMediaLibraryItemKeys(session.email));
     setIsWorkspaceBootstrapPending(true);
     setIsPublishModalOpen(false);
@@ -37898,8 +37889,7 @@ export function WorkspacePage({
                       <strong>{workspaceText(locale, "Как это работает?", "How does it work?")}</strong>
                     </div>
                     <h2 id="studio-welcome-title">
-                      {workspaceText(locale, "Создайте Shorts:", "Create a Short:")}{" "}
-                      <em>{workspaceText(locale, "автоматически или по сценам", "automatically or scene by scene")}</em>
+                      {workspaceText(locale, "Добро пожаловать в AdShorts AI Studio", "Welcome to AdShorts AI Studio")}
                     </h2>
                     <p id="studio-welcome-description">
                       {workspaceText(
@@ -37959,9 +37949,6 @@ export function WorkspacePage({
                         </svg>
                         {workspaceText(locale, "Создать готовый Shorts", "Create a finished Short")}
                       </button>
-                      <small className="studio-welcome-card__mode-note">
-                        {workspaceText(locale, "После генерации любую сцену можно изменить", "After generation, you can edit any scene")}
-                      </small>
                     </article>
 
                     <article className="studio-welcome-card__mode studio-welcome-card__mode--scenes">
@@ -38039,17 +38026,6 @@ export function WorkspacePage({
                         </svg>
                         {workspaceText(locale, "Создать с нуля по сценам", "Create from scratch by scenes")}
                       </button>
-                      <button
-                        className="studio-welcome-card__project-link"
-                        type="button"
-                        onClick={() => {
-                          closeStudioWelcomeCard();
-                          setStudioView("projects");
-                          syncStudioRouteSection("projects");
-                        }}
-                      >
-                        {workspaceText(locale, "Открыть готовый проект и доработать", "Open a finished project and refine it")}
-                      </button>
                     </article>
                   </div>
 
@@ -38063,22 +38039,6 @@ export function WorkspacePage({
                       "The easiest path: create a Short from an idea → open it scene by scene → refine only what you need.",
                     )}
                   </div>
-
-                  <footer className="studio-welcome-card__footer">
-                    <span>{workspaceText(locale, "Вы сможете переключиться между режимами в любой момент", "You can switch modes at any time")}</span>
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={isStudioWelcomeCardDontShowAgain}
-                        onChange={(event) => {
-                          studioWelcomeDontShowAgainRef.current = event.target.checked;
-                          setIsStudioWelcomeCardDontShowAgain(event.target.checked);
-                        }}
-                      />
-                      <span aria-hidden="true"></span>
-                      {workspaceText(locale, "Не показывать снова", "Do not show again")}
-                    </label>
-                  </footer>
                 </section>
               </div>
             ) : null}
