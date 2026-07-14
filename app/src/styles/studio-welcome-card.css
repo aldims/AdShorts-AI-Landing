@@ -118,13 +118,13 @@
 }
 
 .studio-idea-empty-state__suggestions button {
+  position: relative;
   display: grid;
   min-width: 0;
   min-height: 74px;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
-  gap: 10px;
-  padding: 12px 13px;
+  padding: 13px 38px 11px 14px;
   border: 1px solid rgba(132, 157, 221, 0.17);
   border-radius: 15px;
   background: linear-gradient(145deg, rgba(18, 28, 50, 0.82), rgba(9, 16, 31, 0.82));
@@ -136,13 +136,16 @@
 }
 
 .studio-idea-empty-state__suggestions button > span {
+  position: absolute;
+  top: 9px;
+  right: 10px;
   display: inline-flex;
   width: auto;
-  min-width: 25px;
-  height: 25px;
+  min-width: 24px;
+  height: 19px;
   align-items: center;
   justify-content: center;
-  padding: 0 7px;
+  padding: 0 6px;
   border: 1px solid rgba(160, 178, 239, 0.23);
   border-radius: 8px;
   background: rgba(101, 80, 230, 0.12);
@@ -156,12 +159,17 @@
 }
 
 .studio-idea-empty-state__suggestions button strong {
+  display: block;
+  padding-top: 10px;
   font-size: 0.76rem;
   font-weight: 600;
   line-height: 1.35;
 }
 
 .studio-idea-empty-state__suggestions button svg {
+  position: absolute;
+  right: 10px;
+  bottom: 9px;
   width: 16px;
   height: 16px;
   fill: none;
@@ -255,7 +263,21 @@
 
   .studio-idea-empty-state__suggestions button {
     min-height: 52px;
-    padding-block: 9px;
+    padding: 9px 38px 8px 12px;
+  }
+
+  .studio-idea-empty-state__suggestions button > span {
+    top: 7px;
+    right: 9px;
+  }
+
+  .studio-idea-empty-state__suggestions button strong {
+    padding-top: 9px;
+  }
+
+  .studio-idea-empty-state__suggestions button svg {
+    right: 9px;
+    bottom: 7px;
   }
 
   .studio-idea-empty-state__actions {
