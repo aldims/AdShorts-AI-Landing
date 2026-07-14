@@ -30,6 +30,7 @@ const LOCAL_EXAMPLES_ADMIN_EMAIL = "adshortsai@gmail.com";
 const LOCAL_EXAMPLES_ALLOWED_ADMIN_EMAILS = new Set([
     LOCAL_EXAMPLES_ADMIN_EMAIL,
     "aldima@mail.com",
+    "alexmamondi@gmail.com",
 ]);
 const LOCAL_EXAMPLES_SHARED_OWNER_KEY = `email:${LOCAL_EXAMPLES_ADMIN_EMAIL}`;
 const FFMPEG_BINARY = process.env.FFMPEG_PATH?.trim() || "ffmpeg";
@@ -60,7 +61,7 @@ const normalizeLocalExampleGoal = (value) => {
     }
 };
 const isLocalExamplesEnabled = () => true;
-const isLocalExamplesAdmin = (user) => LOCAL_EXAMPLES_ALLOWED_ADMIN_EMAILS.has(normalizeLocalExamplesAdminEmail(user?.email));
+export const isLocalExamplesAdmin = (user) => LOCAL_EXAMPLES_ALLOWED_ADMIN_EMAILS.has(normalizeLocalExamplesAdminEmail(user?.email));
 const resolveLocalExamplesOwnerKey = (user) => {
     const normalizedId = normalizeText(user.id);
     if (normalizedId) {

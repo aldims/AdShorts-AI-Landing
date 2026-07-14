@@ -24,7 +24,9 @@ import { ensureWorkspaceMediaAssetPlayback, getWorkspaceMediaAssetPlaybackCacheK
 import { ensureWorkspaceSegmentVideoCache, getWorkspaceSegmentVideoCacheKey, } from "./segment-video-cache.js";
 import { createTelegramOidcSession, getTelegramUserProfile, getTelegramUserProfileFromIdToken, parseTelegramOidcSession, parseTelegramLoginNonce, serializeTelegramLoginNonce, serializeTelegramOidcSession, TELEGRAM_LOGIN_NONCE_COOKIE_NAME, TELEGRAM_LOGIN_NONCE_MAX_AGE_MS, TELEGRAM_OIDC_SESSION_COOKIE_NAME, verifyTelegramLogin, } from "./telegram.js";
 import { createStudioSegmentAiPhotoJob, createStudioProjectCharacter, getStudioSegmentAiVideoPlaybackAsset, createStudioSegmentAiVideoJob, createStudioSegmentInfographicJob, createStudioSegmentImageEditJob, createStudioSegmentPhotoAnimationJob, createStudioSegmentSceneSoundJob, setStudioSegmentSceneSoundSelection, createStudioBatchVoiceoverJob, createStudioProjectVoiceoverJob, createStudioSegmentVoiceoverJob, createStudioSegmentTalkingPhotoJob, createStudioGenerationJob, generateStudioSegmentAiPhoto, generateStudioContentPlanIdeas, getStudioSegmentAiPhotoJobStatus, getStudioSegmentAiVideoJobPosterPath, getStudioSegmentAiVideoJobStatus, getStudioSegmentInfographicJobStatus, getStudioSegmentImageEditJobStatus, getStudioSegmentImageUpscaleJobStatus, getStudioSegmentPhotoAnimationPlaybackAsset, getStudioSegmentPhotoAnimationJobPosterPath, getStudioSegmentPhotoAnimationJobStatus, getStudioSegmentSceneSoundJobFileProxyTarget, getStudioSegmentSceneSoundJobStatus, getStudioBatchVoiceoverJobStatus, getStudioProjectVoiceoverJobFileProxyTarget, getStudioProjectVoiceoverJobStatus, getStudioSegmentVoiceoverJobFileProxyTarget, getStudioSegmentVoiceoverJobStatus, getStudioSegmentTalkingPhotoPlaybackAsset, getStudioSegmentTalkingPhotoJobPosterPath, getStudioSegmentTalkingPhotoJobStatus, getStudioPlaybackAsset, getStudioProjectCharacters, getWorkspaceBootstrap, getStudioGenerationAvailability, getStudioGenerationStatus, getStudioVideoProxyTargetByPath, getStudioVideoProxyTarget, invalidateWorkspaceBootstrapCacheByIdentityFragments, StudioVoiceoverTextLimitError, invalidateWorkspaceBootstrapCache, adaptStudioVoiceoverTextToDuration, improveStudioSegmentAiPhotoPrompt, normalizeStudioMediaSegmentIndexForScope, previewStudioSegmentTalkingPhotoSpeaker, translateStudioTexts, STUDIO_GENERATION_UNAVAILABLE_ERROR_CODE, STUDIO_GENERATION_UNAVAILABLE_MESSAGE, StudioGenerationUnavailableError, WorkspaceCreditLimitError, } from "./studio.js";
+import { normalizeStudioGenerateMultipartSegmentState } from "./studio-generate-multipart.js";
 import { getStudioVoicePreview, StudioVoicePreviewNotFoundError } from "./voice-preview.js";
+import { normalizeRequiredJsonNonNegativeInteger } from "./request-values.js";
 import { CheckoutConfigError, CheckoutProductUnavailableError, applySimulatedCheckoutProfileOverride, getCheckoutUrl, getCheckoutWidgetSession, isCheckoutAttributionSource, isCheckoutOfferVariant, isCheckoutProductId, shouldSimulateCheckoutPayment, simulateCheckoutPayment, } from "./payments.js";
 import { normalizeWebReferralSource } from "./referral.js";
 import { deleteLocalExample, getLocalExamplePosterAsset, getLocalExampleVideoAsset, getLocalExamplesState, LocalExamplesPermissionError, saveLocalExample, } from "./local-examples.js";
@@ -655,6 +657,7 @@ const parseStudioGenerateMultipartBody = async (req) => {
                 const fallbackMimeType = typeof segmentRecord.customVideoFileMimeType === "string"
                     ? segmentRecord.customVideoFileMimeType.trim()
                     : undefined;
+                const durableSegmentState = normalizeStudioGenerateMultipartSegmentState(segmentRecord);
                 return {
                     customVideoAssetId: normalizeRequestPositiveInteger(segmentRecord.customVideoAssetId),
                     customVideoFileDataUrl: uploadedFile
@@ -683,8 +686,9 @@ const parseStudioGenerateMultipartBody = async (req) => {
                         segmentRecord.duration_sync_mode_user_selected,
                     endTime: segmentRecord.endTime,
                     index: segmentRecord.index,
-                    infographic: segmentRecord.infographic,
-                    infographicRemoved: segmentRecord.infographicRemoved ?? segmentRecord.infographic_removed,
+                    infographic: durableSegmentState.infographic,
+                    infographicRemoved: durableSegmentState.infographicRemoved,
+                    manualTimingUserChanged: durableSegmentState.manualTimingUserChanged,
                     manualDurationSeconds: segmentRecord.manualDurationSeconds ?? segmentRecord.manual_duration_seconds,
                     resetVisual: Boolean(segmentRecord.resetVisual),
                     sceneSoundAssetId: normalizeRequestPositiveInteger(segmentRecord.sceneSoundAssetId ?? segmentRecord.scene_sound_asset_id),
@@ -705,6 +709,7 @@ const parseStudioGenerateMultipartBody = async (req) => {
                         segmentRecord.voice_source_start_time ??
                         segmentRecord._voice_source_start_time,
                     voiceType: segmentRecord.voiceType ?? segmentRecord.voice_type ?? null,
+                    voiceoverAssetId: durableSegmentState.voiceoverAssetId,
                 };
             })),
             source: segmentEditorRecord.source,
@@ -3341,9 +3346,13 @@ app.post("/api/studio/segment-ai-photo/generate", async (req, res) => {
     const language = typeof req.body?.language === "string" ? req.body.language.trim() : "";
     const quality = typeof req.body?.quality === "string" ? req.body.quality.trim() : "";
     const projectId = Number(req.body?.projectId ?? 0);
-    const segmentIndex = Number(req.body?.segmentIndex ?? -1);
+    const segmentIndex = normalizeRequiredJsonNonNegativeInteger(req.body?.segmentIndex);
     if (!prompt) {
         res.status(400).json({ error: "Prompt is required." });
+        return;
+    }
+    if (segmentIndex === undefined) {
+        res.status(400).json({ error: "Segment index is required." });
         return;
     }
     try {
@@ -3351,7 +3360,7 @@ app.post("/api/studio/segment-ai-photo/generate", async (req, res) => {
             language,
             quality,
             projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : undefined,
-            segmentIndex: Number.isFinite(segmentIndex) && segmentIndex >= 0 ? segmentIndex : undefined,
+            segmentIndex,
         });
         res.json({ data: result });
     }
@@ -3380,7 +3389,8 @@ app.post("/api/studio/segment-infographic/jobs", async (req, res) => {
     const idempotencyKey = typeof req.body?.idempotencyKey === "string" ? req.body.idempotencyKey.trim() : "";
     const language = typeof req.body?.language === "string" ? req.body.language.trim() : "";
     const projectId = Number(req.body?.projectId ?? 0);
-    const segmentIndex = Number(req.body?.segmentIndex ?? -1);
+    const draftId = typeof req.body?.draftId === "string" ? req.body.draftId.trim() : "";
+    const segmentIndex = normalizeRequiredJsonNonNegativeInteger(req.body?.segmentIndex);
     const sourceMediaAssetId = normalizeRequestPositiveInteger(req.body?.sourceMediaAssetId);
     if (!text || Array.from(text).length > 160) {
         res.status(400).json({ error: "Infographic text must contain between 1 and 160 characters." });
@@ -3394,11 +3404,15 @@ app.post("/api/studio/segment-infographic/jobs", async (req, res) => {
         res.status(400).json({ error: "Source media asset id is required." });
         return;
     }
-    if (!Number.isInteger(projectId) || projectId <= 0) {
-        res.status(400).json({ error: "Project id is required." });
+    if (!Number.isInteger(projectId) || projectId < 0 || (projectId === 0 && !draftId)) {
+        res.status(400).json({ error: "Project id or draft id is required." });
         return;
     }
-    if (!Number.isInteger(segmentIndex) || segmentIndex < 0) {
+    if (projectId === 0 && !/^scratch:[A-Za-z0-9:_-]{1,192}$/.test(draftId)) {
+        res.status(400).json({ error: "A valid scratch draft id is required." });
+        return;
+    }
+    if (segmentIndex === undefined) {
         res.status(400).json({ error: "Segment index is required." });
         return;
     }
@@ -3408,6 +3422,7 @@ app.post("/api/studio/segment-infographic/jobs", async (req, res) => {
     }
     try {
         const job = await createStudioSegmentInfographicJob(text, session.user, {
+            draftId: projectId === 0 ? draftId : undefined,
             idempotencyKey,
             language,
             projectId,
@@ -3516,13 +3531,17 @@ app.post("/api/studio/segment-image-edit/jobs", async (req, res) => {
     const referenceAssetIds = normalizeRequestPositiveIntegerList(req.body?.referenceAssetIds);
     const sceneReferenceAssetIds = normalizeRequestPositiveIntegerList(req.body?.sceneReferenceAssetIds);
     const projectId = Number(req.body?.projectId ?? 0);
-    const segmentIndex = Number(req.body?.segmentIndex ?? -1);
+    const segmentIndex = normalizeRequiredJsonNonNegativeInteger(req.body?.segmentIndex);
     if (!prompt) {
         res.status(400).json({ error: "Prompt is required." });
         return;
     }
     if (!imageDataUrl && !imageAssetId) {
         res.status(400).json({ error: "Image asset id or image data URL is required." });
+        return;
+    }
+    if (segmentIndex === undefined) {
+        res.status(400).json({ error: "Segment index is required." });
         return;
     }
     console.info("[studio] segment-image-edit route: request received", JSON.stringify({ imageAssetId, imageDataUrl: imageDataUrl ? `[dataUrl len=${imageDataUrl.length}]` : null, imageFileName, projectId, segmentIndex }));
@@ -3537,7 +3556,7 @@ app.post("/api/studio/segment-image-edit/jobs", async (req, res) => {
             projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : undefined,
             referenceAssetIds,
             sceneReferenceAssetIds,
-            segmentIndex: Number.isFinite(segmentIndex) && segmentIndex >= 0 ? segmentIndex : undefined,
+            segmentIndex,
         });
         res.json({ data: job });
     }
@@ -3749,9 +3768,13 @@ app.post("/api/studio/segment-ai-photo/jobs", async (req, res) => {
     const referenceAssetIds = normalizeRequestPositiveIntegerList(req.body?.referenceAssetIds);
     const sceneReferenceAssetIds = normalizeRequestPositiveIntegerList(req.body?.sceneReferenceAssetIds);
     const projectId = Number(req.body?.projectId ?? 0);
-    const segmentIndex = Number(req.body?.segmentIndex ?? -1);
+    const segmentIndex = normalizeRequiredJsonNonNegativeInteger(req.body?.segmentIndex);
     if (!prompt) {
         res.status(400).json({ error: "Prompt is required." });
+        return;
+    }
+    if (segmentIndex === undefined) {
+        res.status(400).json({ error: "Segment index is required." });
         return;
     }
     console.info(JSON.stringify({
@@ -3777,7 +3800,7 @@ app.post("/api/studio/segment-ai-photo/jobs", async (req, res) => {
             referenceKind,
             referenceAssetIds,
             sceneReferenceAssetIds,
-            segmentIndex: Number.isFinite(segmentIndex) && segmentIndex >= 0 ? segmentIndex : undefined,
+            segmentIndex,
         });
         res.json({ data: job });
     }
@@ -3848,9 +3871,13 @@ app.post("/api/studio/segment-ai-video/jobs", async (req, res) => {
     const sceneReferenceAssetIds = normalizeRequestPositiveIntegerList(req.body?.sceneReferenceAssetIds);
     const durationSeconds = normalizeRequestDurationSeconds(req.body?.durationSeconds ?? req.body?.duration);
     const projectId = Number(req.body?.projectId ?? 0);
-    const segmentIndex = Number(req.body?.segmentIndex ?? -1);
+    const segmentIndex = normalizeRequiredJsonNonNegativeInteger(req.body?.segmentIndex);
     if (!prompt) {
         res.status(400).json({ error: "Prompt is required." });
+        return;
+    }
+    if (segmentIndex === undefined) {
+        res.status(400).json({ error: "Segment index is required." });
         return;
     }
     try {
@@ -3869,7 +3896,7 @@ app.post("/api/studio/segment-ai-video/jobs", async (req, res) => {
             projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : undefined,
             referenceAssetIds,
             sceneReferenceAssetIds,
-            segmentIndex: Number.isFinite(segmentIndex) && segmentIndex >= 0 ? segmentIndex : undefined,
+            segmentIndex,
         });
         res.json({ data: job });
     }
@@ -3989,13 +4016,17 @@ app.post("/api/studio/segment-photo-animation/jobs", async (req, res) => {
             ? req.body.duration_extension_source_video_original_name.trim()
             : "";
     const projectId = Number(req.body?.projectId ?? 0);
-    const segmentIndex = Number(req.body?.segmentIndex ?? -1);
+    const segmentIndex = normalizeRequiredJsonNonNegativeInteger(req.body?.segmentIndex);
     if (!prompt) {
         res.status(400).json({ error: "Prompt is required." });
         return;
     }
     if (!customVideoAssetId && !customVideoFileDataUrl) {
         res.status(400).json({ error: "Photo source asset id or image data URL is required." });
+        return;
+    }
+    if (segmentIndex === undefined) {
+        res.status(400).json({ error: "Segment index is required." });
         return;
     }
     try {
@@ -4016,7 +4047,7 @@ app.post("/api/studio/segment-photo-animation/jobs", async (req, res) => {
             language,
             projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : undefined,
             quality,
-            segmentIndex: Number.isFinite(segmentIndex) && segmentIndex >= 0 ? segmentIndex : undefined,
+            segmentIndex,
         });
         res.json({ data: job });
     }
@@ -4115,13 +4146,17 @@ app.post("/api/studio/segment-talking-photo/preview", async (req, res) => {
     const language = typeof req.body?.language === "string" ? req.body.language.trim() : "";
     const speakerTarget = normalizeRequestTalkingCharacterTarget(req.body?.speakerTarget ?? req.body?.speaker_target);
     const projectId = Number(req.body?.projectId ?? 0);
-    const segmentIndex = Number(req.body?.segmentIndex ?? -1);
+    const segmentIndex = normalizeRequiredJsonNonNegativeInteger(req.body?.segmentIndex);
     if (!customVideoAssetId && !customVideoFileDataUrl) {
         res.status(400).json({ error: "Photo or video source asset id or data URL is required." });
         return;
     }
     if (!speakerTarget) {
         res.status(400).json({ error: "Speaker target is required." });
+        return;
+    }
+    if (segmentIndex === undefined) {
+        res.status(400).json({ error: "Segment index is required." });
         return;
     }
     try {
@@ -4133,7 +4168,7 @@ app.post("/api/studio/segment-talking-photo/preview", async (req, res) => {
             customVideoFileName: customVideoFileName || undefined,
             language,
             projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : undefined,
-            segmentIndex: Number.isFinite(segmentIndex) && segmentIndex >= 0 ? segmentIndex : undefined,
+            segmentIndex,
             speakerTarget,
         });
         res.json({ data: preview });
@@ -4170,7 +4205,7 @@ app.post("/api/studio/segment-talking-photo/jobs", async (req, res) => {
             : "";
     const durationSeconds = normalizeRequestDurationSeconds(req.body?.durationSeconds ?? req.body?.duration);
     const projectId = Number(req.body?.projectId ?? 0);
-    const segmentIndex = Number(req.body?.segmentIndex ?? -1);
+    const segmentIndex = normalizeRequiredJsonNonNegativeInteger(req.body?.segmentIndex);
     if (!script) {
         res.status(400).json({ error: "Script is required." });
         return;
@@ -4181,6 +4216,10 @@ app.post("/api/studio/segment-talking-photo/jobs", async (req, res) => {
     }
     if (!speakerTarget) {
         res.status(400).json({ error: "Speaker target is required." });
+        return;
+    }
+    if (segmentIndex === undefined) {
+        res.status(400).json({ error: "Segment index is required." });
         return;
     }
     try {
@@ -4194,7 +4233,7 @@ app.post("/api/studio/segment-talking-photo/jobs", async (req, res) => {
             language,
             projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : undefined,
             prompt: prompt || undefined,
-            segmentIndex: Number.isFinite(segmentIndex) && segmentIndex >= 0 ? segmentIndex : undefined,
+            segmentIndex,
             speakerConfirmationToken: speakerConfirmationToken || undefined,
             speakerTarget,
             voiceType: voiceType || undefined,
@@ -4296,12 +4335,14 @@ app.put("/api/studio/projects/:projectId/segments/:segmentIndex/scene-sound", as
     const assetId = rawAssetId === null || rawAssetId === undefined
         ? null
         : normalizeRequestPositiveInteger(rawAssetId);
-    if (!projectId || segmentIndex === undefined || (hasAssetId && rawAssetId !== null && assetId === undefined)) {
-        res.status(400).json({ error: "Valid project id, segment index and optional asset id are required." });
+    if (!projectId || segmentIndex === undefined || !hasAssetId || (rawAssetId !== null && assetId === undefined)) {
+        res.status(400).json({ error: "Valid project id, segment index and asset id field are required." });
         return;
     }
     try {
         const selection = await setStudioSegmentSceneSoundSelection(projectId, segmentIndex, assetId, session.user);
+        invalidateWorkspaceSegmentEditorSessionCache(session.user, projectId);
+        await clearWorkspaceMediaIndex(session.user);
         res.json({ data: selection });
     }
     catch (error) {
@@ -4325,7 +4366,7 @@ app.post("/api/studio/segment-scene-sound/jobs", async (req, res) => {
     const projectId = normalizeRequestPositiveInteger(req.body?.projectId ?? req.body?.project_id) ??
         normalizeRequestPositiveInteger(req.query?.projectId ?? req.query?.project_id) ??
         getRequestStudioRouteProjectId(req);
-    const segmentIndex = normalizeRequestNonNegativeInteger(req.body?.segmentIndex ?? req.body?.segment_index);
+    const segmentIndex = normalizeRequiredJsonNonNegativeInteger(req.body?.segmentIndex ?? req.body?.segment_index);
     const durationSeconds = normalizeRequestDurationSeconds(req.body?.durationSeconds ?? req.body?.duration);
     const visualMediaAssetId = normalizeRequestPositiveInteger(req.body?.visualMediaAssetId ?? req.body?.visual_media_asset_id);
     const visualSourceJobId = typeof req.body?.visualSourceJobId === "string"
@@ -4345,6 +4386,10 @@ app.post("/api/studio/segment-scene-sound/jobs", async (req, res) => {
     }
     if (!projectId && !hasExplicitVisualSource) {
         res.status(400).json({ error: "Project id or visual source is required for scene sound generation." });
+        return;
+    }
+    if (segmentIndex === undefined) {
+        res.status(400).json({ error: "Segment index is required for scene sound generation." });
         return;
     }
     try {
@@ -4535,7 +4580,7 @@ app.post("/api/studio/segment-voiceover/jobs", async (req, res) => {
     const projectId = normalizeRequestPositiveInteger(req.body?.projectId ?? req.body?.project_id) ??
         normalizeRequestPositiveInteger(req.query?.projectId ?? req.query?.project_id) ??
         getRequestStudioRouteProjectId(req);
-    const segmentIndex = normalizeRequestNonNegativeInteger(req.body?.segmentIndex ?? req.body?.segment_index);
+    const segmentIndex = normalizeRequiredJsonNonNegativeInteger(req.body?.segmentIndex ?? req.body?.segment_index);
     const voiceType = typeof req.body?.voiceType === "string"
         ? req.body.voiceType.trim()
         : typeof req.body?.voice_type === "string"
@@ -4545,7 +4590,7 @@ app.post("/api/studio/segment-voiceover/jobs", async (req, res) => {
         res.status(400).json({ error: "Voiceover text is required." });
         return;
     }
-    if (segmentIndex === null) {
+    if (segmentIndex === undefined) {
         res.status(400).json({ error: "Segment index is required for segment voiceover generation." });
         return;
     }

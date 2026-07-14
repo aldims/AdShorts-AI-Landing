@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { env } from "./env.js";
 import { buildAuthScopedCacheKey, buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
 import { buildWorkspaceMediaAssetRef, mergeWorkspaceMediaAssetRefs, } from "./media-assets.js";
-import { STUDIO_AI_PHOTO_VIDEO_GENERATION_CREDIT_COST, STUDIO_AI_VIDEO_GENERATION_CREDIT_COST, STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST, STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST_BY_QUALITY, STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST, STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST_BY_QUALITY, STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST, STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST, STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST, buildStudioBatchVoiceoverBillingRuns, buildStudioVoiceoverProviderText, getStudioBatchVoiceoverCreditCost, getStudioSegmentPhotoAnimationCreditCost, getStudioSegmentSceneSoundCreditCost, getStudioSegmentTalkingPhotoCreditCost, getStudioVoiceoverCreditCostForText, normalizeStudioSegmentPhotoAnimationDurationSeconds, STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS, STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST, STUDIO_WORKSPACE_CHARACTER_REFERENCE_CREDIT_COST, STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST, } from "../shared/studio-credit-costs.js";
+import { STUDIO_AI_PHOTO_VIDEO_GENERATION_CREDIT_COST, STUDIO_AI_VIDEO_GENERATION_CREDIT_COST, STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST, STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST_BY_QUALITY, STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST, STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST_BY_QUALITY, STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST, STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST, STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST, buildStudioVoiceoverProviderText, getStudioBatchVoiceoverCreditCost, getStudioSegmentPhotoAnimationCreditCost, getStudioSegmentSceneSoundCreditCost, getStudioSegmentTalkingPhotoCreditCost, getStudioVoiceoverCreditCostForText, normalizeStudioSegmentPhotoAnimationDurationSeconds, STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS, STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST, STUDIO_WORKSPACE_CHARACTER_REFERENCE_CREDIT_COST, STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST, } from "../shared/studio-credit-costs.js";
 import { normalizeExamplePrefillStudioSettings, } from "../shared/example-prefill.js";
 import { DEFAULT_LOCALE, DEFAULT_STUDIO_VOICE_ID, SUPPORTED_LOCALES, isSupportedLocale, } from "../shared/locales.js";
 import { ensureWorkspaceProjectPlayback, getWorkspaceProjectPlaybackCacheKey, warmWorkspaceProjectPlayback, } from "./project-playback.js";
@@ -99,6 +99,10 @@ export class StudioGenerationUnavailableError extends Error {
         this.name = "StudioGenerationUnavailableError";
     }
 }
+const STUDIO_SEGMENT_INFOGRAPHIC_FADE_SECONDS = 2.2;
+const STUDIO_SEGMENT_INFOGRAPHIC_PART_REVEAL_SECONDS = 1.3;
+const STUDIO_SEGMENT_INFOGRAPHIC_LEGACY_PART_REVEAL_SECONDS = 0.65;
+const STUDIO_SEGMENT_INFOGRAPHIC_TIMING_SCALE = 2;
 export const resolveStudioSegmentEditorGenerationMediaFlags = (options) => {
     const segmentEditorHasVoice = options.segmentEditor?.segments.some((segment) => Boolean(segment.voiceoverAssetId) ||
         Boolean(segment.voiceType && segment.voiceType !== "none")) ?? false;
@@ -942,27 +946,38 @@ const normalizeStudioSegmentInfographic = (value) => {
             const frameWidth = normalizeNumber(partFrame.width);
             const frameHeight = normalizeNumber(partFrame.height);
             const delaySeconds = normalizeNumber(partReveal.delaySeconds ?? partReveal.delay_seconds);
+            const revealDurationSeconds = normalizeNumber(partReveal.durationSeconds ?? partReveal.duration_seconds);
             const partText = String(part.text ?? "").trim();
             if (!(partAssetId && partWidth && partHeight && partText &&
                 x !== null && y !== null && frameWidth !== null && frameHeight !== null && delaySeconds !== null &&
                 x >= 0 && y >= 0 && frameWidth > 0 && frameHeight > 0 &&
                 x + frameWidth <= 1.0001 && y + frameHeight <= 1.0001 &&
-                delaySeconds >= previousDelay)) {
+                delaySeconds >= 0)) {
                 throw new Error("Segment infographic part is invalid.");
             }
-            previousDelay = delaySeconds;
+            const normalizedDelaySeconds = delaySeconds * (revealDurationSeconds === null ||
+                revealDurationSeconds <= STUDIO_SEGMENT_INFOGRAPHIC_LEGACY_PART_REVEAL_SECONDS + 0.000001
+                ? STUDIO_SEGMENT_INFOGRAPHIC_TIMING_SCALE
+                : 1);
+            if (normalizedDelaySeconds < previousDelay) {
+                throw new Error("Segment infographic part is invalid.");
+            }
+            previousDelay = normalizedDelaySeconds;
             parts.push({
                 frame: { height: frameHeight, width: frameWidth, x, y },
                 intrinsicHeight: partHeight,
                 intrinsicWidth: partWidth,
                 mediaAssetId: partAssetId,
-                reveal: { delaySeconds, durationSeconds: 0.65 },
+                reveal: {
+                    delaySeconds: normalizedDelaySeconds,
+                    durationSeconds: STUDIO_SEGMENT_INFOGRAPHIC_PART_REVEAL_SECONDS,
+                },
                 text: partText,
             });
         }
     }
     return {
-        animation: { durationSeconds: 1.1, type: "fade" },
+        animation: { durationSeconds: STUDIO_SEGMENT_INFOGRAPHIC_FADE_SECONDS, type: "fade" },
         inputHash,
         intrinsicHeight,
         intrinsicWidth,
@@ -1074,6 +1089,7 @@ export const normalizeStudioSegmentEditorPayload = (value, language, fallbackPro
         const infographic = infographicRemoved
             ? undefined
             : normalizeStudioSegmentInfographic(segmentRecord.infographic);
+        const manualTimingUserChanged = normalizeWorkspaceBooleanFlag(segmentRecord.manualTimingUserChanged ?? segmentRecord.manual_timing_user_changed) === true;
         const sceneSoundRemoved = normalizeWorkspaceBooleanFlag(segmentRecord.sceneSoundRemoved ?? segmentRecord.scene_sound_removed) === true;
         const attachesCustomVisual = videoAction === "custom" || videoAction === "talking_photo";
         if (attachesCustomVisual && !customVideoAssetId && (!customVideoFileDataUrl || !customVideoFileName)) {
@@ -1093,6 +1109,7 @@ export const normalizeStudioSegmentEditorPayload = (value, language, fallbackPro
             index,
             infographic,
             infographicRemoved,
+            manualTimingUserChanged,
             manualDurationSeconds: normalizedManualDurationSeconds,
             resetVisual: Boolean(segmentRecord.resetVisual),
             sceneSoundAssetId: sceneSoundRemoved
@@ -2747,7 +2764,10 @@ const normalizeAdsflowSegmentAiPhotoAsset = async (payload, options) => {
                 intrinsicHeight,
                 intrinsicWidth,
                 mediaAssetId,
-                reveal: { delaySeconds, durationSeconds: 0.65 },
+                reveal: {
+                    delaySeconds,
+                    durationSeconds: STUDIO_SEGMENT_INFOGRAPHIC_PART_REVEAL_SECONDS,
+                },
                 text,
             });
         }
@@ -3498,6 +3518,8 @@ const ADSFLOW_FETCH_RETRYABLE_STATUS_CODES = new Set([408, 425, 429, 502, 503, 5
 const ADSFLOW_FETCH_RETRY_DELAYS_MS = [250, 700];
 const ADSFLOW_FETCH_TIMEOUT_MS = 20_000;
 const ADSFLOW_MUTATION_TIMEOUT_MS = 90_000;
+const ADSFLOW_GENERATION_ACCEPTANCE_LOOKUP_TIMEOUT_MS = 5_000;
+const ADSFLOW_GENERATION_NOT_ACCEPTED_DETAIL = "Generation task was not accepted";
 class AdsflowHttpError extends Error {
     statusCode;
     constructor(message, statusCode) {
@@ -3516,6 +3538,16 @@ const isAdsflowTransientFailure = (error) => {
         return ADSFLOW_FETCH_RETRYABLE_STATUS_CODES.has(error.statusCode);
     }
     return error instanceof Error && error.message.startsWith("AdsFlow unavailable for ");
+};
+const isAdsflowGenerationAcceptanceAmbiguous = (error) => {
+    if (error instanceof AdsflowHttpError) {
+        // A definitive client error is the only response that proves AdsFlow rejected
+        // the generation. Server errors can arrive after the task was committed.
+        return error.statusCode >= 500 || ADSFLOW_FETCH_RETRYABLE_STATUS_CODES.has(error.statusCode);
+    }
+    // Transport failures, malformed/empty success responses and local timeout errors
+    // all happen after the request body may have reached AdsFlow.
+    return error instanceof Error;
 };
 const WORKSPACE_REFERENCE_MEDIA_ROLES = new Set([
     "character_reference",
@@ -3963,6 +3995,44 @@ const fetchAdsflowJobStatus = async (jobId, user) => {
         external_user_id: externalUserId,
     }));
 };
+const lookupAdsflowGenerationAcceptance = async (usageEventKey, user) => {
+    const externalUserId = await resolveStudioExternalUserId(user);
+    const lookupUrl = buildAdsflowUrl(`/api/web/generations/by-usage-event/${encodeURIComponent(usageEventKey)}`, {
+        admin_token: env.adsflowAdminToken ?? "",
+        external_user_id: externalUserId,
+    });
+    let lastState = { state: "unknown" };
+    let consecutiveMissingResponses = 0;
+    for (const delayMs of [0, 250, 700, 1_500]) {
+        if (delayMs > 0) {
+            await wait(delayMs);
+        }
+        try {
+            const payload = await fetchAdsflowJson(lookupUrl, undefined, {
+                retryDelaysMs: [],
+                silentStatuses: [404],
+                timeoutMs: ADSFLOW_GENERATION_ACCEPTANCE_LOOKUP_TIMEOUT_MS,
+            });
+            return { payload, state: "found" };
+        }
+        catch (error) {
+            if (error instanceof AdsflowHttpError &&
+                error.statusCode === 404 &&
+                error.message === ADSFLOW_GENERATION_NOT_ACCEPTED_DETAIL) {
+                consecutiveMissingResponses += 1;
+                lastState = consecutiveMissingResponses >= 2 ? { state: "missing" } : { state: "unknown" };
+                continue;
+            }
+            consecutiveMissingResponses = 0;
+            lastState = { state: "unknown" };
+            console.warn("[studio] Failed to reconcile generation acceptance", {
+                error: error instanceof Error ? error.message : "Unknown AdsFlow lookup error.",
+                usageEventKey,
+            });
+        }
+    }
+    return lastState;
+};
 const fetchAdsflowProjectMedia = async (projectId, user) => {
     assertAdsflowConfigured();
     const safeProjectId = normalizePositiveInteger(projectId);
@@ -4118,6 +4188,7 @@ const fetchAdsflowBatchVoiceoverJobStatus = async (jobId, user) => {
 const consumeWorkspaceGenerationCredit = async (user, amount = 1, language, options) => {
     const externalUserId = await resolveStudioExternalUserId(user);
     const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
+    const usageEventKey = normalizeGenerationText(options?.usageEventKey) || `usage:web-credit-consume:${randomUUID()}`;
     const payloadText = await postAdsflowText("/api/web/credits/consume", {
         admin_token: env.adsflowAdminToken,
         amount: Math.max(1, Math.trunc(amount || 1)),
@@ -4127,7 +4198,7 @@ const consumeWorkspaceGenerationCredit = async (user, amount = 1, language, opti
         project_id: options?.projectId,
         referral_source: "landing_site",
         task_type: options?.taskType,
-        usage_event_key: options?.usageEventKey,
+        usage_event_key: usageEventKey,
         user_email: user.email ?? undefined,
         user_name: user.name ?? undefined,
     });
@@ -4149,6 +4220,7 @@ const refundWorkspaceGenerationCredit = async (user, consumed, language, options
     }
     const externalUserId = await resolveStudioExternalUserId(user);
     const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
+    const usageEventKey = normalizeGenerationText(options?.usageEventKey) || `usage:web-credit-refund:${randomUUID()}`;
     const payloadText = await postAdsflowText("/api/web/credits/refund", {
         admin_token: env.adsflowAdminToken,
         consumed_purchased: Math.max(0, Math.trunc(consumed.purchased || 0)),
@@ -4159,7 +4231,7 @@ const refundWorkspaceGenerationCredit = async (user, consumed, language, options
         project_id: options?.projectId,
         referral_source: "landing_site",
         task_type: options?.taskType,
-        usage_event_key: options?.usageEventKey,
+        usage_event_key: usageEventKey,
         user_email: user.email ?? undefined,
         user_name: user.name ?? undefined,
     });
@@ -4389,6 +4461,40 @@ export async function createStudioGenerationJob(prompt, user, options) {
     });
     let jobCreated = false;
     let createdJobId;
+    let generationRequestStarted = false;
+    let refundAllowed = true;
+    const finalizeAcceptedGeneration = async (payload, jobId) => {
+        const queuedMetadata = resolveGenerationPresentation({
+            description: normalizedPrompt,
+            fallbackTitle: normalizedLanguage === "en" ? "Ready video" : "Готовое видео",
+            hashtags: null,
+            language: normalizedLanguage,
+            prompt: normalizedPrompt,
+            title: normalizeGenerationText(payload.title) || normalizedPrompt,
+        });
+        try {
+            await saveWorkspaceGenerationHistory(user, {
+                editedFromProjectAdId: normalizedEditedFromProjectAdId ?? null,
+                description: queuedMetadata.description,
+                hashtags: queuedMetadata.hashtags,
+                jobId,
+                prefillSettings,
+                prompt: queuedMetadata.prompt,
+                status: String(payload.status ?? "queued"),
+                title: queuedMetadata.title,
+                versionRootProjectAdId: normalizedVersionRootProjectAdId ?? null,
+            });
+        }
+        catch (error) {
+            console.error("[studio] Failed to persist queued generation", error);
+        }
+        return {
+            jobId,
+            profile: creditReservation.profile,
+            status: String(payload.status ?? "queued"),
+            title: queuedMetadata.title || "Studio generation",
+        };
+    };
     try {
         console.info("[studio] adsflow.brand-payload", {
             brandLogoDataUrlLength: normalizedBrandLogoFileDataUrl?.length ?? 0,
@@ -4518,6 +4624,11 @@ export async function createStudioGenerationJob(prompt, user, options) {
                         end_time: segment.endTime,
                         endTime: segment.endTime,
                         index: segment.index,
+                        infographic: segment.infographic,
+                        infographicRemoved: segment.infographicRemoved === true,
+                        infographic_removed: segment.infographicRemoved === true,
+                        manualTimingUserChanged: segment.manualTimingUserChanged === true,
+                        manual_timing_user_changed: segment.manualTimingUserChanged === true,
                         manualDurationSeconds,
                         manual_duration_seconds: manualDurationSeconds,
                         reset_visual: Boolean(segment.resetVisual),
@@ -4534,6 +4645,7 @@ export async function createStudioGenerationJob(prompt, user, options) {
                         text: segment.text,
                         timeline_duration_seconds: durationSeconds,
                         video_action: segment.videoAction,
+                        voiceoverAssetId: segment.voiceoverAssetId,
                         voiceover_asset_id: segment.voiceoverAssetId,
                         voice_source_duration: voiceSourceDuration,
                         voice_source_end_time: voiceSourceEndTime,
@@ -4581,6 +4693,7 @@ export async function createStudioGenerationJob(prompt, user, options) {
                 })),
             });
         }
+        generationRequestStarted = true;
         const payload = await fetchAdsflowJson(buildAdsflowUrl("/api/web/generations"), {
             method: "POST",
             headers: {
@@ -4633,48 +4746,37 @@ export async function createStudioGenerationJob(prompt, user, options) {
             throw new Error("AdsFlow did not return a job id.");
         }
         createdJobId = jobId;
+        // AdsFlow persists the task before attempting Redis enqueue. Once a job id is
+        // returned, queue recovery owns delivery and the credit reservation must stay attached.
+        jobCreated = true;
         const enqueueError = normalizeGenerationText(payload.enqueue_error);
         if (enqueueError) {
-            console.warn("[studio] AdsFlow enqueue failed:", {
+            console.warn("[studio] AdsFlow enqueue deferred to queue recovery:", {
                 enqueueError,
                 jobId,
             });
-            throw new StudioGenerationUnavailableError();
         }
-        jobCreated = true;
-        const queuedMetadata = resolveGenerationPresentation({
-            description: normalizedPrompt,
-            fallbackTitle: normalizedLanguage === "en" ? "Ready video" : "Готовое видео",
-            hashtags: null,
-            language: normalizedLanguage,
-            prompt: normalizedPrompt,
-            title: normalizeGenerationText(payload.title) || normalizedPrompt,
-        });
-        try {
-            await saveWorkspaceGenerationHistory(user, {
-                editedFromProjectAdId: normalizedEditedFromProjectAdId ?? null,
-                description: queuedMetadata.description,
-                hashtags: queuedMetadata.hashtags,
-                jobId,
-                prefillSettings,
-                prompt: queuedMetadata.prompt,
-                status: String(payload.status ?? "queued"),
-                title: queuedMetadata.title,
-                versionRootProjectAdId: normalizedVersionRootProjectAdId ?? null,
-            });
-        }
-        catch (error) {
-            console.error("[studio] Failed to persist queued generation", error);
-        }
-        return {
-            jobId,
-            profile: creditReservation.profile,
-            status: String(payload.status ?? "queued"),
-            title: queuedMetadata.title || "Studio generation",
-        };
+        return await finalizeAcceptedGeneration(payload, jobId);
     }
     catch (error) {
-        if (!jobCreated) {
+        if (!jobCreated && generationRequestStarted && isAdsflowGenerationAcceptanceAmbiguous(error)) {
+            const acceptance = await lookupAdsflowGenerationAcceptance(creditReservationEventKey, user);
+            if (acceptance.state === "found") {
+                const recoveredJobId = normalizeGenerationText(acceptance.payload.job_id);
+                if (recoveredJobId) {
+                    createdJobId = recoveredJobId;
+                    jobCreated = true;
+                    return await finalizeAcceptedGeneration(acceptance.payload, recoveredJobId);
+                }
+                refundAllowed = false;
+            }
+            else if (acceptance.state === "unknown") {
+                // A transport failure cannot prove that the POST was rejected. Keep the
+                // reservation attached so a late durable task cannot become a free job.
+                refundAllowed = false;
+            }
+        }
+        if (!jobCreated && refundAllowed) {
             try {
                 const refundUsageEventKey = createdJobId
                     ? `usage:${createdJobId}:refund`
@@ -4725,7 +4827,7 @@ export async function generateStudioSegmentAiPhoto(prompt, user, options) {
             segment_index: normalizedSegmentIndex,
             user_email: user.email ?? undefined,
             user_name: user.name ?? undefined,
-        });
+        }, { retryDelaysMs: [], timeoutMs: ADSFLOW_MUTATION_TIMEOUT_MS });
         const asset = await normalizeAdsflowSegmentAiPhotoAsset(payload.asset);
         assetReady = true;
         return {
@@ -4932,7 +5034,8 @@ export async function createStudioSegmentInfographicJob(text, user, options) {
     const normalizedIdempotencyKey = String(options.idempotencyKey ?? "").trim();
     const sourceMediaAssetId = normalizePositiveInteger(options.sourceMediaAssetId);
     const segmentIndex = normalizeNonNegativeInteger(options.segmentIndex);
-    const projectId = normalizePositiveInteger(options.projectId);
+    const projectId = normalizeNonNegativeInteger(options.projectId);
+    const draftId = normalizeGenerationText(options.draftId);
     if (!normalizedText || Array.from(normalizedText).length > 160) {
         throw new Error("Infographic text must contain between 1 and 160 characters.");
     }
@@ -4942,8 +5045,11 @@ export async function createStudioSegmentInfographicJob(text, user, options) {
     if (!sourceMediaAssetId) {
         throw new Error("Source media asset id is required.");
     }
-    if (!projectId) {
-        throw new Error("Project id is required.");
+    if (projectId === null || (projectId === 0 && !draftId)) {
+        throw new Error("Project id or draft id is required.");
+    }
+    if (projectId === 0 && !/^scratch:[A-Za-z0-9:_-]{1,192}$/.test(draftId)) {
+        throw new Error("A valid scratch draft id is required.");
     }
     if (segmentIndex === null) {
         throw new Error("Segment index is required.");
@@ -4955,6 +5061,7 @@ export async function createStudioSegmentInfographicJob(text, user, options) {
     const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
     const payload = await postAdsflowJson("/api/web/segment-infographic/jobs", {
         admin_token: env.adsflowAdminToken,
+        draft_id: projectId === 0 ? draftId : undefined,
         external_user_id: externalUserId,
         idempotency_key: normalizedIdempotencyKey,
         language: normalizeStudioLanguage(options.language),
@@ -4989,11 +5096,13 @@ export async function getStudioSegmentInfographicJobStatus(jobId, user) {
     const status = String(payload.status ?? "queued").trim() || "queued";
     const safeJobId = String(payload.job_id ?? jobId).trim() || String(jobId ?? "").trim();
     const asset = payload.asset ? await normalizeAdsflowSegmentAiPhotoAsset(payload.asset) : undefined;
-    const projectId = normalizePositiveInteger(payload.project_id);
+    const projectId = normalizeNonNegativeInteger(payload.project_id);
+    const draftId = normalizeGenerationText(payload.draft_id);
     const requestFingerprint = normalizeGenerationText(payload.request_fingerprint);
     const segmentIndex = normalizeNonNegativeInteger(payload.segment_index);
     return {
         asset,
+        draftId: draftId || undefined,
         error: normalizeGenerationText(payload.error) || undefined,
         jobId: safeJobId,
         profile: await enrichWorkspaceProfile(payload.user ?? undefined, {
@@ -5473,7 +5582,7 @@ export async function createStudioSegmentAiPhotoJob(prompt, user, options) {
         segment_index: normalizedSegmentIndex,
         user_email: user.email ?? undefined,
         user_name: user.name ?? undefined,
-    });
+    }, { retryDelaysMs: [], timeoutMs: ADSFLOW_MUTATION_TIMEOUT_MS });
     const jobId = String(payload.job_id ?? "").trim();
     if (!jobId) {
         throw new Error("AdsFlow did not return a segment AI photo job id.");
@@ -5531,7 +5640,7 @@ export async function createStudioSegmentAiVideoJob(prompt, user, options) {
         segment_index: normalizedSegmentIndex,
         user_email: user.email ?? undefined,
         user_name: user.name ?? undefined,
-    });
+    }, { retryDelaysMs: [], timeoutMs: ADSFLOW_MUTATION_TIMEOUT_MS });
     const jobId = String(payload.job_id ?? "").trim();
     if (!jobId) {
         throw new Error("AdsFlow did not return a segment AI video job id.");
@@ -5902,7 +6011,6 @@ export async function createStudioSegmentVoiceoverJob(text, user, options) {
         throw new Error("Voiceover text is required.");
     }
     const normalizedLanguage = normalizeStudioLanguage(options?.language);
-    const normalizedProjectId = normalizePositiveInteger(options?.projectId);
     const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
     const normalizedVoiceType = normalizeStudioVoiceIdForLanguage(options?.voiceType, normalizedLanguage);
     const requiredCredits = getStudioVoiceoverCreditCostForText(normalizedText);
@@ -5917,12 +6025,13 @@ export async function createStudioSegmentVoiceoverJob(text, user, options) {
     const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
     let payload;
     try {
+        // Editor previews are draft assets. Binding this job to project_id lets the
+        // upstream worker overwrite the immutable source version before render succeeds.
         payload = await postAdsflowJson("/api/web/segment-voiceover/jobs", {
             admin_token: env.adsflowAdminToken,
             credit_cost: requiredCredits,
             external_user_id: externalUserId,
             language: normalizedLanguage,
-            project_id: normalizedProjectId ?? undefined,
             segment_index: normalizedSegmentIndex,
             text: normalizedText,
             user_email: user.email ?? undefined,
@@ -6388,10 +6497,11 @@ export async function createStudioBatchVoiceoverJob(user, options) {
     if (creditCost <= 0) {
         throw new Error("Voiceover credit cost is required.");
     }
-    const normalizedProjectId = normalizePositiveInteger(options?.projectId);
     const externalUserId = await resolveStudioExternalUserId(user);
     const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
     try {
+        // Keep batch output detached for the same reason as single-scene previews:
+        // project state is committed only by the successful render/version flow.
         const payload = await postAdsflowJson("/api/web/voiceover/batch-jobs", {
             admin_token: env.adsflowAdminToken,
             credit_cost: creditCost,
@@ -6407,7 +6517,6 @@ export async function createStudioBatchVoiceoverJob(user, options) {
                 voice_type: group.voiceType,
                 ...(getStudioVoiceModelPath(group.voiceType) ? { model_path: getStudioVoiceModelPath(group.voiceType) } : {}),
             })),
-            project_id: normalizedProjectId ?? undefined,
             user_email: user.email ?? undefined,
             user_name: user.name ?? undefined,
         }, {
@@ -6440,84 +6549,36 @@ export async function createStudioBatchVoiceoverJob(user, options) {
     }
     const children = [];
     const projectGroups = [];
-    const billingRuns = buildStudioBatchVoiceoverBillingRuns(normalizedGroups);
     let fallbackProfile = buildWorkspaceProfile();
     try {
-        if (normalizedProjectId) {
-            for (const run of billingRuns) {
-                const runSegmentIndexes = new Set(run.segmentIndexes);
-                const runGroup = normalizedGroups.find((group) => group.language === run.language &&
-                    group.voiceType.toLowerCase() === run.voiceType.toLowerCase());
-                const runSegments = runGroup?.segments.filter((segment) => runSegmentIndexes.has(segment.segmentIndex)) ?? [];
-                if (!runGroup || runSegments.length === 0) {
-                    continue;
-                }
-                const payload = await postAdsflowJson("/api/web/project-voiceover/jobs", {
+        for (const group of normalizedGroups) {
+            for (const segment of group.segments) {
+                const payload = await postAdsflowJson("/api/web/segment-voiceover/jobs", {
                     admin_token: env.adsflowAdminToken,
-                    credit_cost: run.creditCost,
+                    credit_cost: getStudioVoiceoverCreditCostForText(segment.text),
                     external_user_id: externalUserId,
-                    language: runGroup.language,
-                    persist_as_segment_assets: true,
-                    project_id: normalizedProjectId,
-                    segments: runSegments.map((segment) => ({
-                        duration: segment.targetDurationSeconds,
-                        segment_index: segment.segmentIndex,
-                        target_duration: segment.targetDurationSeconds,
-                        text: segment.text,
-                    })),
-                    text: run.text,
+                    language: group.language,
+                    segment_index: segment.segmentIndex,
+                    text: segment.text,
                     user_email: user.email ?? undefined,
                     user_name: user.name ?? undefined,
-                    voice_type: runGroup.voiceType,
-                    ...(getStudioVoiceModelPath(runGroup.voiceType) ? { model_path: getStudioVoiceModelPath(runGroup.voiceType) } : {}),
+                    voice_type: group.voiceType,
+                    ...(getStudioVoiceModelPath(group.voiceType) ? { model_path: getStudioVoiceModelPath(group.voiceType) } : {}),
                 }, {
                     retryDelaysMs: [],
                     timeoutMs: ADSFLOW_MUTATION_TIMEOUT_MS,
                 });
-                const groupJobId = String(payload.job_id ?? "").trim();
-                if (!groupJobId) {
-                    throw new Error("AdsFlow did not return a project voiceover job id.");
+                const childJobId = String(payload.job_id ?? "").trim();
+                if (!childJobId) {
+                    throw new Error("AdsFlow did not return a segment voiceover job id.");
                 }
-                projectGroups.push({
-                    ...runGroup,
-                    creditCost: run.creditCost,
-                    jobId: groupJobId,
-                    segments: runSegments,
+                children.push({
+                    ...segment,
+                    jobId: childJobId,
+                    language: group.language,
+                    voiceType: group.voiceType,
                 });
                 fallbackProfile = await enrichWorkspaceProfileAfterAdsflowWebMutation(payload.user ?? undefined, payload.user?.user_id ? String(payload.user.user_id) : undefined, subscriptionDetails);
-            }
-        }
-        else {
-            for (const group of normalizedGroups) {
-                for (const segment of group.segments) {
-                    const payload = await postAdsflowJson("/api/web/segment-voiceover/jobs", {
-                        admin_token: env.adsflowAdminToken,
-                        credit_cost: getStudioVoiceoverCreditCostForText(segment.text),
-                        external_user_id: externalUserId,
-                        language: group.language,
-                        project_id: normalizedProjectId ?? undefined,
-                        segment_index: segment.segmentIndex,
-                        text: segment.text,
-                        user_email: user.email ?? undefined,
-                        user_name: user.name ?? undefined,
-                        voice_type: group.voiceType,
-                        ...(getStudioVoiceModelPath(group.voiceType) ? { model_path: getStudioVoiceModelPath(group.voiceType) } : {}),
-                    }, {
-                        retryDelaysMs: [],
-                        timeoutMs: ADSFLOW_MUTATION_TIMEOUT_MS,
-                    });
-                    const childJobId = String(payload.job_id ?? "").trim();
-                    if (!childJobId) {
-                        throw new Error("AdsFlow did not return a segment voiceover job id.");
-                    }
-                    children.push({
-                        ...segment,
-                        jobId: childJobId,
-                        language: group.language,
-                        voiceType: group.voiceType,
-                    });
-                    fallbackProfile = await enrichWorkspaceProfileAfterAdsflowWebMutation(payload.user ?? undefined, payload.user?.user_id ? String(payload.user.user_id) : undefined, subscriptionDetails);
-                }
             }
         }
     }
