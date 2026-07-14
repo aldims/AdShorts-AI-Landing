@@ -233,6 +233,7 @@ export const buildWorkspaceSegmentEditorTracks = <T extends WorkspaceSegmentEdit
   });
 
   const musicEdited = !shouldSuppressEditedState && buildMusicIdentity(draftSession) !== buildMusicIdentity(baselineSession);
+  const isMusicEmpty = normalizeTrackString(draftSession?.musicType) === "none";
   const musicRow: WorkspaceSegmentEditorTrackRow = {
     kind: "music",
     spans: [
@@ -240,6 +241,7 @@ export const buildWorkspaceSegmentEditorTracks = <T extends WorkspaceSegmentEdit
         arrayIndex: null,
         duration: totalDuration,
         isEdited: musicEdited,
+        isEmpty: isMusicEmpty,
         key: "music:global",
         kind: "music",
         segmentIndex: null,

@@ -115,6 +115,23 @@ describe("buildWorkspaceSegmentEditorTracks", () => {
     expect(textRow?.spans[1]?.isEdited).toBe(false);
   });
 
+  it("marks only disabled music as an empty timeline track", () => {
+    const segments = [createSegment(1)];
+    const disabledMusicTracks = buildWorkspaceSegmentEditorTracks(
+      segments,
+      [],
+      { musicType: "none" },
+    );
+    const selectedMusicTracks = buildWorkspaceSegmentEditorTracks(
+      segments,
+      [],
+      { musicName: "upbeat_10.mp3", musicType: "upbeat" },
+    );
+
+    expect(disabledMusicTracks.rows.find((row) => row.kind === "music")?.spans[0]?.isEmpty).toBe(true);
+    expect(selectedMusicTracks.rows.find((row) => row.kind === "music")?.spans[0]?.isEmpty).toBe(false);
+  });
+
   it("treats AdsFlow-shaped scene sound metadata as a non-empty sound row", () => {
     const tracks = buildWorkspaceSegmentEditorTracks([
       createSegment(1, {
