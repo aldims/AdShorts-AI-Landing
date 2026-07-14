@@ -10366,6 +10366,7 @@ textarea {
 .studio-publish-modal__main {
   display: grid;
   grid-template-columns: minmax(0, 1.14fr) minmax(320px, 0.86fr);
+  grid-auto-flow: row dense;
   gap: 16px;
   align-content: start;
   background: transparent;
@@ -10380,18 +10381,7 @@ textarea {
 
 .studio-publish-modal__destination,
 .studio-publish-modal__details {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  min-width: 0;
-}
-
-.studio-publish-modal__details {
-  order: 1;
-}
-
-.studio-publish-modal__destination {
-  order: 2;
+  display: contents;
 }
 
 .studio-publish-modal__section {
@@ -10409,9 +10399,33 @@ textarea {
 }
 
 .studio-publish-modal__section--settings {
+  display: flex;
+  flex-direction: column;
+  grid-column: 1;
+  grid-row: span 3;
   background:
     linear-gradient(180deg, rgba(141, 99, 255, 0.07), rgba(255, 255, 255, 0.018) 32%),
     var(--publish-shell-strong);
+}
+
+.studio-publish-modal__section--platform,
+.studio-publish-modal__section--channels,
+.studio-publish-modal__section--schedule {
+  grid-column: 2;
+}
+
+.studio-publish-modal__section--settings .studio-publish-modal__field-grid {
+  flex: 1;
+  grid-template-rows: auto minmax(120px, 1fr) auto;
+}
+
+.studio-publish-modal__section--settings .studio-publish-modal__field,
+.studio-publish-modal__section--settings .studio-publish-modal__field textarea {
+  min-height: 0;
+}
+
+.studio-publish-modal__section--settings .studio-publish-modal__field textarea {
+  height: 100%;
 }
 
 .studio-publish-modal__section-head {
@@ -11465,12 +11479,28 @@ textarea {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .studio-publish-modal__destination {
+  .studio-publish-modal__section--platform,
+  .studio-publish-modal__section--channels,
+  .studio-publish-modal__section--settings,
+  .studio-publish-modal__section--schedule {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .studio-publish-modal__section--platform {
     order: 1;
   }
 
-  .studio-publish-modal__details {
+  .studio-publish-modal__section--channels {
     order: 2;
+  }
+
+  .studio-publish-modal__section--settings {
+    order: 3;
+  }
+
+  .studio-publish-modal__section--schedule {
+    order: 4;
   }
 }
 
