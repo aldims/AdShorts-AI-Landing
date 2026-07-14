@@ -1,8 +1,10 @@
 import {
   cloneWorkspaceSegmentEditorDraftSegment,
   cloneWorkspaceSegmentEditorDraftSession,
+  ensureWorkspaceSegmentEditorDraftId,
   getPositiveWorkspaceMediaAssetId,
   getStudioCustomAssetPreviewUrl,
+  getWorkspaceSegmentEditorDraftId,
   getWorkspaceMediaAssetDurablePreviewUrl,
   getWorkspaceSegmentCustomPreviewKind,
   getWorkspaceSegmentDraftVisualAsset,
@@ -37,48 +39,60 @@ import {
 
 export type StoredWorkspaceSegmentPhotoAnimationJob = {
   createdAt: number;
+  draftId?: string;
   durationExtensionSourceDurationSeconds?: number | null;
   durationExtensionTargetDurationSeconds?: number | null;
   durationSeconds?: number | null;
   jobId: string;
   projectId: number;
   prompt: string;
+  refreshSceneSoundPrompt?: string;
   segmentIndex: number;
   sourceAsset: StudioCustomVideoFile | null;
+  sourceVisualIdentity?: string;
   status: string;
 };
 
 export type StoredWorkspaceSegmentTalkingPhotoJob = {
   createdAt: number;
+  draftId?: string;
   jobId: string;
+  language?: StudioLanguage;
   projectId: number;
   script: string;
   segmentIndex: number;
   sourceAsset: StudioCustomVideoFile | null;
+  sourceVisualIdentity?: string;
   status: string;
+  voiceType?: string;
 };
 
 export type StoredWorkspaceSegmentImageEditJob = {
   createdAt: number;
+  draftId?: string;
   jobId: string;
   projectId: number;
   prompt: string;
   segmentIndex: number;
+  sourceVisualIdentity?: string;
   status: string;
 };
 
 export type StoredWorkspaceSegmentSceneSoundJob = {
   createdAt: number;
+  draftId?: string;
   jobId: string;
   previousAssetId?: number | null;
   projectId: number;
   prompt: string;
   segmentIndex: number;
+  sourceVisualIdentity?: string;
   status: string;
 };
 
 export type StoredWorkspaceSegmentAiPhotoJob = {
   createdAt: number;
+  draftId?: string;
   jobId: string;
   projectId: number;
   prompt: string;
@@ -88,6 +102,7 @@ export type StoredWorkspaceSegmentAiPhotoJob = {
 
 export type StoredWorkspaceSegmentAiVideoJob = {
   createdAt: number;
+  draftId?: string;
   jobId: string;
   projectId: number;
   prompt: string;
@@ -97,6 +112,7 @@ export type StoredWorkspaceSegmentAiVideoJob = {
 
 export type StoredWorkspaceSegmentImageUpscaleJob = {
   createdAt: number;
+  draftId?: string;
   jobId: string;
   projectId: number;
   segmentIndex: number;
@@ -105,6 +121,7 @@ export type StoredWorkspaceSegmentImageUpscaleJob = {
 
 export type StoredWorkspaceSegmentInfographicJob = {
   createdAt: number;
+  draftId?: string;
   idempotencyKey: string;
   jobId: string;
   projectId: number;
@@ -118,6 +135,18 @@ export type StoredWorkspaceSegmentInfographicJob = {
   text: string;
 };
 
+export type StoredWorkspaceSegmentVoiceoverJob = {
+  createdAt: number;
+  draftId?: string;
+  jobId: string;
+  language: StudioLanguage;
+  projectId: number;
+  segmentIndex: number;
+  status: string;
+  text: string;
+  voiceType: string;
+};
+
 export type StoredWorkspaceSegmentBatchVoiceoverSegment = {
   language: StudioLanguage;
   segmentIndex: number;
@@ -127,11 +156,30 @@ export type StoredWorkspaceSegmentBatchVoiceoverSegment = {
 
 export type StoredWorkspaceSegmentBatchVoiceoverJob = {
   createdAt: number;
+  draftId?: string;
   jobId: string;
   projectId: number;
   segments: StoredWorkspaceSegmentBatchVoiceoverSegment[];
   source: "create-shorts" | "global-voiceover";
   status: string;
+};
+
+export const isStoredWorkspaceSegmentJobForDraft = (
+  job: Pick<StoredWorkspaceSegmentAiPhotoJob, "draftId" | "projectId">,
+  draft: Pick<WorkspaceSegmentEditorDraftSession, "draftId" | "projectId"> | null | undefined,
+) => {
+  if (!draft || job.projectId !== draft.projectId) {
+    return false;
+  }
+
+  const jobDraftId = String(job.draftId ?? "").trim();
+  if (!jobDraftId) {
+    // A project id uniquely identifies persisted drafts, but every scratch draft
+    // uses project id 0. Legacy scratch jobs cannot be attached safely without
+    // their originating draft id.
+    return draft.projectId > 0;
+  }
+  return getWorkspaceSegmentEditorDraftId(draft) === jobDraftId;
 };
 
 const WORKSPACE_SEGMENT_EDITOR_SESSION_STORAGE_KEY_PREFIX = "adshorts.segment-editor-session:";
@@ -450,8 +498,11 @@ const WORKSPACE_SEGMENT_INFOGRAPHIC_PENDING_STORAGE_KEY_PREFIX = "adshorts.segme
 const WORKSPACE_SEGMENT_INFOGRAPHIC_PENDING_TTL_MS = 24 * 60 * 60 * 1000;
 const WORKSPACE_SEGMENT_SCENE_SOUND_PENDING_STORAGE_KEY_PREFIX = "adshorts.segment-scene-sound-pending:";
 const WORKSPACE_SEGMENT_SCENE_SOUND_PENDING_TTL_MS = 24 * 60 * 60 * 1000;
+const WORKSPACE_SEGMENT_VOICEOVER_PENDING_STORAGE_KEY_PREFIX = "adshorts.segment-voiceover-pending:";
+const WORKSPACE_SEGMENT_VOICEOVER_PENDING_TTL_MS = 24 * 60 * 60 * 1000;
 const WORKSPACE_SEGMENT_BATCH_VOICEOVER_PENDING_STORAGE_KEY_PREFIX = "adshorts.segment-batch-voiceover-pending:";
 const WORKSPACE_SEGMENT_BATCH_VOICEOVER_PENDING_TTL_MS = 24 * 60 * 60 * 1000;
+const normalizeStoredWorkspaceSegmentJobDraftId = (value: unknown) => String(value ?? "").trim() || undefined;
 
 export const getWorkspaceSegmentEditorProjectOpenOptions = (options?: { forceRefresh?: boolean }) => {
   const forceRefresh = Boolean(options?.forceRefresh);
@@ -507,6 +558,9 @@ const getWorkspaceSegmentInfographicPendingStorageKey = (email: string) =>
 
 const getWorkspaceSegmentSceneSoundPendingStorageKey = (email: string) =>
   `${WORKSPACE_SEGMENT_SCENE_SOUND_PENDING_STORAGE_KEY_PREFIX}${email}`;
+
+const getWorkspaceSegmentVoiceoverPendingStorageKey = (email: string) =>
+  `${WORKSPACE_SEGMENT_VOICEOVER_PENDING_STORAGE_KEY_PREFIX}${email}`;
 
 const getWorkspaceSegmentBatchVoiceoverPendingStorageKey = (email: string) =>
   `${WORKSPACE_SEGMENT_BATCH_VOICEOVER_PENDING_STORAGE_KEY_PREFIX}${email}`;
@@ -656,8 +710,10 @@ export const normalizeStoredWorkspaceSegmentEditorDraftSession = (
   session: WorkspaceSegmentEditorDraftSession,
 ): WorkspaceSegmentEditorDraftSession => {
   const fallbackLanguage = getWorkspaceSegmentEditorSessionLanguage(session);
-  const clonedSession = sanitizeWorkspaceSegmentEditorCustomMusicState(
-    cloneWorkspaceSegmentEditorDraftSession(session),
+  const clonedSession = ensureWorkspaceSegmentEditorDraftId(
+    sanitizeWorkspaceSegmentEditorCustomMusicState(
+      cloneWorkspaceSegmentEditorDraftSession(session),
+    ),
   );
   return normalizeLegacyWorkspaceSegmentEditorDraftSession(rebuildWorkspaceSegmentEditorDraftSessionTimeline({
     ...clonedSession,
@@ -696,6 +752,7 @@ const normalizeStoredWorkspaceSegmentAiPhotoJob = (
   value: StoredWorkspaceSegmentAiPhotoJob,
 ): StoredWorkspaceSegmentAiPhotoJob => ({
   createdAt: Number.isFinite(Number(value.createdAt)) ? Number(value.createdAt) : Date.now(),
+  draftId: normalizeStoredWorkspaceSegmentJobDraftId(value.draftId),
   jobId: String(value.jobId ?? "").trim(),
   projectId: Math.trunc(Number(value.projectId)),
   prompt: normalizeWorkspaceSegmentAiPhotoPrompt(value.prompt),
@@ -803,7 +860,7 @@ export const removeStoredWorkspaceSegmentAiPhotoJobsForSegment = (
   const normalizedSegmentIndex = Number(segmentIndex);
   if (
     !Number.isInteger(normalizedProjectId) ||
-    normalizedProjectId <= 0 ||
+    normalizedProjectId < 0 ||
     !Number.isInteger(normalizedSegmentIndex) ||
     normalizedSegmentIndex < 0
   ) {
@@ -836,6 +893,7 @@ const normalizeStoredWorkspaceSegmentAiVideoJob = (
   value: StoredWorkspaceSegmentAiVideoJob,
 ): StoredWorkspaceSegmentAiVideoJob => ({
   createdAt: Number.isFinite(Number(value.createdAt)) ? Number(value.createdAt) : Date.now(),
+  draftId: normalizeStoredWorkspaceSegmentJobDraftId(value.draftId),
   jobId: String(value.jobId ?? "").trim(),
   projectId: Math.max(0, Math.trunc(Number(value.projectId))),
   prompt: normalizeWorkspaceSegmentAiVideoPrompt(value.prompt),
@@ -976,10 +1034,12 @@ const normalizeStoredWorkspaceSegmentImageEditJob = (
   value: StoredWorkspaceSegmentImageEditJob,
 ): StoredWorkspaceSegmentImageEditJob => ({
   createdAt: Number.isFinite(Number(value.createdAt)) ? Number(value.createdAt) : Date.now(),
+  draftId: normalizeStoredWorkspaceSegmentJobDraftId(value.draftId),
   jobId: String(value.jobId ?? "").trim(),
   projectId: Math.max(0, Math.trunc(Number(value.projectId))),
   prompt: normalizeWorkspaceSegmentAiPhotoPrompt(value.prompt),
   segmentIndex: Math.trunc(Number(value.segmentIndex)),
+  sourceVisualIdentity: String(value.sourceVisualIdentity ?? "").trim() || undefined,
   status: String(value.status ?? "queued").trim() || "queued",
 });
 
@@ -1116,6 +1176,7 @@ const normalizeStoredWorkspaceSegmentImageUpscaleJob = (
   value: StoredWorkspaceSegmentImageUpscaleJob,
 ): StoredWorkspaceSegmentImageUpscaleJob => ({
   createdAt: Number.isFinite(Number(value.createdAt)) ? Number(value.createdAt) : Date.now(),
+  draftId: normalizeStoredWorkspaceSegmentJobDraftId(value.draftId),
   jobId: String(value.jobId ?? "").trim(),
   projectId: Math.max(0, Math.trunc(Number(value.projectId))),
   segmentIndex: Math.trunc(Number(value.segmentIndex)),
@@ -1239,6 +1300,7 @@ const normalizeStoredWorkspaceSegmentInfographicJob = (
   value: StoredWorkspaceSegmentInfographicJob,
 ): StoredWorkspaceSegmentInfographicJob => ({
   createdAt: Number.isFinite(Number(value.createdAt)) ? Number(value.createdAt) : Date.now(),
+  draftId: normalizeStoredWorkspaceSegmentJobDraftId(value.draftId),
   idempotencyKey: String(value.idempotencyKey ?? "").trim(),
   jobId: String(value.jobId ?? "").trim(),
   projectId: Math.max(0, Math.trunc(Number(value.projectId))),
@@ -1401,10 +1463,12 @@ const normalizeStoredWorkspaceSegmentSceneSoundJob = (
 ): StoredWorkspaceSegmentSceneSoundJob => {
   const normalizedJob: StoredWorkspaceSegmentSceneSoundJob = {
     createdAt: Number.isFinite(Number(value.createdAt)) ? Number(value.createdAt) : Date.now(),
+    draftId: normalizeStoredWorkspaceSegmentJobDraftId(value.draftId),
     jobId: String(value.jobId ?? "").trim(),
     projectId: Math.max(0, Math.trunc(Number(value.projectId))),
     prompt: normalizeWorkspaceSegmentAiPhotoPrompt(value.prompt),
     segmentIndex: Math.trunc(Number(value.segmentIndex)),
+    sourceVisualIdentity: String(value.sourceVisualIdentity ?? "").trim(),
     status: String(value.status ?? "queued").trim() || "queued",
   };
   if (Object.prototype.hasOwnProperty.call(value, "previousAssetId")) {
@@ -1423,6 +1487,15 @@ export const hasStoredWorkspaceSegmentSceneSoundAssetChangedSinceStart = (
     normalizedCurrentAssetId !== null &&
     normalizedCurrentAssetId !== getPositiveWorkspaceMediaAssetId(job.previousAssetId)
   );
+};
+
+export const hasStoredWorkspaceSegmentSceneSoundVisualChangedSinceStart = (
+  job: StoredWorkspaceSegmentSceneSoundJob,
+  currentSourceVisualIdentity: string | null | undefined,
+) => {
+  const expectedIdentity = String(job.sourceVisualIdentity ?? "").trim();
+  const currentIdentity = String(currentSourceVisualIdentity ?? "").trim();
+  return !expectedIdentity || expectedIdentity !== currentIdentity;
 };
 
 export const readStoredWorkspaceSegmentSceneSoundJobs = (
@@ -1558,6 +1631,7 @@ const normalizeStoredWorkspaceSegmentPhotoAnimationJob = (
   value: StoredWorkspaceSegmentPhotoAnimationJob,
 ): StoredWorkspaceSegmentPhotoAnimationJob => ({
   createdAt: Number.isFinite(Number(value.createdAt)) ? Number(value.createdAt) : Date.now(),
+  draftId: normalizeStoredWorkspaceSegmentJobDraftId(value.draftId),
   durationExtensionSourceDurationSeconds: normalizeWorkspaceSegmentManualDurationSeconds(
     value.durationExtensionSourceDurationSeconds,
   ),
@@ -1568,8 +1642,10 @@ const normalizeStoredWorkspaceSegmentPhotoAnimationJob = (
   jobId: String(value.jobId ?? "").trim(),
   projectId: Math.trunc(Number(value.projectId)),
   prompt: normalizeWorkspaceSegmentAiVideoPrompt(value.prompt),
+  refreshSceneSoundPrompt: normalizeWorkspaceSegmentAiPhotoPrompt(value.refreshSceneSoundPrompt) || undefined,
   segmentIndex: Math.trunc(Number(value.segmentIndex)),
   sourceAsset: normalizePersistedStudioCustomVideoFile(value.sourceAsset),
+  sourceVisualIdentity: String(value.sourceVisualIdentity ?? "").trim() || undefined,
   status: String(value.status ?? "queued").trim() || "queued",
 });
 
@@ -1643,7 +1719,11 @@ export const upsertStoredWorkspaceSegmentPhotoAnimationJob = (
   job: StoredWorkspaceSegmentPhotoAnimationJob,
 ) => {
   const normalizedJob = normalizeStoredWorkspaceSegmentPhotoAnimationJob(job);
-  const jobs = readStoredWorkspaceSegmentPhotoAnimationJobs(email).filter((item) => item.jobId !== normalizedJob.jobId);
+  const jobs = readStoredWorkspaceSegmentPhotoAnimationJobs(email).filter(
+    (item) =>
+      item.jobId !== normalizedJob.jobId &&
+      !(item.projectId === normalizedJob.projectId && item.segmentIndex === normalizedJob.segmentIndex),
+  );
   writeStoredWorkspaceSegmentPhotoAnimationJobs(email, [normalizedJob, ...jobs]);
 };
 
@@ -1658,6 +1738,30 @@ export const removeStoredWorkspaceSegmentPhotoAnimationJob = (
 
   const jobs = readStoredWorkspaceSegmentPhotoAnimationJobs(email).filter((job) => job.jobId !== safeJobId);
   writeStoredWorkspaceSegmentPhotoAnimationJobs(email, jobs);
+};
+
+export const removeStoredWorkspaceSegmentPhotoAnimationJobsForSegment = (
+  email: string | null | undefined,
+  projectId: number | null | undefined,
+  segmentIndex: number | null | undefined,
+) => {
+  const normalizedProjectId = Number(projectId);
+  const normalizedSegmentIndex = Number(segmentIndex);
+  if (
+    !Number.isInteger(normalizedProjectId) ||
+    normalizedProjectId < 0 ||
+    !Number.isInteger(normalizedSegmentIndex) ||
+    normalizedSegmentIndex < 0
+  ) {
+    return;
+  }
+
+  writeStoredWorkspaceSegmentPhotoAnimationJobs(
+    email,
+    readStoredWorkspaceSegmentPhotoAnimationJobs(email).filter(
+      (job) => !(job.projectId === normalizedProjectId && job.segmentIndex === normalizedSegmentIndex),
+    ),
+  );
 };
 
 const isStoredWorkspaceSegmentTalkingPhotoJob = (value: unknown): value is StoredWorkspaceSegmentTalkingPhotoJob => {
@@ -1680,12 +1784,16 @@ const normalizeStoredWorkspaceSegmentTalkingPhotoJob = (
   value: StoredWorkspaceSegmentTalkingPhotoJob,
 ): StoredWorkspaceSegmentTalkingPhotoJob => ({
   createdAt: Number.isFinite(Number(value.createdAt)) ? Number(value.createdAt) : Date.now(),
+  draftId: normalizeStoredWorkspaceSegmentJobDraftId(value.draftId),
   jobId: String(value.jobId ?? "").trim(),
+  language: value.language === "en" ? "en" : value.language === "ru" ? "ru" : undefined,
   projectId: Math.max(0, Math.trunc(Number(value.projectId))),
   script: normalizeWorkspaceSegmentAiPhotoPrompt(value.script),
   segmentIndex: Math.trunc(Number(value.segmentIndex)),
   sourceAsset: normalizePersistedStudioCustomVideoFile(value.sourceAsset),
+  sourceVisualIdentity: String(value.sourceVisualIdentity ?? "").trim() || undefined,
   status: String(value.status ?? "queued").trim() || "queued",
+  voiceType: String(value.voiceType ?? "").trim() || undefined,
 });
 
 export const readStoredWorkspaceSegmentTalkingPhotoJobs = (
@@ -1809,6 +1917,152 @@ const normalizeStoredWorkspaceSegmentBatchVoiceoverSource = (
 const normalizeStoredWorkspaceSegmentBatchVoiceoverLanguage = (value: unknown): StudioLanguage =>
   value === "en" ? "en" : "ru";
 
+const isStoredWorkspaceSegmentVoiceoverJob = (
+  value: unknown,
+): value is StoredWorkspaceSegmentVoiceoverJob => {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const payload = value as Partial<StoredWorkspaceSegmentVoiceoverJob>;
+  return (
+    typeof payload.jobId === "string" &&
+    payload.jobId.trim().length > 0 &&
+    Number.isInteger(Number(payload.projectId)) &&
+    Number(payload.projectId) >= 0 &&
+    Number.isInteger(Number(payload.segmentIndex)) &&
+    Number(payload.segmentIndex) >= 0 &&
+    String(payload.text ?? "").trim().length > 0 &&
+    String(payload.voiceType ?? "").trim().length > 0 &&
+    String(payload.voiceType ?? "").trim() !== "none"
+  );
+};
+
+const normalizeStoredWorkspaceSegmentVoiceoverJob = (
+  value: StoredWorkspaceSegmentVoiceoverJob,
+): StoredWorkspaceSegmentVoiceoverJob => ({
+  createdAt: Number.isFinite(Number(value.createdAt)) ? Number(value.createdAt) : Date.now(),
+  draftId: normalizeStoredWorkspaceSegmentJobDraftId(value.draftId),
+  jobId: String(value.jobId ?? "").trim(),
+  language: normalizeStoredWorkspaceSegmentBatchVoiceoverLanguage(value.language),
+  projectId: Math.max(0, Math.trunc(Number(value.projectId))),
+  segmentIndex: Math.max(0, Math.trunc(Number(value.segmentIndex))),
+  status: String(value.status ?? "queued").trim() || "queued",
+  text: String(value.text ?? "").replace(/\s+/g, " ").trim(),
+  voiceType: String(value.voiceType ?? "").trim(),
+});
+
+export const readStoredWorkspaceSegmentVoiceoverJobs = (
+  email: string | null | undefined,
+): StoredWorkspaceSegmentVoiceoverJob[] => {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  const normalizedEmail = normalizeWorkspaceSegmentEditorStorageEmail(email);
+  if (!normalizedEmail) {
+    return [];
+  }
+
+  const storageKey = getWorkspaceSegmentVoiceoverPendingStorageKey(normalizedEmail);
+  const candidate = readWorkspaceSegmentEditorStorageCandidates(storageKey)[0];
+  if (!candidate) {
+    return [];
+  }
+
+  try {
+    const parsedValue = JSON.parse(candidate.rawValue) as unknown;
+    const rawJobs = Array.isArray(parsedValue) ? parsedValue : [];
+    const now = Date.now();
+    const jobs = rawJobs
+      .filter(isStoredWorkspaceSegmentVoiceoverJob)
+      .map(normalizeStoredWorkspaceSegmentVoiceoverJob)
+      .filter((job) => now - job.createdAt <= WORKSPACE_SEGMENT_VOICEOVER_PENDING_TTL_MS);
+    if (jobs.length !== rawJobs.length || candidate.storageName === "sessionStorage") {
+      writeWorkspaceSegmentEditorStorageValue(storageKey, JSON.stringify(jobs));
+    }
+    return jobs;
+  } catch {
+    removeWorkspaceSegmentEditorStorageValue(storageKey);
+    return [];
+  }
+};
+
+const writeStoredWorkspaceSegmentVoiceoverJobs = (
+  email: string | null | undefined,
+  jobs: StoredWorkspaceSegmentVoiceoverJob[],
+) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const normalizedEmail = normalizeWorkspaceSegmentEditorStorageEmail(email);
+  if (!normalizedEmail) {
+    return;
+  }
+
+  const storageKey = getWorkspaceSegmentVoiceoverPendingStorageKey(normalizedEmail);
+  const normalizedJobs = jobs
+    .filter(isStoredWorkspaceSegmentVoiceoverJob)
+    .map(normalizeStoredWorkspaceSegmentVoiceoverJob)
+    .filter((job) => Date.now() - job.createdAt <= WORKSPACE_SEGMENT_VOICEOVER_PENDING_TTL_MS);
+  if (!normalizedJobs.length) {
+    removeWorkspaceSegmentEditorStorageValue(storageKey);
+    return;
+  }
+  writeWorkspaceSegmentEditorStorageValue(storageKey, JSON.stringify(normalizedJobs));
+};
+
+export const upsertStoredWorkspaceSegmentVoiceoverJob = (
+  email: string | null | undefined,
+  job: StoredWorkspaceSegmentVoiceoverJob,
+) => {
+  const normalizedJob = normalizeStoredWorkspaceSegmentVoiceoverJob(job);
+  const jobs = readStoredWorkspaceSegmentVoiceoverJobs(email).filter(
+    (item) =>
+      item.jobId !== normalizedJob.jobId &&
+      !(item.projectId === normalizedJob.projectId && item.segmentIndex === normalizedJob.segmentIndex),
+  );
+  writeStoredWorkspaceSegmentVoiceoverJobs(email, [normalizedJob, ...jobs]);
+};
+
+export const removeStoredWorkspaceSegmentVoiceoverJob = (
+  email: string | null | undefined,
+  jobId: string | null | undefined,
+) => {
+  const safeJobId = String(jobId ?? "").trim();
+  if (!safeJobId) {
+    return;
+  }
+  writeStoredWorkspaceSegmentVoiceoverJobs(
+    email,
+    readStoredWorkspaceSegmentVoiceoverJobs(email).filter((job) => job.jobId !== safeJobId),
+  );
+};
+
+export const removeStoredWorkspaceSegmentVoiceoverJobsForSegment = (
+  email: string | null | undefined,
+  projectId: number | null | undefined,
+  segmentIndex: number | null | undefined,
+) => {
+  const normalizedProjectId = Number(projectId);
+  const normalizedSegmentIndex = Number(segmentIndex);
+  if (
+    !Number.isInteger(normalizedProjectId) ||
+    normalizedProjectId < 0 ||
+    !Number.isInteger(normalizedSegmentIndex) ||
+    normalizedSegmentIndex < 0
+  ) {
+    return;
+  }
+  writeStoredWorkspaceSegmentVoiceoverJobs(
+    email,
+    readStoredWorkspaceSegmentVoiceoverJobs(email).filter(
+      (job) => !(job.projectId === normalizedProjectId && job.segmentIndex === normalizedSegmentIndex),
+    ),
+  );
+};
+
 const normalizeStoredWorkspaceSegmentBatchVoiceoverSegment = (
   value: unknown,
 ): StoredWorkspaceSegmentBatchVoiceoverSegment | null => {
@@ -1854,6 +2108,7 @@ const normalizeStoredWorkspaceSegmentBatchVoiceoverJob = (
   value: StoredWorkspaceSegmentBatchVoiceoverJob,
 ): StoredWorkspaceSegmentBatchVoiceoverJob => ({
   createdAt: Number.isFinite(Number(value.createdAt)) ? Number(value.createdAt) : Date.now(),
+  draftId: normalizeStoredWorkspaceSegmentJobDraftId(value.draftId),
   jobId: String(value.jobId ?? "").trim(),
   projectId: Math.max(0, Math.trunc(Number(value.projectId))),
   segments: (value.segments ?? [])
@@ -2124,7 +2379,10 @@ export const readStoredWorkspaceSegmentEditorScratchDraft = (
         continue;
       }
 
-      if (candidate.storageName === "sessionStorage") {
+      if (
+        candidate.storageName === "sessionStorage" ||
+        String((parsedValue as Partial<WorkspaceSegmentEditorDraftSession>).draftId ?? "").trim() !== normalizedDraft.draftId
+      ) {
         writeWorkspaceSegmentEditorStorageValue(storageKey, JSON.stringify({
           ...normalizedDraft,
           storageVersion: WORKSPACE_SEGMENT_EDITOR_DRAFT_STORAGE_VERSION,
@@ -2185,7 +2443,10 @@ export const readStoredWorkspaceSegmentEditorScratchBaseline = (
       }
 
       const normalizedDraft = normalizeStoredWorkspaceSegmentEditorDraftSession(parsedValue);
-      if (candidate.storageName === "sessionStorage") {
+      if (
+        candidate.storageName === "sessionStorage" ||
+        String((parsedValue as Partial<WorkspaceSegmentEditorDraftSession>).draftId ?? "").trim() !== normalizedDraft.draftId
+      ) {
         writeWorkspaceSegmentEditorStorageValue(storageKey, JSON.stringify({
           ...normalizedDraft,
           storageVersion: WORKSPACE_SEGMENT_EDITOR_DRAFT_STORAGE_VERSION,
@@ -2535,6 +2796,15 @@ export const clearStoredWorkspaceSegmentEditorTemporaryStateExcept = (
     return shouldKeep;
   });
   writeStoredWorkspaceSegmentTalkingPhotoJobs(normalizedEmail, nextTalkingPhotoJobs);
+
+  const nextVoiceoverJobs = readStoredWorkspaceSegmentVoiceoverJobs(normalizedEmail).filter((job) => {
+    const shouldKeep = keptProjectIds.has(job.projectId);
+    if (!shouldKeep) {
+      clearedProjectIds.add(job.projectId);
+    }
+    return shouldKeep;
+  });
+  writeStoredWorkspaceSegmentVoiceoverJobs(normalizedEmail, nextVoiceoverJobs);
 
   const nextBatchVoiceoverJobs = readStoredWorkspaceSegmentBatchVoiceoverJobs(normalizedEmail).filter((job) => {
     const shouldKeep = keptProjectIds.has(job.projectId);

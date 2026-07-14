@@ -1,6 +1,8 @@
+import type { Locale } from "../../lib/i18n";
 import {
   createWorkspaceSegmentSceneSoundAsset,
   getCanonicalStudioVoiceOptionId,
+  getStudioVoiceOptionCopy,
   getStudioCustomVideoFileIdentityKey,
   getWorkspaceSegmentCurrentVisualIdentityKey,
   getWorkspaceSegmentCustomAssetId,
@@ -25,7 +27,7 @@ import {
 } from "./workspace-segment-editor";
 import { getStudioSubtitleStyleDisplayLabel } from "./workspace-subtitle-preview-helpers";
 import { areWorkspaceSegmentInfographicsEqual } from "./workspace-infographic-helpers";
-import { studioMusicOptions } from "./workspace-studio-options";
+import { getStudioMusicOptionCopy, studioMusicOptions } from "./workspace-studio-options";
 import { formatWorkspaceSegmentDurationInputValue } from "./workspace-utils";
 import type {
   StudioCustomVideoFile,
@@ -263,9 +265,13 @@ export type WorkspaceSegmentEditorChecklistItem =
     };
 
 export type WorkspaceSegmentEditorChecklistBuildOptions = {
+  locale?: Locale;
   subtitleColorOptions?: StudioSubtitleColorOption[];
   subtitleStyleOptions?: StudioSubtitleStyleOption[];
 };
+
+const workspaceChecklistText = (locale: Locale, russian: string, english: string) =>
+  locale === "en" ? english : russian;
 
 export const hasOnlyWorkspaceSegmentEditorDurationChecklistChanges = (
   items: WorkspaceSegmentEditorChecklistItem[] | null | undefined,
@@ -330,94 +336,113 @@ export const formatWorkspaceSegmentEditorChecklistPreview = (value: string, maxC
   return `${normalized.slice(0, Math.max(1, maxChars - 1)).trimEnd()}…`;
 };
 
-const getWorkspaceSegmentEditorChecklistVoiceLabel = (voiceId?: string | null) => {
+const getWorkspaceSegmentEditorChecklistVoiceLabel = (
+  voiceId: string | null | undefined,
+  locale: Locale,
+) => {
   const safeVoiceId = getCanonicalStudioVoiceOptionId(voiceId);
   if (!safeVoiceId) {
-    return "выключена";
+    return workspaceChecklistText(locale, "выключена", "disabled");
   }
 
   for (const voiceOptions of Object.values(studioVoiceOptionsByLanguage)) {
     const matchedVoice = voiceOptions.find((voice) => voice.id === safeVoiceId);
     if (matchedVoice) {
-      return `голос ${matchedVoice.label}`;
+      return workspaceChecklistText(
+        locale,
+        `голос ${matchedVoice.label}`,
+        `voice ${getStudioVoiceOptionCopy(matchedVoice, locale).label}`,
+      );
     }
   }
 
-  return `голос ${safeVoiceId}`;
+  return workspaceChecklistText(locale, `голос ${safeVoiceId}`, `voice ${safeVoiceId}`);
 };
 
-const getWorkspaceSegmentEditorChecklistMusicLabel = (musicType?: string | null) => {
+const getWorkspaceSegmentEditorChecklistMusicLabel = (
+  musicType: string | null | undefined,
+  locale: Locale,
+) => {
   const safeMusicType = normalizeWorkspaceSegmentEditorSetting(musicType) ?? "ai";
-  return studioMusicOptions.find((option) => option.id === safeMusicType)?.label ?? safeMusicType;
+  const option = studioMusicOptions.find((candidate) => candidate.id === safeMusicType);
+  return option ? getStudioMusicOptionCopy(option, locale).label : safeMusicType;
 };
 
 const getWorkspaceSegmentEditorChecklistSubtitleStyleLabel = (
   styleId: string | null,
+  locale: Locale,
   styleOptions?: StudioSubtitleStyleOption[],
 ) => {
   const safeStyleId = normalizeWorkspaceSegmentEditorSetting(styleId);
   if (!safeStyleId) {
-    return "без стиля";
+    return workspaceChecklistText(locale, "без стиля", "no style");
   }
 
   const styleOption = styleOptions?.find((style) => style.id === safeStyleId);
-  return getStudioSubtitleStyleDisplayLabel("ru", styleOption) || safeStyleId;
+  return getStudioSubtitleStyleDisplayLabel(locale, styleOption) || safeStyleId;
 };
 
 const getWorkspaceSegmentEditorChecklistSubtitleColorLabel = (
   colorId: string | null,
+  locale: Locale,
   colorOptions?: StudioSubtitleColorOption[],
 ) => {
   const safeColorId = normalizeWorkspaceSegmentEditorSetting(colorId);
   if (!safeColorId) {
-    return "без цвета";
+    return workspaceChecklistText(locale, "без цвета", "no color");
   }
 
   return colorOptions?.find((color) => color.id === safeColorId)?.label ?? safeColorId;
 };
 
-const getWorkspaceSegmentEditorChecklistTextLabel = (segment: WorkspaceSegmentEditorDraftSegment) => {
+const getWorkspaceSegmentEditorChecklistTextLabel = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  locale: Locale,
+) => {
   if (!formatWorkspaceSegmentEditorChecklistPreview(segment.text)) {
-    return "текст очищен";
+    return workspaceChecklistText(locale, "текст очищен", "text cleared");
   }
 
-  return "обновлен текст";
+  return workspaceChecklistText(locale, "обновлен текст", "text updated");
 };
 
-const getWorkspaceSegmentEditorChecklistVisualLabel = (segment: WorkspaceSegmentEditorDraftSegment) => {
+const getWorkspaceSegmentEditorChecklistVisualLabel = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  locale: Locale,
+) => {
   if (segment.visualReset && isWorkspaceSegmentVisualResetApplied(segment)) {
-    return "сброшен визуал";
+    return workspaceChecklistText(locale, "сброшен визуал", "visual reset");
   }
 
   const latestVisualAction = getWorkspaceSegmentLatestVisualAction(segment);
 
   if (latestVisualAction === "ai") {
-    return "обновлено видео";
+    return workspaceChecklistText(locale, "обновлено видео", "video updated");
   }
 
   if (latestVisualAction === "photo_animation") {
-    return "добавлено движение в фото";
+    return workspaceChecklistText(locale, "добавлено движение в фото", "motion added to photo");
   }
 
   if (latestVisualAction === "talking_photo") {
-    return "добавлен говорящий персонаж";
+    return workspaceChecklistText(locale, "добавлен говорящий персонаж", "talking character added");
   }
 
   if (latestVisualAction === "custom") {
     return segment.customVideo?.source === "media-library"
-      ? "выбран визуал из медиатеки"
-      : "добавлен свой визуал";
+      ? workspaceChecklistText(locale, "выбран визуал из медиатеки", "visual selected from media library")
+      : workspaceChecklistText(locale, "добавлен свой визуал", "custom visual added");
   }
 
   if (latestVisualAction === "image_edit") {
-    return "отредактировано фото";
+    return workspaceChecklistText(locale, "отредактировано фото", "photo edited");
   }
 
   if (latestVisualAction === "ai_photo") {
-    return "обновлено изображение";
+    return workspaceChecklistText(locale, "обновлено изображение", "image updated");
   }
 
-  return "обновлен визуал";
+  return workspaceChecklistText(locale, "обновлен визуал", "visual updated");
 };
 
 const getWorkspaceSegmentCustomAssetIdentityKey = (asset: StudioCustomVideoFile | null | undefined) => {
@@ -638,76 +663,103 @@ export const canReuseWorkspaceSegmentProjectTimelineVoiceover = (
 const getWorkspaceSegmentEditorChecklistSceneSoundLabel = (
   segment: WorkspaceSegmentEditorDraftSegment,
   baselineSegment: WorkspaceSegmentEditorDraftSegment | null | undefined,
+  locale: Locale,
 ) => {
   const currentIdentity = getWorkspaceSegmentSceneSoundIdentityKey(segment);
   const baselineIdentity = getWorkspaceSegmentSceneSoundIdentityKey(baselineSegment);
 
   if (currentIdentity && !baselineIdentity) {
-    return "добавлен звук сцены";
+    return workspaceChecklistText(locale, "добавлен звук сцены", "scene sound added");
   }
 
   if (!currentIdentity && baselineIdentity) {
-    return "удален звук сцены";
+    return workspaceChecklistText(locale, "удален звук сцены", "scene sound removed");
   }
 
-  return "обновлен звук сцены";
+  return workspaceChecklistText(locale, "обновлен звук сцены", "scene sound updated");
 };
 
 const getWorkspaceSegmentEditorChecklistInfographicLabel = (
   segment: WorkspaceSegmentEditorDraftSegment,
   baselineSegment: WorkspaceSegmentEditorDraftSegment | null | undefined,
+  locale: Locale,
 ) => {
   if (segment.infographic && !baselineSegment?.infographic) {
-    return "добавлена инфографика";
+    return workspaceChecklistText(locale, "добавлена инфографика", "infographic added");
   }
   if (!segment.infographic && baselineSegment?.infographic) {
-    return "удалена инфографика";
+    return workspaceChecklistText(locale, "удалена инфографика", "infographic removed");
   }
-  return "обновлена инфографика";
+  return workspaceChecklistText(locale, "обновлена инфографика", "infographic updated");
 };
 
-const getWorkspaceSegmentEditorChecklistSceneVoiceLabel = (segment: WorkspaceSegmentEditorDraftSegment) => {
+const getWorkspaceSegmentEditorChecklistSceneVoiceLabel = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  locale: Locale,
+) => {
   const voiceId = getWorkspaceSegmentVoiceOverrideId(segment);
   if (segment.voiceoverAsset) {
-    return "озвучка сгенерирована";
+    return workspaceChecklistText(locale, "озвучка сгенерирована", "voiceover generated");
   }
   if (!voiceId) {
-    return "озвучка как в видео";
+    return workspaceChecklistText(locale, "озвучка как в видео", "voiceover inherited from video");
   }
 
-  return `озвучка: ${getWorkspaceSegmentEditorChecklistVoiceLabel(voiceId)}`;
+  return workspaceChecklistText(
+    locale,
+    `озвучка: ${getWorkspaceSegmentEditorChecklistVoiceLabel(voiceId, locale)}`,
+    `voiceover: ${getWorkspaceSegmentEditorChecklistVoiceLabel(voiceId, locale)}`,
+  );
 };
 
 const getWorkspaceSegmentEditorChecklistSceneSubtitleLabel = (
   segment: WorkspaceSegmentEditorDraftSegment,
   options?: WorkspaceSegmentEditorChecklistBuildOptions,
 ) => {
+  const locale = options?.locale ?? "ru";
   const subtitleType = getWorkspaceSegmentSubtitleTypeOverrideId(segment);
   const subtitleStyleId = getWorkspaceSegmentSubtitleStyleOverrideId(segment);
   const subtitleColorId = getWorkspaceSegmentSubtitleColorOverrideId(segment);
 
   if (subtitleType === "none") {
-    return "субтитры выключены";
+    return workspaceChecklistText(locale, "субтитры выключены", "subtitles disabled");
   }
 
   const changes: string[] = [];
   if (subtitleStyleId) {
     changes.push(
-      `стиль ${getWorkspaceSegmentEditorChecklistSubtitleStyleLabel(subtitleStyleId, options?.subtitleStyleOptions)}`,
+      workspaceChecklistText(
+        locale,
+        `стиль ${getWorkspaceSegmentEditorChecklistSubtitleStyleLabel(subtitleStyleId, locale, options?.subtitleStyleOptions)}`,
+        `style ${getWorkspaceSegmentEditorChecklistSubtitleStyleLabel(subtitleStyleId, locale, options?.subtitleStyleOptions)}`,
+      ),
     );
   }
 
   if (subtitleColorId) {
     changes.push(
-      `цвет ${getWorkspaceSegmentEditorChecklistSubtitleColorLabel(subtitleColorId, options?.subtitleColorOptions)}`,
+      workspaceChecklistText(
+        locale,
+        `цвет ${getWorkspaceSegmentEditorChecklistSubtitleColorLabel(subtitleColorId, locale, options?.subtitleColorOptions)}`,
+        `color ${getWorkspaceSegmentEditorChecklistSubtitleColorLabel(subtitleColorId, locale, options?.subtitleColorOptions)}`,
+      ),
     );
   }
 
-  return changes.length > 0 ? `субтитры: ${changes.join(", ")}` : "субтитры: глобальные настройки";
+  return changes.length > 0
+    ? workspaceChecklistText(locale, `субтитры: ${changes.join(", ")}`, `subtitles: ${changes.join(", ")}`)
+    : workspaceChecklistText(locale, "субтитры: глобальные настройки", "subtitles: global settings");
 };
 
-const getWorkspaceSegmentEditorChecklistDurationLabel = (segment: WorkspaceSegmentEditorDraftSegment) =>
-  `длина: ${formatWorkspaceSegmentDurationInputValue(segment.manualDurationSeconds || segment.duration)} сек`;
+const getWorkspaceSegmentEditorChecklistDurationLabel = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  locale: Locale,
+) =>
+  workspaceChecklistText(
+    locale,
+    `длина: ${formatWorkspaceSegmentDurationInputValue(segment.manualDurationSeconds || segment.duration)} сек`,
+    `duration: ${formatWorkspaceSegmentDurationInputValue(segment.manualDurationSeconds || segment.duration)} sec`,
+  );
 
 const lowerCaseWorkspaceChecklistLabelPrefix = (value: string) => {
   const normalized = value.trim();
@@ -723,56 +775,80 @@ const getWorkspaceSegmentEditorChecklistSubtitleLabel = (
   baselineSettings: ReturnType<typeof getWorkspaceSegmentEditorSettingsSnapshot>,
   options?: WorkspaceSegmentEditorChecklistBuildOptions,
 ) => {
+  const locale = options?.locale ?? "ru";
   if (!baselineSettings.subtitleEnabled && !draftSettings.subtitleEnabled) {
-    return "Субтитры: выключены";
+    return workspaceChecklistText(locale, "Субтитры: выключены", "Subtitles: disabled");
   }
 
   if (!draftSettings.subtitleEnabled) {
-    return "Субтитры: выключены";
+    return workspaceChecklistText(locale, "Субтитры: выключены", "Subtitles: disabled");
   }
 
   const nextStyleLabel = getWorkspaceSegmentEditorChecklistSubtitleStyleLabel(
     draftSettings.subtitleStyleId,
+    locale,
     options?.subtitleStyleOptions,
   );
   const nextColorLabel = getWorkspaceSegmentEditorChecklistSubtitleColorLabel(
     draftSettings.subtitleColorId,
+    locale,
     options?.subtitleColorOptions,
   );
 
   if (!baselineSettings.subtitleEnabled) {
-    return `Субтитры: включены, стиль ${nextStyleLabel}, цвет ${nextColorLabel}`;
+    return workspaceChecklistText(
+      locale,
+      `Субтитры: включены, стиль ${nextStyleLabel}, цвет ${nextColorLabel}`,
+      `Subtitles: enabled, style ${nextStyleLabel}, color ${nextColorLabel}`,
+    );
   }
 
   const changes: string[] = [];
   if (draftSettings.subtitleStyleId !== baselineSettings.subtitleStyleId) {
-    changes.push(`стиль ${nextStyleLabel}`);
+    changes.push(workspaceChecklistText(locale, `стиль ${nextStyleLabel}`, `style ${nextStyleLabel}`));
   }
 
   if (draftSettings.subtitleColorId !== baselineSettings.subtitleColorId) {
-    changes.push(`цвет ${nextColorLabel}`);
+    changes.push(workspaceChecklistText(locale, `цвет ${nextColorLabel}`, `color ${nextColorLabel}`));
   }
 
-  return changes.length > 0 ? `Субтитры: ${changes.join(", ")}` : `Субтитры: стиль ${nextStyleLabel}, цвет ${nextColorLabel}`;
+  return changes.length > 0
+    ? workspaceChecklistText(locale, `Субтитры: ${changes.join(", ")}`, `Subtitles: ${changes.join(", ")}`)
+    : workspaceChecklistText(
+        locale,
+        `Субтитры: стиль ${nextStyleLabel}, цвет ${nextColorLabel}`,
+        `Subtitles: style ${nextStyleLabel}, color ${nextColorLabel}`,
+      );
 };
 
 const getWorkspaceSegmentEditorChecklistVoiceSettingsLabel = (
   draftSettings: ReturnType<typeof getWorkspaceSegmentEditorSettingsSnapshot>,
+  locale: Locale,
 ) =>
-  `Озвучка: ${getWorkspaceSegmentEditorChecklistVoiceLabel(draftSettings.voiceId)}`;
+  workspaceChecklistText(
+    locale,
+    `Озвучка: ${getWorkspaceSegmentEditorChecklistVoiceLabel(draftSettings.voiceId, locale)}`,
+    `Voiceover: ${getWorkspaceSegmentEditorChecklistVoiceLabel(draftSettings.voiceId, locale)}`,
+  );
 
 const getWorkspaceSegmentEditorChecklistMusicSettingsLabel = (
   draftSettings: ReturnType<typeof getWorkspaceSegmentEditorSettingsSnapshot>,
+  locale: Locale,
 ) => {
-  const musicLabel = getWorkspaceSegmentEditorChecklistMusicLabel(draftSettings.musicType);
+  const musicLabel = getWorkspaceSegmentEditorChecklistMusicLabel(draftSettings.musicType, locale);
   return draftSettings.musicType === "custom" && draftSettings.customMusicFileName
-    ? `Музыка: ${musicLabel} (${formatWorkspaceSegmentEditorChecklistPreview(draftSettings.customMusicFileName, 32)})`
-    : `Музыка: ${musicLabel}`;
+    ? workspaceChecklistText(
+        locale,
+        `Музыка: ${musicLabel} (${formatWorkspaceSegmentEditorChecklistPreview(draftSettings.customMusicFileName, 32)})`,
+        `Music: ${musicLabel} (${formatWorkspaceSegmentEditorChecklistPreview(draftSettings.customMusicFileName, 32)})`,
+      )
+    : workspaceChecklistText(locale, `Музыка: ${musicLabel}`, `Music: ${musicLabel}`);
 };
 
 const getWorkspaceSegmentEditorChecklistOrderLabel = (
   draft: WorkspaceSegmentEditorDraftSession,
   baseline: WorkspaceSegmentEditorDraftSession,
+  locale: Locale,
 ) => {
   const baselineSegmentIds = baseline.segments.map((segment) => segment.index).sort((left, right) => left - right);
   const draftSegmentIds = draft.segments.map((segment) => segment.index).sort((left, right) => left - right);
@@ -781,10 +857,14 @@ const getWorkspaceSegmentEditorChecklistOrderLabel = (
     baselineSegmentIds.every((segmentIndex, index) => segmentIndex === draftSegmentIds[index]);
 
   if (!hasSameSegmentSet) {
-    return `Сегменты: было ${baseline.segments.length}, стало ${draft.segments.length}`;
+    return workspaceChecklistText(
+      locale,
+      `Сегменты: было ${baseline.segments.length}, стало ${draft.segments.length}`,
+      `Scenes: ${baseline.segments.length} before, ${draft.segments.length} now`,
+    );
   }
 
-  return "Сегменты: изменен порядок";
+  return workspaceChecklistText(locale, "Сегменты: изменен порядок", "Scenes: order changed");
 };
 
 export const isWorkspaceSegmentAppliedVisualResetChange = (
@@ -816,6 +896,7 @@ export const buildWorkspaceSegmentEditorChangeChecklist = (
   baseline?: WorkspaceSegmentEditorDraftSession | null,
   options?: WorkspaceSegmentEditorChecklistBuildOptions,
 ) => {
+  const locale = options?.locale ?? "ru";
   const pendingInsertedSegmentIndices = getWorkspaceSegmentEditorPendingInsertedSegmentIndices(draft, baseline);
   const comparableDraft = createWorkspaceSegmentEditorComparableDraftSession(draft, baseline);
   const baselineSegmentsByIndex = new Map((baseline?.segments ?? []).map((segment) => [segment.index, segment] as const));
@@ -839,30 +920,30 @@ export const buildWorkspaceSegmentEditorChangeChecklist = (
     const baselineSegment = baselineSegmentsByIndex.get(segment.index);
 
     if (isWorkspaceSegmentDraftTextEdited(segment)) {
-      segmentChanges.push(getWorkspaceSegmentEditorChecklistTextLabel(segment));
+      segmentChanges.push(getWorkspaceSegmentEditorChecklistTextLabel(segment, locale));
       resetText = true;
     }
 
     const isVisualEdited = isWorkspaceSegmentDraftVisualChangedFromBaseline(segment, baselineSegment);
     const isVisualResetChange = isWorkspaceSegmentAppliedVisualResetChange(segment, baselineSegment);
     if (isVisualEdited || isVisualResetChange) {
-      segmentChanges.push(getWorkspaceSegmentEditorChecklistVisualLabel(segment));
+      segmentChanges.push(getWorkspaceSegmentEditorChecklistVisualLabel(segment, locale));
       resetVisual = isVisualEdited;
       restoreVisual = isVisualResetChange;
     }
 
     if (isWorkspaceSegmentDraftInfographicEdited(segment, baselineSegment)) {
-      segmentChanges.push(getWorkspaceSegmentEditorChecklistInfographicLabel(segment, baselineSegment));
+      segmentChanges.push(getWorkspaceSegmentEditorChecklistInfographicLabel(segment, baselineSegment, locale));
       resetInfographic = true;
     }
 
     if (isWorkspaceSegmentDraftSceneSoundEdited(segment, baselineSegment)) {
-      segmentChanges.push(getWorkspaceSegmentEditorChecklistSceneSoundLabel(segment, baselineSegment));
+      segmentChanges.push(getWorkspaceSegmentEditorChecklistSceneSoundLabel(segment, baselineSegment, locale));
       resetSceneSound = true;
     }
 
     if (isWorkspaceSegmentDraftVoiceEdited(segment, baselineSegment)) {
-      segmentChanges.push(getWorkspaceSegmentEditorChecklistSceneVoiceLabel(segment));
+      segmentChanges.push(getWorkspaceSegmentEditorChecklistSceneVoiceLabel(segment, locale));
       resetVoice = true;
     }
 
@@ -872,7 +953,7 @@ export const buildWorkspaceSegmentEditorChangeChecklist = (
     }
 
     if (isWorkspaceSegmentDraftDurationEdited(segment, baselineSegment)) {
-      segmentChanges.push(getWorkspaceSegmentEditorChecklistDurationLabel(segment));
+      segmentChanges.push(getWorkspaceSegmentEditorChecklistDurationLabel(segment, locale));
       resetDuration = true;
     }
 
@@ -880,7 +961,11 @@ export const buildWorkspaceSegmentEditorChangeChecklist = (
       items.push({
         key: `segment-change:${segment.index}`,
         kind: "segment",
-        label: `Сегмент ${segmentNumber}: ${segmentChanges.join(", ")}`,
+        label: workspaceChecklistText(
+          locale,
+          `Сегмент ${segmentNumber}: ${segmentChanges.join(", ")}`,
+          `Scene ${segmentNumber}: ${segmentChanges.join(", ")}`,
+        ),
         resetDuration,
         resetInfographic,
         resetSceneSound,
@@ -915,7 +1000,9 @@ export const buildWorkspaceSegmentEditorChangeChecklist = (
 
   if (draftSettings.voiceEnabled !== baselineSettings.voiceEnabled || draftSettings.voiceId !== baselineSettings.voiceId) {
     globalChanges.push(
-      lowerCaseWorkspaceChecklistLabelPrefix(getWorkspaceSegmentEditorChecklistVoiceSettingsLabel(draftSettings)),
+      lowerCaseWorkspaceChecklistLabelPrefix(
+        getWorkspaceSegmentEditorChecklistVoiceSettingsLabel(draftSettings, locale),
+      ),
     );
     resetSettingIds.push("voice");
   }
@@ -928,13 +1015,19 @@ export const buildWorkspaceSegmentEditorChangeChecklist = (
     draftSettings.customMusicFileName !== baselineSettings.customMusicFileName
   ) {
     globalChanges.push(
-      lowerCaseWorkspaceChecklistLabelPrefix(getWorkspaceSegmentEditorChecklistMusicSettingsLabel(draftSettings)),
+      lowerCaseWorkspaceChecklistLabelPrefix(
+        getWorkspaceSegmentEditorChecklistMusicSettingsLabel(draftSettings, locale),
+      ),
     );
     resetSettingIds.push("music");
   }
 
   if (baseline && !areWorkspaceSegmentEditorSegmentOrdersEqual(comparableDraft, baseline)) {
-    globalChanges.push(lowerCaseWorkspaceChecklistLabelPrefix(getWorkspaceSegmentEditorChecklistOrderLabel(comparableDraft, baseline)));
+    globalChanges.push(
+      lowerCaseWorkspaceChecklistLabelPrefix(
+        getWorkspaceSegmentEditorChecklistOrderLabel(comparableDraft, baseline, locale),
+      ),
+    );
     resetOrder = true;
   }
 
@@ -942,7 +1035,11 @@ export const buildWorkspaceSegmentEditorChangeChecklist = (
     items.push({
       key: "segment-settings:global",
       kind: "global",
-      label: `Общее: ${globalChanges.join(", ")}`,
+      label: workspaceChecklistText(
+        locale,
+        `Общее: ${globalChanges.join(", ")}`,
+        `General: ${globalChanges.join(", ")}`,
+      ),
       resetOrder,
       resetSettingIds,
     });

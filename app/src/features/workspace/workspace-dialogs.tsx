@@ -1,5 +1,5 @@
 import { createPortal } from "react-dom";
-import type { Dispatch, SetStateAction } from "react";
+import { useEffect, useRef, type Dispatch, type RefObject, type SetStateAction } from "react";
 import type { Locale } from "../../lib/i18n";
 import {
   formatWorkspaceMediaLibraryCreatedAt,
@@ -14,6 +14,83 @@ import {
   type WorkspaceLocalExampleSource,
 } from "./workspace-page-model";
 import type { WorkspaceProject } from "./workspace-types";
+
+const workspaceDialogFocusableSelector = [
+  "a[href]",
+  "button:not([disabled])",
+  "input:not([disabled]):not([type=\"hidden\"])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  "[contenteditable=\"true\"]",
+  "[tabindex]:not([tabindex=\"-1\"])",
+].join(",");
+
+const getWorkspaceDialogFocusableElements = (container: HTMLElement) =>
+  Array.from(container.querySelectorAll<HTMLElement>(workspaceDialogFocusableSelector)).filter(
+    (element) => !element.closest('[aria-hidden="true"]'),
+  );
+
+const useWorkspaceDialogFocusManagement = (isOpen: boolean): RefObject<HTMLDivElement | null> => {
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen || typeof document === "undefined") {
+      return undefined;
+    }
+
+    const returnFocusTarget = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const panel = panelRef.current;
+    if (!panel) {
+      return undefined;
+    }
+
+    const initialFocusTarget =
+      panel.querySelector<HTMLElement>("[data-dialog-initial-focus]:not([disabled])") ??
+      getWorkspaceDialogFocusableElements(panel)[0] ??
+      panel;
+    initialFocusTarget.focus({ preventScroll: true });
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Tab") {
+        return;
+      }
+
+      const focusableElements = getWorkspaceDialogFocusableElements(panel);
+      if (focusableElements.length === 0) {
+        event.preventDefault();
+        panel.focus({ preventScroll: true });
+        return;
+      }
+
+      const firstFocusableElement = focusableElements[0]!;
+      const lastFocusableElement = focusableElements[focusableElements.length - 1]!;
+      const activeElement = document.activeElement;
+      const focusIsOutsidePanel = !(activeElement instanceof Node) || !panel.contains(activeElement);
+
+      if (event.shiftKey && (focusIsOutsidePanel || activeElement === firstFocusableElement)) {
+        event.preventDefault();
+        lastFocusableElement.focus({ preventScroll: true });
+        return;
+      }
+
+      if (!event.shiftKey && (focusIsOutsidePanel || activeElement === lastFocusableElement)) {
+        event.preventDefault();
+        firstFocusableElement.focus({ preventScroll: true });
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      if (returnFocusTarget?.isConnected && !returnFocusTarget.hasAttribute("disabled")) {
+        returnFocusTarget.focus({ preventScroll: true });
+      }
+    };
+  }, [isOpen]);
+
+  return panelRef;
+};
 
 type WorkspaceLocalExampleModalProps = {
   isOpen: boolean;
@@ -408,6 +485,8 @@ export function WorkspaceSegmentEditorResetConfirmModal({
   onClose,
   onConfirm,
 }: WorkspaceSegmentEditorResetConfirmModalProps) {
+  const panelRef = useWorkspaceDialogFocusManagement(isOpen);
+
   if (!isOpen || typeof document === "undefined") {
     return null;
   }
@@ -420,7 +499,12 @@ export function WorkspaceSegmentEditorResetConfirmModal({
         aria-label={workspaceText(locale, "Закрыть подтверждение сброса изменений", "Close reset changes confirmation")}
         onClick={onClose}
       />
-      <div className="workspace-confirm-modal__panel workspace-confirm-modal__panel--reset" role="document">
+      <div
+        ref={panelRef}
+        className="workspace-confirm-modal__panel workspace-confirm-modal__panel--reset"
+        role="document"
+        tabIndex={-1}
+      >
         <button
           className="workspace-confirm-modal__close route-close"
           type="button"
@@ -477,6 +561,7 @@ export function WorkspaceSegmentEditorResetConfirmModal({
           <button
             className="workspace-confirm-modal__action workspace-confirm-modal__action--secondary"
             type="button"
+            data-dialog-initial-focus
             onClick={onClose}
           >
             {workspaceText(locale, "Отмена", "Cancel")}
@@ -511,6 +596,8 @@ export function WorkspaceSegmentEditorStartFreshConfirmModal({
   onClose,
   onConfirm,
 }: WorkspaceSegmentEditorStartFreshConfirmModalProps) {
+  const panelRef = useWorkspaceDialogFocusManagement(isOpen);
+
   if (!isOpen || typeof document === "undefined") {
     return null;
   }
@@ -528,7 +615,7 @@ export function WorkspaceSegmentEditorStartFreshConfirmModal({
         aria-label={workspaceText(locale, "Закрыть подтверждение", "Close confirmation")}
         onClick={onClose}
       />
-      <div className="workspace-confirm-modal__panel" role="document">
+      <div ref={panelRef} className="workspace-confirm-modal__panel" role="document" tabIndex={-1}>
         <button
           className="workspace-confirm-modal__close route-close"
           type="button"
@@ -564,6 +651,7 @@ export function WorkspaceSegmentEditorStartFreshConfirmModal({
           <button
             className="workspace-confirm-modal__action workspace-confirm-modal__action--secondary"
             type="button"
+            data-dialog-initial-focus
             onClick={onClose}
             disabled={isBusy}
           >
@@ -603,6 +691,8 @@ export function WorkspaceSegmentEditorDeleteConfirmModal({
   onConfirm,
   segmentSummary,
 }: WorkspaceSegmentEditorDeleteConfirmModalProps) {
+  const panelRef = useWorkspaceDialogFocusManagement(isOpen);
+
   if (!isOpen || typeof document === "undefined") {
     return null;
   }
@@ -615,7 +705,7 @@ export function WorkspaceSegmentEditorDeleteConfirmModal({
         aria-label={workspaceText(locale, "Закрыть подтверждение удаления сцены", "Close scene deletion confirmation")}
         onClick={onClose}
       />
-      <div className="workspace-confirm-modal__panel" role="document">
+      <div ref={panelRef} className="workspace-confirm-modal__panel" role="document" tabIndex={-1}>
         <button
           className="workspace-confirm-modal__close route-close"
           type="button"
@@ -657,6 +747,7 @@ export function WorkspaceSegmentEditorDeleteConfirmModal({
           <button
             className="workspace-confirm-modal__action workspace-confirm-modal__action--secondary"
             type="button"
+            data-dialog-initial-focus
             onClick={onClose}
           >
             {workspaceText(locale, "Отмена", "Cancel")}
@@ -693,6 +784,8 @@ export function WorkspaceSegmentEditorInfographicDeleteConfirmModal({
   onConfirm,
   segmentNumber,
 }: WorkspaceSegmentEditorInfographicDeleteConfirmModalProps) {
+  const panelRef = useWorkspaceDialogFocusManagement(isOpen);
+
   if (!isOpen || typeof document === "undefined") {
     return null;
   }
@@ -718,7 +811,7 @@ export function WorkspaceSegmentEditorInfographicDeleteConfirmModal({
         )}
         onClick={onClose}
       />
-      <div className="workspace-confirm-modal__panel" role="document">
+      <div ref={panelRef} className="workspace-confirm-modal__panel" role="document" tabIndex={-1}>
         <button
           className="workspace-confirm-modal__close route-close"
           type="button"
@@ -765,8 +858,8 @@ export function WorkspaceSegmentEditorInfographicDeleteConfirmModal({
           <button
             className="workspace-confirm-modal__action workspace-confirm-modal__action--secondary"
             type="button"
+            data-dialog-initial-focus
             onClick={onClose}
-            autoFocus
           >
             {workspaceText(locale, "Отмена", "Cancel")}
           </button>
@@ -803,6 +896,8 @@ export function WorkspaceSegmentEditorVoiceoverGenerationRequiredModal({
   onClose,
   onGenerate,
 }: WorkspaceSegmentEditorVoiceoverGenerationRequiredModalProps) {
+  const panelRef = useWorkspaceDialogFocusManagement(isOpen);
+
   if (!isOpen || typeof document === "undefined") {
     return null;
   }
@@ -815,7 +910,7 @@ export function WorkspaceSegmentEditorVoiceoverGenerationRequiredModal({
         aria-label={workspaceText(locale, "Закрыть окно с предупреждением о озвучке", "Close voiceover warning")}
         onClick={onClose}
       />
-      <div className="workspace-confirm-modal__panel" role="document">
+      <div ref={panelRef} className="workspace-confirm-modal__panel" role="document" tabIndex={-1}>
         <button
           className="workspace-confirm-modal__close route-close"
           type="button"
@@ -852,6 +947,7 @@ export function WorkspaceSegmentEditorVoiceoverGenerationRequiredModal({
           <button
             className="workspace-confirm-modal__action workspace-confirm-modal__action--secondary"
             type="button"
+            data-dialog-initial-focus
             onClick={onClose}
           >
             {workspaceText(locale, "Позже", "Later")}
@@ -905,6 +1001,8 @@ export function WorkspaceSegmentEditorBulkSceneSoundModal({
   sceneCount,
   totalCredits,
 }: WorkspaceSegmentEditorBulkSceneSoundModalProps) {
+  const panelRef = useWorkspaceDialogFocusManagement(isOpen);
+
   if (!isOpen || typeof document === "undefined") {
     return null;
   }
@@ -926,7 +1024,12 @@ export function WorkspaceSegmentEditorBulkSceneSoundModal({
         onClick={onClose}
         disabled={isGenerating}
       />
-      <div className="workspace-confirm-modal__panel workspace-confirm-modal__panel--bulk-sound" role="document">
+      <div
+        ref={panelRef}
+        className="workspace-confirm-modal__panel workspace-confirm-modal__panel--bulk-sound"
+        role="document"
+        tabIndex={-1}
+      >
         <button
           className="workspace-confirm-modal__close route-close"
           type="button"
@@ -988,6 +1091,7 @@ export function WorkspaceSegmentEditorBulkSceneSoundModal({
           <button
             className="workspace-confirm-modal__action workspace-confirm-modal__action--secondary"
             type="button"
+            data-dialog-initial-focus
             onClick={onClose}
             disabled={isGenerating}
           >

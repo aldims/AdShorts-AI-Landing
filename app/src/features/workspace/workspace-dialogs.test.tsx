@@ -1,12 +1,35 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
+import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import {
   WorkspaceSegmentEditorBulkSceneSoundModal,
+  WorkspaceSegmentEditorDeleteConfirmModal,
   WorkspaceSegmentEditorInfographicDeleteConfirmModal,
 } from "./workspace-dialogs";
+
+function SceneDeleteModalHarness() {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <>
+      <button type="button" onClick={() => setIsOpen(true)}>
+        Открыть удаление
+      </button>
+      <WorkspaceSegmentEditorDeleteConfirmModal
+        canDelete
+        isBusy={false}
+        isOpen={isOpen}
+        locale="ru"
+        onClose={() => setIsOpen(false)}
+        onConfirm={() => undefined}
+        segmentSummary="Сцена 1"
+      />
+    </>
+  );
+}
 
 describe("WorkspaceSegmentEditorBulkSceneSoundModal", () => {
   it("shows the automatic generation copy and total cost for all scenes", () => {
@@ -47,6 +70,66 @@ describe("WorkspaceSegmentEditorBulkSceneSoundModal", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Создать звуки · 10 ⚡" }));
     expect(onGenerate).toHaveBeenCalledOnce();
+  });
+
+  it("focuses the dialog panel when generation disables every action", () => {
+    render(
+      <WorkspaceSegmentEditorBulkSceneSoundModal
+        completedCount={1}
+        failedCount={0}
+        isGenerating
+        isOpen
+        locale="ru"
+        onClose={() => undefined}
+        onGenerate={() => undefined}
+        sceneCount={5}
+        totalCredits={10}
+      />,
+    );
+
+    expect(document.activeElement).toBe(screen.getByRole("document"));
+  });
+});
+
+describe("scene dialog focus management", () => {
+  it("moves focus into the dialog and returns it to the opener on close", () => {
+    render(<SceneDeleteModalHarness />);
+    const opener = screen.getByRole("button", { name: "Открыть удаление" });
+    opener.focus();
+
+    fireEvent.click(opener);
+    const cancelButton = screen.getByRole("button", { name: "Отмена" });
+    expect(document.activeElement).toBe(cancelButton);
+
+    fireEvent.click(cancelButton);
+    expect(document.activeElement).toBe(opener);
+  });
+
+  it("keeps forward and backward Tab navigation inside the dialog", () => {
+    render(
+      <WorkspaceSegmentEditorDeleteConfirmModal
+        canDelete
+        isBusy={false}
+        isOpen
+        locale="ru"
+        onClose={() => undefined}
+        onConfirm={() => undefined}
+        segmentSummary="Сцена 1"
+      />,
+    );
+
+    const panel = screen.getByRole("document");
+    const panelButtons = within(panel).getAllByRole("button");
+    const firstButton = panelButtons[0]!;
+    const lastButton = panelButtons[panelButtons.length - 1]!;
+
+    lastButton.focus();
+    fireEvent.keyDown(document, { key: "Tab" });
+    expect(document.activeElement).toBe(firstButton);
+
+    firstButton.focus();
+    fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
+    expect(document.activeElement).toBe(lastButton);
   });
 });
 

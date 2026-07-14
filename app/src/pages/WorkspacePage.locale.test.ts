@@ -1855,6 +1855,36 @@ describe("WorkspacePage segment editor draft persistence", () => {
     expect(checklist.map((item) => item.label)).toContain("Сегмент 1: добавлен звук сцены");
   });
 
+  it("localizes scene and global checklist changes for the English workspace", () => {
+    const baselineSegment = createDraftSegment({ index: 0 });
+    const draftSegment = createDraftSegment({
+      index: 0,
+      sceneSoundAsset: {
+        assetId: 101,
+        fileName: "scene-sound.wav",
+        fileSize: 2048,
+        mimeType: "audio/wav",
+        remoteUrl: "/api/workspace/media-assets/101",
+        source: "media-library",
+      },
+      sceneSoundGeneratedFromPrompt: "busy cafe ambience",
+      sceneSoundPrompt: "busy cafe ambience",
+      sceneSoundPromptInitialized: true,
+    });
+    const baselineSession = createDraftSession(baselineSegment);
+    const draftSession = {
+      ...createDraftSession(draftSegment),
+      musicType: "none",
+    } as DraftSession;
+
+    const checklist = buildWorkspaceSegmentEditorChangeChecklist(draftSession, baselineSession, { locale: "en" });
+
+    expect(checklist.map((item) => item.label)).toEqual([
+      "Scene 1: scene sound added",
+      "General: music: No music",
+    ]);
+  });
+
   it("treats a generated scene sound as changed when a refreshed baseline already sees its asset", () => {
     const sceneSoundAsset = {
       assetId: 202,

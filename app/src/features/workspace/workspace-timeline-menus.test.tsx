@@ -56,6 +56,17 @@ afterEach(() => {
 });
 
 describe("WorkspaceSegmentTimelineVoiceMenu", () => {
+  it("uses dialog and radio semantics for the mixed voiceover form", () => {
+    render(<WorkspaceSegmentTimelineVoiceMenu {...baseProps} />);
+
+    expect(screen.getByRole("dialog", { name: "Голос сцены 1" })).toBeTruthy();
+    expect(screen.getByRole("radiogroup", { name: "Язык озвучки" })).toBeTruthy();
+    expect(screen.getByRole("radio", { name: /Русский/ }).getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByRole("radiogroup", { name: "Голос сцены" })).toBeTruthy();
+    expect(screen.getByRole("radio", { name: /Алексей/ }).getAttribute("aria-checked")).toBe("true");
+    expect(screen.queryByRole("menu")).toBeNull();
+  });
+
   it("exposes an explicit save action for scene text edits", () => {
     const onClose = vi.fn();
     render(<WorkspaceSegmentTimelineVoiceMenu {...baseProps} onClose={onClose} />);

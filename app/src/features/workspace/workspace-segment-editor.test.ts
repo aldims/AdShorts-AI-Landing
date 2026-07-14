@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_STUDIO_VOICE_ID } from "../../../shared/locales";
 import { STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST } from "../../../shared/studio-credit-costs";
 import {
+  applyWorkspaceSegmentEditorJobResult,
   applyWorkspaceSegmentEditorGlobalSubtitleSelection,
   applyWorkspaceSegmentPendingInfographicTransforms,
   applyWorkspaceSegmentEditorGlobalVoiceToSegments,
@@ -33,10 +34,14 @@ import {
   isWorkspaceSegmentProjectTimelineVoiceoverAvailable,
   isWorkspaceSegmentStaleMeasuredRenderedPhotoDuration,
   isWorkspaceSegmentVoiceoverPlaybackFresh,
+  invalidateWorkspaceSegmentSceneSoundForVisualChange,
   createWorkspaceSegmentSceneSoundAsset,
   createWorkspaceSegmentEditorInsertedSegment,
   createWorkspaceSegmentEditorDraftSession,
+  createWorkspaceSegmentEditorScratchDraftSession,
   clearWorkspaceSegmentEditorVoiceoverGenerationState,
+  ensureWorkspaceSegmentEditorDraftId,
+  getWorkspaceSegmentEditorDraftId,
   normalizeLegacyWorkspaceSegmentEditorDraftSession,
   rebuildWorkspaceSegmentEditorDraftSessionTimeline,
   repairWorkspaceSegmentEditorSpeechWordBoundaries,
@@ -299,6 +304,101 @@ const createProjectVoiceoverDraft = (
   title: "Session",
   ttsAssetId: 777,
   voiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+});
+
+describe("workspace segment editor draft identity", () => {
+  it("derives a deterministic identity for a persisted project draft", () => {
+    const draft = createProjectVoiceoverDraft([createProjectVoiceoverSegment()]);
+
+    expect(getWorkspaceSegmentEditorDraftId(draft)).toBe("project:77");
+    expect(ensureWorkspaceSegmentEditorDraftId(draft)).toEqual({
+      ...draft,
+      draftId: "project:77",
+    });
+  });
+
+  it("assigns a stable unique identity to a scratch draft", () => {
+    const draft = createWorkspaceSegmentEditorScratchDraftSession();
+
+    expect(draft.draftId).toMatch(/^scratch:/);
+    expect(getWorkspaceSegmentEditorDraftId(draft)).toBe(draft.draftId);
+    expect(ensureWorkspaceSegmentEditorDraftId(draft)).toBe(draft);
+  });
+});
+
+describe("applyWorkspaceSegmentEditorJobResult", () => {
+  it("updates the stable segment index without overwriting a newer prompt", () => {
+    const unrelatedSegment = createProjectVoiceoverSegment({
+      aiPhotoPrompt: "unrelated prompt",
+      index: 3,
+    });
+    const targetSegment = createProjectVoiceoverSegment({
+      aiPhotoPrompt: "newer prompt typed while the job was running",
+      index: 8,
+    });
+    const draft = createProjectVoiceoverDraft([unrelatedSegment, targetSegment]);
+
+    const result = applyWorkspaceSegmentEditorJobResult(draft, {
+      expectedProjectId: 77,
+      segmentIndex: 8,
+      updater: (segment) => ({
+        ...segment,
+        aiPhotoGeneratedFromPrompt: "captured job prompt",
+      }),
+    });
+
+    expect(result.status).toBe("applied");
+    expect(result.draft.segments.find((segment) => segment.index === 8)).toMatchObject({
+      aiPhotoGeneratedFromPrompt: "captured job prompt",
+      aiPhotoPrompt: "newer prompt typed while the job was running",
+    });
+    expect(result.draft.segments.find((segment) => segment.index === 3)?.aiPhotoGeneratedFromPrompt).toBeNull();
+  });
+
+  it("passes the matching draft to the result updater for freshness checks", () => {
+    const targetSegment = createProjectVoiceoverSegment({ index: 8 });
+    const draft = createProjectVoiceoverDraft([targetSegment]);
+    let updaterDraft: typeof draft | null = null;
+
+    const result = applyWorkspaceSegmentEditorJobResult(draft, {
+      expectedProjectId: 77,
+      segmentIndex: 8,
+      updater: (segment, matchingDraft) => {
+        updaterDraft = matchingDraft;
+        return segment;
+      },
+    });
+
+    expect(result.status).toBe("applied");
+    expect(updaterDraft).toBe(draft);
+    expect(result.draft).toBe(draft);
+  });
+
+  it("does not fall back to the array position when the stable segment index is missing", () => {
+    const draft = createProjectVoiceoverDraft([
+      createProjectVoiceoverSegment({ index: 9 }),
+    ]);
+
+    const result = applyWorkspaceSegmentEditorJobResult(draft, {
+      expectedProjectId: 77,
+      segmentIndex: 0,
+      updater: (segment) => ({ ...segment, aiPhotoGeneratedFromPrompt: "stale result" }),
+    });
+
+    expect(result).toEqual({ draft, status: "segment-missing" });
+  });
+
+  it("leaves a different project draft untouched", () => {
+    const draft = createProjectVoiceoverDraft([createProjectVoiceoverSegment({ index: 0 })]);
+
+    const result = applyWorkspaceSegmentEditorJobResult(draft, {
+      expectedProjectId: 78,
+      segmentIndex: 0,
+      updater: (segment) => ({ ...segment, aiPhotoGeneratedFromPrompt: "stale result" }),
+    });
+
+    expect(result).toEqual({ draft, status: "project-mismatch" });
+  });
 });
 
 describe("segment infographic refresh isolation", () => {
@@ -751,6 +851,33 @@ it("repairs repeated speech words that leaked into the next project voiceover sc
 });
 
 describe("workspace segment editor scene sound preview", () => {
+  it("invalidates a generated scene sound when the scene visual changes and keeps its prompt", () => {
+    const segment = createProjectVoiceoverSegment({
+      sceneSoundAsset: {
+        assetId: 812,
+        fileName: "scene-sound.wav",
+        fileSize: 2048,
+        mimeType: "audio/wav",
+        remoteUrl: "/api/workspace/media-assets/812/playback",
+      },
+      sceneSoundAssetId: 812,
+      sceneSoundGeneratedFromPrompt: "rain on glass",
+      sceneSoundPrompt: "",
+      sceneSoundPromptInitialized: true,
+      sceneSoundReset: false,
+      scene_sound_asset_id: 812,
+    });
+
+    const updated = invalidateWorkspaceSegmentSceneSoundForVisualChange(segment);
+
+    expect(updated.sceneSoundAsset).toBeNull();
+    expect(updated.sceneSoundAssetId).toBeNull();
+    expect(updated.scene_sound_asset_id).toBeNull();
+    expect(updated.sceneSoundPrompt).toBe("rain on glass");
+    expect(updated.sceneSoundPromptInitialized).toBe(true);
+    expect(updated.sceneSoundReset).toBe(true);
+  });
+
   it("displays empty scene timeline ranges as zero-length without changing real slot timing", () => {
     const emptySegment = createProjectVoiceoverSegment({
       duration: 2.4,

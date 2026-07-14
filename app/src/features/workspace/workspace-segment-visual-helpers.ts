@@ -1,6 +1,7 @@
 import type { WorkspaceSavedReference } from "../../../shared/workspace-references";
 import {
   getPositiveWorkspaceMediaAssetId,
+  getStudioCustomVideoFileIdentityKey,
   getWorkspaceMediaAssetDurablePreviewUrl,
   getWorkspaceSegmentCustomPreviewKind,
   getWorkspaceSegmentDraftVisualAsset,
@@ -197,6 +198,22 @@ export const getWorkspaceSegmentSceneSoundVisualJobSource = (
   } catch {
     return null;
   }
+};
+
+export const getWorkspaceSegmentSceneSoundSourceVisualIdentity = (
+  segment: WorkspaceSegmentEditorDraftSegment | null | undefined,
+) => {
+  const mediaAssetId = getWorkspaceSegmentSceneSoundVisualAssetId(segment);
+  if (mediaAssetId) {
+    return `asset:${mediaAssetId}`;
+  }
+
+  const jobSource = getWorkspaceSegmentSceneSoundVisualJobSource(segment);
+  if (jobSource) {
+    return `job:${jobSource.visualSourceKind}:${jobSource.visualSourceJobId}`;
+  }
+
+  return segment ? getStudioCustomVideoFileIdentityKey(getWorkspaceSegmentDraftVisualAsset(segment)) : null;
 };
 
 export const applyWorkspaceSegmentSceneSoundVisualAssetId = (

@@ -3,12 +3,28 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import {
+  isStoredWorkspaceSegmentJobForDraft,
+  readStoredWorkspaceSegmentEditorScratchDraft,
   readStoredWorkspaceSegmentEditorExplicitReset,
+  readStoredWorkspaceSegmentAiPhotoJobs,
+  readStoredWorkspaceSegmentPhotoAnimationJobs,
+  readStoredWorkspaceSegmentSceneSoundJobs,
+  readStoredWorkspaceSegmentVoiceoverJobs,
   readWorkspaceSegmentEditorStorageCandidates,
   removeStoredWorkspaceSegmentEditorExplicitReset,
+  removeStoredWorkspaceSegmentAiPhotoJobsForSegment,
+  removeStoredWorkspaceSegmentPhotoAnimationJobsForSegment,
+  removeStoredWorkspaceSegmentVoiceoverJob,
+  WORKSPACE_SEGMENT_EDITOR_SCRATCH_DRAFT_STORAGE_KEY_PREFIX,
+  upsertStoredWorkspaceSegmentSceneSoundJob,
+  upsertStoredWorkspaceSegmentAiPhotoJob,
+  upsertStoredWorkspaceSegmentPhotoAnimationJob,
+  upsertStoredWorkspaceSegmentVoiceoverJob,
   writeStoredWorkspaceSegmentEditorExplicitReset,
+  writeStoredWorkspaceSegmentEditorScratchDraft,
   writeWorkspaceSegmentEditorStorageValue,
 } from "./workspace-segment-editor-storage";
+import { createWorkspaceSegmentEditorScratchDraftSession } from "./workspace-segment-editor";
 
 const createMemoryStorage = (): Storage => {
   const values = new Map<string, string>();
@@ -79,5 +95,166 @@ describe("workspace segment editor storage fallback", () => {
     removeStoredWorkspaceSegmentEditorExplicitReset("editor@example.test", 4205);
 
     expect(readStoredWorkspaceSegmentEditorExplicitReset("editor@example.test", 4205)).toBe(false);
+  });
+
+  it("matches a pending job only to its originating scratch draft", () => {
+    const draft = {
+      ...createWorkspaceSegmentEditorScratchDraftSession(),
+      draftId: "scratch:current",
+    };
+
+    expect(isStoredWorkspaceSegmentJobForDraft({ draftId: "scratch:current", projectId: 0 }, draft)).toBe(true);
+    expect(isStoredWorkspaceSegmentJobForDraft({ draftId: "scratch:other", projectId: 0 }, draft)).toBe(false);
+    expect(isStoredWorkspaceSegmentJobForDraft({ draftId: "scratch:current", projectId: 1 }, draft)).toBe(false);
+    expect(isStoredWorkspaceSegmentJobForDraft({ projectId: 0 }, draft)).toBe(false);
+    expect(isStoredWorkspaceSegmentJobForDraft({ projectId: 42 }, { ...draft, projectId: 42 })).toBe(true);
+    expect(isStoredWorkspaceSegmentJobForDraft({ draftId: "scratch:current", projectId: 0 }, null)).toBe(false);
+  });
+
+  it("keeps a scratch draft identity across storage round trips", () => {
+    const draft = createWorkspaceSegmentEditorScratchDraftSession();
+
+    writeStoredWorkspaceSegmentEditorScratchDraft("editor@example.test", draft);
+
+    expect(readStoredWorkspaceSegmentEditorScratchDraft("EDITOR@example.test")?.draftId).toBe(draft.draftId);
+  });
+
+  it("persists the source visual identity of a pending scene sound job", () => {
+    upsertStoredWorkspaceSegmentSceneSoundJob("editor@example.test", {
+      createdAt: Date.now(),
+      draftId: "scratch:scene-sound",
+      jobId: "scene-sound-job-1",
+      previousAssetId: 42,
+      projectId: 0,
+      prompt: "  quiet rain  ",
+      segmentIndex: 3,
+      sourceVisualIdentity: "  asset:271  ",
+      status: "queued",
+    });
+
+    expect(readStoredWorkspaceSegmentSceneSoundJobs("EDITOR@example.test")).toEqual([
+      expect.objectContaining({
+        draftId: "scratch:scene-sound",
+        jobId: "scene-sound-job-1",
+        previousAssetId: 42,
+        projectId: 0,
+        prompt: "quiet rain",
+        segmentIndex: 3,
+        sourceVisualIdentity: "asset:271",
+        status: "queued",
+      }),
+    ]);
+  });
+
+  it("replaces and clears pending photo animation jobs by scene", () => {
+    const buildJob = (jobId: string) => ({
+      createdAt: Date.now(),
+      draftId: "project:42",
+      jobId,
+      projectId: 42,
+      prompt: "animate the frame",
+      refreshSceneSoundPrompt: "rain on glass",
+      segmentIndex: 3,
+      sourceAsset: null,
+      sourceVisualIdentity: "asset:501",
+      status: "queued",
+    });
+
+    upsertStoredWorkspaceSegmentPhotoAnimationJob("editor@example.test", buildJob("animation-1"));
+    upsertStoredWorkspaceSegmentPhotoAnimationJob("editor@example.test", buildJob("animation-2"));
+
+    expect(readStoredWorkspaceSegmentPhotoAnimationJobs("editor@example.test")).toHaveLength(1);
+    expect(readStoredWorkspaceSegmentPhotoAnimationJobs("editor@example.test")[0]).toMatchObject({
+      jobId: "animation-2",
+      refreshSceneSoundPrompt: "rain on glass",
+      sourceVisualIdentity: "asset:501",
+    });
+
+    removeStoredWorkspaceSegmentPhotoAnimationJobsForSegment("editor@example.test", 42, 3);
+
+    expect(readStoredWorkspaceSegmentPhotoAnimationJobs("editor@example.test")).toEqual([]);
+  });
+
+  it("clears a pending AI photo job from a scratch scene after a durable visual replacement", () => {
+    upsertStoredWorkspaceSegmentAiPhotoJob("editor@example.test", {
+      createdAt: Date.now(),
+      draftId: "scratch:ai-photo",
+      jobId: "ai-photo-job-1",
+      projectId: 0,
+      prompt: "product on a marble table",
+      segmentIndex: 0,
+      status: "queued",
+    });
+
+    removeStoredWorkspaceSegmentAiPhotoJobsForSegment("editor@example.test", 0, 0);
+
+    expect(readStoredWorkspaceSegmentAiPhotoJobs("editor@example.test")).toEqual([]);
+  });
+
+  it("round-trips, replaces, and removes a pending single-scene voiceover job", () => {
+    const email = "editor@example.test";
+    upsertStoredWorkspaceSegmentVoiceoverJob(email, {
+      createdAt: Date.now(),
+      draftId: "scratch:voiceover",
+      jobId: "voiceover-job-1",
+      language: "en",
+      projectId: 0,
+      segmentIndex: 2,
+      status: "queued",
+      text: "  First   voiceover text  ",
+      voiceType: "  Adam  ",
+    });
+
+    expect(readStoredWorkspaceSegmentVoiceoverJobs(email)).toEqual([
+      expect.objectContaining({
+        draftId: "scratch:voiceover",
+        jobId: "voiceover-job-1",
+        language: "en",
+        projectId: 0,
+        segmentIndex: 2,
+        status: "queued",
+        text: "First voiceover text",
+        voiceType: "Adam",
+      }),
+    ]);
+
+    upsertStoredWorkspaceSegmentVoiceoverJob(email, {
+      createdAt: Date.now(),
+      draftId: "scratch:voiceover",
+      jobId: "voiceover-job-2",
+      language: "en",
+      projectId: 0,
+      segmentIndex: 2,
+      status: "processing",
+      text: "Updated voiceover text",
+      voiceType: "Adam",
+    });
+
+    expect(readStoredWorkspaceSegmentVoiceoverJobs(email)).toEqual([
+      expect.objectContaining({
+        jobId: "voiceover-job-2",
+        status: "processing",
+        text: "Updated voiceover text",
+      }),
+    ]);
+
+    removeStoredWorkspaceSegmentVoiceoverJob(email, "voiceover-job-2");
+
+    expect(readStoredWorkspaceSegmentVoiceoverJobs(email)).toEqual([]);
+  });
+
+  it("migrates a legacy scratch draft once and persists the assigned identity", () => {
+    const email = "editor@example.test";
+    const storageKey = `${WORKSPACE_SEGMENT_EDITOR_SCRATCH_DRAFT_STORAGE_KEY_PREFIX}${email}`;
+    const legacyDraft = { ...createWorkspaceSegmentEditorScratchDraftSession() };
+    delete legacyDraft.draftId;
+    localStorage.setItem(storageKey, JSON.stringify({ ...legacyDraft, storageVersion: 3 }));
+
+    const firstRead = readStoredWorkspaceSegmentEditorScratchDraft(email);
+    const secondRead = readStoredWorkspaceSegmentEditorScratchDraft(email);
+
+    expect(firstRead?.draftId).toMatch(/^scratch:/);
+    expect(secondRead?.draftId).toBe(firstRead?.draftId);
+    expect(JSON.parse(localStorage.getItem(storageKey) ?? "null")?.draftId).toBe(firstRead?.draftId);
   });
 });

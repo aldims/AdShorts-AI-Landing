@@ -485,6 +485,7 @@ export function WorkspaceSegmentTimelineVisualMenu({
               key={`timeline-visual-tool:${option.action ?? option.tab}`}
               type="button"
               disabled={Boolean(disabledReason)}
+              aria-pressed={isVideoExtensionAction ? undefined : isSelected}
               aria-label={`${option.title}: ${disabledReason ?? option.description}`}
               title={`${option.groupLabel}: ${disabledReason ?? option.description}`}
               onClick={() =>
@@ -598,7 +599,8 @@ export function WorkspaceSegmentTimelineVoiceMenu({
     <div
       ref={menuRef}
       className="studio-voice-selector__menu studio-voice-selector__menu--with-text studio-segment-editor__timeline-voice-menu"
-      role="menu"
+      role="dialog"
+      aria-modal="false"
       aria-label={workspaceText(
         locale,
         `Голос сцены ${segmentArrayIndex + 1}`,
@@ -617,7 +619,11 @@ export function WorkspaceSegmentTimelineVoiceMenu({
         <span className="studio-voice-selector__language-title">
           {workspaceText(locale, "Язык озвучки", "Voice language")}
         </span>
-        <div className="studio-voice-selector__language-options">
+        <div
+          className="studio-voice-selector__language-options"
+          role="radiogroup"
+          aria-label={workspaceText(locale, "Язык озвучки", "Voice language")}
+        >
           {languageOptions.map((option) => {
             const isSelectedLanguage = option.id === language;
 
@@ -626,7 +632,7 @@ export function WorkspaceSegmentTimelineVoiceMenu({
                 key={`timeline-voice-language:${option.id}`}
                 className={`studio-voice-selector__language-option${isSelectedLanguage ? " is-selected" : ""}`}
                 type="button"
-                role="menuitemradio"
+                role="radio"
                 aria-checked={isSelectedLanguage}
                 onClick={(event) => {
                   event.preventDefault();
@@ -641,12 +647,16 @@ export function WorkspaceSegmentTimelineVoiceMenu({
           })}
         </div>
       </div>
-      <div className="studio-voice-selector__voice-grid">
+      <div
+        className="studio-voice-selector__voice-grid"
+        role="radiogroup"
+        aria-label={workspaceText(locale, "Голос сцены", "Scene voice")}
+      >
         <div className={`studio-voice-selector__option studio-voice-selector__option--no-voice${isVoiceDisabled ? " is-selected" : ""}`}>
           <button
             className="studio-voice-selector__option-main"
             type="button"
-            role="menuitemradio"
+            role="radio"
             aria-checked={isVoiceDisabled}
             onClick={() => onUseGlobalVoice(segment.index)}
           >
@@ -675,7 +685,7 @@ export function WorkspaceSegmentTimelineVoiceMenu({
               <button
                 className="studio-voice-selector__option-main"
                 type="button"
-                role="menuitemradio"
+                role="radio"
                 aria-checked={isSelectedSceneVoice}
                 onClick={() => onVoiceSelect(segment.index, voice.id)}
               >

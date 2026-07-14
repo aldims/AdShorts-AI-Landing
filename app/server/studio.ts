@@ -955,6 +955,7 @@ export type StudioSegmentEditorSegment = {
   index: number;
   infographic?: StudioSegmentInfographic;
   infographicRemoved?: boolean;
+  manualTimingUserChanged?: boolean;
   manualDurationSeconds?: number | null;
   resetVisual?: boolean;
   sceneSoundAssetId?: number;
@@ -2174,6 +2175,8 @@ export const normalizeStudioSegmentEditorPayload = (
       infographic?: unknown;
       infographicRemoved?: unknown;
       infographic_removed?: unknown;
+      manualTimingUserChanged?: unknown;
+      manual_timing_user_changed?: unknown;
       manualDurationSeconds?: unknown;
       manual_duration_seconds?: unknown;
       resetVisual?: unknown;
@@ -2314,6 +2317,9 @@ export const normalizeStudioSegmentEditorPayload = (
     const infographic = infographicRemoved
       ? undefined
       : normalizeStudioSegmentInfographic(segmentRecord.infographic);
+    const manualTimingUserChanged = normalizeWorkspaceBooleanFlag(
+      segmentRecord.manualTimingUserChanged ?? segmentRecord.manual_timing_user_changed,
+    ) === true;
     const sceneSoundRemoved = normalizeWorkspaceBooleanFlag(
       segmentRecord.sceneSoundRemoved ?? segmentRecord.scene_sound_removed,
     ) === true;
@@ -2337,6 +2343,7 @@ export const normalizeStudioSegmentEditorPayload = (
       index,
       infographic,
       infographicRemoved,
+      manualTimingUserChanged,
       manualDurationSeconds: normalizedManualDurationSeconds,
       resetVisual: Boolean(segmentRecord.resetVisual),
       sceneSoundAssetId: sceneSoundRemoved
@@ -5403,6 +5410,8 @@ const ADSFLOW_FETCH_RETRYABLE_STATUS_CODES = new Set([408, 425, 429, 502, 503, 5
 const ADSFLOW_FETCH_RETRY_DELAYS_MS = [250, 700];
 const ADSFLOW_FETCH_TIMEOUT_MS = 20_000;
 const ADSFLOW_MUTATION_TIMEOUT_MS = 90_000;
+const ADSFLOW_GENERATION_ACCEPTANCE_LOOKUP_TIMEOUT_MS = 5_000;
+const ADSFLOW_GENERATION_NOT_ACCEPTED_DETAIL = "Generation task was not accepted";
 
 type AdsflowRequestOptions = {
   retryDelaysMs?: number[];
@@ -5437,6 +5446,18 @@ const isAdsflowTransientFailure = (error: unknown) => {
   }
 
   return error instanceof Error && error.message.startsWith("AdsFlow unavailable for ");
+};
+
+const isAdsflowGenerationAcceptanceAmbiguous = (error: unknown) => {
+  if (error instanceof AdsflowHttpError) {
+    // A definitive client error is the only response that proves AdsFlow rejected
+    // the generation. Server errors can arrive after the task was committed.
+    return error.statusCode >= 500 || ADSFLOW_FETCH_RETRYABLE_STATUS_CODES.has(error.statusCode);
+  }
+
+  // Transport failures, malformed/empty success responses and local timeout errors
+  // all happen after the request body may have reached AdsFlow.
+  return error instanceof Error;
 };
 
 const WORKSPACE_REFERENCE_MEDIA_ROLES = new Set([
@@ -6056,6 +6077,61 @@ const fetchAdsflowJobStatus = async (jobId: string, user: StudioUser) => {
   );
 };
 
+type AdsflowGenerationAcceptanceLookup =
+  | { payload: AdsflowCreateJobResponse; state: "found" }
+  | { state: "missing" }
+  | { state: "unknown" };
+
+const lookupAdsflowGenerationAcceptance = async (
+  usageEventKey: string,
+  user: StudioUser,
+): Promise<AdsflowGenerationAcceptanceLookup> => {
+  const externalUserId = await resolveStudioExternalUserId(user);
+  const lookupUrl = buildAdsflowUrl(
+    `/api/web/generations/by-usage-event/${encodeURIComponent(usageEventKey)}`,
+    {
+      admin_token: env.adsflowAdminToken ?? "",
+      external_user_id: externalUserId,
+    },
+  );
+  let lastState: AdsflowGenerationAcceptanceLookup = { state: "unknown" };
+  let consecutiveMissingResponses = 0;
+
+  for (const delayMs of [0, 250, 700, 1_500]) {
+    if (delayMs > 0) {
+      await wait(delayMs);
+    }
+
+    try {
+      const payload = await fetchAdsflowJson<AdsflowCreateJobResponse>(lookupUrl, undefined, {
+        retryDelaysMs: [],
+        silentStatuses: [404],
+        timeoutMs: ADSFLOW_GENERATION_ACCEPTANCE_LOOKUP_TIMEOUT_MS,
+      });
+      return { payload, state: "found" };
+    } catch (error) {
+      if (
+        error instanceof AdsflowHttpError &&
+        error.statusCode === 404 &&
+        error.message === ADSFLOW_GENERATION_NOT_ACCEPTED_DETAIL
+      ) {
+        consecutiveMissingResponses += 1;
+        lastState = consecutiveMissingResponses >= 2 ? { state: "missing" } : { state: "unknown" };
+        continue;
+      }
+
+      consecutiveMissingResponses = 0;
+      lastState = { state: "unknown" };
+      console.warn("[studio] Failed to reconcile generation acceptance", {
+        error: error instanceof Error ? error.message : "Unknown AdsFlow lookup error.",
+        usageEventKey,
+      });
+    }
+  }
+
+  return lastState;
+};
+
 const fetchAdsflowProjectMedia = async (projectId: number, user: StudioUser) => {
   assertAdsflowConfigured();
 
@@ -6298,6 +6374,7 @@ const consumeWorkspaceGenerationCredit = async (
 ) => {
   const externalUserId = await resolveStudioExternalUserId(user);
   const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
+  const usageEventKey = normalizeGenerationText(options?.usageEventKey) || `usage:web-credit-consume:${randomUUID()}`;
   const payloadText = await postAdsflowText("/api/web/credits/consume", {
     admin_token: env.adsflowAdminToken,
     amount: Math.max(1, Math.trunc(amount || 1)),
@@ -6307,7 +6384,7 @@ const consumeWorkspaceGenerationCredit = async (
     project_id: options?.projectId,
     referral_source: "landing_site",
     task_type: options?.taskType,
-    usage_event_key: options?.usageEventKey,
+    usage_event_key: usageEventKey,
     user_email: user.email ?? undefined,
     user_name: user.name ?? undefined,
   });
@@ -6343,6 +6420,7 @@ const refundWorkspaceGenerationCredit = async (
 
   const externalUserId = await resolveStudioExternalUserId(user);
   const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
+  const usageEventKey = normalizeGenerationText(options?.usageEventKey) || `usage:web-credit-refund:${randomUUID()}`;
   const payloadText = await postAdsflowText("/api/web/credits/refund", {
     admin_token: env.adsflowAdminToken,
     consumed_purchased: Math.max(0, Math.trunc(consumed.purchased || 0)),
@@ -6353,7 +6431,7 @@ const refundWorkspaceGenerationCredit = async (
     project_id: options?.projectId,
     referral_source: "landing_site",
     task_type: options?.taskType,
-    usage_event_key: options?.usageEventKey,
+    usage_event_key: usageEventKey,
     user_email: user.email ?? undefined,
     user_name: user.name ?? undefined,
   });
@@ -6673,6 +6751,42 @@ export async function createStudioGenerationJob(
 
   let jobCreated = false;
   let createdJobId: string | undefined;
+  let generationRequestStarted = false;
+  let refundAllowed = true;
+
+  const finalizeAcceptedGeneration = async (payload: AdsflowCreateJobResponse, jobId: string) => {
+    const queuedMetadata = resolveGenerationPresentation({
+      description: normalizedPrompt,
+      fallbackTitle: normalizedLanguage === "en" ? "Ready video" : "Готовое видео",
+      hashtags: null,
+      language: normalizedLanguage,
+      prompt: normalizedPrompt,
+      title: normalizeGenerationText(payload.title) || normalizedPrompt,
+    });
+
+    try {
+      await saveWorkspaceGenerationHistory(user, {
+        editedFromProjectAdId: normalizedEditedFromProjectAdId ?? null,
+        description: queuedMetadata.description,
+        hashtags: queuedMetadata.hashtags,
+        jobId,
+        prefillSettings,
+        prompt: queuedMetadata.prompt,
+        status: String(payload.status ?? "queued"),
+        title: queuedMetadata.title,
+        versionRootProjectAdId: normalizedVersionRootProjectAdId ?? null,
+      });
+    } catch (error) {
+      console.error("[studio] Failed to persist queued generation", error);
+    }
+
+    return {
+      jobId,
+      profile: creditReservation.profile,
+      status: String(payload.status ?? "queued"),
+      title: queuedMetadata.title || "Studio generation",
+    };
+  };
 
   try {
     console.info("[studio] adsflow.brand-payload", {
@@ -6811,6 +6925,11 @@ export async function createStudioGenerationJob(
                 end_time: segment.endTime,
                 endTime: segment.endTime,
                 index: segment.index,
+                infographic: segment.infographic,
+                infographicRemoved: segment.infographicRemoved === true,
+                infographic_removed: segment.infographicRemoved === true,
+                manualTimingUserChanged: segment.manualTimingUserChanged === true,
+                manual_timing_user_changed: segment.manualTimingUserChanged === true,
                 manualDurationSeconds,
                 manual_duration_seconds: manualDurationSeconds,
                 reset_visual: Boolean(segment.resetVisual),
@@ -6827,6 +6946,7 @@ export async function createStudioGenerationJob(
                 text: segment.text,
                 timeline_duration_seconds: durationSeconds,
                 video_action: segment.videoAction,
+                voiceoverAssetId: segment.voiceoverAssetId,
                 voiceover_asset_id: segment.voiceoverAssetId,
                 voice_source_duration: voiceSourceDuration,
                 voice_source_end_time: voiceSourceEndTime,
@@ -6879,6 +6999,7 @@ export async function createStudioGenerationJob(
       });
     }
 
+    generationRequestStarted = true;
     const payload = await fetchAdsflowJson<AdsflowCreateJobResponse>(buildAdsflowUrl("/api/web/generations"), {
       method: "POST",
       headers: {
@@ -6932,51 +7053,38 @@ export async function createStudioGenerationJob(
       throw new Error("AdsFlow did not return a job id.");
     }
     createdJobId = jobId;
+    // AdsFlow persists the task before attempting Redis enqueue. Once a job id is
+    // returned, queue recovery owns delivery and the credit reservation must stay attached.
+    jobCreated = true;
 
     const enqueueError = normalizeGenerationText(payload.enqueue_error);
     if (enqueueError) {
-      console.warn("[studio] AdsFlow enqueue failed:", {
+      console.warn("[studio] AdsFlow enqueue deferred to queue recovery:", {
         enqueueError,
         jobId,
       });
-      throw new StudioGenerationUnavailableError();
     }
 
-    jobCreated = true;
-
-    const queuedMetadata = resolveGenerationPresentation({
-      description: normalizedPrompt,
-      fallbackTitle: normalizedLanguage === "en" ? "Ready video" : "Готовое видео",
-      hashtags: null,
-      language: normalizedLanguage,
-      prompt: normalizedPrompt,
-      title: normalizeGenerationText(payload.title) || normalizedPrompt,
-    });
-
-    try {
-      await saveWorkspaceGenerationHistory(user, {
-        editedFromProjectAdId: normalizedEditedFromProjectAdId ?? null,
-        description: queuedMetadata.description,
-        hashtags: queuedMetadata.hashtags,
-        jobId,
-        prefillSettings,
-        prompt: queuedMetadata.prompt,
-        status: String(payload.status ?? "queued"),
-        title: queuedMetadata.title,
-        versionRootProjectAdId: normalizedVersionRootProjectAdId ?? null,
-      });
-    } catch (error) {
-      console.error("[studio] Failed to persist queued generation", error);
-    }
-
-    return {
-      jobId,
-      profile: creditReservation.profile,
-      status: String(payload.status ?? "queued"),
-      title: queuedMetadata.title || "Studio generation",
-    };
+    return await finalizeAcceptedGeneration(payload, jobId);
   } catch (error) {
-    if (!jobCreated) {
+    if (!jobCreated && generationRequestStarted && isAdsflowGenerationAcceptanceAmbiguous(error)) {
+      const acceptance = await lookupAdsflowGenerationAcceptance(creditReservationEventKey, user);
+      if (acceptance.state === "found") {
+        const recoveredJobId = normalizeGenerationText(acceptance.payload.job_id);
+        if (recoveredJobId) {
+          createdJobId = recoveredJobId;
+          jobCreated = true;
+          return await finalizeAcceptedGeneration(acceptance.payload, recoveredJobId);
+        }
+        refundAllowed = false;
+      } else if (acceptance.state === "unknown") {
+        // A transport failure cannot prove that the POST was rejected. Keep the
+        // reservation attached so a late durable task cannot become a free job.
+        refundAllowed = false;
+      }
+    }
+
+    if (!jobCreated && refundAllowed) {
       try {
         const refundUsageEventKey = createdJobId
           ? `usage:${createdJobId}:refund`
@@ -7031,17 +7139,21 @@ export async function generateStudioSegmentAiPhoto(
   let assetReady = false;
 
   try {
-    const payload = await postAdsflowJson<AdsflowSegmentAiPhotoGenerateResponse>("/api/web/segment-ai-photo/generate", {
-      admin_token: env.adsflowAdminToken,
-      external_user_id: externalUserId,
-      ...buildStudioSegmentVisualQualityPayload(normalizedQuality),
-      language: normalizedLanguage,
-      project_id: normalizedProjectId,
-      prompt: upstreamPrompt,
-      segment_index: normalizedSegmentIndex,
-      user_email: user.email ?? undefined,
-      user_name: user.name ?? undefined,
-    });
+    const payload = await postAdsflowJson<AdsflowSegmentAiPhotoGenerateResponse>(
+      "/api/web/segment-ai-photo/generate",
+      {
+        admin_token: env.adsflowAdminToken,
+        external_user_id: externalUserId,
+        ...buildStudioSegmentVisualQualityPayload(normalizedQuality),
+        language: normalizedLanguage,
+        project_id: normalizedProjectId,
+        prompt: upstreamPrompt,
+        segment_index: normalizedSegmentIndex,
+        user_email: user.email ?? undefined,
+        user_name: user.name ?? undefined,
+      },
+      { retryDelaysMs: [], timeoutMs: ADSFLOW_MUTATION_TIMEOUT_MS },
+    );
     const asset = await normalizeAdsflowSegmentAiPhotoAsset(payload.asset);
     assetReady = true;
 
@@ -7976,29 +8088,33 @@ export async function createStudioSegmentAiPhotoJob(
       segmentIndex: normalizedSegmentIndex,
     }),
   );
-  const payload = await postAdsflowJson<AdsflowSegmentAiPhotoJobCreateResponse>("/api/web/segment-ai-photo/jobs", {
-    admin_token: env.adsflowAdminToken,
-    credit_cost: requiredCredits,
-    external_user_id: externalUserId,
-    ...buildStudioSegmentVisualQualityPayload(normalizedQuality),
-    character_ids: characterIds,
-    character_reference_mode: characterReferenceMode,
-    character_prompt: normalizedPrompt,
-    language: normalizedLanguage,
-    preserve_characters: preserveCharacters,
-    project_id: normalizedProjectId,
-    prompt: upstreamPrompt,
-    generation_purpose: normalizedPurpose || undefined,
-    library_kind:
-      normalizedPurpose === "workspace_reference" && normalizedReferenceKind
-        ? `${normalizedReferenceKind}_reference`
-        : undefined,
-    reference_asset_ids: referenceAssetIds,
-    scene_reference_asset_ids: sceneReferenceAssetIds,
-    segment_index: normalizedSegmentIndex,
-    user_email: user.email ?? undefined,
-    user_name: user.name ?? undefined,
-  });
+  const payload = await postAdsflowJson<AdsflowSegmentAiPhotoJobCreateResponse>(
+    "/api/web/segment-ai-photo/jobs",
+    {
+      admin_token: env.adsflowAdminToken,
+      credit_cost: requiredCredits,
+      external_user_id: externalUserId,
+      ...buildStudioSegmentVisualQualityPayload(normalizedQuality),
+      character_ids: characterIds,
+      character_reference_mode: characterReferenceMode,
+      character_prompt: normalizedPrompt,
+      language: normalizedLanguage,
+      preserve_characters: preserveCharacters,
+      project_id: normalizedProjectId,
+      prompt: upstreamPrompt,
+      generation_purpose: normalizedPurpose || undefined,
+      library_kind:
+        normalizedPurpose === "workspace_reference" && normalizedReferenceKind
+          ? `${normalizedReferenceKind}_reference`
+          : undefined,
+      reference_asset_ids: referenceAssetIds,
+      scene_reference_asset_ids: sceneReferenceAssetIds,
+      segment_index: normalizedSegmentIndex,
+      user_email: user.email ?? undefined,
+      user_name: user.name ?? undefined,
+    },
+    { retryDelaysMs: [], timeoutMs: ADSFLOW_MUTATION_TIMEOUT_MS },
+  );
 
   const jobId = String(payload.job_id ?? "").trim();
   if (!jobId) {
@@ -8070,25 +8186,29 @@ export async function createStudioSegmentAiVideoJob(
   const sceneReferenceAssetIds = normalizePositiveIntegerList(options?.sceneReferenceAssetIds);
   const externalUserId = await resolveStudioExternalUserId(user);
   const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
-  const payload = await postAdsflowJson<AdsflowSegmentAiVideoJobCreateResponse>("/api/web/segment-ai-video/jobs", {
-    admin_token: env.adsflowAdminToken,
-    credit_cost: requiredCredits,
-    external_user_id: externalUserId,
-    ...buildStudioSegmentVisualDurationPayload(normalizedDurationSeconds),
-    ...buildStudioSegmentVisualQualityPayload(normalizedQuality),
-    character_ids: characterIds,
-    character_reference_mode: characterReferenceMode,
-    character_prompt: normalizedPrompt,
-    language: normalizedLanguage,
-    preserve_characters: preserveCharacters,
-    project_id: normalizedProjectId,
-    prompt: upstreamPrompt,
-    reference_asset_ids: referenceAssetIds,
-    scene_reference_asset_ids: sceneReferenceAssetIds,
-    segment_index: normalizedSegmentIndex,
-    user_email: user.email ?? undefined,
-    user_name: user.name ?? undefined,
-  });
+  const payload = await postAdsflowJson<AdsflowSegmentAiVideoJobCreateResponse>(
+    "/api/web/segment-ai-video/jobs",
+    {
+      admin_token: env.adsflowAdminToken,
+      credit_cost: requiredCredits,
+      external_user_id: externalUserId,
+      ...buildStudioSegmentVisualDurationPayload(normalizedDurationSeconds),
+      ...buildStudioSegmentVisualQualityPayload(normalizedQuality),
+      character_ids: characterIds,
+      character_reference_mode: characterReferenceMode,
+      character_prompt: normalizedPrompt,
+      language: normalizedLanguage,
+      preserve_characters: preserveCharacters,
+      project_id: normalizedProjectId,
+      prompt: upstreamPrompt,
+      reference_asset_ids: referenceAssetIds,
+      scene_reference_asset_ids: sceneReferenceAssetIds,
+      segment_index: normalizedSegmentIndex,
+      user_email: user.email ?? undefined,
+      user_name: user.name ?? undefined,
+    },
+    { retryDelaysMs: [], timeoutMs: ADSFLOW_MUTATION_TIMEOUT_MS },
+  );
 
   const jobId = String(payload.job_id ?? "").trim();
   if (!jobId) {

@@ -2606,6 +2606,28 @@ export const clearWorkspaceSegmentSceneSoundState = <T extends WorkspaceSegmentE
     sceneSoundReset: true,
   }) as T;
 
+export const invalidateWorkspaceSegmentSceneSoundForVisualChange = <T extends WorkspaceSegmentEditorDraftSegment>(
+  segment: T,
+): T => {
+  const preservedPrompt =
+    String(segment.sceneSoundPrompt ?? "").trim() ||
+    String(segment.sceneSoundGeneratedFromPrompt ?? "").trim();
+  const hadSceneSound = Boolean(
+    segment.sceneSound ||
+    segment.sceneSoundAsset ||
+    segment.scene_sound ||
+    getWorkspaceSegmentSceneSoundStateAssetId(segment),
+  );
+  const clearedSegment = clearWorkspaceSegmentSceneSoundState(segment);
+
+  return {
+    ...clearedSegment,
+    sceneSoundPrompt: preservedPrompt,
+    sceneSoundPromptInitialized: Boolean(preservedPrompt),
+    sceneSoundReset: Boolean(segment.sceneSoundReset || hadSceneSound),
+  } as T;
+};
+
 export const restoreWorkspaceSegmentSceneSoundState = <T extends WorkspaceSegmentEditorDraftSegment>(
   segment: T,
   source: WorkspaceSegmentEditorDraftSegment | null | undefined,
@@ -7850,7 +7872,84 @@ export const rebuildWorkspaceSegmentEditorDraftSessionTimeline = (
   };
 };
 
+export type WorkspaceSegmentEditorJobResultApplyStatus =
+  | "applied"
+  | "project-mismatch"
+  | "segment-missing";
+
+export const applyWorkspaceSegmentEditorJobResult = (
+  session: WorkspaceSegmentEditorDraftSession,
+  options: {
+    expectedProjectId: number;
+    segmentIndex: number;
+    updater: (
+      segment: WorkspaceSegmentEditorDraftSegment,
+      session: WorkspaceSegmentEditorDraftSession,
+    ) => WorkspaceSegmentEditorDraftSegment;
+    timelineOptions?: {
+      preserveSpeechBoundaries?: boolean;
+      preserveExistingStillDurations?: boolean | ((segment: WorkspaceSegmentEditorDraftSegment) => boolean);
+      preserveSourceTimelineEnd?: boolean;
+    };
+  },
+): {
+  draft: WorkspaceSegmentEditorDraftSession;
+  status: WorkspaceSegmentEditorJobResultApplyStatus;
+} => {
+  if (session.projectId !== options.expectedProjectId) {
+    return { draft: session, status: "project-mismatch" };
+  }
+
+  const targetSegment = session.segments.find((segment) => segment.index === options.segmentIndex);
+  if (!targetSegment) {
+    return { draft: session, status: "segment-missing" };
+  }
+
+  const nextSegment = options.updater(targetSegment, session);
+  if (nextSegment === targetSegment) {
+    return { draft: session, status: "applied" };
+  }
+
+  return {
+    draft: rebuildWorkspaceSegmentEditorDraftSessionTimeline({
+      ...session,
+      segments: session.segments.map((segment) =>
+        segment.index === options.segmentIndex ? nextSegment : segment,
+      ),
+    }, options.timelineOptions),
+    status: "applied",
+  };
+};
+
 export const WORKSPACE_SEGMENT_EDITOR_SCRATCH_PROJECT_ID = 0;
+
+const createWorkspaceSegmentEditorScratchDraftId = () => {
+  const randomUuid = globalThis.crypto?.randomUUID?.();
+  if (randomUuid) {
+    return `scratch:${randomUuid}`;
+  }
+
+  return `scratch:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 12)}`;
+};
+
+export const getWorkspaceSegmentEditorDraftId = (
+  session?: Pick<WorkspaceSegmentEditorDraftSession, "draftId" | "projectId"> | null,
+) => {
+  const explicitDraftId = String(session?.draftId ?? "").trim();
+  if (explicitDraftId) {
+    return explicitDraftId;
+  }
+
+  const projectId = Number(session?.projectId);
+  return Number.isInteger(projectId) && projectId > 0 ? `project:${projectId}` : null;
+};
+
+export const ensureWorkspaceSegmentEditorDraftId = (
+  session: WorkspaceSegmentEditorDraftSession,
+): WorkspaceSegmentEditorDraftSession => {
+  const draftId = getWorkspaceSegmentEditorDraftId(session) ?? createWorkspaceSegmentEditorScratchDraftId();
+  return session.draftId === draftId ? session : { ...session, draftId };
+};
 
 export const isWorkspaceSegmentEditorScratchDraft = (
   session?: Pick<WorkspaceSegmentEditorDraftSession, "projectId"> | null,
@@ -7867,6 +7966,7 @@ export const createWorkspaceSegmentEditorDraftSession = (
 
   return {
     ...normalizedSession,
+    draftId: `project:${normalizedSession.projectId}`,
     segments: rebuildWorkspaceSegmentEditorDraftTimeline(
       normalizedSession.segments.map((segment) => {
         const sceneSoundAsset = createWorkspaceSegmentSceneSoundAsset(segment, segment.index);
@@ -8755,6 +8855,7 @@ export const createWorkspaceSegmentEditorScratchDraftSession = (options?: {
     customMusicAssetId: null,
     customMusicFileName: null,
     description,
+    draftId: createWorkspaceSegmentEditorScratchDraftId(),
     language,
     musicAssetId: null,
     musicName: null,

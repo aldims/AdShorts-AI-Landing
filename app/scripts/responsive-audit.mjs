@@ -10,22 +10,39 @@ import { chromium } from "playwright";
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const appRoot = path.resolve(scriptDir, "..");
 const repoRoot = path.resolve(appRoot, "..");
-const artifactDir = path.join(appRoot, "test-results", "responsive-audit");
+const artifactDir = path.join(repoRoot, ".codex-tmp", "responsive-audit");
 const quickMode = process.env.RESPONSIVE_AUDIT_QUICK === "1";
+const scenesOnly = process.env.RESPONSIVE_AUDIT_SCENES_ONLY === "1";
 
 const widths = quickMode
   ? [320, 390, 768, 1280, 1920]
   : [320, 360, 390, 480, 640, 768, 1024, 1280, 1440, 1920];
 const zooms = quickMode ? [1, 1.5, 2] : [1, 1.25, 1.5, 1.75, 2];
 const fontScales = quickMode ? [1, 1.5] : [1, 1.25, 1.5];
+const defaultViewportHeight = 900;
 
-const appRoutes = quickMode
-  ? ["/", "/pricing", "/examples", "/app/studio", "/app/projects"]
-  : ["/", "/pricing", "/examples", "/en", "/en/pricing", "/en/examples", "/app/studio", "/app/projects"];
+const appRoutes = scenesOnly
+  ? ["/app/studio?mode=scenes", "/en/app/studio?mode=scenes"]
+  : quickMode
+    ? ["/", "/pricing", "/examples", "/app/studio", "/app/studio?mode=scenes", "/app/projects"]
+    : [
+      "/",
+      "/pricing",
+      "/examples",
+      "/en",
+      "/en/pricing",
+      "/en/examples",
+      "/app/studio",
+      "/app/studio?mode=scenes",
+      "/en/app/studio?mode=scenes",
+      "/app/projects",
+      ];
 
-const staticRoutes = quickMode
-  ? ["/", "/pricing/", "/examples/", "/shorts-guides/", "/kak-sdelat-shorts-na-youtube/"]
-  : [
+const staticRoutes = scenesOnly
+  ? []
+  : quickMode
+    ? ["/", "/pricing/", "/examples/", "/shorts-guides/", "/kak-sdelat-shorts-na-youtube/"]
+    : [
       "/",
       "/pricing/",
       "/examples/",
@@ -33,7 +50,7 @@ const staticRoutes = quickMode
       "/kak-sdelat-shorts-na-youtube/",
       "/kak-sdelat-huk-v-shorts/",
       "/en/how-to-make-shorts-on-youtube/",
-    ];
+      ];
 
 const nowIso = new Date().toISOString();
 const workspaceProfile = {
@@ -334,13 +351,19 @@ const buildScenarios = () => {
 
   for (const width of widths) {
     for (const zoom of zooms) {
-      scenarios.push({ width, zoom, fontScale: 1, type: "zoom" });
+      scenarios.push({ width, height: defaultViewportHeight, zoom, fontScale: 1, type: "zoom" });
     }
 
     for (const fontScale of fontScales.filter((value) => value !== 1)) {
-      scenarios.push({ width, zoom: 1, fontScale, type: "font" });
+      scenarios.push({ width, height: defaultViewportHeight, zoom: 1, fontScale, type: "font" });
     }
   }
+
+  scenarios.push(
+    { width: 1280, height: 600, zoom: 1, fontScale: 1, type: "height" },
+    { width: 1440, height: 720, zoom: 1, fontScale: 1, type: "height" },
+    { width: 1920, height: 800, zoom: 1, fontScale: 1, type: "height" },
+  );
 
   return scenarios;
 };
@@ -373,6 +396,31 @@ const evaluateLayout = async (page) =>
       );
     };
 
+    const isInsideReachableHorizontalScroller = (element) => {
+      let ancestor = element.parentElement;
+
+      while (ancestor && ancestor !== body) {
+        const style = window.getComputedStyle(ancestor);
+        const overflowX = style.overflowX;
+        const isScrollable =
+          (overflowX === "auto" || overflowX === "scroll") &&
+          ancestor.scrollWidth > ancestor.clientWidth + 1;
+
+        if (isScrollable) {
+          const ancestorRect = ancestor.getBoundingClientRect();
+          return (
+            ancestorRect.width > 0 &&
+            ancestorRect.right > 0 &&
+            ancestorRect.left < viewportWidth
+          );
+        }
+
+        ancestor = ancestor.parentElement;
+      }
+
+      return false;
+    };
+
     for (const element of document.body.querySelectorAll("*")) {
       const rect = element.getBoundingClientRect();
       if (!isVisible(element, rect)) continue;
@@ -380,7 +428,11 @@ const evaluateLayout = async (page) =>
     }
 
     const offenders = visibleElements
-      .filter(({ rect }) => rect.right > viewportWidth + 1 || rect.left < -1)
+      .filter(
+        ({ element, rect }) =>
+          (rect.right > viewportWidth + 1 || rect.left < -1) &&
+          !isInsideReachableHorizontalScroller(element),
+      )
       .map(({ element, rect }) => ({
         selector:
           element.id ||
@@ -405,11 +457,11 @@ const evaluateLayout = async (page) =>
         if (element.closest("[hidden], [aria-hidden='true']")) return false;
         const intersectsViewportVertically = rect.bottom > 0 && rect.top < viewportHeight;
         if (!intersectsViewportVertically) return false;
+        const isOutsideViewportHorizontally = rect.left < -1 || rect.right > viewportWidth + 1;
         return (
           rect.width < 1 ||
           rect.height < 1 ||
-          rect.left < -1 ||
-          rect.right > viewportWidth + 1
+          (isOutsideViewportHorizontally && !isInsideReachableHorizontalScroller(element))
         );
       })
       .slice(0, 8)
@@ -449,6 +501,23 @@ const evaluateLayout = async (page) =>
       }
     }
 
+    const activeSceneCard = document.querySelector(".studio-segment-editor__card.is-active");
+    const activeSceneCardRect = activeSceneCard?.getBoundingClientRect();
+    const sceneTimelineRect = document
+      .querySelector(".studio-segment-editor__timeline")
+      ?.getBoundingClientRect();
+    const sceneSubmitRect = document
+      .querySelector(".studio-segment-editor__timeline-submit-row")
+      ?.getBoundingClientRect();
+    const sceneMain = document.querySelector(".studio-canvas-main.is-segment-editor");
+    const sceneLayout = document.querySelector(".studio-segment-editor__layout");
+    const sceneLayoutRect = sceneLayout?.getBoundingClientRect();
+    const sceneLayoutStyle = sceneLayout ? window.getComputedStyle(sceneLayout) : null;
+    const scenePreviewColumnRect = document
+      .querySelector(".studio-segment-editor__preview-column")
+      ?.getBoundingClientRect();
+    const headerRect = document.querySelector("header")?.getBoundingClientRect();
+
     return {
       clientWidth: viewportWidth,
       clientHeight: viewportHeight,
@@ -457,21 +526,63 @@ const evaluateLayout = async (page) =>
       offenders,
       badControls,
       overlaps: overlaps.slice(0, 6),
+      scenePreview: activeSceneCardRect
+        ? {
+            width: Math.round(activeSceneCardRect.width),
+            height: Math.round(activeSceneCardRect.height),
+            top: Math.round(activeSceneCardRect.top),
+            bottom: Math.round(activeSceneCardRect.bottom),
+          }
+        : null,
+      sceneTimeline: sceneTimelineRect
+        ? {
+            top: Math.round(sceneTimelineRect.top),
+            bottom: Math.round(sceneTimelineRect.bottom),
+          }
+        : null,
+      sceneSubmit: sceneSubmitRect
+        ? {
+            top: Math.round(sceneSubmitRect.top),
+            bottom: Math.round(sceneSubmitRect.bottom),
+          }
+        : null,
+      sceneMainScrollTop: sceneMain ? Math.round(sceneMain.scrollTop) : null,
+      sceneLayout: sceneLayoutRect
+        ? {
+            top: Math.round(sceneLayoutRect.top),
+            bottom: Math.round(sceneLayoutRect.bottom),
+            height: Math.round(sceneLayoutRect.height),
+            gridTemplateRows: sceneLayoutStyle?.gridTemplateRows ?? "",
+          }
+        : null,
+      scenePreviewColumn: scenePreviewColumnRect
+        ? {
+            top: Math.round(scenePreviewColumnRect.top),
+            bottom: Math.round(scenePreviewColumnRect.bottom),
+            height: Math.round(scenePreviewColumnRect.height),
+          }
+        : null,
+      headerBottom: headerRect ? Math.round(headerRect.bottom) : null,
     };
   });
 
 const auditRoute = async ({ browser, baseUrl, route, surface, scenario, sampleState }) => {
   const effectiveWidth = Math.max(320, Math.round(scenario.width / scenario.zoom));
+  const effectiveHeight = Math.max(320, Math.round(scenario.height / scenario.zoom));
   const page = await browser.newPage({
-    viewport: { width: effectiveWidth, height: 900 },
+    viewport: { width: effectiveWidth, height: effectiveHeight },
     deviceScaleFactor: scenario.fontScale,
+  });
+  const runtimeErrors = [];
+  page.on("pageerror", (error) => {
+    runtimeErrors.push(error instanceof Error ? error.message : String(error));
   });
 
   if (surface === "app") {
     await installAppMocks(page);
   }
 
-  const label = `${surface}${route} width=${scenario.width} effective=${effectiveWidth} zoom=${Math.round(
+  const label = `${surface}${route} viewport=${scenario.width}x${scenario.height} effective=${effectiveWidth}x${effectiveHeight} zoom=${Math.round(
     scenario.zoom * 100,
   )}% font=${Math.round(scenario.fontScale * 100)}%`;
   const url = new URL(route, baseUrl).toString();
@@ -486,8 +597,24 @@ const auditRoute = async ({ browser, baseUrl, route, surface, scenario, sampleSt
     await page.waitForLoadState("load", { timeout: 3_000 }).catch(() => undefined);
     await page.waitForTimeout(180);
 
+    const expectsScenesMode = surface === "app" && route.includes("mode=scenes");
+    const scenesModeReady = expectsScenesMode
+      ? await page
+          .waitForSelector(".studio-canvas-main.is-segment-editor", { state: "visible", timeout: 5_000 })
+          .then(() => true)
+          .catch(() => false)
+      : true;
+
     const metrics = await evaluateLayout(page);
     const failures = [];
+
+    if (!scenesModeReady) {
+      failures.push("scenes mode did not render");
+    }
+
+    if (runtimeErrors.length > 0) {
+      failures.push(`runtime errors: ${runtimeErrors.slice(0, 3).join("; ")}`);
+    }
 
     if (metrics.scrollWidth > metrics.clientWidth + 1) {
       failures.push(`document overflow ${metrics.scrollWidth} > ${metrics.clientWidth}`);
@@ -501,7 +628,41 @@ const auditRoute = async ({ browser, baseUrl, route, surface, scenario, sampleSt
       failures.push(`header overlaps: ${metrics.overlaps.map((item) => `${item.a}/${item.b}`).join(", ")}`);
     }
 
-    const screenshotName = `${safeName(`${surface}-${route}-w${scenario.width}-z${scenario.zoom}-f${scenario.fontScale}`)}.png`;
+    if (
+      expectsScenesMode &&
+      metrics.scenePreview &&
+      (metrics.scenePreview.width < 160 || metrics.scenePreview.height < 280)
+    ) {
+      failures.push(
+        `scene preview too small: ${metrics.scenePreview.width}x${metrics.scenePreview.height}`,
+      );
+    }
+
+    if (
+      expectsScenesMode &&
+      metrics.scenePreview &&
+      metrics.sceneTimeline &&
+      metrics.sceneTimeline.top < metrics.scenePreview.bottom
+    ) {
+      failures.push(
+        `timeline overlaps scene preview: ${metrics.sceneTimeline.top} < ${metrics.scenePreview.bottom}`,
+      );
+    }
+
+    if (
+      expectsScenesMode &&
+      metrics.scenePreview &&
+      typeof metrics.headerBottom === "number" &&
+      metrics.scenePreview.top < metrics.headerBottom
+    ) {
+      failures.push(
+        `scene preview overlaps header: ${metrics.scenePreview.top} < ${metrics.headerBottom}`,
+      );
+    }
+
+    const screenshotName = `${safeName(
+      `${surface}-${route}-w${scenario.width}-h${scenario.height}-z${scenario.zoom}-f${scenario.fontScale}`,
+    )}.png`;
     if (failures.length > 0) {
       const screenshotPath = path.join(artifactDir, "failures", screenshotName);
       await mkdir(path.dirname(screenshotPath), { recursive: true });
@@ -515,7 +676,22 @@ const auditRoute = async ({ browser, baseUrl, route, surface, scenario, sampleSt
       };
     }
 
-    if (sampleState.count < 8 && (scenario.width === 320 || scenario.width === 768 || scenario.width === 1920)) {
+    const isCanonicalSample =
+      scenario.zoom === 1 &&
+      scenario.fontScale === 1 &&
+      scenario.height === defaultViewportHeight &&
+      (scenario.width === 320 || scenario.width === 768 || scenario.width === 1920);
+    const shouldAlwaysCaptureScenesSample = surface === "app" && route.includes("mode=scenes");
+    const isScenesStressSample =
+      shouldAlwaysCaptureScenesSample &&
+      scenario.fontScale === 1 &&
+      scenario.height === defaultViewportHeight &&
+      ((scenario.width === 1280 && scenario.zoom === 1.5) ||
+        (scenario.width === 1920 && scenario.zoom === 2));
+    if (
+      (isCanonicalSample || isScenesStressSample) &&
+      (shouldAlwaysCaptureScenesSample || sampleState.count < 8)
+    ) {
       const screenshotPath = path.join(artifactDir, "samples", screenshotName);
       await mkdir(path.dirname(screenshotPath), { recursive: true });
       await page.screenshot({ path: screenshotPath, fullPage: false });
@@ -527,7 +703,9 @@ const auditRoute = async ({ browser, baseUrl, route, surface, scenario, sampleSt
     const screenshotPath = path.join(
       artifactDir,
       "failures",
-      `${safeName(`${surface}-${route}-w${scenario.width}-z${scenario.zoom}-f${scenario.fontScale}-error`)}.png`,
+      `${safeName(
+        `${surface}-${route}-w${scenario.width}-h${scenario.height}-z${scenario.zoom}-f${scenario.fontScale}-error`,
+      )}.png`,
     );
     await mkdir(path.dirname(screenshotPath), { recursive: true });
     await page.screenshot({ path: screenshotPath, fullPage: false }).catch(() => undefined);
@@ -590,13 +768,26 @@ const run = async () => {
             if (result.metrics?.offenders?.length) {
               console.error(`  offenders: ${result.metrics.offenders.map((item) => item.selector).join(", ")}`);
             }
+            if (result.metrics?.scenePreview) {
+              console.error(
+                `  scene geometry: ${JSON.stringify({
+                  mainScrollTop: result.metrics.sceneMainScrollTop,
+                  layout: result.metrics.sceneLayout,
+                  previewColumn: result.metrics.scenePreviewColumn,
+                  preview: result.metrics.scenePreview,
+                  submit: result.metrics.sceneSubmit,
+                  timeline: result.metrics.sceneTimeline,
+                })}`,
+              );
+            }
             if (result.screenshotPath) console.error(`  screenshot: ${result.screenshotPath}`);
           }
         }
       }
     }
 
-    console.log(`Responsive audit checked ${checked} scenarios (${quickMode ? "quick" : "full"} mode).`);
+    const auditMode = scenesOnly ? "scenes" : quickMode ? "quick" : "full";
+    console.log(`Responsive audit checked ${checked} scenarios (${auditMode} mode).`);
     console.log(`Screenshots: ${artifactDir}`);
 
     if (failures.length > 0) {
