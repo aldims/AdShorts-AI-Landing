@@ -2152,9 +2152,6 @@ export function WorkspacePage({
     Record<string, SegmentTimelineVoiceHistory>
   >({});
   const segmentTimelineVoiceHistoryRef = useRef<Record<string, SegmentTimelineVoiceHistory>>({});
-  const [segmentInfographicHistory, setSegmentInfographicHistoryState] = useState<
-    Record<number, WorkspaceSegmentInfographicHistory>
-  >({});
   const segmentInfographicHistoryRef = useRef<Record<number, WorkspaceSegmentInfographicHistory>>({});
   const segmentInfographicPendingTransformsRef = useRef<
     Record<number, WorkspaceSegmentInfographicTransform | undefined>
@@ -2189,7 +2186,6 @@ export function WorkspacePage({
       ? nextValue(segmentInfographicHistoryRef.current)
       : nextValue;
     segmentInfographicHistoryRef.current = nextHistory;
-    setSegmentInfographicHistoryState(nextHistory);
   }, []);
   useEffect(() => {
     setSegmentTimelineRedoSnapshots({});
@@ -35991,30 +35987,6 @@ export function WorkspacePage({
                           }
                         }}
                       />
-                      <p className="studio-segment-editor__infographic-hint">
-                        <span aria-hidden="true">✦</span>
-                        {workspaceText(
-                          locale,
-                          "Если стиль не указан, ИИ автоматически подберёт его под сцену.",
-                          "If no style is provided, AI will match it to the scene automatically.",
-                        )}
-                      </p>
-                      <div className="studio-segment-editor__infographic-history-actions">
-                        <button
-                          type="button"
-                          disabled={!activeSegment || !(segmentInfographicHistory[activeSegment.index]?.past.length)}
-                          onClick={() => activeSegment && undoSegmentEditorInfographic(activeSegment.index)}
-                        >
-                          {workspaceText(locale, "Отменить", "Undo")}
-                        </button>
-                        <button
-                          type="button"
-                          disabled={!activeSegment || !(segmentInfographicHistory[activeSegment.index]?.future.length)}
-                          onClick={() => activeSegment && redoSegmentEditorInfographic(activeSegment.index)}
-                        >
-                          {workspaceText(locale, "Вернуть", "Redo")}
-                        </button>
-                      </div>
                       {activeSegment?.infographic &&
                       isWorkspaceSegmentInfographicStale(
                         activeSegment.infographic,
@@ -36058,16 +36030,6 @@ export function WorkspacePage({
                             </button>
                           </div>
                         </div>
-                      ) : null}
-                      {activeSegment?.infographic ? (
-                        <button
-                          className="studio-segment-editor__infographic-remove"
-                          type="button"
-                          disabled={isSegmentInfographicCurrentSegment}
-                          onClick={() => deleteSegmentEditorInfographicByIndex(activeSegment.index)}
-                        >
-                          {workspaceText(locale, "Удалить инфографику", "Delete infographic")}
-                        </button>
                       ) : null}
                     </div>
                   ) : (
@@ -37065,8 +37027,6 @@ export function WorkspacePage({
                                       ) : null}
                                       {segment.infographic ? (
                                         <WorkspaceSegmentInfographicOverlay
-                                          canRedo={Boolean(segmentInfographicHistory[segment.index]?.future.length)}
-                                          canUndo={Boolean(segmentInfographicHistory[segment.index]?.past.length)}
                                           editable={
                                             isActiveCard &&
                                             segmentEditorFullPreviewStatus === "idle" &&
@@ -38971,7 +38931,6 @@ export function WorkspacePage({
                                 }));
                               }}
                             />
-                            <p>{workspaceText(locale, "Если стиль не указан, ИИ автоматически подберёт его под сцену.", "If no style is provided, AI will match it to the scene automatically.")}</p>
                           </div>
 
                           <div className="studio-ai-photo-modal__tab-actions">

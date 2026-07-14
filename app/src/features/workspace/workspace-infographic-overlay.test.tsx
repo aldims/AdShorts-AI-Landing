@@ -254,7 +254,7 @@ describe("WorkspaceSegmentInfographicOverlay", () => {
     expect(onTransformCommit).not.toHaveBeenCalled();
   });
 
-  it("keeps history and deletion available from both the toolbar and keyboard", () => {
+  it("keeps history and deletion available from the keyboard without rendering action buttons", () => {
     const onDelete = vi.fn();
     const onRedo = vi.fn();
     const onUndo = vi.fn();
@@ -268,8 +268,6 @@ describe("WorkspaceSegmentInfographicOverlay", () => {
     });
     const view = render(
       <WorkspaceSegmentInfographicOverlay
-        canRedo
-        canUndo
         editable
         infographic={infographic}
         isPlaying={false}
@@ -281,17 +279,14 @@ describe("WorkspaceSegmentInfographicOverlay", () => {
       />,
     );
     const object = view.getByRole("group");
-    expect(view.getByRole("toolbar", { name: "Действия с инфографикой" })).toBeTruthy();
 
-    fireEvent.click(view.getByRole("button", { name: "Отменить изменение инфографики" }));
-    fireEvent.click(view.getByRole("button", { name: "Вернуть изменение инфографики" }));
-    fireEvent.click(view.getByRole("button", { name: "Удалить инфографику" }));
+    expect(view.queryByRole("button")).toBeNull();
     fireEvent.keyDown(object, { ctrlKey: true, key: "z" });
     fireEvent.keyDown(object, { ctrlKey: true, key: "z", shiftKey: true });
     fireEvent.keyDown(object, { key: "Delete" });
 
-    expect(onUndo).toHaveBeenCalledTimes(2);
-    expect(onRedo).toHaveBeenCalledTimes(2);
-    expect(onDelete).toHaveBeenCalledTimes(2);
+    expect(onUndo).toHaveBeenCalledTimes(1);
+    expect(onRedo).toHaveBeenCalledTimes(1);
+    expect(onDelete).toHaveBeenCalledTimes(1);
   });
 });

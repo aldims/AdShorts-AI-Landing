@@ -42638,63 +42638,6 @@ html, body {
 .studio-segment-infographic__handle.is-sw { bottom: -22px; left: -22px; cursor: nesw-resize; }
 .studio-segment-infographic__handle.is-se { bottom: -22px; right: -22px; cursor: nwse-resize; }
 
-.studio-segment-infographic__toolbar {
-  position: absolute;
-  right: -20px;
-  top: -36px;
-  z-index: 3;
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 2px;
-  border: 1px solid rgba(207, 250, 254, 0.16);
-  border-radius: 999px;
-  background: rgba(5, 18, 28, 0.88);
-  box-shadow: 0 8px 20px -12px rgba(0, 0, 0, 0.86), inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(12px);
-}
-
-.studio-segment-infographic__toolbar button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  min-width: 26px;
-  height: 26px;
-  min-height: 26px;
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: rgba(207, 250, 254, 0.84);
-  cursor: pointer;
-}
-
-.studio-segment-infographic__toolbar button:hover:not(:disabled),
-.studio-segment-infographic__toolbar button:focus-visible {
-  background: rgba(103, 232, 249, 0.12);
-  color: rgba(236, 254, 255, 1);
-  outline: none;
-}
-
-.studio-segment-infographic__toolbar button:disabled {
-  cursor: default;
-  opacity: 0.3;
-}
-
-.studio-segment-infographic__toolbar .studio-segment-infographic__delete {
-  width: 28px;
-  min-width: 28px;
-  height: 30px;
-  color: rgba(254, 226, 226, 0.96);
-}
-
-.studio-segment-infographic__delete:hover,
-.studio-segment-infographic__delete:focus-visible {
-  background: rgba(69, 10, 24, 0.96);
-  outline: none;
-}
-
 .studio-segment-infographic__refreshing {
   position: absolute;
   left: 50%;
@@ -42871,44 +42814,6 @@ html, body {
   }
 }
 
-.studio-segment-editor__infographic-hint {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  margin: -2px 0 0;
-  color: rgba(165, 243, 252, 0.74);
-  font-size: 0.68rem;
-  line-height: 1.42;
-}
-
-.studio-segment-editor__infographic-hint span {
-  flex: 0 0 auto;
-  color: rgba(103, 232, 249, 0.94);
-}
-
-.studio-segment-editor__infographic-history-actions {
-  display: inline-flex;
-  gap: 6px;
-}
-
-.studio-segment-editor__infographic-history-actions button {
-  min-height: 28px;
-  padding: 0 10px;
-  border: 1px solid rgba(103, 232, 249, 0.14);
-  border-radius: 8px;
-  background: rgba(8, 28, 40, 0.44);
-  color: rgba(207, 250, 254, 0.82);
-  font: inherit;
-  font-size: 0.66rem;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.studio-segment-editor__infographic-history-actions button:disabled {
-  cursor: default;
-  opacity: 0.36;
-}
-
 .studio-segment-editor__infographic-stale {
   display: flex;
   align-items: center;
@@ -42947,8 +42852,7 @@ html, body {
   color: rgba(253, 230, 138, 0.68);
 }
 
-.studio-segment-editor__infographic-stale button,
-.studio-segment-editor__infographic-remove {
+.studio-segment-editor__infographic-stale button {
   flex: 0 0 auto;
   min-height: 30px;
   padding: 0 10px;
@@ -42960,12 +42864,6 @@ html, body {
   font-size: 0.68rem;
   font-weight: 700;
   cursor: pointer;
-}
-
-.studio-segment-editor__infographic-remove {
-  justify-self: start;
-  border-color: rgba(248, 113, 113, 0.18);
-  color: rgba(254, 202, 202, 0.86);
 }
 
 .studio-ai-photo-modal__infographic-fields {
@@ -42984,13 +42882,6 @@ html, body {
   font-weight: 720;
 }
 
-.studio-ai-photo-modal__infographic-fields p {
-  margin: 0;
-  color: rgba(165, 243, 252, 0.7);
-  font-size: 0.7rem;
-  line-height: 1.4;
-}
-
 @media (max-width: 720px) {
   .studio-segment-editor__infographic-stale {
     align-items: stretch;
@@ -43001,18 +42892,6 @@ html, body {
     align-self: flex-start;
   }
 
-  .studio-segment-infographic__toolbar {
-    right: -24px;
-    top: -43px;
-    padding: 3px;
-  }
-
-  .studio-segment-infographic__toolbar button {
-    width: 34px;
-    min-width: 34px;
-    height: 34px;
-    min-height: 34px;
-  }
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__card-media::before,

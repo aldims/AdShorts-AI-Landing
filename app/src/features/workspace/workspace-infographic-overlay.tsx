@@ -26,8 +26,6 @@ type InfographicDragState = {
 };
 
 export type WorkspaceSegmentInfographicOverlayProps = {
-  canRedo?: boolean;
-  canUndo?: boolean;
   editable: boolean;
   infographic: WorkspaceSegmentInfographic;
   isPlaying: boolean;
@@ -42,8 +40,6 @@ export type WorkspaceSegmentInfographicOverlayProps = {
 };
 
 export const WorkspaceSegmentInfographicOverlay = ({
-  canRedo = false,
-  canUndo = false,
   editable,
   infographic,
   isPlaying,
@@ -283,60 +279,14 @@ export const WorkspaceSegmentInfographicOverlay = ({
             draggable={false}
           />
         )}
-        {editable ? (
-          <>
-            {(["nw", "ne", "sw", "se"] as const).map((handle) => (
-              <span
-                className={`studio-segment-infographic__handle is-${handle}`}
-                data-infographic-handle={handle}
-                key={handle}
-                aria-hidden="true"
-              />
-            ))}
-            <span
-              className="studio-segment-infographic__toolbar"
-              role="toolbar"
-              aria-label="Действия с инфографикой"
-            >
-              <button
-                type="button"
-                aria-label="Отменить изменение инфографики"
-                title="Отменить"
-                disabled={!canUndo}
-                onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
-                onClick={(event) => { event.preventDefault(); event.stopPropagation(); onUndo?.(); }}
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M9 7H4V2M4.9 7.7A8 8 0 1 1 4 12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
-                </svg>
-              </button>
-              <button
-                type="button"
-                aria-label="Вернуть изменение инфографики"
-                title="Вернуть"
-                disabled={!canRedo}
-                onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
-                onClick={(event) => { event.preventDefault(); event.stopPropagation(); onRedo?.(); }}
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M15 7h5V2M19.1 7.7A8 8 0 1 0 20 12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
-                </svg>
-              </button>
-              <button
-                className="studio-segment-infographic__delete"
-                type="button"
-                aria-label="Удалить инфографику"
-                title="Удалить инфографику"
-                onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
-                onClick={(event) => { event.preventDefault(); event.stopPropagation(); onDelete?.(); }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" strokeLinecap="round" strokeWidth="2" />
-                </svg>
-              </button>
-            </span>
-          </>
-        ) : null}
+        {editable ? (["nw", "ne", "sw", "se"] as const).map((handle) => (
+          <span
+            className={`studio-segment-infographic__handle is-${handle}`}
+            data-infographic-handle={handle}
+            key={handle}
+            aria-hidden="true"
+          />
+        )) : null}
       </div>
     </div>
   );
