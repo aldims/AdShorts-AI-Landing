@@ -37058,12 +37058,6 @@ export function WorkspacePage({
                                           </span>
                                         </div>
                                       ) : null}
-                                      {isInfographicGenerationPending ? (
-                                        <div className="studio-segment-infographic__refreshing" role="status" aria-live="polite">
-                                          <span className="studio-segment-editor__prompt-action-spinner" aria-hidden="true" />
-                                          {workspaceText(locale, "Создаем инфографику", "Creating infographic")}
-                                        </div>
-                                      ) : null}
                                       <div className={`studio-segment-editor__card-overlay${isActiveCard ? " is-active" : ""}`}>
                                         {isActiveCard ? (
                                           <div className="studio-segment-editor__card-overlay-footer">
@@ -37135,6 +37129,12 @@ export function WorkspacePage({
                                             </button>
                                           ) : null}
                                         </div>
+                                      </div>
+                                    ) : null}
+                                    {isInfographicGenerationPending ? (
+                                      <div className="studio-segment-infographic__refreshing" role="status" aria-live="polite">
+                                        <span className="studio-segment-editor__prompt-action-spinner" aria-hidden="true" />
+                                        {workspaceText(locale, "Создаем инфографику", "Creating infographic")}
                                       </div>
                                     ) : null}
                                   </div>
