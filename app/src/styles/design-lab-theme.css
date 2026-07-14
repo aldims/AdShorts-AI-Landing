@@ -42590,6 +42590,16 @@ html, body {
   pointer-events: none;
 }
 
+.studio-segment-infographic.is-selectable {
+  pointer-events: none;
+}
+
+.studio-segment-infographic.is-selectable .studio-segment-infographic__object {
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: none;
+}
+
 .studio-segment-infographic.is-editable .studio-segment-infographic__object {
   cursor: grab;
   pointer-events: auto;
@@ -42637,6 +42647,40 @@ html, body {
 .studio-segment-infographic__handle.is-ne { right: -22px; top: -22px; cursor: nesw-resize; }
 .studio-segment-infographic__handle.is-sw { bottom: -22px; left: -22px; cursor: nesw-resize; }
 .studio-segment-infographic__handle.is-se { bottom: -22px; right: -22px; cursor: nwse-resize; }
+
+.studio-segment-infographic__close {
+  position: absolute;
+  right: 7px;
+  top: 7px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  min-height: 38px;
+  padding: 0;
+  border: 1px solid rgba(207, 250, 254, 0.22);
+  border-radius: 999px;
+  background: rgba(5, 18, 28, 0.88);
+  color: rgba(236, 254, 255, 0.94);
+  box-shadow: 0 8px 20px -12px rgba(0, 0, 0, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  backdrop-filter: blur(12px);
+}
+
+.studio-segment-infographic__close:hover,
+.studio-segment-infographic__close:focus-visible {
+  border-color: rgba(103, 232, 249, 0.5);
+  background: rgba(8, 35, 48, 0.96);
+  color: #fff;
+  outline: none;
+}
+
+.studio-segment-infographic__close:focus-visible {
+  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.18), 0 8px 20px -12px rgba(0, 0, 0, 0.9);
+}
 
 .studio-segment-infographic__refreshing {
   position: absolute;
@@ -42883,6 +42927,13 @@ html, body {
 }
 
 @media (max-width: 720px) {
+  .studio-segment-infographic__close {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
+
   .studio-segment-editor__infographic-stale {
     align-items: stretch;
     flex-direction: column;

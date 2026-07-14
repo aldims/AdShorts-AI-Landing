@@ -254,7 +254,7 @@ describe("WorkspaceSegmentInfographicOverlay", () => {
     expect(onTransformCommit).not.toHaveBeenCalled();
   });
 
-  it("keeps history and deletion available from the keyboard without rendering action buttons", () => {
+  it("keeps keyboard actions without rendering history or deletion buttons", () => {
     const onDelete = vi.fn();
     const onRedo = vi.fn();
     const onUndo = vi.fn();
@@ -280,7 +280,10 @@ describe("WorkspaceSegmentInfographicOverlay", () => {
     );
     const object = view.getByRole("group");
 
-    expect(view.queryByRole("button")).toBeNull();
+    expect(view.getByRole("button", { name: "Закрыть редактирование инфографики" })).toBeTruthy();
+    expect(view.queryByRole("button", { name: "Отменить изменение инфографики" })).toBeNull();
+    expect(view.queryByRole("button", { name: "Вернуть изменение инфографики" })).toBeNull();
+    expect(view.queryByRole("button", { name: "Удалить инфографику" })).toBeNull();
     fireEvent.keyDown(object, { ctrlKey: true, key: "z" });
     fireEvent.keyDown(object, { ctrlKey: true, key: "z", shiftKey: true });
     fireEvent.keyDown(object, { key: "Delete" });
@@ -288,5 +291,39 @@ describe("WorkspaceSegmentInfographicOverlay", () => {
     expect(onUndo).toHaveBeenCalledTimes(1);
     expect(onRedo).toHaveBeenCalledTimes(1);
     expect(onDelete).toHaveBeenCalledTimes(1);
+  });
+
+  it("closes the editing selection without deleting the infographic and allows selecting it again", () => {
+    const onDelete = vi.fn();
+    const infographic = createWorkspaceSegmentInfographic({
+      inputHash: "2".repeat(64),
+      intrinsicHeight: 1024,
+      intrinsicWidth: 1024,
+      mediaAssetId: 61,
+      sourceVisualIdentity: "asset:17",
+      text: "Close editing",
+    });
+    const view = render(
+      <WorkspaceSegmentInfographicOverlay
+        editable
+        infographic={infographic}
+        isPlaying={false}
+        localTimeSeconds={0}
+        onDelete={onDelete}
+        segmentDurationSeconds={5}
+      />,
+    );
+
+    fireEvent.click(view.getByRole("button", { name: "Закрыть редактирование инфографики" }));
+
+    expect(onDelete).not.toHaveBeenCalled();
+    expect(view.queryByRole("button", { name: "Закрыть редактирование инфографики" })).toBeNull();
+    expect(view.container.querySelectorAll(".studio-segment-infographic__handle")).toHaveLength(0);
+    const object = view.getByRole("group", { name: /Нажмите, чтобы редактировать/ });
+
+    fireEvent.keyDown(object, { key: "Enter" });
+
+    expect(view.getByRole("button", { name: "Закрыть редактирование инфографики" })).toBeTruthy();
+    expect(view.container.querySelectorAll(".studio-segment-infographic__handle")).toHaveLength(4);
   });
 });

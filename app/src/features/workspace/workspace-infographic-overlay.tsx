@@ -58,12 +58,17 @@ export const WorkspaceSegmentInfographicOverlay = ({
   const pendingTransformRef = useRef<WorkspaceSegmentInfographicTransform | null>(null);
   const [transientTransform, setTransientTransform] = useState(infographic.transform);
   const [isInteracting, setIsInteracting] = useState(false);
+  const [isSelected, setIsSelected] = useState(editable);
 
   useEffect(() => {
     if (!dragRef.current) {
       setTransientTransform(infographic.transform);
     }
   }, [infographic.mediaAssetId, infographic.transform.centerX, infographic.transform.centerY, infographic.transform.width]);
+
+  useEffect(() => {
+    setIsSelected(true);
+  }, [infographic.mediaAssetId]);
 
   useEffect(() => () => {
     if (frameRef.current !== null) {
@@ -89,6 +94,7 @@ export const WorkspaceSegmentInfographicOverlay = ({
     if (!editable || event.button !== 0) {
       return;
     }
+    setIsSelected(true);
     const target = event.target as HTMLElement;
     const rawHandle = target.closest<HTMLElement>("[data-infographic-handle]")?.dataset.infographicHandle;
     const handle = rawHandle === "ne" || rawHandle === "nw" || rawHandle === "se" || rawHandle === "sw"
@@ -189,11 +195,12 @@ export const WorkspaceSegmentInfographicOverlay = ({
   const objectStyle = infographic.parts.length > 0
     ? { aspectRatio: `${infographic.intrinsicWidth} / ${infographic.intrinsicHeight}` }
     : undefined;
+  const isEditing = editable && isSelected;
 
   return (
     <div
       ref={rootRef}
-      className={`studio-segment-infographic${editable ? " is-editable" : ""}${isInteracting ? " is-interacting" : ""}`}
+      className={`studio-segment-infographic${isEditing ? " is-editable" : editable ? " is-selectable" : ""}${isInteracting ? " is-interacting" : ""}`}
       style={style}
       data-testid="segment-infographic-overlay"
       onPointerCancel={(event) => finishInteraction(event, true)}
@@ -207,10 +214,21 @@ export const WorkspaceSegmentInfographicOverlay = ({
         style={objectStyle}
         data-infographic-handle="move"
         role={editable ? "group" : undefined}
-        aria-label={editable ? `Инфографика: ${infographic.text}. Перетащите для изменения положения.` : undefined}
+        aria-label={editable
+          ? isEditing
+            ? `Инфографика: ${infographic.text}. Перетащите для изменения положения.`
+            : `Инфографика: ${infographic.text}. Нажмите, чтобы редактировать.`
+          : undefined}
         tabIndex={editable ? 0 : -1}
         onKeyDown={(event) => {
-          if (editable && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
+          if (editable && !isEditing && (event.key === "Enter" || event.key === " ")) {
+            event.preventDefault();
+            event.stopPropagation();
+            setIsSelected(true);
+            onInteractionStart?.();
+            return;
+          }
+          if (isEditing && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
             event.preventDefault();
             event.stopPropagation();
             if (event.shiftKey) {
@@ -220,8 +238,8 @@ export const WorkspaceSegmentInfographicOverlay = ({
             }
             return;
           }
-          if (!editable || !["ArrowDown", "ArrowLeft", "ArrowRight", "ArrowUp"].includes(event.key)) {
-            if (editable && (event.key === "Backspace" || event.key === "Delete")) {
+          if (!isEditing || !["ArrowDown", "ArrowLeft", "ArrowRight", "ArrowUp"].includes(event.key)) {
+            if (isEditing && (event.key === "Backspace" || event.key === "Delete")) {
               event.preventDefault();
               event.stopPropagation();
               onDelete?.();
@@ -280,14 +298,37 @@ export const WorkspaceSegmentInfographicOverlay = ({
             draggable={false}
           />
         )}
-        {editable ? (["nw", "ne", "sw", "se"] as const).map((handle) => (
-          <span
-            className={`studio-segment-infographic__handle is-${handle}`}
-            data-infographic-handle={handle}
-            key={handle}
-            aria-hidden="true"
-          />
-        )) : null}
+        {isEditing ? (
+          <>
+            {(["nw", "ne", "sw", "se"] as const).map((handle) => (
+              <span
+                className={`studio-segment-infographic__handle is-${handle}`}
+                data-infographic-handle={handle}
+                key={handle}
+                aria-hidden="true"
+              />
+            ))}
+            <button
+              className="studio-segment-infographic__close"
+              type="button"
+              aria-label="Закрыть редактирование инфографики"
+              title="Закрыть"
+              onPointerDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                setIsSelected(false);
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" strokeLinecap="round" strokeWidth="2" />
+              </svg>
+            </button>
+          </>
+        ) : null}
       </div>
     </div>
   );
