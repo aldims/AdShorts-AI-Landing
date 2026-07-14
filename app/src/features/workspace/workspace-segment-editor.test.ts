@@ -405,7 +405,7 @@ describe("segment infographic refresh isolation", () => {
   it("preserves a generated layer when a concurrent fresh session still has no infographic", () => {
     const baselineSegment = createProjectVoiceoverSegment({ index: 0 });
     const infographic = {
-      animation: { durationSeconds: 1.1 as const, type: "fade" as const },
+      animation: { durationSeconds: 2.2 as const, type: "fade" as const },
       inputHash: "b".repeat(64),
       intrinsicHeight: 400,
       intrinsicWidth: 800,
@@ -434,7 +434,7 @@ describe("segment infographic refresh isolation", () => {
     const firstSegment = createProjectVoiceoverSegment({ index: 0 });
     const secondSegment = createProjectVoiceoverSegment({ index: 1 });
     const infographic = {
-      animation: { durationSeconds: 1.1 as const, type: "fade" as const },
+      animation: { durationSeconds: 2.2 as const, type: "fade" as const },
       inputHash: "c".repeat(64),
       intrinsicHeight: 1453,
       intrinsicWidth: 908,

@@ -46,7 +46,7 @@ describe("workspace segment editor infographic hydration", () => {
     });
 
     expect(segment?.infographic).toEqual({
-      animation: { durationSeconds: 1.1, type: "fade" },
+      animation: { durationSeconds: 2.2, type: "fade" },
       inputHash: "a".repeat(64),
       intrinsicHeight: 640,
       intrinsicWidth: 1280,
@@ -57,7 +57,7 @@ describe("workspace segment editor infographic hydration", () => {
           intrinsicHeight: 220,
           intrinsicWidth: 720,
           mediaAssetId: 902,
-          reveal: { delaySeconds: 0, durationSeconds: 0.65 },
+          reveal: { delaySeconds: 0, durationSeconds: 1.3 },
           text: "Главный",
         },
         {
@@ -65,7 +65,7 @@ describe("workspace segment editor infographic hydration", () => {
           intrinsicHeight: 180,
           intrinsicWidth: 560,
           mediaAssetId: 903,
-          reveal: { delaySeconds: 0.85, durationSeconds: 0.65 },
+          reveal: { delaySeconds: 1.7, durationSeconds: 1.3 },
           text: "факт",
         },
       ],

@@ -2591,6 +2591,11 @@ export const buildWorkspaceSegmentEditorSessionFromPayload = (
   };
 };
 
+const WORKSPACE_SEGMENT_INFOGRAPHIC_FADE_SECONDS = 2.2;
+const WORKSPACE_SEGMENT_INFOGRAPHIC_PART_REVEAL_SECONDS = 1.3;
+const WORKSPACE_SEGMENT_INFOGRAPHIC_LEGACY_PART_REVEAL_SECONDS = 0.65;
+const WORKSPACE_SEGMENT_INFOGRAPHIC_TIMING_SCALE = 2;
+
 const normalizeWorkspaceSegmentInfographic = (value: unknown): WorkspaceSegmentInfographic | null => {
   if (!value || typeof value !== "object") {
     return null;
@@ -2634,24 +2639,38 @@ const normalizeWorkspaceSegmentInfographic = (value: unknown): WorkspaceSegmentI
       const frameWidth = normalizeNumber(frame.width);
       const frameHeight = normalizeNumber(frame.height);
       const delaySeconds = normalizeNumber(reveal.delaySeconds ?? reveal.delay_seconds);
+      const revealDurationSeconds = normalizeNumber(
+        reveal.durationSeconds ?? reveal.duration_seconds,
+      );
+      const normalizedDelaySeconds = delaySeconds === null
+        ? null
+        : delaySeconds * (
+            revealDurationSeconds === null ||
+            revealDurationSeconds <= WORKSPACE_SEGMENT_INFOGRAPHIC_LEGACY_PART_REVEAL_SECONDS + 0.000001
+              ? WORKSPACE_SEGMENT_INFOGRAPHIC_TIMING_SCALE
+              : 1
+          );
       const partText = String(part.text ?? "").trim();
       if (!(
         partAssetId && partWidth && partHeight && partText && x !== null && y !== null &&
-        frameWidth !== null && frameHeight !== null && delaySeconds !== null &&
+        frameWidth !== null && frameHeight !== null && normalizedDelaySeconds !== null &&
         x >= 0 && y >= 0 && frameWidth > 0 && frameHeight > 0 &&
         x + frameWidth <= 1.0001 && y + frameHeight <= 1.0001 &&
-        delaySeconds >= previousDelay
+        normalizedDelaySeconds >= previousDelay
       )) {
         partsValid = false;
         continue;
       }
-      previousDelay = delaySeconds;
+      previousDelay = normalizedDelaySeconds;
       parts.push({
         frame: { height: frameHeight, width: frameWidth, x, y },
         intrinsicHeight: partHeight,
         intrinsicWidth: partWidth,
         mediaAssetId: partAssetId,
-        reveal: { delaySeconds, durationSeconds: 0.65 },
+        reveal: {
+          delaySeconds: normalizedDelaySeconds,
+          durationSeconds: WORKSPACE_SEGMENT_INFOGRAPHIC_PART_REVEAL_SECONDS,
+        },
         text: partText,
       });
     }
@@ -2673,7 +2692,7 @@ const normalizeWorkspaceSegmentInfographic = (value: unknown): WorkspaceSegmentI
   }
 
   return {
-    animation: { durationSeconds: 1.1, type: "fade" },
+    animation: { durationSeconds: WORKSPACE_SEGMENT_INFOGRAPHIC_FADE_SECONDS, type: "fade" },
     inputHash,
     intrinsicHeight,
     intrinsicWidth,

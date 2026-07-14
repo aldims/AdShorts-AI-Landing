@@ -25,7 +25,7 @@ const adsflowHealthyPayload = {
 };
 
 const segmentInfographic = {
-  animation: { durationSeconds: 1.1, type: "fade" as const },
+  animation: { durationSeconds: 2.2, type: "fade" as const },
   inputHash: "a".repeat(64),
   intrinsicHeight: 600,
   intrinsicWidth: 1200,
@@ -36,7 +36,7 @@ const segmentInfographic = {
       intrinsicHeight: 240,
       intrinsicWidth: 900,
       mediaAssetId: 502,
-      reveal: { delaySeconds: 0, durationSeconds: 0.65 },
+      reveal: { delaySeconds: 0, durationSeconds: 1.3 },
       text: "Три простых шага",
     },
   ],

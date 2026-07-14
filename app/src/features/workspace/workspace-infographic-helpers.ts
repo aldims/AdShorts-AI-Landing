@@ -10,8 +10,10 @@ export const WORKSPACE_SEGMENT_INFOGRAPHIC_STYLE_MAX_CHARS = 300;
 export const WORKSPACE_SEGMENT_INFOGRAPHIC_DEFAULT_WIDTH = 0.7;
 export const WORKSPACE_SEGMENT_INFOGRAPHIC_MIN_WIDTH = 0.12;
 export const WORKSPACE_SEGMENT_INFOGRAPHIC_MAX_WIDTH = 0.96;
-export const WORKSPACE_SEGMENT_INFOGRAPHIC_FADE_SECONDS = 1.1;
-export const WORKSPACE_SEGMENT_INFOGRAPHIC_PART_REVEAL_SECONDS = 0.65;
+export const WORKSPACE_SEGMENT_INFOGRAPHIC_FADE_SECONDS = 2.2;
+export const WORKSPACE_SEGMENT_INFOGRAPHIC_PART_REVEAL_SECONDS = 1.3;
+export const WORKSPACE_SEGMENT_INFOGRAPHIC_LEGACY_PART_REVEAL_SECONDS = 0.65;
+export const WORKSPACE_SEGMENT_INFOGRAPHIC_TIMING_SCALE = 2;
 export const WORKSPACE_SEGMENT_INFOGRAPHIC_FRAME_ASPECT_RATIO = 9 / 16;
 export const WORKSPACE_SEGMENT_INFOGRAPHIC_HISTORY_LIMIT = 40;
 
@@ -87,22 +89,35 @@ const normalizeWorkspaceSegmentInfographicParts = (value: unknown): WorkspaceSeg
     const width = finiteNumber(frame.width, Number.NaN);
     const height = finiteNumber(frame.height, Number.NaN);
     const delaySeconds = finiteNumber(reveal.delaySeconds ?? reveal.delay_seconds, Number.NaN);
+    const rawRevealDurationSeconds = finiteNumber(
+      reveal.durationSeconds ?? reveal.duration_seconds,
+      Number.NaN,
+    );
+    const normalizedDelaySeconds = delaySeconds * (
+      !Number.isFinite(rawRevealDurationSeconds) ||
+      rawRevealDurationSeconds <= WORKSPACE_SEGMENT_INFOGRAPHIC_LEGACY_PART_REVEAL_SECONDS + 0.000001
+        ? WORKSPACE_SEGMENT_INFOGRAPHIC_TIMING_SCALE
+        : 1
+    );
     if (
       !mediaAssetId || !intrinsicWidth || !intrinsicHeight || !text ||
       ![x, y, width, height, delaySeconds].every(Number.isFinite) ||
       x < 0 || y < 0 || width <= 0 || height <= 0 ||
       x + width > 1.000001 || y + height > 1.000001 ||
-      delaySeconds < previousDelay
+      normalizedDelaySeconds < previousDelay
     ) {
       return [];
     }
-    previousDelay = delaySeconds;
+    previousDelay = normalizedDelaySeconds;
     parts.push({
       frame: { height, width, x, y },
       intrinsicHeight,
       intrinsicWidth,
       mediaAssetId,
-      reveal: { delaySeconds, durationSeconds: WORKSPACE_SEGMENT_INFOGRAPHIC_PART_REVEAL_SECONDS },
+      reveal: {
+        delaySeconds: normalizedDelaySeconds,
+        durationSeconds: WORKSPACE_SEGMENT_INFOGRAPHIC_PART_REVEAL_SECONDS,
+      },
       text,
     });
   }

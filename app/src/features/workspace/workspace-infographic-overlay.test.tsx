@@ -47,7 +47,7 @@ describe("WorkspaceSegmentInfographicOverlay", () => {
         editable={false}
         infographic={infographic}
         isPlaying
-        localTimeSeconds={0.55}
+        localTimeSeconds={1}
         segmentDurationSeconds={5}
       />,
     );
@@ -90,7 +90,7 @@ describe("WorkspaceSegmentInfographicOverlay", () => {
         editable={false}
         infographic={infographic}
         isPlaying
-        localTimeSeconds={0.4}
+        localTimeSeconds={0.8}
         segmentDurationSeconds={5}
       />,
     );

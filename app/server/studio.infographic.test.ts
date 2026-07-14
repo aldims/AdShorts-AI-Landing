@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { normalizeStudioSegmentEditorPayload } from "./studio.js";
 
 const infographic = {
-  animation: { durationSeconds: 1.1, type: "fade" },
+  animation: { durationSeconds: 2.2, type: "fade" },
   inputHash: "a".repeat(64),
   intrinsicHeight: 600,
   intrinsicWidth: 1200,
@@ -14,7 +14,7 @@ const infographic = {
       intrinsicHeight: 240,
       intrinsicWidth: 900,
       mediaAssetId: 502,
-      reveal: { delaySeconds: 0, durationSeconds: 0.65 },
+      reveal: { delaySeconds: 0, durationSeconds: 1.3 },
       text: "Три простых",
     },
     {
@@ -22,7 +22,7 @@ const infographic = {
       intrinsicHeight: 210,
       intrinsicWidth: 700,
       mediaAssetId: 503,
-      reveal: { delaySeconds: 0.85, durationSeconds: 0.65 },
+      reveal: { delaySeconds: 1.7, durationSeconds: 1.3 },
       text: "шага",
     },
   ],
