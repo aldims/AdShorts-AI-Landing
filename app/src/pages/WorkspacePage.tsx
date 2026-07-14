@@ -38008,7 +38008,7 @@ export function WorkspacePage({
                   <header className="studio-welcome-card__header">
                     <div className="studio-welcome-card__eyebrow">
                       <span className="studio-welcome-card__eyebrow-dot" aria-hidden="true"></span>
-                      <strong>{workspaceText(locale, "ВАША AI-СТУДИЯ SHORTS", "YOUR AI SHORTS STUDIO")}</strong>
+                      <strong>{workspaceText(locale, "Как это работает?", "How does it work?")}</strong>
                     </div>
                     <h2 id="studio-welcome-title">
                       {workspaceText(locale, "Создайте Shorts:", "Create a Short:")}{" "}
@@ -38031,7 +38031,7 @@ export function WorkspacePage({
                       <div className="studio-welcome-card__mode-badges">
                         <span>{workspaceText(locale, "БЫСТРЫЙ СТАРТ", "QUICK START")}</span>
                       </div>
-                      <h3>{workspaceText(locale, "Готовый Shorts из идеи", "A finished Short from an idea")}</h3>
+                      <h3>{workspaceText(locale, "Из идеи", "From an idea")}</h3>
                       <p>
                         {workspaceText(
                           locale,
@@ -38054,18 +38054,6 @@ export function WorkspacePage({
                         <li><b>2</b>{workspaceText(locale, "AI соберёт ролик", "AI builds the video")}</li>
                         <li><b>3</b>{workspaceText(locale, "Публикуйте или улучшайте", "Publish or refine")}</li>
                       </ol>
-
-                      <div className="studio-welcome-card__feature-list studio-welcome-card__feature-list--idea">
-                        {[
-                          workspaceText(locale, "Сценарий", "Script"),
-                          workspaceText(locale, "Визуалы", "Visuals"),
-                          workspaceText(locale, "Озвучка", "Voiceover"),
-                          workspaceText(locale, "Субтитры", "Captions"),
-                          workspaceText(locale, "Музыка", "Music"),
-                        ].map((feature) => (
-                          <span key={feature}>{feature}</span>
-                        ))}
-                      </div>
 
                       <button
                         className="studio-welcome-card__primary-action"
@@ -38092,10 +38080,10 @@ export function WorkspacePage({
 
                     <article className="studio-welcome-card__mode studio-welcome-card__mode--scenes">
                       <div className="studio-welcome-card__mode-badges">
-                        <span>{workspaceText(locale, "ПОЛНАЯ AI-СТУДИЯ", "FULL AI STUDIO")}</span>
+                        <span>{workspaceText(locale, "ПОЛНЫЙ КОНТРОЛЬ", "FULL CONTROL")}</span>
                         <span className="is-featured">{workspaceText(locale, "МАКСИМУМ ВОЗМОЖНОСТЕЙ", "MAXIMUM CAPABILITY")}</span>
                       </div>
-                      <h3>{workspaceText(locale, "Полный контроль по сценам", "Full scene-by-scene control")}</h3>
+                      <h3>{workspaceText(locale, "По сценам", "Scene by scene")}</h3>
                       <p>
                         {workspaceText(
                           locale,
@@ -38106,10 +38094,10 @@ export function WorkspacePage({
 
                       <div className="studio-welcome-card__showcase studio-welcome-card__showcase--scenes" aria-hidden="true">
                         <img
-                          src="/studio/welcome-scene-filmstrip.webp"
+                          src="/studio/welcome-scene-filmstrip-v2.webp"
                           alt=""
-                          width="1400"
-                          height="700"
+                          width="1774"
+                          height="887"
                           decoding="async"
                         />
                         <div className="studio-welcome-card__scene-tags">
@@ -38118,6 +38106,7 @@ export function WorkspacePage({
                             { duration: "0:04", number: "02" },
                             { duration: "0:02", number: "03" },
                             { duration: "0:03", number: "04" },
+                            { duration: "0:03", number: "05" },
                           ].map((scene) => (
                             <span key={scene.number}>
                               <b>{scene.number}</b>

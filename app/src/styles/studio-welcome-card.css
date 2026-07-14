@@ -160,6 +160,7 @@
 
 .studio-welcome-card__eyebrow {
   display: inline-flex;
+  align-self: flex-start;
   min-height: 31px;
   align-items: center;
   gap: 10px;
@@ -174,7 +175,7 @@
 .studio-welcome-card__eyebrow strong {
   font-size: 0.7rem;
   font-weight: 840;
-  letter-spacing: 0.19em;
+  letter-spacing: 0.08em;
 }
 
 .studio-welcome-card__eyebrow-dot {
@@ -299,10 +300,29 @@
 }
 
 .studio-welcome-card__mode-badges > span.is-featured {
-  border-color: rgba(78, 148, 255, 0.76);
-  background: rgba(18, 34, 68, 0.78);
-  color: #c8d8ff;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 0 18px rgba(54, 113, 255, 0.16);
+  position: absolute;
+  top: -14px;
+  right: -15px;
+  z-index: 2;
+  min-height: 31px;
+  padding-inline: 16px;
+  border-color: rgba(139, 183, 255, 0.78);
+  background:
+    linear-gradient(110deg, rgba(36, 91, 214, 0.97), rgba(107, 70, 231, 0.96) 58%, rgba(174, 83, 236, 0.94));
+  color: #f7f8ff;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 12px 28px -12px rgba(59, 130, 246, 0.9),
+    0 0 24px rgba(139, 92, 246, 0.28);
+  letter-spacing: 0.045em;
+  transform: rotate(2deg);
+}
+
+.studio-welcome-card__mode-badges > span.is-featured::before {
+  content: "✦";
+  margin-right: 7px;
+  color: #d9e7ff;
+  font-size: 0.76rem;
 }
 
 .studio-welcome-card__mode h3 {
@@ -407,47 +427,13 @@
   width: 100%;
 }
 
-.studio-welcome-card__feature-list--idea {
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 8px;
-  margin-top: 10px;
-}
-
-.studio-welcome-card__feature-list--idea > span {
-  display: inline-flex;
-  min-height: 35px;
-  align-items: center;
-  justify-content: center;
-  padding: 0 10px;
-  border: 1px solid rgba(151, 174, 231, 0.13);
-  border-radius: 999px;
-  background: rgba(23, 34, 57, 0.62);
-  color: rgba(210, 219, 242, 0.79);
-  font-size: clamp(0.58rem, 0.76vw, 0.72rem);
-  line-height: 1;
-  text-align: center;
-  white-space: nowrap;
-}
-
-.studio-welcome-card__feature-list--idea > span:nth-child(-n + 3) {
-  grid-column: span 2;
-}
-
-.studio-welcome-card__feature-list--idea > span:nth-child(4) {
-  grid-column: 2 / span 2;
-}
-
-.studio-welcome-card__feature-list--idea > span:nth-child(5) {
-  grid-column: 4 / span 2;
-}
-
 .studio-welcome-card__scene-tags {
   position: absolute;
-  inset: 5.3% 5.25% 8.4%;
+  inset: 10.6% 3.4%;
   z-index: 2;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 2.8%;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1.8%;
 }
 
 .studio-welcome-card__scene-tags > span {
@@ -565,10 +551,6 @@
     0 21px 44px -19px rgba(73, 91, 255, 1),
     0 0 32px rgba(77, 104, 255, 0.24);
   transform: translateY(-2px);
-}
-
-.studio-welcome-card__mode--idea .studio-welcome-card__primary-action {
-  margin-top: 18px;
 }
 
 .studio-welcome-card__mode--scenes .studio-welcome-card__primary-action {
@@ -709,6 +691,11 @@
     font-size: 0.57rem;
   }
 
+  .studio-welcome-card__mode-badges > span.is-featured {
+    right: -10px;
+    padding-inline: 12px;
+  }
+
   .studio-welcome-card__feature-list--studio > span {
     padding-inline: 8px;
   }
@@ -836,19 +823,14 @@
     flex-basis: 18px;
   }
 
-  .studio-welcome-card__feature-list--idea {
-    gap: 6px;
-    margin-top: 9px;
-  }
-
-  .studio-welcome-card__feature-list--idea > span {
-    min-height: 31px;
-    padding-inline: 5px;
-    font-size: 0.58rem;
-  }
-
   .studio-welcome-card__scene-tags {
-    inset: 5.3% 5.25% 8.4%;
+    inset: 10.6% 3.4%;
+  }
+
+  .studio-welcome-card__mode-badges > span.is-featured {
+    top: -10px;
+    right: 8px;
+    max-width: calc(100% - 16px);
   }
 
   .studio-welcome-card__scene-tags b,
