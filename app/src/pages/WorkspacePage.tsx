@@ -26356,6 +26356,9 @@ export function WorkspacePage({
     setSegmentEditorBrandCloseRequestId((current) => current + 1);
     setReleasedSegmentEditorPromptTool(tab);
     handleSegmentEditorPromptVisualToolSelect(tab);
+    if (tab === "upload") {
+      segmentAiPhotoModalFileInputRef.current?.click();
+    }
   };
   const handleSegmentEditorPromptBrandToolButtonClick = (event: ReactMouseEvent<HTMLButtonElement>) => {
     event.currentTarget.blur();
@@ -35470,6 +35473,15 @@ export function WorkspacePage({
   const segmentEditorPromptPanel = (
     <div className="studio-segment-editor__prompt-shell">
       <div className="studio-canvas-prompt__inner studio-canvas-prompt__inner--editor studio-segment-editor__prompt-panel">
+        <input
+          ref={segmentAiPhotoModalFileInputRef}
+          className="studio-segment-editor__prompt-file-input"
+          type="file"
+          accept=".jpg,.jpeg,.png,.webp,.avif,.mp4,.mov,.webm,.m4v,image/*,video/*"
+          onChange={(event) => {
+            void handleSegmentAiPhotoModalCustomVideoChange(event);
+          }}
+        />
         <div className="studio-canvas-prompt__editor-layout">
           <div className="studio-canvas-prompt__editor-pane">
             <div className="studio-segment-editor__prompt-topbar" aria-label={workspaceText(locale, "Режим панели", "Panel mode")}>
@@ -35694,22 +35706,14 @@ export function WorkspacePage({
                   </div>
                 </div>
               </div>
-            <div className="studio-canvas-prompt__input-row">
+            {!isPromptUploadMode ? (
+              <div className="studio-canvas-prompt__input-row">
               <div className="studio-canvas-prompt__input-main">
                 <div
                   className={`studio-segment-editor__prompt-visual-panel${
                     isPromptInfographicMode ? " is-infographic" : ""
                   }`}
                 >
-                  <input
-                    ref={segmentAiPhotoModalFileInputRef}
-                    className="studio-segment-editor__prompt-file-input"
-                    type="file"
-                    accept=".jpg,.jpeg,.png,.webp,.avif,.mp4,.mov,.webm,.m4v,image/*,video/*"
-                    onChange={(event) => {
-                      void handleSegmentAiPhotoModalCustomVideoChange(event);
-                    }}
-                  />
                   <div className="studio-segment-editor__prompt-workspace-head">
                     <div>
                       <span>{workspaceText(locale, "Действие", "Action")}</span>
@@ -36066,15 +36070,6 @@ export function WorkspacePage({
                         </button>
                       ) : null}
                     </div>
-                  ) : isPromptUploadMode ? (
-                    <div className="studio-segment-editor__prompt-info-card studio-segment-editor__prompt-info-card--action-card">
-                      <strong>
-                        {segmentAiPhotoModalCustomFileLabel ?? workspaceText(locale, "Свой визуал", "Custom visual")}
-                      </strong>
-                      <span>
-                        {workspaceText(locale, "Загрузите фото или видео для текущего сегмента.", "Upload a photo or video for the current segment.")}
-                      </span>
-                    </div>
                   ) : (
                     <>
                       <div
@@ -36250,7 +36245,8 @@ export function WorkspacePage({
                   ) : null}
                 </div>
               </div>
-            </div>
+              </div>
+            ) : null}
             <div className="studio-canvas-prompt__footer">
               <div className="studio-segment-editor__prompt-controls">
                 <div className="studio-segment-editor__prompt-control-proxies" aria-hidden="true">
