@@ -220,6 +220,38 @@ const getWorkspaceMediaLibraryResolvedPosterUrl = (item: WorkspaceMediaLibraryIt
   return item.previewPosterUrl || assetPosterUrl;
 };
 
+const isWorkspaceMediaLibraryTileContext = (context: WorkspaceResolvedMediaContext) =>
+  context === "media-library-tile" || context === "segment-modal-library-tile";
+
+const getWorkspaceMediaLibraryPositiveAssetId = (item: WorkspaceMediaLibraryItem) =>
+  typeof item.assetId === "number" && Number.isFinite(item.assetId) && item.assetId > 0
+    ? Math.trunc(item.assetId)
+    : null;
+
+export const getWorkspaceMediaLibraryTileImageUrl = (item: WorkspaceMediaLibraryItem) => {
+  if (item.previewKind !== "image") {
+    return item.previewUrl;
+  }
+
+  if (isWorkspaceMediaLibraryGeneratedPosterProxyUrl(item.previewPosterUrl)) {
+    return item.previewPosterUrl ?? item.previewUrl;
+  }
+
+  const assetId = getWorkspaceMediaLibraryPositiveAssetId(item);
+  return assetId ? `/api/workspace/media-assets/${assetId}/preview` : item.previewPosterUrl || item.previewUrl;
+};
+
+export const getWorkspaceMediaLibraryTilePosterUrl = (item: WorkspaceMediaLibraryItem) => {
+  if (item.previewKind !== "video") {
+    return null;
+  }
+
+  const assetId = getWorkspaceMediaLibraryPositiveAssetId(item);
+  return assetId
+    ? `/api/workspace/media-assets/${assetId}/poster?tile=1`
+    : getWorkspaceMediaLibraryResolvedPosterUrl(item);
+};
+
 const getWorkspaceMediaLibrarySelectionPosterUrl = (item: WorkspaceMediaLibraryItem) => {
   if (item.previewKind !== "video") {
     return undefined;
@@ -235,9 +267,17 @@ export const getWorkspaceMediaLibraryResolvedMediaSurface = (
 ): WorkspaceResolvedMediaSurface =>
   resolveWorkspaceMediaSurface({
     context,
-    displayUrl: item.previewUrl,
+    displayUrl:
+      isWorkspaceMediaLibraryTileContext(context) && item.previewKind === "image"
+        ? getWorkspaceMediaLibraryTileImageUrl(item)
+        : item.previewUrl,
     isGeneratedVideo: item.kind === "ai_video" || item.kind === "photo_animation" || item.kind === "talking_photo",
-    posterUrl: item.previewKind === "video" ? getWorkspaceMediaLibraryResolvedPosterUrl(item) : null,
+    posterUrl:
+      item.previewKind === "video"
+        ? isWorkspaceMediaLibraryTileContext(context)
+          ? getWorkspaceMediaLibraryTilePosterUrl(item)
+          : getWorkspaceMediaLibraryResolvedPosterUrl(item)
+        : null,
     previewKind: item.previewKind,
     viewerUrl: item.previewUrl,
   });

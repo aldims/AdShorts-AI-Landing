@@ -10,6 +10,7 @@ import { SiteHeaderWorkspaceStatus } from "../components/SiteHeaderWorkspaceStat
 import {
   buildWorkspaceMediaLibraryRequestPath,
   canCapturePosterInBrowser,
+  MEDIA_LIBRARY_LOAD_MORE_ROOT_MARGIN_PX,
   MEDIA_LIBRARY_PAGE_SIZE,
   shouldLoadWorkspaceMediaLibraryView,
 } from "../features/workspace/hot-path";
@@ -601,7 +602,6 @@ import {
   SEGMENT_AI_PHOTO_MODAL_LIBRARY_INITIAL_RENDER_COUNT,
   SEGMENT_AI_PHOTO_MODAL_LIBRARY_RENDER_STEP,
   SEGMENT_AI_PHOTO_MODAL_EXIT_DURATION_MS,
-  MEDIA_LIBRARY_LOAD_MORE_SCROLL_THRESHOLD_PX,
   normalizeWorkspaceSegmentGenerationJobStatus,
   isWorkspaceSegmentGenerationJobDoneStatus,
   isWorkspaceSegmentGenerationJobFailedStatus,
@@ -1591,7 +1591,7 @@ const resolveStudioCreateInitialSettings = (
 
 const MEDIA_LIBRARY_VIRTUAL_MIN_COLUMN_WIDTH_PX = 118;
 const MEDIA_LIBRARY_VIRTUAL_DEFAULT_GAP_PX = 10;
-const MEDIA_LIBRARY_VIRTUAL_OVERSCAN_ROWS = 3;
+const MEDIA_LIBRARY_VIRTUAL_OVERSCAN_ROWS = 1;
 const MEDIA_LIBRARY_CARD_HEIGHT_RATIO = 16 / 9;
 
 type MediaLibraryVirtualLayout = {
@@ -1600,6 +1600,7 @@ type MediaLibraryVirtualLayout = {
   columns: number;
   endIndex: number;
   gap: number;
+  itemCount: number;
   startIndex: number;
   totalHeight: number;
 };
@@ -1610,6 +1611,7 @@ const createEmptyMediaLibraryVirtualLayout = (): MediaLibraryVirtualLayout => ({
   columns: 1,
   endIndex: 0,
   gap: MEDIA_LIBRARY_VIRTUAL_DEFAULT_GAP_PX,
+  itemCount: 0,
   startIndex: 0,
   totalHeight: 0,
 });
@@ -5550,142 +5552,6 @@ export function WorkspacePage({
 
   const canAutoLoadMoreMediaLibrary = isMediaLibraryStudioView || shouldLoadSegmentModalMediaLibrary;
 
-  const maybeLoadMoreMediaLibrary = useCallback(() => {
-    if (
-      !canAutoLoadMoreMediaLibrary ||
-      !mediaLibraryNextCursor ||
-      isMediaLibraryLoading ||
-      mediaLibraryError
-    ) {
-      return;
-    }
-
-    const root = mediaLibraryScrollRootRef.current;
-    const sentinel = mediaLibraryLoadMoreSentinelRef.current;
-    if (!root || !sentinel) {
-      return;
-    }
-
-    const remainingRootScrollDistance = root.scrollHeight - root.scrollTop - root.clientHeight;
-    if (remainingRootScrollDistance <= MEDIA_LIBRARY_LOAD_MORE_SCROLL_THRESHOLD_PX) {
-      void handleLoadMoreMediaLibrary();
-      return;
-    }
-
-    const pageScrollElement = document.scrollingElement ?? document.documentElement;
-    const remainingPageScrollDistance = pageScrollElement.scrollHeight - window.scrollY - window.innerHeight;
-    if (remainingPageScrollDistance <= MEDIA_LIBRARY_LOAD_MORE_SCROLL_THRESHOLD_PX) {
-      void handleLoadMoreMediaLibrary();
-      return;
-    }
-
-    const sentinelRect = sentinel.getBoundingClientRect();
-    if (sentinelRect.top - window.innerHeight <= MEDIA_LIBRARY_LOAD_MORE_SCROLL_THRESHOLD_PX) {
-      void handleLoadMoreMediaLibrary();
-    }
-  }, [
-    canAutoLoadMoreMediaLibrary,
-    handleLoadMoreMediaLibrary,
-    isMediaLibraryLoading,
-    mediaLibraryError,
-    mediaLibraryNextCursor,
-  ]);
-
-  useEffect(() => {
-    if (
-      !canAutoLoadMoreMediaLibrary ||
-      !mediaLibraryNextCursor ||
-      isMediaLibraryLoading ||
-      mediaLibraryError
-    ) {
-      return;
-    }
-
-    const root = mediaLibraryScrollRootRef.current;
-    if (!root) {
-      return;
-    }
-
-    let frameId: number | null = null;
-    const scheduleCheck = () => {
-      if (frameId !== null) {
-        return;
-      }
-
-      frameId = window.requestAnimationFrame(() => {
-        frameId = null;
-        maybeLoadMoreMediaLibrary();
-      });
-    };
-
-    scheduleCheck();
-    root.addEventListener("scroll", scheduleCheck, { passive: true });
-    window.addEventListener("scroll", scheduleCheck, { passive: true });
-    window.addEventListener("resize", scheduleCheck);
-    document.addEventListener("scroll", scheduleCheck, { capture: true, passive: true });
-
-    return () => {
-      if (frameId !== null) {
-        window.cancelAnimationFrame(frameId);
-      }
-
-      root.removeEventListener("scroll", scheduleCheck);
-      window.removeEventListener("scroll", scheduleCheck);
-      window.removeEventListener("resize", scheduleCheck);
-      document.removeEventListener("scroll", scheduleCheck, { capture: true });
-    };
-  }, [
-    canAutoLoadMoreMediaLibrary,
-    hiddenMediaLibraryItemKeys.length,
-    isMediaLibraryLoading,
-    mediaLibraryError,
-    mediaLibraryItems.length,
-    mediaLibraryNextCursor,
-    maybeLoadMoreMediaLibrary,
-  ]);
-
-  useEffect(() => {
-    if (
-      !canAutoLoadMoreMediaLibrary ||
-      !mediaLibraryNextCursor ||
-      isMediaLibraryLoading ||
-      mediaLibraryError
-    ) {
-      return;
-    }
-
-    const root = mediaLibraryScrollRootRef.current;
-    const sentinel = mediaLibraryLoadMoreSentinelRef.current;
-    if (!root || !sentinel || typeof IntersectionObserver === "undefined") {
-      return;
-    }
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          void handleLoadMoreMediaLibrary();
-        }
-      },
-      {
-        root,
-        rootMargin: "480px 0px",
-        threshold: 0,
-      },
-    );
-
-    observer.observe(sentinel);
-
-    return () => {
-      observer.disconnect();
-    };
-  }, [
-    canAutoLoadMoreMediaLibrary,
-    handleLoadMoreMediaLibrary,
-    isMediaLibraryLoading,
-    mediaLibraryError,
-    mediaLibraryNextCursor,
-  ]);
-
   const header = tabCopy[activeTab][locale];
   const sectionTitleId = header.heading ? "account-shell-title" : undefined;
   const verifiedWorkspaceProfile = isProfileVerified ? workspaceProfile : null;
@@ -6518,47 +6384,6 @@ export function WorkspacePage({
       : mediaLibraryDisplayTotalCount !== null && mediaLibraryDisplayTotalCount > mediaLibraryVisibleCount
         ? workspaceText(locale, `Все ${mediaLibraryVisibleCount} из ${mediaLibraryDisplayTotalCount}`, `All ${mediaLibraryVisibleCount} of ${mediaLibraryDisplayTotalCount}`)
         : workspaceText(locale, `Все ${mediaLibraryVisibleCount}`, `All ${mediaLibraryVisibleCount}`);
-  useEffect(() => {
-    if (
-      activeTab !== "studio" ||
-      studioView !== "media" ||
-      !mediaLibraryNextCursor ||
-      isMediaLibraryLoading ||
-      mediaLibraryError ||
-      mediaLibraryDisplayTotalCount === null ||
-      mediaLibraryVisibleCount >= mediaLibraryDisplayTotalCount
-    ) {
-        return;
-      }
-
-    const root = mediaLibraryScrollRootRef.current;
-    if (!root || root.clientHeight <= 0) {
-      return;
-    }
-
-    const hasFilledVisibleArea =
-      root.scrollHeight - root.clientHeight > MEDIA_LIBRARY_LOAD_MORE_SCROLL_THRESHOLD_PX;
-    if (hasFilledVisibleArea) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      void handleLoadMoreMediaLibrary();
-    }, 80);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [
-    activeTab,
-    handleLoadMoreMediaLibrary,
-    isMediaLibraryLoading,
-    mediaLibraryDisplayTotalCount,
-    mediaLibraryError,
-    mediaLibraryNextCursor,
-    mediaLibraryVisibleCount,
-    studioView,
-  ]);
   const shouldShowMediaLibraryGridLoadingState =
     isMediaLibraryStudioView &&
     shouldShowWorkspaceMediaLibraryLoadingState({
@@ -6745,6 +6570,7 @@ export function WorkspacePage({
           current.columns === columns &&
           current.endIndex === endIndex &&
           current.gap === gap &&
+          current.itemCount === itemCount &&
           current.startIndex === startIndex &&
           current.totalHeight === totalHeight
         ) {
@@ -6757,6 +6583,7 @@ export function WorkspacePage({
           columns,
           endIndex,
           gap,
+          itemCount,
           startIndex,
           totalHeight,
         };
@@ -6797,6 +6624,8 @@ export function WorkspacePage({
     filteredVisibleMediaLibraryItems.length > 0 &&
     mediaLibraryVirtualLayout.columnWidth > 0 &&
     mediaLibraryVirtualLayout.cardHeight > 0;
+  const isMediaLibraryVirtualLayoutCurrent =
+    mediaLibraryVirtualLayout.itemCount === filteredVisibleMediaLibraryItems.length;
   const renderedMediaLibraryVirtualItems = useMemo(() => {
     if (!isMediaLibraryVirtualGridReady) {
       return filteredVisibleMediaLibraryItems.map((item, index) => ({
@@ -6824,6 +6653,96 @@ export function WorkspacePage({
         };
       });
   }, [filteredVisibleMediaLibraryItems, isMediaLibraryVirtualGridReady, mediaLibraryVirtualLayout]);
+  useEffect(() => {
+    if (
+      !canAutoLoadMoreMediaLibrary ||
+      !mediaLibraryNextCursor ||
+      isMediaLibraryLoading ||
+      mediaLibraryError ||
+      visibleMediaLibraryItems.length > 0
+    ) {
+      return;
+    }
+
+    void handleLoadMoreMediaLibrary();
+  }, [
+    canAutoLoadMoreMediaLibrary,
+    handleLoadMoreMediaLibrary,
+    isMediaLibraryLoading,
+    mediaLibraryError,
+    mediaLibraryNextCursor,
+    visibleMediaLibraryItems.length,
+  ]);
+  useEffect(() => {
+    if (
+      !canAutoLoadMoreMediaLibrary ||
+      !mediaLibraryNextCursor ||
+      isMediaLibraryLoading ||
+      mediaLibraryError ||
+      !isMediaLibraryVirtualLayoutCurrent
+    ) {
+      return;
+    }
+
+    const root = mediaLibraryScrollRootRef.current;
+    const sentinel = mediaLibraryLoadMoreSentinelRef.current;
+    if (!root || !sentinel) {
+      return;
+    }
+
+    if (typeof IntersectionObserver !== "undefined") {
+      const observer = new IntersectionObserver(
+        (entries) => {
+          if (entries.some((entry) => entry.isIntersecting)) {
+            void handleLoadMoreMediaLibrary();
+          }
+        },
+        {
+          root,
+          rootMargin: `${MEDIA_LIBRARY_LOAD_MORE_ROOT_MARGIN_PX}px 0px`,
+          threshold: 0,
+        },
+      );
+
+      observer.observe(sentinel);
+      return () => {
+        observer.disconnect();
+      };
+    }
+
+    let frameId: number | null = null;
+    const checkRemainingDistance = () => {
+      frameId = null;
+      const remainingDistance = root.scrollHeight - root.scrollTop - root.clientHeight;
+      if (remainingDistance <= MEDIA_LIBRARY_LOAD_MORE_ROOT_MARGIN_PX) {
+        void handleLoadMoreMediaLibrary();
+      }
+    };
+    const scheduleCheck = () => {
+      if (frameId === null) {
+        frameId = window.requestAnimationFrame(checkRemainingDistance);
+      }
+    };
+
+    scheduleCheck();
+    root.addEventListener("scroll", scheduleCheck, { passive: true });
+    window.addEventListener("resize", scheduleCheck);
+
+    return () => {
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
+      root.removeEventListener("scroll", scheduleCheck);
+      window.removeEventListener("resize", scheduleCheck);
+    };
+  }, [
+    canAutoLoadMoreMediaLibrary,
+    handleLoadMoreMediaLibrary,
+    isMediaLibraryLoading,
+    isMediaLibraryVirtualLayoutCurrent,
+    mediaLibraryError,
+    mediaLibraryNextCursor,
+  ]);
   const segmentEditorSegmentCount = segmentEditorDraft?.segments.length ?? 0;
   const segmentEditorBulkSceneSoundCreditCost = getWorkspaceSegmentEditorBulkSceneSoundCreditCost(
     (segmentEditorDraft?.segments ?? []).map(getWorkspaceSegmentVisualGenerationDurationSeconds),

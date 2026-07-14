@@ -26,6 +26,9 @@ describe("workspace segment preview helpers", () => {
     expect(
       sanitizeWorkspaceSegmentPosterUrl("video", previewUrl, "https://cdn.example.com/segments/1/poster.jpg"),
     ).toBe("https://cdn.example.com/segments/1/poster.jpg");
+    expect(
+      sanitizeWorkspaceSegmentPosterUrl("video", previewUrl, "/api/workspace/media-assets/903/poster?tile=1"),
+    ).toBe("/api/workspace/media-assets/903/poster?tile=1");
   });
 
   it("filters proxy video routes out of still-image candidate lists", () => {

@@ -12,8 +12,9 @@ const getStableWorkspaceMediaAssetPosterUrl = (value: string) => {
     }
 
     const version = url.searchParams.get("v");
+    const tileQuery = url.searchParams.get("tile") === "1" ? "?tile=1" : "";
     return !version || version.includes(":")
-      ? `/api/workspace/media-assets/${match[1]}/poster`
+      ? `/api/workspace/media-assets/${match[1]}/poster${tileQuery}`
       : value;
   } catch {
     return value;

@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
+import { pathToFileURL } from "node:url";
 
 import express from "express";
 import cors from "cors";
@@ -79,6 +80,10 @@ import {
   ensureWorkspaceVideoPoster,
   getWorkspaceVideoPosterCacheKey,
 } from "./project-posters.js";
+import {
+  ensureWorkspacePreviewImage,
+  getWorkspacePreviewImageCacheKey,
+} from "./preview-images.js";
 import {
   ensureWorkspaceMediaAssetPlayback,
   getWorkspaceMediaAssetPlaybackCacheKey,
@@ -2724,6 +2729,55 @@ const proxyWorkspaceMediaAssetDownload = async (req: express.Request, res: expre
 };
 
 app.get("/api/media/:assetId/download", proxyWorkspaceMediaAssetDownload);
+app.get("/api/workspace/media-assets/:assetId/preview", async (req, res) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+
+  if (!session?.user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const assetId = Number(req.params.assetId ?? 0);
+  if (!Number.isFinite(assetId) || assetId <= 0) {
+    res.status(400).json({ error: "Asset id is required." });
+    return;
+  }
+
+  const safeAssetId = Math.trunc(assetId);
+  const version = typeof req.query.v === "string" ? req.query.v.trim() : "";
+
+  try {
+    const externalUserId = await resolvePreferredExternalUserId(session.user);
+    const upstreamUrl = buildAdsflowUrl(`/api/media/${safeAssetId}/download`, {
+      admin_token: env.adsflowAdminToken,
+      external_user_id: externalUserId,
+    });
+    const cacheTargetUrl = buildAdsflowUrl(`/api/media/${safeAssetId}/download`, {
+      external_user_id: externalUserId,
+    });
+    const previewPath = await ensureWorkspacePreviewImage({
+      cacheKey: getWorkspacePreviewImageCacheKey({
+        previewId: `workspace-media-asset:${safeAssetId}:tile`,
+        targetUrl: cacheTargetUrl,
+        version: version || `asset:${safeAssetId}`,
+      }),
+      upstreamUrl,
+    });
+
+    res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
+    res.sendFile(previewPath);
+  } catch (error) {
+    console.error("[workspace] Failed to build media asset preview", {
+      assetId: safeAssetId,
+      error: getServerErrorMessage(error, "Failed to build media asset preview."),
+    });
+    res.status(502).json({
+      error: error instanceof Error ? error.message : "Failed to build media asset preview.",
+    });
+  }
+});
 app.get("/api/workspace/media-assets/:assetId", proxyWorkspaceMediaAssetDownload);
 app.get("/api/workspace/media-assets/:assetId/playback", async (req, res) => {
   const session = await auth.api.getSession({
@@ -2802,6 +2856,7 @@ app.get("/api/workspace/media-assets/:assetId/poster", async (req, res) => {
   }
 
   const version = typeof req.query.v === "string" ? req.query.v.trim() : "";
+  const shouldBuildTilePreview = typeof req.query.tile === "string" && req.query.tile.trim() === "1";
 
   try {
     const externalUserId = await resolvePreferredExternalUserId(session.user);
@@ -2818,6 +2873,21 @@ app.get("/api/workspace/media-assets/:assetId/poster", async (req, res) => {
       }),
       upstreamUrl,
     });
+
+    if (shouldBuildTilePreview) {
+      const posterUrl = pathToFileURL(posterPath);
+      const tilePreviewPath = await ensureWorkspacePreviewImage({
+        cacheKey: getWorkspacePreviewImageCacheKey({
+          previewId: `workspace-media-asset:${Math.trunc(assetId)}:poster-tile`,
+          targetUrl: posterUrl,
+          version: `poster:${version || `asset:${Math.trunc(assetId)}`}`,
+        }),
+        upstreamUrl: posterUrl,
+      });
+      res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
+      res.sendFile(tilePreviewPath);
+      return;
+    }
 
     res.setHeader("Cache-Control", "private, max-age=86400, stale-while-revalidate=604800");
     res.sendFile(posterPath);

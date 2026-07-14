@@ -1,4 +1,5 @@
 export const MEDIA_LIBRARY_PAGE_SIZE = 24;
+export const MEDIA_LIBRARY_LOAD_MORE_ROOT_MARGIN_PX = 240;
 
 const normalizeText = (value: unknown) => String(value ?? "").trim();
 const SAME_ORIGIN_VIDEO_PROXY_ROUTE_PATTERN =

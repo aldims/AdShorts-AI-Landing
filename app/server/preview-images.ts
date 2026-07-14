@@ -28,7 +28,8 @@ type WorkspacePreviewImageMetadata = PreparedAssetMetadata;
 
 const WORKSPACE_PREVIEW_IMAGES_ROOT_DIR = join(env.assetCacheDir, "workspace-preview-images");
 const WORKSPACE_PREVIEW_IMAGE_CONCURRENCY = 4;
-const WORKSPACE_PREVIEW_IMAGE_MAX_DIMENSION = 640;
+export const WORKSPACE_PREVIEW_IMAGE_MAX_DIMENSION = 480;
+const WORKSPACE_PREVIEW_IMAGE_SCHEMA_VERSION = "preview-v2-480-webp";
 const WORKSPACE_PREVIEW_IMAGE_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
 const WORKSPACE_PREVIEW_IMAGE_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 
@@ -46,8 +47,8 @@ const previewImageQueue = createAssetPreparationQueue<string>({
 
 const normalizeText = (value: unknown) => String(value ?? "").replace(/\s+/g, " ").trim();
 
-const transformToPreviewBuffer = async (source: WorkspacePreviewImageSource) => {
-  const transformer = sharp()
+const configureWorkspacePreviewImageTransformer = (transformer: sharp.Sharp) =>
+  transformer
     .rotate()
     .resize({
       fit: "inside",
@@ -55,19 +56,16 @@ const transformToPreviewBuffer = async (source: WorkspacePreviewImageSource) => 
       width: WORKSPACE_PREVIEW_IMAGE_MAX_DIMENSION,
       withoutEnlargement: true,
     })
-    .jpeg({ quality: 82 });
+    .webp({ effort: 4, quality: 78 });
+
+export const transformWorkspacePreviewImageBuffer = (source: Buffer) =>
+  configureWorkspacePreviewImageTransformer(sharp(source)).toBuffer();
+
+const transformToPreviewBuffer = async (source: WorkspacePreviewImageSource) => {
+  const transformer = configureWorkspacePreviewImageTransformer(sharp());
 
   if (source.upstreamUrl.protocol === "file:") {
-    return sharp(fileURLToPath(source.upstreamUrl))
-      .rotate()
-      .resize({
-        fit: "inside",
-        height: WORKSPACE_PREVIEW_IMAGE_MAX_DIMENSION,
-        width: WORKSPACE_PREVIEW_IMAGE_MAX_DIMENSION,
-        withoutEnlargement: true,
-      })
-      .jpeg({ quality: 82 })
-      .toBuffer();
+    return configureWorkspacePreviewImageTransformer(sharp(fileURLToPath(source.upstreamUrl))).toBuffer();
   }
 
   const response = await fetchUpstreamResponse(
@@ -117,7 +115,7 @@ export const getWorkspacePreviewImageCacheKey = (source: {
   const normalizedTargetUrl = new URL(source.targetUrl.toString());
   normalizedTargetUrl.searchParams.delete("admin_token");
 
-  return `${normalizedVersion}:${normalizedTargetUrl.toString()}`;
+  return `${WORKSPACE_PREVIEW_IMAGE_SCHEMA_VERSION}:${normalizedVersion}:${normalizedTargetUrl.toString()}`;
 };
 
 export async function ensureWorkspacePreviewImage(source: WorkspacePreviewImageSource): Promise<string> {
@@ -142,8 +140,8 @@ export async function ensureWorkspacePreviewImage(source: WorkspacePreviewImageS
         source.cacheKey,
         buffer,
         {
-          contentType: "image/jpeg",
-          fileName: "preview.jpg",
+          contentType: "image/webp",
+          fileName: "preview.webp",
           savedAt: new Date().toISOString(),
         },
       );

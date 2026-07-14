@@ -4,6 +4,9 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   getWorkspaceGeneratedMediaLibraryStorageKey,
+  getWorkspaceMediaLibraryResolvedMediaSurface,
+  getWorkspaceMediaLibraryTileImageUrl,
+  getWorkspaceMediaLibraryTilePosterUrl,
   persistGeneratedMediaLibraryEntries,
   readStoredGeneratedMediaLibraryEntries,
   type WorkspaceGeneratedMediaLibraryEntry,
@@ -126,5 +129,43 @@ describe("workspace generated media library storage", () => {
     );
 
     expect(readStoredGeneratedMediaLibraryEntries(TEST_EMAIL).map((entry) => entry.item.assetId)).toEqual([901]);
+  });
+});
+
+describe("workspace media library tile surfaces", () => {
+  it("uses a compact asset preview for image tiles and keeps the original in the viewer", () => {
+    const item = createMediaLibraryItem({
+      assetId: 902,
+      downloadName: "visual.png",
+      kind: "ai_photo",
+      previewKind: "image",
+      previewPosterUrl: null,
+      previewUrl: "/api/workspace/media-assets/902",
+    });
+
+    expect(getWorkspaceMediaLibraryTileImageUrl(item)).toBe("/api/workspace/media-assets/902/preview");
+    expect(getWorkspaceMediaLibraryResolvedMediaSurface(item, "media-library-tile")).toMatchObject({
+      displayUrl: "/api/workspace/media-assets/902/preview",
+      viewerUrl: "/api/workspace/media-assets/902",
+    });
+    expect(getWorkspaceMediaLibraryResolvedMediaSurface(item, "media-viewer")).toMatchObject({
+      displayUrl: "/api/workspace/media-assets/902",
+      viewerUrl: "/api/workspace/media-assets/902",
+    });
+  });
+
+  it("uses a compact poster for video tiles and keeps the full poster in the viewer", () => {
+    const item = createMediaLibraryItem({
+      assetId: 903,
+      previewPosterUrl: "/api/workspace/media-assets/903/poster",
+    });
+
+    expect(getWorkspaceMediaLibraryTilePosterUrl(item)).toBe("/api/workspace/media-assets/903/poster?tile=1");
+    expect(getWorkspaceMediaLibraryResolvedMediaSurface(item, "media-library-tile").posterUrl).toBe(
+      "/api/workspace/media-assets/903/poster?tile=1",
+    );
+    expect(getWorkspaceMediaLibraryResolvedMediaSurface(item, "media-viewer").posterUrl).toBe(
+      "/api/workspace/media-assets/903/poster",
+    );
   });
 });

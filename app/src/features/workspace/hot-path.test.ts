@@ -3,11 +3,16 @@ import { describe, expect, it } from "vitest";
 import {
   buildWorkspaceMediaLibraryRequestPath,
   canCapturePosterInBrowser,
+  MEDIA_LIBRARY_LOAD_MORE_ROOT_MARGIN_PX,
   MEDIA_LIBRARY_PAGE_SIZE,
   shouldLoadWorkspaceMediaLibraryView,
 } from "./hot-path";
 
 describe("workspace hot path helpers", () => {
+  it("keeps media-library prefetch bounded to roughly one tile row", () => {
+    expect(MEDIA_LIBRARY_LOAD_MORE_ROOT_MARGIN_PX).toBe(240);
+  });
+
   it("loads media library only for the media studio view", () => {
     expect(shouldLoadWorkspaceMediaLibraryView("studio", "media")).toBe(true);
     expect(shouldLoadWorkspaceMediaLibraryView("studio", "projects")).toBe(false);

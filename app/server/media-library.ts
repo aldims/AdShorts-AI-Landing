@@ -72,6 +72,13 @@ type AdsflowWebMediaLibraryAssetPayload = AdsflowMediaAssetPayload & {
   links?: unknown[] | null;
 };
 
+type WorkspaceDurableMediaLibrarySnapshot = {
+  expiresAt: number;
+  hasMore: boolean;
+  items: WorkspaceMediaLibraryItem[];
+  nextCursor: number | null;
+};
+
 const WORKSPACE_MEDIA_LIBRARY_CACHE_TTL_MS = 60_000;
 const WORKSPACE_MEDIA_LIBRARY_DURABLE_SYNC_TIMEOUT_MS = 3_500;
 const WORKSPACE_MEDIA_LIBRARY_INDEX_SYNC_BUDGET_MS = 2_000;
@@ -91,6 +98,8 @@ export type WorkspaceMediaLibraryPage = {
 const workspaceMediaLibraryCache = new Map<string, { expiresAt: number; page: WorkspaceMediaLibraryPage }>();
 const workspaceMediaLibraryInFlight = new Map<string, Promise<WorkspaceMediaLibraryPage>>();
 const workspaceMediaLibraryIndexWarmInFlight = new Set<string>();
+const workspaceDurableMediaLibrarySnapshots = new Map<string, WorkspaceDurableMediaLibrarySnapshot>();
+const workspaceDurableMediaLibraryQueues = new Map<string, Promise<void>>();
 
 const normalizeText = (value: unknown) => String(value ?? "").replace(/\s+/g, " ").trim();
 
@@ -157,6 +166,22 @@ const cloneWorkspaceMediaLibraryPage = (page: WorkspaceMediaLibraryPage): Worksp
   nextCursor: page.nextCursor,
   total: page.total,
 });
+
+const runWorkspaceDurableMediaLibraryTask = <T>(cacheKey: string, task: () => Promise<T>) => {
+  const previousTask = workspaceDurableMediaLibraryQueues.get(cacheKey) ?? Promise.resolve();
+  const request = previousTask.catch(() => undefined).then(task);
+  const queueTail = request.then(
+    () => undefined,
+    () => undefined,
+  );
+  workspaceDurableMediaLibraryQueues.set(cacheKey, queueTail);
+
+  return request.finally(() => {
+    if (workspaceDurableMediaLibraryQueues.get(cacheKey) === queueTail) {
+      workspaceDurableMediaLibraryQueues.delete(cacheKey);
+    }
+  });
+};
 
 const buildWorkspaceMediaLibraryPreviewUrl = (options: {
   kind: WorkspaceMediaLibraryItemKind;
@@ -727,7 +752,7 @@ export const buildWorkspaceReferenceMediaLibraryItems = async (
   });
 };
 
-const fetchWorkspaceDurableMediaLibraryItems = async (
+export const fetchWorkspaceDurableMediaLibraryItems = async (
   user: MediaLibraryUser,
   options?: {
     existingItems?: WorkspaceMediaLibraryItem[];
@@ -743,7 +768,6 @@ const fetchWorkspaceDurableMediaLibraryItems = async (
     };
   }
 
-  const externalUserId = await resolvePreferredExternalUserId(user);
   const targetItemCount = Math.max(
     1,
     (options?.offset ?? 0) + (options?.limit ?? WORKSPACE_MEDIA_LIBRARY_DEFAULT_LIMIT),
@@ -753,108 +777,137 @@ const fetchWorkspaceDurableMediaLibraryItems = async (
     Math.min(WORKSPACE_MEDIA_LIBRARY_MAX_LIMIT, options?.limit ?? WORKSPACE_MEDIA_LIBRARY_MAX_LIMIT),
   );
   const existingItems = options?.existingItems ?? [];
-  const collectedItems: WorkspaceMediaLibraryItem[] = [];
-  const visitedCursors = new Set<number>();
   const maxWaitMs =
     typeof options?.maxWaitMs === "number" && Number.isFinite(options.maxWaitMs) && options.maxWaitMs > 0
       ? Math.trunc(options.maxWaitMs)
       : null;
-  const deadlineController = maxWaitMs ? new AbortController() : null;
-  let didReachDeadline = false;
-  const deadlineTimeoutId =
-    deadlineController && maxWaitMs
-      ? setTimeout(() => {
-          didReachDeadline = true;
-          deadlineController.abort("media-library-durable-timeout");
-        }, maxWaitMs)
-      : null;
-  let nextCursor = 0;
-  let hasMore = false;
+  const cacheKey = getWorkspaceMediaLibraryCacheKey(user);
 
-  try {
-    while (!visitedCursors.has(nextCursor)) {
-      if (deadlineController?.signal.aborted) {
-        didReachDeadline = true;
-        hasMore = true;
-        break;
-      }
+  const loadSnapshot = async () => {
+    const cachedSnapshot = cacheKey ? workspaceDurableMediaLibrarySnapshots.get(cacheKey) : null;
+    const hasFreshSnapshot = Boolean(cachedSnapshot && cachedSnapshot.expiresAt > Date.now());
+    let collectedItems = hasFreshSnapshot
+      ? cloneWorkspaceMediaLibraryItems(cachedSnapshot?.items ?? [])
+      : [];
+    let hasMore = hasFreshSnapshot ? Boolean(cachedSnapshot?.hasMore) : true;
+    let nextCursor = hasFreshSnapshot ? cachedSnapshot?.nextCursor ?? null : 0;
+    const visitedCursors = new Set<number>();
+    let externalUserId: string | null = null;
+    const deadlineController = maxWaitMs ? new AbortController() : null;
+    let didReachDeadline = false;
+    const deadlineTimeoutId =
+      deadlineController && maxWaitMs
+        ? setTimeout(() => {
+            didReachDeadline = true;
+            deadlineController.abort("media-library-durable-timeout");
+          }, maxWaitMs)
+        : null;
 
-      visitedCursors.add(nextCursor);
-      const payload = await postAdsflowJson<AdsflowWebMediaLibraryResponse>(
-        "/api/web/media-library",
-        {
-          admin_token: env.adsflowAdminToken,
-          external_user_id: externalUserId,
-          user_email: user.email ?? undefined,
-          user_name: user.name ?? undefined,
-          limit: requestPageSize,
-          cursor: nextCursor,
-          status: "ready",
-        },
-        upstreamPolicies.adsflowMetadata,
-        {
-          assetKind: "media-library",
-          endpoint: "web.media-library",
-        },
-        {
-          signal: deadlineController?.signal,
-        },
-      ).catch((error) => {
+    try {
+      while (
+        hasMore &&
+        nextCursor !== null &&
+        dedupeWorkspaceMediaLibraryPageItems([...existingItems, ...collectedItems]).length < targetItemCount
+      ) {
         if (deadlineController?.signal.aborted) {
           didReachDeadline = true;
+          break;
         }
 
-        console.warn("[workspace] Failed to load durable media library", {
-          error: error instanceof Error ? error.message : "Unknown durable media library error.",
-          timedOut: Boolean(deadlineController?.signal.aborted),
+        if (visitedCursors.has(nextCursor)) {
+          hasMore = false;
+          nextCursor = null;
+          break;
+        }
+
+        visitedCursors.add(nextCursor);
+        const requestCursor = nextCursor;
+        externalUserId ??= await resolvePreferredExternalUserId(user);
+        const payload = await postAdsflowJson<AdsflowWebMediaLibraryResponse>(
+          "/api/web/media-library",
+          {
+            admin_token: env.adsflowAdminToken,
+            external_user_id: externalUserId,
+            user_email: user.email ?? undefined,
+            user_name: user.name ?? undefined,
+            limit: requestPageSize,
+            cursor: requestCursor,
+            status: "ready",
+          },
+          upstreamPolicies.adsflowMetadata,
+          {
+            assetKind: "media-library",
+            endpoint: "web.media-library",
+          },
+          {
+            signal: deadlineController?.signal,
+          },
+        ).catch((error) => {
+          if (deadlineController?.signal.aborted) {
+            didReachDeadline = true;
+          }
+
+          console.warn("[workspace] Failed to load durable media library", {
+            error: error instanceof Error ? error.message : "Unknown durable media library error.",
+            timedOut: Boolean(deadlineController?.signal.aborted),
+          });
+          return null;
         });
-        return null;
-      });
 
-      if (!Array.isArray(payload?.assets)) {
-        return {
-          hasMore: didReachDeadline,
-          items: collectedItems,
-        };
-      }
+        if (!Array.isArray(payload?.assets)) {
+          hasMore = true;
+          break;
+        }
 
-      collectedItems.push(
-        ...payload.assets
+        const pageItems = payload.assets
           .map((item) =>
             isAdsflowMediaAssetPayload(item)
               ? buildWorkspaceDurableMediaLibraryItem(item as AdsflowWebMediaLibraryAssetPayload)
               : null,
           )
-          .filter((item): item is WorkspaceMediaLibraryItem => Boolean(item)),
-      );
+          .filter((item): item is WorkspaceMediaLibraryItem => Boolean(item));
+        collectedItems = dedupeWorkspaceMediaLibraryPageItems([...collectedItems, ...pageItems]);
 
-      const dedupedVisibleCount = dedupeWorkspaceMediaLibraryPageItems([
-        ...existingItems,
-        ...collectedItems,
-      ]).length;
-      const payloadNextCursor = normalizeInteger(payload.next_cursor);
-      if (payloadNextCursor === null) {
-        hasMore = false;
-        break;
-      }
+        const payloadNextCursor = normalizeInteger(payload.next_cursor);
+        if (payloadNextCursor === null) {
+          hasMore = false;
+          nextCursor = null;
+          break;
+        }
 
-      if (dedupedVisibleCount >= targetItemCount) {
+        if (payloadNextCursor === requestCursor || visitedCursors.has(payloadNextCursor)) {
+          hasMore = false;
+          nextCursor = null;
+          break;
+        }
+
         hasMore = true;
-        break;
+        nextCursor = payloadNextCursor;
       }
-
-      nextCursor = payloadNextCursor;
+    } finally {
+      if (deadlineTimeoutId) {
+        clearTimeout(deadlineTimeoutId);
+      }
     }
-  } finally {
-    if (deadlineTimeoutId) {
-      clearTimeout(deadlineTimeoutId);
-    }
-  }
 
-  return {
-    hasMore: hasMore || didReachDeadline,
-    items: collectedItems,
+    if (cacheKey) {
+      workspaceDurableMediaLibrarySnapshots.set(cacheKey, {
+        expiresAt: Date.now() + WORKSPACE_MEDIA_LIBRARY_CACHE_TTL_MS,
+        hasMore: hasMore || didReachDeadline,
+        items: cloneWorkspaceMediaLibraryItems(collectedItems),
+        nextCursor,
+      });
+    }
+
+    return {
+      hasMore: hasMore || didReachDeadline,
+      items: cloneWorkspaceMediaLibraryItems(collectedItems),
+    };
   };
+
+  return cacheKey
+    ? runWorkspaceDurableMediaLibraryTask(cacheKey, loadSnapshot)
+    : loadSnapshot();
 };
 
 const getWorkspacePhotoOriginalPreviewUrl = (segment: WorkspaceSegmentEditorSegment) =>
@@ -1635,6 +1688,7 @@ export const invalidateWorkspaceMediaLibraryCache = (user: MediaLibraryUser) => 
 
   workspaceMediaLibraryCache.delete(cacheKey);
   workspaceMediaLibraryInFlight.delete(cacheKey);
+  workspaceDurableMediaLibrarySnapshots.delete(cacheKey);
 };
 
 export const getWorkspaceMediaLibraryItems = async (
@@ -1650,6 +1704,10 @@ export const getWorkspaceMediaLibraryItems = async (
   const limit = parseWorkspaceMediaLibraryLimit(options?.limit);
   const baseCacheKey = getWorkspaceMediaLibraryCacheKey(user);
   const cacheKey = baseCacheKey ? `${baseCacheKey}:offset:${offset}:limit:${limit}` : null;
+
+  if (shouldBypassCache && baseCacheKey) {
+    workspaceDurableMediaLibrarySnapshots.delete(baseCacheKey);
+  }
 
   if (!shouldBypassCache && cacheKey) {
     const cachedEntry = workspaceMediaLibraryCache.get(cacheKey);
