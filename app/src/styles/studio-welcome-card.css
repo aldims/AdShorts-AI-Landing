@@ -317,6 +317,10 @@
 }
 
 .studio-welcome-card__mode > p {
+  display: flex;
+  min-height: 2.84em;
+  align-items: flex-start;
+  justify-content: center;
   max-width: none;
   margin: 4px 0 0;
   color: rgba(198, 208, 232, 0.68);
@@ -329,7 +333,8 @@
 .studio-welcome-card__showcase {
   position: relative;
   width: 100%;
-  aspect-ratio: 2 / 1;
+  height: clamp(172px, 15vw, 212px);
+  flex: 0 0 auto;
   margin-top: 8px;
   overflow: hidden;
   border: 1px solid rgba(143, 170, 235, 0.2);
@@ -787,7 +792,7 @@
   }
 
   .studio-welcome-card__showcase {
-    aspect-ratio: 2.2;
+    height: clamp(150px, 21vh, 176px);
     margin-top: 7px;
   }
 
