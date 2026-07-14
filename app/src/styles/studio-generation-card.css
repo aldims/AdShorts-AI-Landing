@@ -63,16 +63,14 @@
   pointer-events: none;
 }
 
-.studio-canvas-preview__generation-status {
-  position: absolute;
-  top: 50%;
-  right: 20px;
-  bottom: auto;
-  left: 20px;
+.studio-canvas-preview__placeholder.is-generating > .studio-canvas-preview__generation-status,
+.studio-canvas-preview__overlay.is-generating > .studio-canvas-preview__generation-status {
+  position: relative;
+  inset: auto;
   z-index: 3;
   display: flex;
-  width: auto;
-  max-width: none;
+  width: 100%;
+  max-width: 280px;
   min-width: 0;
   align-items: center;
   flex-direction: column;
@@ -81,7 +79,7 @@
   gap: 0;
   font-family: "Sora", "Manrope", sans-serif;
   text-align: center;
-  transform: translateY(-50%);
+  transform: none;
 }
 
 .studio-canvas-preview__generation-kicker {
