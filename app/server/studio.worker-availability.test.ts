@@ -144,6 +144,107 @@ describe("studio generation worker availability", () => {
     expect(paths).not.toContain("/api/web/credits/consume");
   });
 
+  it("reserves exactly 80 credits and forwards the full AI video mode", async () => {
+    const { createStudioGenerationJob } = await loadStudioModule();
+    const calls: Array<{ body: Record<string, unknown>; pathname: string }> = [];
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(String(input));
+        const body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {};
+        calls.push({ body, pathname: url.pathname });
+
+        if (url.pathname === "/health") {
+          return jsonResponse(adsflowHealthyPayload);
+        }
+        if (url.pathname.startsWith("/api/admin/users")) {
+          return jsonResponse({ items: [] });
+        }
+        if (url.pathname === "/api/web/credits/consume") {
+          return jsonResponse({
+            consumed: { purchased: 80, subscription: 0 },
+            user: { balance: 20, plan: "PRO", user_id: "123" },
+          });
+        }
+        if (url.pathname === "/api/web/generations") {
+          return jsonResponse({
+            job_id: "job-full-ai-video",
+            status: "queued",
+            title: "Full AI video",
+          });
+        }
+        return jsonResponse({ detail: `unexpected ${url.pathname}` }, 500);
+      }),
+    );
+
+    await expect(
+      createStudioGenerationJob("История космического телескопа", {
+        email: "alex@example.test",
+        name: "Alex",
+      }, {
+        language: "ru",
+        videoMode: "ai_video",
+        videoModeChanged: true,
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        jobId: "job-full-ai-video",
+        status: "queued",
+      }),
+    );
+
+    const consumeBody = calls.find((call) => call.pathname === "/api/web/credits/consume")?.body;
+    const generationBody = calls.find((call) => call.pathname === "/api/web/generations")?.body;
+    expect(consumeBody).toEqual(expect.objectContaining({ amount: 80 }));
+    expect(generationBody).toEqual(
+      expect.objectContaining({
+        credit_cost: 80,
+        video_mode: "ai_video",
+        video_mode_changed: true,
+      }),
+    );
+  });
+
+  it("does not enqueue AI video when the 80-credit reservation is rejected", async () => {
+    const { createStudioGenerationJob } = await loadStudioModule();
+    const calls: Array<{ body: Record<string, unknown>; pathname: string }> = [];
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(String(input));
+        const body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {};
+        calls.push({ body, pathname: url.pathname });
+
+        if (url.pathname === "/health") {
+          return jsonResponse(adsflowHealthyPayload);
+        }
+        if (url.pathname.startsWith("/api/admin/users")) {
+          return jsonResponse({ items: [] });
+        }
+        if (url.pathname === "/api/web/credits/consume") {
+          return jsonResponse({ detail: "Insufficient credits" }, 402);
+        }
+        return jsonResponse({ detail: `unexpected ${url.pathname}` }, 500);
+      }),
+    );
+
+    await expect(
+      createStudioGenerationJob("История космического телескопа", {
+        email: "alex@example.test",
+        name: "Alex",
+      }, {
+        language: "ru",
+        videoMode: "ai_video",
+      }),
+    ).rejects.toThrow("Insufficient credits");
+
+    const consumeBody = calls.find((call) => call.pathname === "/api/web/credits/consume")?.body;
+    expect(consumeBody).toEqual(expect.objectContaining({ amount: 80 }));
+    expect(calls.map((call) => call.pathname)).not.toContain("/api/web/generations");
+  });
+
   it("refunds reserved credits when the health probe is indeterminate and enqueue is unavailable", async () => {
     const {
       STUDIO_GENERATION_UNAVAILABLE_MESSAGE,

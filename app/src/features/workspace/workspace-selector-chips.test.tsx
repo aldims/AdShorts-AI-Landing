@@ -209,7 +209,8 @@ describe("StudioVoiceSelectorChip", () => {
 });
 
 describe("StudioVideoSelectorChip", () => {
-  it("shows the two AI creation modes without premium or custom visual controls", () => {
+  it("selects the available AI video mode and closes the menu", () => {
+    const onSelectVideoMode = vi.fn();
     render(
       <LocaleProvider locale="ru">
         <StudioVideoSelectorChip
@@ -222,7 +223,7 @@ describe("StudioVideoSelectorChip", () => {
           onBrandTextChange={vi.fn()}
           onClearBrandText={vi.fn()}
           onRemoveBrandLogo={vi.fn()}
-          onSelectVideoMode={vi.fn()}
+          onSelectVideoMode={onSelectVideoMode}
           selectedVideoMode="ai_photo"
         />
       </LocaleProvider>,
@@ -231,8 +232,9 @@ describe("StudioVideoSelectorChip", () => {
     fireEvent.click(screen.getByRole("button", { name: /Визуал\s*AI фото/ }));
 
     expect(screen.getByRole("menuitemradio", { name: /AI фото.*10 ⚡/ })).toBeTruthy();
-    const aiVideoOption = screen.getByRole("menuitemradio", { name: /AI видео.*80 ⚡.*Скоро.*3–5 минут/ }) as HTMLButtonElement;
-    expect(aiVideoOption.disabled).toBe(true);
+    const aiVideoOption = screen.getByRole("menuitemradio", { name: /AI видео.*80 ⚡.*3–5 минут/ }) as HTMLButtonElement;
+    expect(aiVideoOption.disabled).toBe(false);
+    expect(screen.queryByText("Скоро")).toBeNull();
     expect(screen.getByText("1–2 минуты")).toBeTruthy();
     expect(screen.getByText("3–5 минут")).toBeTruthy();
     const brandHeading = screen.getByText("Текст бренда").parentElement;
@@ -241,6 +243,11 @@ describe("StudioVideoSelectorChip", () => {
     expect(screen.queryByText("Premium")).toBeNull();
     expect(screen.queryByText("Загрузить свой визуал")).toBeNull();
     expect(screen.queryByText("Лого: .jpg, .png, .webp, .avif")).toBeNull();
+
+    fireEvent.click(aiVideoOption);
+
+    expect(onSelectVideoMode).toHaveBeenCalledWith("ai_video");
+    expect(screen.queryByRole("menuitemradio", { name: /AI видео/ })).toBeNull();
   });
 
   it("localizes the creation-mode durations in the English UI", () => {

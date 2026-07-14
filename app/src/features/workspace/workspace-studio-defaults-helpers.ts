@@ -126,6 +126,11 @@ export type WorkspaceExamplePrefillInitialStudioState = {
 
 const normalizeWorkspaceExamplePrefillString = (value: unknown) => String(value ?? "").trim();
 
+export const resolveWorkspaceRestoredStudioVideoMode = (value: unknown): StudioVideoMode | null => {
+  const normalized = normalizeWorkspaceExamplePrefillString(value);
+  return normalized === "ai_photo" || normalized === "ai_video" ? normalized : null;
+};
+
 const resolveWorkspaceExamplePrefillInitialMusicType = (
   settings: ExamplePrefillStudioSettings | null | undefined,
 ): StudioMusicType => {
@@ -140,12 +145,7 @@ const resolveWorkspaceExamplePrefillInitialMusicType = (
 const resolveWorkspaceExamplePrefillInitialVideoMode = (
   settings: ExamplePrefillStudioSettings | null | undefined,
 ): StudioVideoMode => {
-  const requestedVideoMode = normalizeWorkspaceExamplePrefillString(settings?.videoMode);
-  if (requestedVideoMode === "ai_photo") {
-    return "ai_photo";
-  }
-
-  return "ai_photo";
+  return resolveWorkspaceRestoredStudioVideoMode(settings?.videoMode) ?? "ai_photo";
 };
 
 export const resolveWorkspaceExamplePrefillInitialStudioState = (options: {

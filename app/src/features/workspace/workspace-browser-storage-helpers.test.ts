@@ -6,9 +6,11 @@ import {
   persistDismissedFirstVideoOfferKey,
   persistDismissedStudioWelcomeCard,
   persistStudioCreateMode,
+  persistStudioCreateSettings,
   readDismissedFirstVideoOfferKey,
   readDismissedStudioWelcomeCard,
   readStoredStudioCreateMode,
+  readStoredStudioCreateSettings,
 } from "./workspace-browser-storage-helpers";
 
 let originalLocalStorage: PropertyDescriptor | undefined;
@@ -95,6 +97,29 @@ describe("studio create mode storage", () => {
     persistStudioCreateMode("user@example.test", "default");
 
     expect(readStoredStudioCreateMode("USER@EXAMPLE.TEST")).toBe("default");
+  });
+});
+
+describe("studio create settings storage", () => {
+  beforeEach(() => {
+    originalLocalStorage = Object.getOwnPropertyDescriptor(window, "localStorage");
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: createMemoryStorage(),
+    });
+  });
+
+  afterEach(() => {
+    if (originalLocalStorage) {
+      Object.defineProperty(window, "localStorage", originalLocalStorage);
+    }
+  });
+
+  it("persists the full AI video mode for the current account", () => {
+    persistStudioCreateSettings(" User@Example.Test ", { videoMode: "ai_video" });
+
+    expect(readStoredStudioCreateSettings("user@example.test")?.videoMode).toBe("ai_video");
+    expect(readStoredStudioCreateSettings("other@example.test")).toBeNull();
   });
 });
 

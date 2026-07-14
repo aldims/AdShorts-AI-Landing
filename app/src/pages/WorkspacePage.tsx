@@ -369,6 +369,7 @@ import {
   getStudioVoiceOptionById,
   getWorkspaceInitialStudioDefaults,
   resolveWorkspaceGenerationVoiceRequest,
+  resolveWorkspaceRestoredStudioVideoMode,
   resolveStudioSceneVoiceIdOnSettingsOpen,
   resolveStudioVoiceIdForLanguage,
   resolveWorkspaceExamplePrefillInitialStudioState,
@@ -1206,6 +1207,7 @@ export {
   getDefaultStudioVoiceId,
   getWorkspaceInitialStudioDefaults,
   resolveWorkspaceGenerationVoiceRequest,
+  resolveWorkspaceRestoredStudioVideoMode,
   resolveStudioVoiceIdForLanguage,
   resolveWorkspaceExamplePrefillInitialStudioState,
 } from "../features/workspace/workspace-studio-defaults-helpers";
@@ -1522,16 +1524,17 @@ const resolveStoredStudioCreateMusicType = (
   return fallbackNonCustomMusicType === "none" ? "ai" : fallbackNonCustomMusicType;
 };
 
-const resolveStoredStudioCreateVideoMode = (
+export const resolveStoredStudioCreateVideoMode = (
   value: unknown,
-  _fallbackVideoMode: StudioVideoMode,
+  fallbackVideoMode: StudioVideoMode,
 ): StudioVideoMode => {
   const normalized = normalizeStoredStudioCreateTextValue(value);
-  if (normalized === "ai_photo") {
-    return "ai_photo";
+  const restoredVideoMode = resolveWorkspaceRestoredStudioVideoMode(normalized);
+  if (restoredVideoMode) {
+    return restoredVideoMode;
   }
 
-  return "ai_photo";
+  return fallbackVideoMode === "ai_video" ? "ai_video" : "ai_photo";
 };
 
 const resolveStudioCreateInitialSettings = (
@@ -1698,6 +1701,17 @@ export function WorkspacePage({
         return workspaceText(locale, "Введите prompt для генерации.", "Enter a prompt to generate.");
       }
       const lowerMessage = normalizedMessage.toLowerCase();
+      if (
+        lowerMessage.includes("ai_video_quorum_failed") ||
+        lowerMessage.includes("not enough ai video clips could be created") ||
+        lowerMessage.includes("не удалось создать достаточно ai-видео")
+      ) {
+        return workspaceText(
+          locale,
+          "Не удалось создать достаточно AI-видео. 80 ⚡ возвращены. Попробуйте запустить создание ещё раз позже.",
+          "Not enough AI video clips could be created. Your 80 ⚡ were refunded. Please try generating the video again later.",
+        );
+      }
       if (
         lowerMessage.includes("ai_visuals_rejected") ||
         lowerMessage.includes("ai visuals could not be created") ||
@@ -1937,7 +1951,7 @@ export function WorkspacePage({
     setSelectedSubtitleColorId(settings.subtitleColorId);
     selectedVoiceIdByLanguageRef.current = { ...settings.voiceIdsByLanguage };
     setSelectedVoiceId(settings.voiceId);
-    selectedVideoModeExplicitlyChangedRef.current = settings.videoMode !== "ai_photo";
+    selectedVideoModeExplicitlyChangedRef.current = false;
     setSelectedVideoMode(settings.videoMode);
     if (settings.videoMode !== "custom") {
       setSelectedCustomVideo(null);
@@ -6122,10 +6136,7 @@ export function WorkspacePage({
       typeof settings.musicType === "string" && settings.musicType !== "custom"
         ? studioMusicOptions.find((option) => option.id === settings.musicType)?.id ?? null
         : null;
-    const nextVideoMode =
-      settings.videoMode === "ai_photo"
-        ? "ai_photo"
-        : null;
+    const nextVideoMode = resolveWorkspaceRestoredStudioVideoMode(settings.videoMode);
     const nextSubtitleStyleId = typeof settings.subtitleStyleId === "string" ? settings.subtitleStyleId.trim() : "";
     const nextSubtitleColorId = typeof settings.subtitleColorId === "string" ? settings.subtitleColorId.trim() : "";
     const nextBrandText = typeof settings.brandText === "string" ? settings.brandText.trim() : "";
@@ -6169,6 +6180,7 @@ export function WorkspacePage({
     }
 
     if (nextVideoMode) {
+      selectedVideoModeExplicitlyChangedRef.current = false;
       setSelectedVideoMode(nextVideoMode);
       setSelectedCustomVideo(null);
       setVideoSelectionError(null);
@@ -11222,12 +11234,10 @@ export function WorkspacePage({
 
     setIsVoiceoverEnabled(draftVoiceId !== "none");
 
-    if (
-      typeof projectSettings?.videoMode === "string" &&
-      projectSettings.videoMode === "ai_photo"
-    ) {
+    const restoredProjectVideoMode = resolveWorkspaceRestoredStudioVideoMode(projectSettings?.videoMode);
+    if (restoredProjectVideoMode) {
       selectedVideoModeExplicitlyChangedRef.current = false;
-      setSelectedVideoMode(projectSettings.videoMode);
+      setSelectedVideoMode(restoredProjectVideoMode);
       setSelectedCustomVideo(null);
       setVideoSelectionError(null);
     }

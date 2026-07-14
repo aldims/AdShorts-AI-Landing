@@ -3,7 +3,10 @@
 import { describe, expect, it } from "vitest";
 
 import { DEFAULT_STUDIO_VOICE_ID } from "../../shared/locales";
-import { STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST } from "../../shared/studio-credit-costs";
+import {
+  STUDIO_AI_VIDEO_GENERATION_CREDIT_COST,
+  STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST,
+} from "../../shared/studio-credit-costs";
 import {
   applyWorkspaceSegmentEditorGlobalVoiceToSegments,
   clearWorkspaceSegmentEditorVoiceoverGenerationState,
@@ -159,6 +162,8 @@ import {
   shouldUseWorkspaceSegmentMeasuredVoiceoverDuration,
   shouldSkipWorkspaceSegmentEditorActiveDraftReopen,
   resolveWorkspaceGenerationEffectiveVideoMode,
+  resolveWorkspaceRestoredStudioVideoMode,
+  resolveStoredStudioCreateVideoMode,
   resolveWorkspaceExamplePrefillInitialStudioState,
   resolveWorkspaceRegenerationVideoMode,
   resetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene,
@@ -400,6 +405,10 @@ const createFreshSessionFromDraftSegments = (segments: DraftSegment[]): FreshSes
 });
 
 describe("WorkspacePage generation credits", () => {
+  it("requires 80 credits for the full AI video mode", () => {
+    expect(getWorkspaceGenerationRequiredCredits("ai_video")).toBe(STUDIO_AI_VIDEO_GENERATION_CREDIT_COST);
+  });
+
   it("uses segment-editor scene voice overrides for the final generation cost", () => {
     const draft = {
       ...createDraftSession(createDraftSegment({ voiceType: "Liam" })),
@@ -864,6 +873,16 @@ describe("WorkspacePage reference creation defaults", () => {
 });
 
 describe("WorkspacePage example prefill settings", () => {
+  it("restores AI video from stored Studio settings without downgrading it", () => {
+    expect(resolveStoredStudioCreateVideoMode("ai_video", "ai_photo")).toBe("ai_video");
+    expect(resolveStoredStudioCreateVideoMode(undefined, "ai_video")).toBe("ai_video");
+  });
+
+  it("accepts AI video when restoring project settings", () => {
+    expect(resolveWorkspaceRestoredStudioVideoMode("ai_video")).toBe("ai_video");
+    expect(resolveWorkspaceRestoredStudioVideoMode("standard")).toBeNull();
+  });
+
   it("keeps the system watermark disabled by default", () => {
     expect(createWorkspaceSegmentEditorProjectBrandState()).toMatchObject({
       brandLogoFile: null,
@@ -926,6 +945,15 @@ describe("WorkspacePage example prefill settings", () => {
         routeDefaults: getWorkspaceInitialStudioDefaults("ru"),
       }).videoMode,
     ).toBe("ai_photo");
+  });
+
+  it("uses AI video from example settings as the initial Studio state", () => {
+    expect(
+      resolveWorkspaceExamplePrefillInitialStudioState({
+        prefillSettings: { videoMode: "ai_video" },
+        routeDefaults: getWorkspaceInitialStudioDefaults("ru"),
+      }).videoMode,
+    ).toBe("ai_video");
   });
 
   it("turns subtitles off when example voiceover is disabled", () => {

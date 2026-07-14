@@ -323,8 +323,8 @@ const pricingFaqCopy: Array<{ question: Record<Locale, string>; answer: Record<L
   {
     question: { ru: "Как списываются кредиты", en: "How credits are charged" },
     answer: {
-      ru: "Shorts с AI-фото — 10 кредитов, создание Shorts из редактора — 5 кредитов, озвучка — 1 кредит за каждые начатые 100 символов. AI-видео для всех сцен будет стоить 80 кредитов после запуска.",
-      en: "Shorts with AI photos use 10 credits, creating Shorts from the editor uses 5 credits, and voiceover uses 1 credit per started 100 characters. Full-scene AI video will use 80 credits after launch.",
+      ru: "Shorts с AI-фото — 10 кредитов, AI-видео для всех сцен — 80 кредитов, создание Shorts из редактора — 5 кредитов, озвучка — 1 кредит за каждые начатые 100 символов.",
+      en: "Shorts with AI photos use 10 credits, full-scene AI video uses 80 credits, creating Shorts from the editor uses 5 credits, and voiceover uses 1 credit per started 100 characters.",
     },
   },
   {

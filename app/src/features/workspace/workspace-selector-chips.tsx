@@ -1438,8 +1438,7 @@ export function StudioVideoSelectorChip({
               <div className="studio-video-selector__options">
                 {studioVideoOptions.map((option) => {
                   const optionCopy = getStudioVideoOptionCopy(option, locale);
-                  const isComingSoon = option.id === "ai_video";
-                  const creditCost = isComingSoon
+                  const creditCost = option.id === "ai_video"
                     ? STUDIO_AI_VIDEO_GENERATION_CREDIT_COST
                     : STUDIO_AI_PHOTO_VIDEO_GENERATION_CREDIT_COST;
                   return (
@@ -1449,11 +1448,7 @@ export function StudioVideoSelectorChip({
                       type="button"
                       role="menuitemradio"
                       aria-checked={selectedVideoMode === option.id}
-                      disabled={isComingSoon}
                       onClick={() => {
-                        if (isComingSoon) {
-                          return;
-                        }
                         onSelectVideoMode(option.id);
                         setIsOpen(false);
                       }}
@@ -1462,11 +1457,6 @@ export function StudioVideoSelectorChip({
                         <span className="studio-video-selector__option-title">
                           <span>{optionCopy.label}</span>
                           <span className="studio-video-selector__cost">{creditCost} ⚡</span>
-                          {isComingSoon ? (
-                            <span className="studio-video-selector__soon">
-                              {locale === "en" ? "Soon" : "Скоро"}
-                            </span>
-                          ) : null}
                         </span>
                         {optionCopy.duration ? (
                           <span className="studio-video-selector__option-duration">{optionCopy.duration}</span>
