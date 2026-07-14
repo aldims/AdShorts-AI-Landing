@@ -162,7 +162,7 @@ export const renderWorkspaceStudioInlinePreviewActions = ({
 export const renderWorkspaceStudioShortsGenerationStatus = (locale: Locale) => (
   <div className="studio-canvas-preview__generation-status">
     <span className="studio-generation-visual" aria-hidden="true">
-      <span className="studio-generation-visual__halo"></span>
+      <span className="studio-generation-visual__ambient"></span>
       <span className="studio-generation-visual__orbit studio-generation-visual__orbit--outer">
         <i></i>
         <i></i>
@@ -170,14 +170,21 @@ export const renderWorkspaceStudioShortsGenerationStatus = (locale: Locale) => (
       <span className="studio-generation-visual__orbit studio-generation-visual__orbit--inner">
         <i></i>
       </span>
-      <span className="studio-generation-visual__frame">
-        <span className="studio-generation-visual__grid"></span>
+      <span className="studio-generation-visual__echo studio-generation-visual__echo--left"></span>
+      <span className="studio-generation-visual__echo studio-generation-visual__echo--right"></span>
+      <span className="studio-generation-visual__core">
+        <img
+          src="/studio/generation-render-core.webp"
+          alt=""
+          width="514"
+          height="900"
+          decoding="async"
+          draggable={false}
+        />
         <span className="studio-generation-visual__scan"></span>
-        <svg viewBox="0 0 48 48" fill="none">
-          <path d="M17 13.5h14M17 34.5h14" />
-          <path d="M18.5 18.5 30 24l-11.5 5.5v-11Z" />
-        </svg>
+        <span className="studio-generation-visual__glint"></span>
       </span>
+      <span className="studio-generation-visual__beam"></span>
       <span className="studio-generation-visual__particle studio-generation-visual__particle--one"></span>
       <span className="studio-generation-visual__particle studio-generation-visual__particle--two"></span>
       <span className="studio-generation-visual__particle studio-generation-visual__particle--three"></span>
@@ -194,6 +201,9 @@ export const renderWorkspaceStudioShortsGenerationStatus = (locale: Locale) => (
     </span>
     <span className="studio-canvas-preview__generation-progress" aria-hidden="true">
       <i></i>
+      <b></b>
+      <b></b>
+      <b></b>
     </span>
   </div>
 );

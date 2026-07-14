@@ -15,6 +15,9 @@ describe("renderWorkspaceStudioShortsGenerationStatus", () => {
     expect(screen.getByText("Создаём ваш Shorts")).toBeTruthy();
     expect(screen.getByText("Собираем сцены, озвучку и субтитры")).toBeTruthy();
     expect(container.querySelector(".studio-generation-visual")).toBeTruthy();
+    expect(container.querySelector(".studio-generation-visual__core img")?.getAttribute("src")).toBe(
+      "/studio/generation-render-core.webp",
+    );
     expect(container.querySelector(".studio-canvas-preview__generation-progress")).toBeTruthy();
   });
 
