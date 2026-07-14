@@ -6619,6 +6619,83 @@ export const isWorkspaceSegmentVoiceoverPlaybackFresh = (
   isWorkspaceSegmentVoiceoverAssetFresh(segment, session) ||
   isWorkspaceSegmentProjectVoiceoverTimingFresh(segment, session);
 
+export const applyWorkspaceSegmentEditorSceneVoiceSelection = (
+  draft: WorkspaceSegmentEditorDraftSession,
+  segmentIndex: number,
+  selectedVoiceType: string,
+  baselineSession?: WorkspaceSegmentEditorDraftSession | null,
+): WorkspaceSegmentEditorDraftSession => {
+  const selectedVoiceId = normalizeWorkspaceSegmentEditorSetting(selectedVoiceType);
+  if (!selectedVoiceId || selectedVoiceId === "none") {
+    return applyWorkspaceSegmentEditorSceneVoiceOverride(draft, segmentIndex, selectedVoiceId ?? null);
+  }
+
+  const segment = draft.segments.find((candidate) => candidate.index === segmentIndex) ?? null;
+  if (!segment || doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio(segment)) {
+    return draft;
+  }
+
+  const currentVoiceId = normalizeWorkspaceSegmentEditorSetting(
+    getWorkspaceSegmentEffectiveVoiceId(segment, draft),
+  );
+  if (currentVoiceId === selectedVoiceId && isWorkspaceSegmentVoiceoverPlaybackFresh(segment, draft)) {
+    return draft;
+  }
+
+  const compatibleBaselineSession = baselineSession?.projectId === draft.projectId ? baselineSession : null;
+  const baselineSegment =
+    compatibleBaselineSession?.segments.find((candidate) => candidate.index === segmentIndex) ?? null;
+  const baselineVoiceId = baselineSegment && compatibleBaselineSession
+    ? normalizeWorkspaceSegmentEditorSetting(
+        getWorkspaceSegmentEffectiveVoiceId(baselineSegment, compatibleBaselineSession),
+      )
+    : undefined;
+  const hasUnchangedBaselineText = Boolean(
+    baselineSegment &&
+      normalizeWorkspaceSegmentEditorTextForCompare(segment.text) ===
+        normalizeWorkspaceSegmentEditorTextForCompare(baselineSegment.text),
+  );
+  const hasCompatibleBaselineLanguage = Boolean(
+    compatibleBaselineSession &&
+      normalizeStudioLanguageValue(draft.language) === normalizeStudioLanguageValue(compatibleBaselineSession.language),
+  );
+
+  if (
+    baselineSegment &&
+    compatibleBaselineSession &&
+    baselineVoiceId === selectedVoiceId &&
+    hasUnchangedBaselineText &&
+    hasCompatibleBaselineLanguage
+  ) {
+    return {
+      ...draft,
+      segments: draft.segments.map((candidate) =>
+        candidate.index === segmentIndex
+          ? {
+              ...restoreWorkspaceSegmentEffectiveVoiceFromBaseline(candidate, baselineSegment, {
+                baselineSession: compatibleBaselineSession,
+                draftSession: draft,
+              }),
+              estimatedVoiceoverDurationSeconds: baselineSegment.estimatedVoiceoverDurationSeconds ?? null,
+              estimatedVoiceoverTextHash: baselineSegment.estimatedVoiceoverTextHash ?? null,
+            }
+          : candidate,
+      ),
+    };
+  }
+
+  if (currentVoiceId === selectedVoiceId) {
+    return draft;
+  }
+
+  const projectVoiceId = normalizeWorkspaceSegmentEditorSetting(draft.voiceType);
+  return applyWorkspaceSegmentEditorSceneVoiceOverride(
+    draft,
+    segmentIndex,
+    projectVoiceId === selectedVoiceId ? null : selectedVoiceId,
+  );
+};
+
 const WORKSPACE_SEGMENT_PROJECT_TTS_RESTORE_RANGE_EPSILON_SECONDS = 0.35;
 
 const areWorkspaceSegmentVoiceoverRangesEquivalent = (

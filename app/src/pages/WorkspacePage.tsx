@@ -245,6 +245,7 @@ import {
   formatWorkspaceSegmentEditorMissingVisualScenesMessage,
   applyWorkspaceSegmentEditorGlobalSubtitleSelection,
   applyWorkspaceSegmentPendingInfographicTransforms,
+  applyWorkspaceSegmentEditorSceneVoiceSelection,
   hasWorkspaceSegmentProjectVoiceoverTimingData,
   hasWorkspaceSegmentEditorGeneratedShortsFromProject,
   hasWorkspaceSegmentEditorRenderableScratchScene,
@@ -13549,14 +13550,19 @@ export function WorkspacePage({
       getStudioVoiceOptionById(voiceId)?.id ?? resolveStudioVoiceIdForLanguage(selectedLanguage, voiceId, studioSidebarVoiceId);
     selectedVoiceIdByLanguageRef.current[getStudioLanguageForVoiceId(nextVoiceId, selectedLanguage) ?? selectedLanguage] = nextVoiceId;
     setSegmentEditorVideoError(null);
-    updateSegmentEditorDraft((currentDraft) => {
-      const inheritedProjectVoiceId = normalizeWorkspaceSegmentEditorSetting(currentDraft.voiceType);
-      return applyWorkspaceSegmentEditorSceneVoiceOverride(
-        currentDraft,
-        activeSegment.index,
-        inheritedProjectVoiceId && nextVoiceId === inheritedProjectVoiceId ? null : nextVoiceId,
-      );
-    });
+    const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+    if (!currentDraft) {
+      return;
+    }
+    const nextDraft = applyWorkspaceSegmentEditorSceneVoiceSelection(
+      currentDraft,
+      activeSegment.index,
+      nextVoiceId,
+      segmentEditorChangeBaselineSession,
+    );
+    if (nextDraft !== currentDraft) {
+      updateSegmentEditorDraft(() => nextDraft);
+    }
   };
 
   const handleSegmentEditorSceneVoiceToggle = (enabled: boolean) => {
@@ -25338,24 +25344,24 @@ export function WorkspacePage({
     setSegmentEditorVideoError(null);
     clearSegmentEditorVoiceoverError(segmentIndex);
     const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
-    const inheritedProjectVoiceId = normalizeWorkspaceSegmentEditorSetting(currentDraft?.voiceType);
-    const nextVoiceOverrideId = inheritedProjectVoiceId && nextVoiceId === inheritedProjectVoiceId ? null : nextVoiceId;
     const currentSegment = currentDraft
       ? getSegmentEditorDraftSegmentByIndex(currentDraft, segmentIndex)
       : null;
-    if (
-      currentSegment &&
-      getWorkspaceSegmentVoiceOverrideId(currentSegment) !== nextVoiceOverrideId
-    ) {
+    const nextDraft = currentDraft
+      ? applyWorkspaceSegmentEditorSceneVoiceSelection(
+          currentDraft,
+          segmentIndex,
+          nextVoiceId,
+          segmentEditorChangeBaselineSession,
+        )
+      : null;
+    const nextSegment = nextDraft ? getSegmentEditorDraftSegmentByIndex(nextDraft, segmentIndex) : null;
+    if (currentSegment && nextSegment && currentSegment !== nextSegment) {
       pushSegmentTimelineVoiceHistory(segmentIndex, currentSegment);
     }
-    updateSegmentEditorDraft((draft) => {
-      return applyWorkspaceSegmentEditorSceneVoiceOverride(
-        draft,
-        segmentIndex,
-        nextVoiceOverrideId,
-      );
-    });
+    if (nextDraft && nextDraft !== currentDraft) {
+      updateSegmentEditorDraft(() => nextDraft);
+    }
   };
   const handleSegmentTimelineVoiceLanguageSelect = (segmentIndex: number, language: StudioLanguage) => {
     const nextVoiceId = resolveStudioVoiceIdForLanguage(

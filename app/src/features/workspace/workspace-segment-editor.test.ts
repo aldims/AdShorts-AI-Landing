@@ -7,6 +7,7 @@ import {
   applyWorkspaceSegmentPendingInfographicTransforms,
   applyWorkspaceSegmentEditorGlobalVoiceToSegments,
   applyWorkspaceSegmentEditorSceneVoiceOverride,
+  applyWorkspaceSegmentEditorSceneVoiceSelection,
   getWorkspaceSegmentEffectiveVoiceId,
   getWorkspaceSegmentEffectiveSubtitleSettings,
   getWorkspaceSegmentKnownVisualDurationSeconds,
@@ -441,6 +442,149 @@ it("applies a voice override only to the selected scene", () => {
     }),
   );
   expect(updatedDraft.segments[1]).toBe(secondSegment);
+});
+
+it("restores the original voiceover and exact duration when the baseline voice is selected again", () => {
+  const text = "It was an ordinary day in the animal city.";
+  const baselineSegment = createProjectVoiceoverSegment({
+    duration: 4.4,
+    endTime: 4.4,
+    speechDuration: 4.4,
+    speechDurationSource: "audio",
+    speechEndTime: 4.4,
+    speechStartTime: 0,
+    text,
+    voiceSourceDuration: 4.4,
+    voiceSourceEndTime: 4.4,
+    voiceSourceStartTime: 0,
+    voiceoverAsset: {
+      assetId: 801,
+      durationSeconds: 4.4,
+      fileName: "scene-1.mp3",
+      fileSize: 0,
+      mimeType: "audio/mpeg",
+      remoteUrl: "/api/workspace/media-assets/801",
+      source: "media-library",
+    },
+    voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(text),
+  });
+  const baselineDraft = createProjectVoiceoverDraft([baselineSegment]);
+  const changedDraft = rebuildWorkspaceSegmentEditorDraftSessionTimeline(
+    applyWorkspaceSegmentEditorSceneVoiceOverride(baselineDraft, 0, "Russian_BrightHeroine"),
+  );
+
+  const restoredDraft = rebuildWorkspaceSegmentEditorDraftSessionTimeline(
+    applyWorkspaceSegmentEditorSceneVoiceSelection(
+      changedDraft,
+      0,
+      DEFAULT_STUDIO_VOICE_ID.ru,
+      baselineDraft,
+    ),
+  );
+
+  expect(changedDraft.segments[0]?.voiceoverAsset).toBeNull();
+  expect(restoredDraft.segments[0]).toEqual(expect.objectContaining({
+    duration: 4.4,
+    endTime: 4.4,
+    estimatedVoiceoverDurationSeconds: null,
+    estimatedVoiceoverTextHash: null,
+    speechDuration: 4.4,
+    voiceType: null,
+    voiceoverAsset: expect.objectContaining({ assetId: 801, durationSeconds: 4.4 }),
+    voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+  }));
+});
+
+it("does not restore a baseline voiceover when the scene text changed", () => {
+  const baselineText = "Original scene text";
+  const editedText = "Edited scene text that needs a new recording";
+  const baselineSegment = createProjectVoiceoverSegment({
+    duration: 4.4,
+    endTime: 4.4,
+    speechDuration: 4.4,
+    speechDurationSource: "audio",
+    speechEndTime: 4.4,
+    speechStartTime: 0,
+    text: baselineText,
+    voiceSourceDuration: 4.4,
+    voiceSourceEndTime: 4.4,
+    voiceSourceStartTime: 0,
+    voiceoverAsset: {
+      assetId: 801,
+      durationSeconds: 4.4,
+      fileName: "scene-1.mp3",
+      fileSize: 0,
+      mimeType: "audio/mpeg",
+      remoteUrl: "/api/workspace/media-assets/801",
+      source: "media-library",
+    },
+    voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(baselineText),
+  });
+  const baselineDraft = createProjectVoiceoverDraft([baselineSegment]);
+  const changedVoiceDraft = applyWorkspaceSegmentEditorSceneVoiceOverride(
+    baselineDraft,
+    0,
+    "Russian_BrightHeroine",
+  );
+  const editedDraft = {
+    ...changedVoiceDraft,
+    segments: changedVoiceDraft.segments.map((segment) => ({
+      ...segment,
+      text: editedText,
+      textByLanguage: { ru: editedText },
+    })),
+  };
+
+  const restoredDraft = rebuildWorkspaceSegmentEditorDraftSessionTimeline(
+    applyWorkspaceSegmentEditorSceneVoiceSelection(
+      editedDraft,
+      0,
+      DEFAULT_STUDIO_VOICE_ID.ru,
+      baselineDraft,
+    ),
+  );
+
+  expect(restoredDraft.segments[0]).toEqual(expect.objectContaining({
+    text: editedText,
+    voiceType: null,
+    voiceoverAsset: null,
+    voiceoverTextHash: null,
+    voiceoverVoiceType: null,
+  }));
+  expect(restoredDraft.segments[0]?.duration).not.toBe(4.4);
+});
+
+it("keeps a fresh generated voiceover when the already selected voice is selected again", () => {
+  const text = "Keep the current generated take";
+  const baselineDraft = createProjectVoiceoverDraft([
+    createProjectVoiceoverSegment({ text }),
+  ]);
+  const currentSegment = createProjectVoiceoverSegment({
+    text,
+    voiceType: "Russian_BrightHeroine",
+    voiceoverAsset: {
+      assetId: 802,
+      durationSeconds: 3.8,
+      fileName: "scene-1-new.mp3",
+      fileSize: 0,
+      mimeType: "audio/mpeg",
+      remoteUrl: "/api/workspace/media-assets/802",
+      source: "media-library",
+    },
+    voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(text),
+    voiceoverVoiceType: "Russian_BrightHeroine",
+  });
+  const currentDraft = createProjectVoiceoverDraft([currentSegment]);
+
+  const selectedDraft = applyWorkspaceSegmentEditorSceneVoiceSelection(
+    currentDraft,
+    0,
+    "Russian_BrightHeroine",
+    baselineDraft,
+  );
+
+  expect(selectedDraft).toBe(currentDraft);
+  expect(selectedDraft.segments[0]?.voiceoverAsset?.assetId).toBe(802);
 });
 
 it("resets scene duration to pending voiceover estimate after a global voice change", () => {
