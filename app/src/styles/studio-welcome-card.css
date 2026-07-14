@@ -644,14 +644,6 @@
   border-radius: 11px;
 }
 
-.studio-welcome-card__scene-tags > span:nth-child(2) {
-  border-color: rgba(178, 111, 255, 0.94);
-  box-shadow:
-    inset 0 0 0 1px rgba(96, 176, 255, 0.72),
-    0 0 0 2px rgba(111, 84, 255, 0.18),
-    0 0 23px rgba(122, 83, 255, 0.35);
-}
-
 .studio-welcome-card__scene-tags b,
 .studio-welcome-card__scene-tags small {
   position: absolute;

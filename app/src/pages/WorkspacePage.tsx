@@ -38063,11 +38063,11 @@ export function WorkspacePage({
                         />
                         <div className="studio-welcome-card__scene-tags">
                           {[
-                            { duration: "0:03", number: "01" },
-                            { duration: "0:04", number: "02" },
-                            { duration: "0:02", number: "03" },
-                            { duration: "0:03", number: "04" },
-                            { duration: "0:03", number: "05" },
+                            { duration: "00:05", number: "01" },
+                            { duration: "00:10", number: "02" },
+                            { duration: "00:15", number: "03" },
+                            { duration: "00:20", number: "04" },
+                            { duration: "00:25", number: "05" },
                           ].map((scene) => (
                             <span key={scene.number}>
                               <b>{scene.number}</b>
