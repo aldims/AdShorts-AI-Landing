@@ -1374,6 +1374,24 @@ export const shouldShowWorkspaceStartFreshScenesAction = (options: {
   options.isSegmentEditorActive &&
   (options.hasContent || options.hasResettableChanges);
 
+export const shouldShowWorkspaceStudioWelcomeCard = (options: {
+  createMode: StudioCreateMode;
+  hasCreatedVideo: boolean;
+  hasGenerationError: boolean;
+  isBootstrapPending: boolean;
+  isClosed: boolean;
+  isCreateView: boolean;
+  isDismissed: boolean;
+  isGenerationVisible: boolean;
+  isManuallyOpened: boolean;
+}) =>
+  options.isCreateView &&
+  options.createMode === "default" &&
+  !options.isBootstrapPending &&
+  !options.isGenerationVisible &&
+  !options.hasGenerationError &&
+  (options.isManuallyOpened || (!options.hasCreatedVideo && !options.isClosed && !options.isDismissed));
+
 export const shouldShowWorkspaceStudioIdeaEmptyState = (options: {
   createMode: StudioCreateMode;
   hasComposerSourceIdea: boolean;

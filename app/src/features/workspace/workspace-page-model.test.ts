@@ -14,6 +14,7 @@ import {
   resolveWorkspaceScenesModeSwitchTarget,
   shouldShowStudioGenerationError,
   shouldShowWorkspaceStudioIdeaEmptyState,
+  shouldShowWorkspaceStudioWelcomeCard,
   shouldUseWorkspaceStudioExpandedPromptLayout,
   shouldShowWorkspaceStartFreshScenesAction,
   shouldShowWorkspaceSegmentEditorFullPreviewBusyIndicator,
@@ -205,6 +206,44 @@ describe("studio idea empty state", () => {
     ).flat();
 
     expect(new Set(prompts).size).toBe(prompts.length);
+  });
+});
+
+describe("studio welcome card", () => {
+  const newUserStudio = {
+    createMode: "default" as const,
+    hasCreatedVideo: false,
+    hasGenerationError: false,
+    isBootstrapPending: false,
+    isClosed: false,
+    isCreateView: true,
+    isDismissed: false,
+    isGenerationVisible: false,
+    isManuallyOpened: false,
+  };
+
+  it("keeps automatic onboarding visible until it is dismissed or a video exists", () => {
+    expect(shouldShowWorkspaceStudioWelcomeCard(newUserStudio)).toBe(true);
+    expect(shouldShowWorkspaceStudioWelcomeCard({ ...newUserStudio, isDismissed: true })).toBe(false);
+    expect(shouldShowWorkspaceStudioWelcomeCard({ ...newUserStudio, hasCreatedVideo: true })).toBe(false);
+  });
+
+  it("allows a dismissed guide to be opened manually after a video is created", () => {
+    expect(
+      shouldShowWorkspaceStudioWelcomeCard({
+        ...newUserStudio,
+        hasCreatedVideo: true,
+        isDismissed: true,
+        isManuallyOpened: true,
+      }),
+    ).toBe(true);
+  });
+
+  it("does not cover loading, generation, errors, or another creation mode", () => {
+    expect(shouldShowWorkspaceStudioWelcomeCard({ ...newUserStudio, isBootstrapPending: true })).toBe(false);
+    expect(shouldShowWorkspaceStudioWelcomeCard({ ...newUserStudio, isGenerationVisible: true })).toBe(false);
+    expect(shouldShowWorkspaceStudioWelcomeCard({ ...newUserStudio, hasGenerationError: true })).toBe(false);
+    expect(shouldShowWorkspaceStudioWelcomeCard({ ...newUserStudio, createMode: "segment-editor" })).toBe(false);
   });
 });
 

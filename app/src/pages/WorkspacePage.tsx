@@ -30,6 +30,7 @@ import {
   normalizeWorkspaceEmail,
   persistDismissedStudioPreviewKey,
   persistDismissedFirstVideoOfferKey,
+  persistDismissedStudioWelcomeCard,
   persistHiddenMediaLibraryItemKeys,
   persistStudioCreateMode,
   persistStudioCreateSettings,
@@ -622,6 +623,7 @@ import {
   resolveWorkspaceScenesModeSwitchTarget,
   shouldShowStudioGenerationError,
   shouldShowWorkspaceStudioIdeaEmptyState,
+  shouldShowWorkspaceStudioWelcomeCard,
   shouldUseWorkspaceStudioExpandedPromptLayout,
   shouldShowWorkspaceStartFreshScenesAction,
   shouldShowWorkspaceSegmentEditorFullPreviewBusyIndicator,
@@ -2026,6 +2028,7 @@ export function WorkspacePage({
   const [isStudioWelcomeCardDismissed, setIsStudioWelcomeCardDismissed] = useState(() =>
     readDismissedStudioWelcomeCard(session.email),
   );
+  const [isStudioWelcomeCardManuallyOpened, setIsStudioWelcomeCardManuallyOpened] = useState(false);
   const [hiddenMediaLibraryItemKeys, setHiddenMediaLibraryItemKeys] = useState<string[]>(() =>
     readHiddenMediaLibraryItemKeys(session.email),
   );
@@ -2864,10 +2867,17 @@ export function WorkspacePage({
   );
   const closeStudioWelcomeCard = useCallback(() => {
     setIsStudioWelcomeCardClosed(true);
+    setIsStudioWelcomeCardManuallyOpened(false);
   }, []);
+  const dismissStudioWelcomeCard = useCallback(() => {
+    persistDismissedStudioWelcomeCard(session.email, true);
+    setIsStudioWelcomeCardDismissed(true);
+    setIsStudioWelcomeCardClosed(true);
+    setIsStudioWelcomeCardManuallyOpened(false);
+  }, [session.email]);
   const openStudioWelcomeCard = useCallback(() => {
-    setIsStudioWelcomeCardDismissed(false);
     setIsStudioWelcomeCardClosed(false);
+    setIsStudioWelcomeCardManuallyOpened(true);
   }, []);
   const handleStudioIdeaSuggestionSelect = useCallback((suggestion: string) => {
     setTopicInput(suggestion);
@@ -4199,6 +4209,7 @@ export function WorkspacePage({
     setFirstVideoCheckoutError(null);
     setIsStudioWelcomeCardClosed(false);
     setIsStudioWelcomeCardDismissed(readDismissedStudioWelcomeCard(session.email));
+    setIsStudioWelcomeCardManuallyOpened(false);
     setHiddenMediaLibraryItemKeys(readHiddenMediaLibraryItemKeys(session.email));
     setIsWorkspaceBootstrapPending(true);
     setIsPublishModalOpen(false);
@@ -5916,14 +5927,27 @@ export function WorkspacePage({
   const visibleGeneratedVideoPlaybackUrl = isGeneratedVideoDismissed ? null : generatedVideoPlaybackUrl;
   const isUserFacingGeneration = isStudioGenerationUserFacing(isGenerating, generationUiSource);
   const shouldShowGenerateError = shouldShowStudioGenerationError(generateError, isGenerating, generationUiSource);
-  const shouldShowStudioWelcomeCard =
-    studioView === "create" &&
-    createMode === "default" &&
-    !isWorkspaceBootstrapPending &&
-    !isUserFacingGeneration &&
-    !shouldShowGenerateError &&
-    !isStudioWelcomeCardClosed &&
-    !isStudioWelcomeCardDismissed;
+  const hasCreatedStudioVideo =
+    Boolean(generatedVideoPlaybackUrl) ||
+    projects.some((project) => project.status === "ready" && Boolean(String(project.videoUrl ?? "").trim()));
+  const shouldShowStudioWelcomeCard = shouldShowWorkspaceStudioWelcomeCard({
+    createMode,
+    hasCreatedVideo: hasCreatedStudioVideo,
+    hasGenerationError: shouldShowGenerateError,
+    isBootstrapPending: isWorkspaceBootstrapPending,
+    isClosed: isStudioWelcomeCardClosed,
+    isCreateView: studioView === "create",
+    isDismissed: isStudioWelcomeCardDismissed,
+    isGenerationVisible: isUserFacingGeneration,
+    isManuallyOpened: isStudioWelcomeCardManuallyOpened,
+  });
+  useEffect(() => {
+    if (!hasCreatedStudioVideo) {
+      return;
+    }
+
+    dismissStudioWelcomeCard();
+  }, [dismissStudioWelcomeCard, hasCreatedStudioVideo]);
   const isSegmentEditorShortsGeneration = isGenerating && generationUiSource === "segment-editor";
   const shouldShowStudioPreviewGenerationOverlay = isUserFacingGeneration && !visibleGeneratedVideo;
   const isGeneratedVideoPrimaryActionExpanded = generatedVideoActionMode === "expanded";
@@ -37974,7 +37998,7 @@ export function WorkspacePage({
                     className="studio-welcome-card__close"
                     type="button"
                     aria-label={workspaceText(locale, "Закрыть", "Close")}
-                    onClick={closeStudioWelcomeCard}
+                    onClick={dismissStudioWelcomeCard}
                   >
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                       <path d="m6 6 12 12M18 6 6 18" />
