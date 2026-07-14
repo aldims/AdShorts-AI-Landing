@@ -161,8 +161,39 @@ export const renderWorkspaceStudioInlinePreviewActions = ({
 
 export const renderWorkspaceStudioShortsGenerationStatus = (locale: Locale) => (
   <div className="studio-canvas-preview__generation-status">
-    <span className="studio-segment-editor__generation-spinner" aria-hidden="true"></span>
-    <strong>{locale === "en" ? "Generating Shorts" : "Генерируем Shorts"}</strong>
-    <span>{locale === "en" ? "Assembling segments into a video" : "Собираем сегменты в видео"}</span>
+    <span className="studio-generation-visual" aria-hidden="true">
+      <span className="studio-generation-visual__halo"></span>
+      <span className="studio-generation-visual__orbit studio-generation-visual__orbit--outer">
+        <i></i>
+        <i></i>
+      </span>
+      <span className="studio-generation-visual__orbit studio-generation-visual__orbit--inner">
+        <i></i>
+      </span>
+      <span className="studio-generation-visual__frame">
+        <span className="studio-generation-visual__grid"></span>
+        <span className="studio-generation-visual__scan"></span>
+        <svg viewBox="0 0 48 48" fill="none">
+          <path d="M17 13.5h14M17 34.5h14" />
+          <path d="M18.5 18.5 30 24l-11.5 5.5v-11Z" />
+        </svg>
+      </span>
+      <span className="studio-generation-visual__particle studio-generation-visual__particle--one"></span>
+      <span className="studio-generation-visual__particle studio-generation-visual__particle--two"></span>
+      <span className="studio-generation-visual__particle studio-generation-visual__particle--three"></span>
+    </span>
+    <span className="studio-canvas-preview__generation-kicker">
+      <i aria-hidden="true"></i>
+      {locale === "en" ? "AI render in progress" : "AI-рендер в процессе"}
+    </span>
+    <strong>{locale === "en" ? "Creating your Short" : "Создаём ваш Shorts"}</strong>
+    <span className="studio-canvas-preview__generation-copy">
+      {locale === "en"
+        ? "Assembling scenes, voiceover and subtitles"
+        : "Собираем сцены, озвучку и субтитры"}
+    </span>
+    <span className="studio-canvas-preview__generation-progress" aria-hidden="true">
+      <i></i>
+    </span>
   </div>
 );
