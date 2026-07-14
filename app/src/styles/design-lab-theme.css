@@ -42650,7 +42650,7 @@ html, body {
 
 .studio-segment-infographic__reset {
   position: absolute;
-  right: 24px;
+  right: -1px;
   top: -38px;
   z-index: 4;
   display: inline-flex;
@@ -42661,37 +42661,36 @@ html, body {
   height: 30px;
   min-height: 30px;
   padding: 0;
-  border: 1px solid rgba(103, 232, 249, 0.34);
-  border-radius: 999px;
+  border: 0;
   background: transparent;
   color: rgba(236, 254, 255, 0.94);
   box-shadow: none;
   cursor: pointer;
   backdrop-filter: none;
   transition:
-    border-color 150ms ease,
-    box-shadow 150ms ease,
     color 150ms ease,
+    filter 150ms ease,
     transform 150ms ease;
 }
 
 .studio-segment-infographic__reset:hover,
 .studio-segment-infographic__reset:focus-visible {
-  border-color: rgba(103, 232, 249, 0.72);
-  background: rgba(8, 35, 48, 0.28);
+  background: transparent;
   color: #fff;
+  filter: drop-shadow(0 0 5px rgba(103, 232, 249, 0.48));
   outline: none;
   transform: translateY(-1px);
 }
 
 .studio-segment-infographic__reset:focus-visible {
-  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.18), 0 8px 20px -12px rgba(0, 0, 0, 0.9);
+  box-shadow: none;
 }
 
 .studio-segment-infographic__reset:disabled {
-  border-color: rgba(148, 163, 184, 0.16);
+  border: 0;
   background: transparent;
   color: rgba(148, 163, 184, 0.46);
+  filter: none;
   box-shadow: none;
   cursor: default;
   transform: none;
@@ -42946,7 +42945,7 @@ html, body {
 
 @media (max-width: 720px) {
   .studio-segment-infographic__reset {
-    right: 27px;
+    right: -2px;
     top: -43px;
     width: 35px;
     min-width: 35px;
