@@ -404,6 +404,38 @@ describe("media library photo sources", () => {
       previewPosterUrl: expect.stringContaining("/api/workspace/media-assets/303/poster"),
     });
   });
+
+  it("preserves explicit photo animation kind when both persisted assets are videos", () => {
+    const segment = createPhotoSegment();
+    segment.mediaType = "video";
+    segment.currentAsset = {
+      ...segment.currentAsset!,
+      assetId: 8814,
+      kind: "rendered_segment",
+      libraryKind: "photo_animation",
+      mediaType: "video",
+      mimeType: "video/mp4",
+      role: "source_upload",
+    };
+    segment.originalAsset = {
+      ...segment.originalAsset!,
+      assetId: 8814,
+      kind: "rendered_segment",
+      libraryKind: "photo_animation",
+      mediaType: "video",
+      mimeType: "video/mp4",
+      role: "source_upload",
+    };
+
+    const items = buildWorkspacePersistedMediaLibraryItems(project, session(segment));
+
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      assetId: 8814,
+      kind: "photo_animation",
+      previewKind: "video",
+    });
+  });
 });
 
 describe("media library durable assets", () => {

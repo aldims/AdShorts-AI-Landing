@@ -87,7 +87,7 @@ const WORKSPACE_MEDIA_LIBRARY_INDEX_SYNC_MIN_REMAINING_MS = 250;
 const WORKSPACE_MEDIA_LIBRARY_SEGMENT_CONCURRENCY = 6;
 const WORKSPACE_MEDIA_LIBRARY_DEFAULT_LIMIT = 24;
 const WORKSPACE_MEDIA_LIBRARY_MAX_LIMIT = 96;
-const WORKSPACE_MEDIA_LIBRARY_INDEX_SCHEMA_VERSION = "media-v6-durable-video-posters";
+const WORKSPACE_MEDIA_LIBRARY_INDEX_SCHEMA_VERSION = "media-v7-segment-library-kind";
 
 export type WorkspaceMediaLibraryPage = {
   items: WorkspaceMediaLibraryItem[];
@@ -1108,12 +1108,21 @@ export const buildWorkspacePersistedMediaLibraryItems = (
         if (aiVideoPreviewUrl && isWorkspaceMediaLibraryAssetVisible(segment.currentAsset?.assetId, segment.currentAsset?.lifecycle)) {
           const originalAssetMediaType = normalizeText(segment.originalAsset?.mediaType).toLowerCase();
           const originalAssetMimeType = normalizeText(segment.originalAsset?.mimeType).toLowerCase();
-          const currentClassifier = `${normalizeText(segment.currentAsset?.kind)} ${normalizeText(segment.currentAsset?.role)} ${normalizeText(segment.currentAsset?.sourceKind)} ${normalizeText(segment.currentAsset?.libraryKind)}`.toLowerCase();
+          const currentClassifier = [
+            segment.currentAsset?.kind,
+            segment.currentAsset?.role,
+            segment.currentAsset?.sourceKind,
+            segment.currentAsset?.libraryKind,
+            segment.currentAsset?.renderedAnimationMode,
+            segment.originalAsset?.libraryKind,
+          ].map(normalizeText).join(" ").toLowerCase();
           const isTalkingPhotoVariant =
             currentClassifier.includes("talking_photo") ||
             currentClassifier.includes("talking-photo") ||
             currentClassifier.includes("talking_avatar");
           const isPhotoAnimationVariant =
+            currentClassifier.includes("photo_animation") ||
+            currentClassifier.includes("photo-animation") ||
             originalAssetMediaType === "photo" ||
             originalAssetMediaType === "image" ||
             originalAssetMimeType.startsWith("image/");
