@@ -382,12 +382,13 @@ describe("studio segment voiceover jobs", () => {
         credit_cost: 2,
         external_user_id: "email:alex@example.test",
         language: "ru",
-        project_id: 3576,
         segment_index: 4,
         text: voiceoverText,
         voice_type: "Liam_Timing",
       }),
     );
+    expect(calls.find((call) => call.pathname === "/api/web/segment-voiceover/jobs")?.body)
+      .not.toHaveProperty("project_id");
   });
 
   it("forwards one project voiceover job with scene texts and one voiceover credit cost", async () => {
@@ -468,11 +469,14 @@ describe("studio segment voiceover jobs", () => {
 
   it("uses the durable media proxy for native batch voiceover segment assets", async () => {
     const { createStudioBatchVoiceoverJob, getStudioBatchVoiceoverJobStatus } = await loadStudioModule();
+    const calls: Array<{ body: Record<string, unknown>; pathname: string }> = [];
 
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = new URL(String(input));
+        const body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {};
+        calls.push({ body, pathname: url.pathname });
 
         if (url.pathname.startsWith("/api/admin/users")) {
           return jsonResponse({ items: [] });
@@ -536,14 +540,17 @@ describe("studio segment voiceover jobs", () => {
       assetId: 8740,
       remoteUrl: "/api/workspace/media-assets/8740",
     }));
+    expect(calls.find((call) => call.pathname === "/api/web/voiceover/batch-jobs")?.body)
+      .not.toHaveProperty("project_id");
   });
 
-  it("does not apply a whole-project voiceover segment as the first scene in fallback batch jobs", async () => {
+  it("keeps fallback batch voiceovers detached from the source project", async () => {
     const { createStudioBatchVoiceoverJob, getStudioBatchVoiceoverJobStatus } = await loadStudioModule();
+    const requestBodies: Record<string, unknown>[] = [];
 
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = new URL(String(input));
 
         if (url.pathname.startsWith("/api/admin/users")) {
@@ -554,9 +561,11 @@ describe("studio segment voiceover jobs", () => {
           return jsonResponse({ detail: "not found" }, 404);
         }
 
-        if (url.pathname === "/api/web/project-voiceover/jobs") {
+        if (url.pathname === "/api/web/segment-voiceover/jobs" && init?.method === "POST") {
+          const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+          requestBodies.push(body);
           return jsonResponse({
-            job_id: "project-voiceover-job-1",
+            job_id: `segment-voiceover-job-${body.segment_index}`,
             status: "queued",
             user: {
               balance: 12,
@@ -566,24 +575,22 @@ describe("studio segment voiceover jobs", () => {
           });
         }
 
-        if (url.pathname === "/api/web/project-voiceover/jobs/project-voiceover-job-1") {
+        const statusMatch = url.pathname.match(/^\/api\/web\/segment-voiceover\/jobs\/segment-voiceover-job-(\d+)$/);
+        if (statusMatch) {
+          const segmentIndex = Number(statusMatch[1]);
           return jsonResponse({
             asset: {
-              file_name: "whole-video.wav",
-              media_asset_id: 902,
+              file_name: `scene-${segmentIndex + 1}.wav`,
+              media_asset_id: 902 + segmentIndex,
               mime_type: "audio/wav",
             },
-            job_id: "project-voiceover-job-1",
-            segments: [
-              {
-                segment_index: 0,
-                speech_duration: 31.5,
-                speech_end_time: 31.5,
-                speech_start_time: 0,
-                text: "Scene one Scene two",
-              },
-            ],
+            job_id: `segment-voiceover-job-${segmentIndex}`,
+            segment_index: segmentIndex,
+            speech_duration: segmentIndex === 0 ? 3.5 : 4.1,
+            speech_end_time: segmentIndex === 0 ? 3.5 : 4.1,
+            speech_start_time: 0,
             status: "completed",
+            text: segmentIndex === 0 ? "Scene one" : "Scene two",
             user: {
               balance: 12,
               plan: "FREE",
@@ -618,25 +625,21 @@ describe("studio segment voiceover jobs", () => {
       name: "Alex",
     });
 
-    expect(status.status).not.toBe("done");
+    expect(status.status).toBe("done");
     expect(status.segments).toEqual([
       expect.objectContaining({
-        asset: undefined,
+        asset: expect.objectContaining({ assetId: 902 }),
         segmentIndex: 0,
-        speechDuration: null,
-        speechEndTime: null,
-        speechStartTime: null,
         text: "Scene one",
       }),
       expect.objectContaining({
-        asset: undefined,
+        asset: expect.objectContaining({ assetId: 903 }),
         segmentIndex: 1,
-        speechDuration: null,
-        speechEndTime: null,
-        speechStartTime: null,
         text: "Scene two",
       }),
     ]);
+    expect(requestBodies).toHaveLength(2);
+    expect(requestBodies.every((body) => !("project_id" in body))).toBe(true);
   });
 
   it("restores fallback batch voiceover jobs after a server module reload", async () => {
@@ -659,9 +662,10 @@ describe("studio segment voiceover jobs", () => {
           return jsonResponse({ detail: "not found" }, 404);
         }
 
-        if (method === "POST" && url.pathname === "/api/web/project-voiceover/jobs") {
+        if (method === "POST" && url.pathname === "/api/web/segment-voiceover/jobs") {
+          const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
           return jsonResponse({
-            job_id: "project-voiceover-job-1",
+            job_id: `segment-voiceover-job-${body.segment_index}`,
             status: "queued",
             user: {
               balance: 12,
@@ -671,43 +675,23 @@ describe("studio segment voiceover jobs", () => {
           });
         }
 
-        if (method === "GET" && url.pathname === "/api/web/project-voiceover/jobs/project-voiceover-job-1") {
+        const statusMatch = url.pathname.match(/^\/api\/web\/segment-voiceover\/jobs\/segment-voiceover-job-(\d+)$/);
+        if (method === "GET" && statusMatch) {
+          const segmentIndex = Number(statusMatch[1]);
           return jsonResponse({
             asset: {
-              file_name: "project-voiceover.wav",
-              media_asset_id: 902,
+              file_name: `segment-voiceover-${segmentIndex + 1}.wav`,
+              media_asset_id: 903 + segmentIndex,
               mime_type: "audio/wav",
+              remote_url: `https://cdn.example.test/segment-voiceover-${segmentIndex + 1}.wav`,
             },
-            job_id: "project-voiceover-job-1",
-            segments: [
-              {
-                asset: {
-                  file_name: "segment-voiceover-1.wav",
-                  media_asset_id: 903,
-                  mime_type: "audio/wav",
-                  remote_url: "https://cdn.example.test/segment-voiceover-1.wav",
-                },
-                segment_index: 0,
-                speech_duration: 3.5,
-                speech_end_time: 3.5,
-                speech_start_time: 0,
-                text: "Scene one",
-              },
-              {
-                asset: {
-                  file_name: "segment-voiceover-2.wav",
-                  media_asset_id: 904,
-                  mime_type: "audio/wav",
-                  remote_url: "https://cdn.example.test/segment-voiceover-2.wav",
-                },
-                segment_index: 1,
-                speech_duration: 4.1,
-                speech_end_time: 7.6,
-                speech_start_time: 3.5,
-                text: "Scene two",
-              },
-            ],
+            job_id: `segment-voiceover-job-${segmentIndex}`,
+            segment_index: segmentIndex,
+            speech_duration: segmentIndex === 0 ? 3.5 : 4.1,
+            speech_end_time: segmentIndex === 0 ? 3.5 : 4.1,
+            speech_start_time: 0,
             status: "completed",
+            text: segmentIndex === 0 ? "Scene one" : "Scene two",
             user: {
               balance: 12,
               plan: "FREE",

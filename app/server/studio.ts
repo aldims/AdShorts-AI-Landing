@@ -18,7 +18,6 @@ import {
   STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST,
   STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST,
   STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST,
-  buildStudioBatchVoiceoverBillingRuns,
   buildStudioVoiceoverProviderText,
   getStudioBatchVoiceoverCreditCost,
   getStudioSegmentPhotoAnimationCreditCost,
@@ -8732,7 +8731,6 @@ export async function createStudioSegmentVoiceoverJob(
   }
 
   const normalizedLanguage = normalizeStudioLanguage(options?.language);
-  const normalizedProjectId = normalizePositiveInteger(options?.projectId);
   const normalizedSegmentIndex = normalizeNonNegativeInteger(options?.segmentIndex);
   const normalizedVoiceType = normalizeStudioVoiceIdForLanguage(options?.voiceType, normalizedLanguage);
   const requiredCredits = getStudioVoiceoverCreditCostForText(normalizedText);
@@ -8751,12 +8749,13 @@ export async function createStudioSegmentVoiceoverJob(
 
   let payload: AdsflowSegmentAiVideoJobCreateResponse;
   try {
+    // Editor previews are draft assets. Binding this job to project_id lets the
+    // upstream worker overwrite the immutable source version before render succeeds.
     payload = await postAdsflowJson<AdsflowSegmentAiVideoJobCreateResponse>("/api/web/segment-voiceover/jobs", {
       admin_token: env.adsflowAdminToken,
       credit_cost: requiredCredits,
       external_user_id: externalUserId,
       language: normalizedLanguage,
-      project_id: normalizedProjectId ?? undefined,
       segment_index: normalizedSegmentIndex,
       text: normalizedText,
       user_email: user.email ?? undefined,
@@ -9437,11 +9436,12 @@ export async function createStudioBatchVoiceoverJob(
     throw new Error("Voiceover credit cost is required.");
   }
 
-  const normalizedProjectId = normalizePositiveInteger(options?.projectId);
   const externalUserId = await resolveStudioExternalUserId(user);
   const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
 
   try {
+    // Keep batch output detached for the same reason as single-scene previews:
+    // project state is committed only by the successful render/version flow.
     const payload = await postAdsflowJson<AdsflowSegmentAiVideoJobCreateResponse>("/api/web/voiceover/batch-jobs", {
       admin_token: env.adsflowAdminToken,
       credit_cost: creditCost,
@@ -9457,7 +9457,6 @@ export async function createStudioBatchVoiceoverJob(
         voice_type: group.voiceType,
         ...(getStudioVoiceModelPath(group.voiceType) ? { model_path: getStudioVoiceModelPath(group.voiceType) } : {}),
       })),
-      project_id: normalizedProjectId ?? undefined,
       user_email: user.email ?? undefined,
       user_name: user.name ?? undefined,
     }, {
@@ -9497,99 +9496,43 @@ export async function createStudioBatchVoiceoverJob(
 
   const children: StudioBatchVoiceoverFallbackChildJob[] = [];
   const projectGroups: StudioBatchVoiceoverFallbackProjectGroupJob[] = [];
-  const billingRuns = buildStudioBatchVoiceoverBillingRuns(normalizedGroups);
   let fallbackProfile = buildWorkspaceProfile();
 
   try {
-    if (normalizedProjectId) {
-      for (const run of billingRuns) {
-        const runSegmentIndexes = new Set(run.segmentIndexes);
-        const runGroup = normalizedGroups.find(
-          (group) =>
-            group.language === run.language &&
-            group.voiceType.toLowerCase() === run.voiceType.toLowerCase(),
-        );
-        const runSegments = runGroup?.segments.filter((segment) => runSegmentIndexes.has(segment.segmentIndex)) ?? [];
-        if (!runGroup || runSegments.length === 0) {
-          continue;
-        }
-        const payload = await postAdsflowJson<AdsflowSegmentAiVideoJobCreateResponse>("/api/web/project-voiceover/jobs", {
+    for (const group of normalizedGroups) {
+      for (const segment of group.segments) {
+        const payload = await postAdsflowJson<AdsflowSegmentAiVideoJobCreateResponse>("/api/web/segment-voiceover/jobs", {
           admin_token: env.adsflowAdminToken,
-          credit_cost: run.creditCost,
+          credit_cost: getStudioVoiceoverCreditCostForText(segment.text),
           external_user_id: externalUserId,
-          language: runGroup.language,
-          persist_as_segment_assets: true,
-          project_id: normalizedProjectId,
-          segments: runSegments.map((segment) => ({
-            duration: segment.targetDurationSeconds,
-            segment_index: segment.segmentIndex,
-            target_duration: segment.targetDurationSeconds,
-            text: segment.text,
-          })),
-          text: run.text,
+          language: group.language,
+          segment_index: segment.segmentIndex,
+          text: segment.text,
           user_email: user.email ?? undefined,
           user_name: user.name ?? undefined,
-          voice_type: runGroup.voiceType,
-          ...(getStudioVoiceModelPath(runGroup.voiceType) ? { model_path: getStudioVoiceModelPath(runGroup.voiceType) } : {}),
+          voice_type: group.voiceType,
+          ...(getStudioVoiceModelPath(group.voiceType) ? { model_path: getStudioVoiceModelPath(group.voiceType) } : {}),
         }, {
           retryDelaysMs: [],
           timeoutMs: ADSFLOW_MUTATION_TIMEOUT_MS,
         });
 
-        const groupJobId = String(payload.job_id ?? "").trim();
-        if (!groupJobId) {
-          throw new Error("AdsFlow did not return a project voiceover job id.");
+        const childJobId = String(payload.job_id ?? "").trim();
+        if (!childJobId) {
+          throw new Error("AdsFlow did not return a segment voiceover job id.");
         }
 
-        projectGroups.push({
-          ...runGroup,
-          creditCost: run.creditCost,
-          jobId: groupJobId,
-          segments: runSegments,
+        children.push({
+          ...segment,
+          jobId: childJobId,
+          language: group.language,
+          voiceType: group.voiceType,
         });
         fallbackProfile = await enrichWorkspaceProfileAfterAdsflowWebMutation(
           payload.user ?? undefined,
           payload.user?.user_id ? String(payload.user.user_id) : undefined,
           subscriptionDetails,
         );
-      }
-    } else {
-      for (const group of normalizedGroups) {
-        for (const segment of group.segments) {
-          const payload = await postAdsflowJson<AdsflowSegmentAiVideoJobCreateResponse>("/api/web/segment-voiceover/jobs", {
-            admin_token: env.adsflowAdminToken,
-            credit_cost: getStudioVoiceoverCreditCostForText(segment.text),
-            external_user_id: externalUserId,
-            language: group.language,
-            project_id: normalizedProjectId ?? undefined,
-            segment_index: segment.segmentIndex,
-            text: segment.text,
-            user_email: user.email ?? undefined,
-            user_name: user.name ?? undefined,
-            voice_type: group.voiceType,
-            ...(getStudioVoiceModelPath(group.voiceType) ? { model_path: getStudioVoiceModelPath(group.voiceType) } : {}),
-          }, {
-            retryDelaysMs: [],
-            timeoutMs: ADSFLOW_MUTATION_TIMEOUT_MS,
-          });
-
-          const childJobId = String(payload.job_id ?? "").trim();
-          if (!childJobId) {
-            throw new Error("AdsFlow did not return a segment voiceover job id.");
-          }
-
-          children.push({
-            ...segment,
-            jobId: childJobId,
-            language: group.language,
-            voiceType: group.voiceType,
-          });
-          fallbackProfile = await enrichWorkspaceProfileAfterAdsflowWebMutation(
-            payload.user ?? undefined,
-            payload.user?.user_id ? String(payload.user.user_id) : undefined,
-            subscriptionDetails,
-          );
-        }
       }
     }
   } catch (error) {
