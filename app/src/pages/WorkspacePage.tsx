@@ -213,7 +213,6 @@ import {
   getWorkspaceSegmentEditorEffectiveSubtitleSelection,
   getWorkspaceSegmentEditorGenerationRequiredCredits,
   getWorkspaceSegmentEditorDraftId,
-  getWorkspaceSegmentEditorMissingVisualSceneNumbers,
   getWorkspaceSegmentEditorProjectVoiceType,
   getWorkspaceSegmentEditorReservedSegmentIndexes,
   getWorkspaceSegmentEditorSessionLanguage,
@@ -328,7 +327,6 @@ import {
 import {
   buildWorkspaceSegmentEditorChangeChecklist,
   canReuseWorkspaceSegmentProjectTimelineVoiceover,
-  createWorkspaceSegmentEditorComparableDraftSession,
   getWorkspaceSegmentDraftVisualStatus,
   getWorkspaceSegmentVisualTimelineHistoryState,
   getWorkspaceSegmentEditorPendingInsertedSegmentIndices,
@@ -340,6 +338,7 @@ import {
   isWorkspaceSegmentDraftVoiceEdited,
   isWorkspaceSegmentEffectiveVoiceEdited,
   reorderWorkspaceSegmentEditorSegmentsByIndex,
+  resolveWorkspaceSegmentEditorCreateShortsPreflight,
   resolveWorkspaceSegmentEditorChangeDisplayBaselineSession,
 } from "../features/workspace/workspace-segment-editor-checklist";
 import type { WorkspaceSegmentEditorChecklistItem } from "../features/workspace/workspace-segment-editor-checklist";
@@ -1108,6 +1107,7 @@ export {
   isWorkspaceSegmentDraftVisualChangedFromBaseline,
   isWorkspaceSegmentDraftVisualResettable,
   resolveWorkspaceSegmentEditorChangeDisplayBaselineSession,
+  resolveWorkspaceSegmentEditorCreateShortsPreflight,
 } from "../features/workspace/workspace-segment-editor-checklist";
 export {
   buildWorkspaceSegmentEditorPayload,
@@ -21097,11 +21097,12 @@ export function WorkspacePage({
       segmentCount: currentSegmentEditorDraft.segments.length,
     }, { includeOrder: true });
 
-    const effectiveDraft = createWorkspaceSegmentEditorComparableDraftSession(
+    const createShortsPreflight = resolveWorkspaceSegmentEditorCreateShortsPreflight(
       currentSegmentEditorDraft,
       segmentEditorChecklistBaseSession,
     );
-    const isScratchDraft = isWorkspaceSegmentEditorScratchDraft(effectiveDraft);
+    const effectiveDraft = createShortsPreflight.effectiveDraft;
+    const isScratchDraft = isWorkspaceSegmentEditorScratchDraft(currentSegmentEditorDraft);
 
     if (effectiveDraft.segments.length < WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS) {
       logSegmentEditorDiagnostics(
@@ -21130,7 +21131,7 @@ export function WorkspacePage({
     }
 
     if (isScratchDraft) {
-      const missingVisualSceneNumbers = getWorkspaceSegmentEditorMissingVisualSceneNumbers(effectiveDraft);
+      const missingVisualSceneNumbers = createShortsPreflight.missingVisualSceneNumbers;
       if (missingVisualSceneNumbers.length > 0) {
         logSegmentEditorDiagnostics(
           "client.segment-editor.create-shorts.blocked",

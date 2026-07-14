@@ -147,6 +147,7 @@ import {
   resolveWorkspaceSegmentEditorMediaUploadScope,
   resolveWorkspaceSegmentEditorProjectBrandSnapshot,
   resolveWorkspaceSegmentEditorChangeDisplayBaselineSession,
+  resolveWorkspaceSegmentEditorCreateShortsPreflight,
   resolveWorkspaceSegmentEditorLoadedBaselineSession,
   resolveWorkspaceSegmentEditorPendingRouteSync,
   resolveWorkspaceSegmentEditorScratchDraftOpenSource,
@@ -7678,6 +7679,42 @@ describe("WorkspacePage studio locale defaults", () => {
         language: "ru",
       }),
     ).rejects.toThrow("Визуал не задан для сцены 1. Добавьте визуал или удалите сцену.");
+  });
+
+  it("keeps a newly inserted empty scene in the create Shorts preflight", () => {
+    const scratchDraft = createWorkspaceSegmentEditorScratchDraftSession({
+      language: "ru",
+      title: "Новый Shorts",
+    });
+    const firstScene = {
+      ...scratchDraft.segments[0],
+      aiPhotoAsset: {
+        assetId: 701,
+        fileName: "visual-scene.jpg",
+        fileSize: 1200,
+        mimeType: "image/jpeg",
+      },
+      videoAction: "ai_photo" as const,
+    };
+    const draftWithEmptyScene = {
+      ...scratchDraft,
+      segments: [
+        firstScene,
+        createWorkspaceSegmentEditorInsertedSegment({
+          draft: { ...scratchDraft, segments: [firstScene] },
+          insertAt: 1,
+        }),
+      ],
+    };
+    const baseline = { ...scratchDraft, segments: [firstScene] };
+
+    const preflight = resolveWorkspaceSegmentEditorCreateShortsPreflight(
+      draftWithEmptyScene,
+      baseline,
+    );
+
+    expect(preflight.effectiveDraft.segments).toHaveLength(1);
+    expect(preflight.missingVisualSceneNumbers).toEqual([2]);
   });
 
   it("treats scratch visual-only scenes as valid create input", () => {

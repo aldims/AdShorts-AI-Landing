@@ -9,6 +9,7 @@ import {
   getWorkspaceSegmentEditorProjectVoiceType,
   getWorkspaceSegmentEffectiveVoiceEnabled,
   getWorkspaceSegmentEffectiveVoiceId,
+  getWorkspaceSegmentEditorMissingVisualSceneNumbers,
   getWorkspaceSegmentLatestVisualAction,
   getWorkspaceSegmentSubtitleColorOverrideId,
   getWorkspaceSegmentSubtitleStyleOverrideId,
@@ -20,6 +21,7 @@ import {
   isWorkspaceSegmentDraftTextEdited,
   isWorkspaceSegmentProjectTimelineVoiceoverAvailable,
   isWorkspaceSegmentServerPhotoAnimationOverride,
+  isWorkspaceSegmentEditorScratchDraft,
   isWorkspaceSegmentVisualResetApplied,
   normalizeWorkspaceSegmentEditorSetting,
   normalizeWorkspaceSegmentEditorTextForCompare,
@@ -233,6 +235,16 @@ export const createWorkspaceSegmentEditorComparableDraftSession = (
     segments: draft.segments.filter((segment) => !pendingInsertedSegmentIndices.has(segment.index)),
   };
 };
+
+export const resolveWorkspaceSegmentEditorCreateShortsPreflight = (
+  draft: WorkspaceSegmentEditorDraftSession,
+  baseline?: WorkspaceSegmentEditorDraftSession | null,
+) => ({
+  effectiveDraft: createWorkspaceSegmentEditorComparableDraftSession(draft, baseline),
+  missingVisualSceneNumbers: isWorkspaceSegmentEditorScratchDraft(draft)
+    ? getWorkspaceSegmentEditorMissingVisualSceneNumbers(draft)
+    : [],
+});
 
 export type WorkspaceSegmentEditorChecklistSettingId = "music" | "subtitle" | "voice";
 
