@@ -43465,18 +43465,23 @@ html, body {
   z-index: 6;
   display: inline-flex;
   align-items: center;
-  justify-content: flex-start;
-  gap: 7px;
-  width: min(154px, calc(100% - 36px));
-  min-height: 38px;
-  padding: 5px 7px 5px 6px;
+  justify-content: center;
+  width: auto;
+  min-width: 76px;
+  max-width: calc(100% - 36px);
+  min-height: 30px;
+  padding: 0 13px;
   border: 1px solid rgba(129, 140, 248, 0.34);
-  border-radius: 12px;
+  border-radius: 999px;
   background:
     linear-gradient(135deg, rgba(124, 58, 237, 0.18), rgba(14, 165, 233, 0.08) 58%, transparent),
     rgba(7, 10, 20, 0.84);
   color: rgba(244, 247, 255, 0.96);
   font: inherit;
+  font-size: 0.7rem;
+  font-weight: 820;
+  line-height: 1;
+  white-space: nowrap;
   cursor: pointer;
   opacity: 1;
   transform: translateX(-50%);
@@ -43512,73 +43517,6 @@ html, body {
 .studio-canvas-main.is-segment-editor .studio-segment-editor__brand-add:focus-visible {
   outline: 2px solid rgba(129, 140, 248, 0.42);
   outline-offset: 3px;
-}
-
-.studio-canvas-main.is-segment-editor .studio-segment-editor__brand-add-icon {
-  display: inline-grid;
-  place-items: center;
-  width: 27px;
-  height: 27px;
-  flex: 0 0 27px;
-  border: 1px solid rgba(191, 219, 254, 0.2);
-  border-radius: 9px;
-  background: linear-gradient(145deg, rgba(124, 58, 237, 0.72), rgba(37, 99, 235, 0.62));
-  color: rgba(255, 255, 255, 0.96);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
-}
-
-.studio-canvas-main.is-segment-editor .studio-segment-editor__brand-add-icon svg {
-  width: 16px;
-  height: 16px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.7;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.studio-canvas-main.is-segment-editor .studio-segment-editor__brand-add-copy {
-  display: grid;
-  flex: 1 1 auto;
-  gap: 2px;
-  min-width: 0;
-  text-align: left;
-}
-
-.studio-canvas-main.is-segment-editor .studio-segment-editor__brand-add-copy strong,
-.studio-canvas-main.is-segment-editor .studio-segment-editor__brand-add-copy small {
-  overflow: hidden;
-  line-height: 1;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.studio-canvas-main.is-segment-editor .studio-segment-editor__brand-add-copy strong {
-  font-size: 0.68rem;
-  font-weight: 820;
-}
-
-.studio-canvas-main.is-segment-editor .studio-segment-editor__brand-add-copy small {
-  color: rgba(203, 213, 225, 0.62);
-  font-size: 0.5rem;
-  font-weight: 650;
-}
-
-.studio-canvas-main.is-segment-editor .studio-segment-editor__brand-add-arrow {
-  width: 13px;
-  height: 13px;
-  flex: 0 0 13px;
-  fill: none;
-  stroke: rgba(191, 219, 254, 0.74);
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  transition: transform 0.16s ease;
-}
-
-.studio-canvas-main.is-segment-editor .studio-segment-editor__brand-add:hover .studio-segment-editor__brand-add-arrow,
-.studio-canvas-main.is-segment-editor .studio-segment-editor__brand-add:focus-visible .studio-segment-editor__brand-add-arrow {
-  transform: translateX(2px);
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__brand-overlay--thumb,

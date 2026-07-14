@@ -14,8 +14,7 @@ describe("workspace segment editor brand UI", () => {
 
     const button = screen.getByRole("button", { name: "Добавить бренд" });
 
-    expect(button.textContent).toContain("Бренд");
-    expect(button.textContent).toContain("Лого или текст");
+    expect(button.textContent).toBe("Бренд");
   });
 
   it("uses the compact brand edit label on editable overlays", () => {
