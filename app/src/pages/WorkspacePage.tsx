@@ -611,6 +611,8 @@ import {
   SEGMENT_EDITOR_PREPARING_RETRY_DELAY_MS,
   SEGMENT_EDITOR_TIMELINE_STANDARD_FIT_SLOTS,
   getWorkspaceSegmentEditorSessionUrl,
+  getWorkspaceStudioIdeaSuggestionRotation,
+  getWorkspaceStudioIdeaSuggestions,
   WORKSPACE_CHECKOUT_REQUEST_TIMEOUT_MS,
   isWorkspaceSegmentEditorNotFoundError,
   isWorkspaceSegmentEditorProjectUnavailableError,
@@ -1788,6 +1790,9 @@ export function WorkspacePage({
   const [createMode, setCreateMode] = useState<StudioCreateMode>("default");
   const lastStudioCreateModeRef = useRef<StudioCreateMode>(initialStudioCreateMode);
   const [topicInput, setTopicInput] = useState("");
+  const [studioIdeaSuggestionRotation, setStudioIdeaSuggestionRotation] = useState(
+    getWorkspaceStudioIdeaSuggestionRotation,
+  );
   const [isStudioIdeaPromptImproving, setIsStudioIdeaPromptImproving] = useState(false);
   const [adaptingVoiceTextSegmentIndex, setAdaptingVoiceTextSegmentIndex] = useState<number | null>(null);
   const [adaptedVoiceTextOriginal, setAdaptedVoiceTextOriginal] = useState<{
@@ -24957,18 +24962,10 @@ export function WorkspacePage({
     isPreviewStageVisible: shouldRenderStudioPreviewStage,
     isWelcomeVisible: shouldShowStudioWelcomeCard,
   });
-  const studioIdeaEmptyStateSuggestions =
-    locale === "en"
-      ? [
-          "3 surprising facts about house cats",
-          "A product Short that makes people want to try it",
-          "A short story with an unexpected ending",
-        ]
-      : [
-          "3 неожиданных факта о домашних кошках",
-          "Рекламный Shorts, после которого хочется попробовать продукт",
-          "Короткая история с неожиданной развязкой",
-        ];
+  const studioIdeaEmptyStateSuggestions = getWorkspaceStudioIdeaSuggestions(
+    locale,
+    studioIdeaSuggestionRotation,
+  );
   const contentPlanPanel = shouldRenderStudioContentPlanRail ? (
     <WorkspaceContentPlanPanel
       activePlanId={activeContentPlanId}
@@ -36559,13 +36556,13 @@ export function WorkspacePage({
                     <div className="studio-idea-empty-state__copy">
                       <span>{workspaceText(locale, "НОВЫЙ SHORTS", "NEW SHORT")}</span>
                       <h2 id="studio-idea-empty-state-title">
-                        {workspaceText(locale, "Создайте свой следующий Shorts", "Create your next Short")}
+                        {workspaceText(locale, "Создайте свой Shorts", "Create your Short")}
                       </h2>
                       <p id="studio-idea-empty-state-description">
                         {workspaceText(
                           locale,
-                          "Опишите идею в поле ниже или выберите готовое направление.",
-                          "Describe your idea below or choose a ready-made direction.",
+                          "Опишите идею в поле ниже или выберите подходящий шаблон.",
+                          "Describe your idea below or choose a useful template.",
                         )}
                       </p>
                     </div>
@@ -36573,28 +36570,41 @@ export function WorkspacePage({
                       className="studio-idea-empty-state__suggestions"
                       aria-label={workspaceText(locale, "Примеры идей", "Idea examples")}
                     >
-                      {studioIdeaEmptyStateSuggestions.map((suggestion, index) => (
+                      {studioIdeaEmptyStateSuggestions.map((suggestion) => (
                         <button
-                          key={suggestion}
+                          key={`${suggestion.category}:${suggestion.prompt}`}
                           type="button"
-                          onClick={() => handleStudioIdeaSuggestionSelect(suggestion)}
+                          onClick={() => handleStudioIdeaSuggestionSelect(suggestion.prompt)}
                         >
-                          <span aria-hidden="true">{index + 1}</span>
-                          <strong>{suggestion}</strong>
+                          <span>{suggestion.category}</span>
+                          <strong>{suggestion.prompt}</strong>
                           <svg viewBox="0 0 24 24" aria-hidden="true">
                             <path d="m9 6 6 6-6 6" />
                           </svg>
                         </button>
                       ))}
                     </div>
-                    <button className="studio-idea-empty-state__guide" type="button" onClick={openStudioWelcomeCard}>
-                      <svg viewBox="0 0 24 24" aria-hidden="true">
-                        <circle cx="12" cy="12" r="9" />
-                        <path d="M9.8 9a2.35 2.35 0 0 1 4.57.78c0 1.74-2.37 2.05-2.37 3.72" />
-                        <path d="M12 17h.01" />
-                      </svg>
-                      {workspaceText(locale, "Как это работает?", "How does it work?")}
-                    </button>
+                    <div className="studio-idea-empty-state__actions">
+                      <button className="studio-idea-empty-state__guide" type="button" onClick={openStudioWelcomeCard}>
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <circle cx="12" cy="12" r="9" />
+                          <path d="M9.8 9a2.35 2.35 0 0 1 4.57.78c0 1.74-2.37 2.05-2.37 3.72" />
+                          <path d="M12 17h.01" />
+                        </svg>
+                        {workspaceText(locale, "Как это работает?", "How does it work?")}
+                      </button>
+                      <button
+                        className="studio-idea-empty-state__guide is-refresh"
+                        type="button"
+                        onClick={() => setStudioIdeaSuggestionRotation((current) => current + 1)}
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M20 7v5h-5" />
+                          <path d="M18.4 16a8 8 0 1 1 .8-7.7L20 12" />
+                        </svg>
+                        {workspaceText(locale, "Другие идеи", "More ideas")}
+                      </button>
+                    </div>
                   </section>
                 ) : null}
                 {shouldRenderStudioPreviewStage ? (

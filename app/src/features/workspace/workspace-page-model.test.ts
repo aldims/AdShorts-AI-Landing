@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  getWorkspaceStudioIdeaSuggestionRotation,
+  getWorkspaceStudioIdeaSuggestions,
   getWorkspaceSegmentEditorSessionUrl,
   getPublishBootstrapForPlatform,
   getPublishChannelsForPlatform,
@@ -177,6 +179,32 @@ describe("studio idea empty state", () => {
   it("disappears as soon as the user starts an idea", () => {
     expect(shouldShowWorkspaceStudioIdeaEmptyState({ ...emptyStudio, hasTopicInput: true })).toBe(false);
     expect(shouldShowWorkspaceStudioIdeaEmptyState({ ...emptyStudio, hasComposerSourceIdea: true })).toBe(false);
+  });
+
+  it("rotates through diverse suggestion packs and wraps safely", () => {
+    const firstPack = getWorkspaceStudioIdeaSuggestions("ru", 0);
+    const secondPack = getWorkspaceStudioIdeaSuggestions("ru", 1);
+
+    expect(firstPack).toHaveLength(3);
+    expect(secondPack).toHaveLength(3);
+    expect(secondPack).not.toEqual(firstPack);
+    expect(getWorkspaceStudioIdeaSuggestions("ru", 5)).toEqual(firstPack);
+    expect(getWorkspaceStudioIdeaSuggestions("ru", -1)).toEqual(getWorkspaceStudioIdeaSuggestions("ru", 4));
+    expect(getWorkspaceStudioIdeaSuggestions("ru", Number.NaN)).toEqual(firstPack);
+  });
+
+  it("changes the initial suggestion pack once per day", () => {
+    expect(getWorkspaceStudioIdeaSuggestionRotation(0)).toBe(0);
+    expect(getWorkspaceStudioIdeaSuggestionRotation(86_399_999)).toBe(0);
+    expect(getWorkspaceStudioIdeaSuggestionRotation(86_400_000)).toBe(1);
+  });
+
+  it("keeps all prompts unique across a complete rotation", () => {
+    const prompts = Array.from({ length: 5 }, (_, rotation) =>
+      getWorkspaceStudioIdeaSuggestions("ru", rotation).map((suggestion) => suggestion.prompt),
+    ).flat();
+
+    expect(new Set(prompts).size).toBe(prompts.length);
   });
 });
 

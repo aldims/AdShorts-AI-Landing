@@ -1390,3 +1390,80 @@ export const shouldShowWorkspaceStudioIdeaEmptyState = (options: {
   !options.isContentPlanVisible &&
   !options.hasTopicInput &&
   !options.hasComposerSourceIdea;
+
+export type WorkspaceStudioIdeaSuggestion = {
+  category: string;
+  prompt: string;
+};
+
+const WORKSPACE_STUDIO_IDEA_SUGGESTION_ROTATION_INTERVAL_MS = 24 * 60 * 60 * 1_000;
+
+const workspaceStudioIdeaSuggestionPacks: Record<
+  Locale,
+  ReadonlyArray<ReadonlyArray<WorkspaceStudioIdeaSuggestion>>
+> = {
+  ru: [
+    [
+      { category: "Польза", prompt: "3 ошибки в [вашей теме], которые совершают почти все" },
+      { category: "Продажи", prompt: "Покажите продукт: проблема → решение → результат" },
+      { category: "История", prompt: "Всё шло по плану, пока не случилось неожиданное" },
+    ],
+    [
+      { category: "Эксперт", prompt: "Объясните сложную тему простыми словами за 30 секунд" },
+      { category: "Результат", prompt: "До и после: покажите заметный результат" },
+      { category: "Разбор", prompt: "Разберите популярный миф и покажите, как на самом деле" },
+    ],
+    [
+      { category: "Советы", prompt: "5 быстрых советов, которые можно применить сегодня" },
+      { category: "Сравнение", prompt: "Сравните два подхода и помогите выбрать лучший" },
+      { category: "FAQ", prompt: "Ответьте на вопрос, который клиенты задают чаще всего" },
+    ],
+    [
+      { category: "Факт", prompt: "Неожиданный факт, который меняет взгляд на привычную вещь" },
+      { category: "Кейс", prompt: "Мини-кейс: задача, решение и результат в цифрах" },
+      { category: "Хук", prompt: "Начните с провокационного вопроса и дайте ясный ответ" },
+    ],
+    [
+      { category: "Процесс", prompt: "Покажите путь изнутри: от первого шага до результата" },
+      { category: "Продажи", prompt: "3 причины попробовать [продукт или услугу] сейчас" },
+      { category: "Клиент", prompt: "Короткая история клиента с понятным выводом" },
+    ],
+  ],
+  en: [
+    [
+      { category: "Value", prompt: "3 mistakes in [your topic] that almost everyone makes" },
+      { category: "Sales", prompt: "Show the product: problem → solution → result" },
+      { category: "Story", prompt: "Everything went to plan until something unexpected happened" },
+    ],
+    [
+      { category: "Expert", prompt: "Explain a complex topic in simple words in 30 seconds" },
+      { category: "Result", prompt: "Before and after: show a visible result" },
+      { category: "Breakdown", prompt: "Debunk a popular myth and show what really happens" },
+    ],
+    [
+      { category: "Tips", prompt: "5 quick tips people can use today" },
+      { category: "Compare", prompt: "Compare two approaches and help people choose" },
+      { category: "FAQ", prompt: "Answer the question customers ask most often" },
+    ],
+    [
+      { category: "Fact", prompt: "A surprising fact that changes how people see something familiar" },
+      { category: "Case", prompt: "Mini case study: challenge, solution and measurable result" },
+      { category: "Hook", prompt: "Open with a provocative question and give a clear answer" },
+    ],
+    [
+      { category: "Process", prompt: "Show the process from the first step to the final result" },
+      { category: "Sales", prompt: "3 reasons to try [the product or service] now" },
+      { category: "Customer", prompt: "A short customer story with a clear takeaway" },
+    ],
+  ],
+};
+
+export const getWorkspaceStudioIdeaSuggestionRotation = (timestamp = Date.now()) =>
+  Math.floor(timestamp / WORKSPACE_STUDIO_IDEA_SUGGESTION_ROTATION_INTERVAL_MS);
+
+export const getWorkspaceStudioIdeaSuggestions = (locale: Locale, rotation: number) => {
+  const packs = workspaceStudioIdeaSuggestionPacks[locale];
+  const safeRotation = Number.isFinite(rotation) ? Math.trunc(rotation) : 0;
+  const normalizedRotation = ((safeRotation % packs.length) + packs.length) % packs.length;
+  return packs[normalizedRotation];
+};
