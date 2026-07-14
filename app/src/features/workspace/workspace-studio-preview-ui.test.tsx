@@ -14,10 +14,9 @@ describe("renderWorkspaceStudioShortsGenerationStatus", () => {
     expect(screen.getByText("AI-рендер в процессе")).toBeTruthy();
     expect(screen.getByText("Создаём ваш Shorts")).toBeTruthy();
     expect(screen.getByText("Собираем сцены, озвучку и субтитры")).toBeTruthy();
-    expect(container.querySelector(".studio-generation-visual")).toBeTruthy();
-    expect(container.querySelector(".studio-generation-visual__core img")?.getAttribute("src")).toBe(
-      "/studio/generation-render-core.webp",
-    );
+    expect(container.querySelector(".studio-generation-visual")).toBeNull();
+    expect(container.querySelector(".studio-canvas-preview__generation-progress")).toBeNull();
+    expect(container.querySelector(".studio-canvas-preview__generation-kicker i")).toBeNull();
     const backgroundVideo = container.querySelector<HTMLVideoElement>(".studio-generation-background");
     expect(backgroundVideo?.autoplay).toBe(true);
     expect(backgroundVideo?.loop).toBe(true);
@@ -27,7 +26,6 @@ describe("renderWorkspaceStudioShortsGenerationStatus", () => {
     expect(backgroundVideo?.querySelector("source")?.getAttribute("src")).toBe(
       "/studio/generation-background.mp4",
     );
-    expect(container.querySelector(".studio-canvas-preview__generation-progress")).toBeTruthy();
   });
 
   it("keeps the generation status localized in English", () => {

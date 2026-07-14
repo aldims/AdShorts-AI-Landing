@@ -175,36 +175,7 @@ export const renderWorkspaceStudioShortsGenerationStatus = (locale: Locale) => (
       <source src="/studio/generation-background.mp4" type="video/mp4" />
     </video>
     <div className="studio-canvas-preview__generation-status">
-      <span className="studio-generation-visual" aria-hidden="true">
-        <span className="studio-generation-visual__ambient"></span>
-        <span className="studio-generation-visual__orbit studio-generation-visual__orbit--outer">
-          <i></i>
-          <i></i>
-        </span>
-        <span className="studio-generation-visual__orbit studio-generation-visual__orbit--inner">
-          <i></i>
-        </span>
-        <span className="studio-generation-visual__echo studio-generation-visual__echo--left"></span>
-        <span className="studio-generation-visual__echo studio-generation-visual__echo--right"></span>
-        <span className="studio-generation-visual__core">
-          <img
-            src="/studio/generation-render-core.webp"
-            alt=""
-            width="514"
-            height="900"
-            decoding="async"
-            draggable={false}
-          />
-          <span className="studio-generation-visual__scan"></span>
-          <span className="studio-generation-visual__glint"></span>
-        </span>
-        <span className="studio-generation-visual__beam"></span>
-        <span className="studio-generation-visual__particle studio-generation-visual__particle--one"></span>
-        <span className="studio-generation-visual__particle studio-generation-visual__particle--two"></span>
-        <span className="studio-generation-visual__particle studio-generation-visual__particle--three"></span>
-      </span>
       <span className="studio-canvas-preview__generation-kicker">
-        <i aria-hidden="true"></i>
         {locale === "en" ? "AI render in progress" : "AI-рендер в процессе"}
       </span>
       <strong>{locale === "en" ? "Creating your Short" : "Создаём ваш Shorts"}</strong>
@@ -212,12 +183,6 @@ export const renderWorkspaceStudioShortsGenerationStatus = (locale: Locale) => (
         {locale === "en"
           ? "Assembling scenes, voiceover and subtitles"
           : "Собираем сцены, озвучку и субтитры"}
-      </span>
-      <span className="studio-canvas-preview__generation-progress" aria-hidden="true">
-        <i></i>
-        <b></b>
-        <b></b>
-        <b></b>
       </span>
     </div>
   </>
