@@ -42772,6 +42772,105 @@ html, body {
   outline: none;
 }
 
+.studio-segment-editor__infographic-style-disclosure {
+  overflow: clip;
+  border: 1px solid rgba(103, 232, 249, 0.14);
+  border-radius: 11px;
+  background: rgba(5, 18, 30, 0.46);
+  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+
+.studio-segment-editor__infographic-style-disclosure[open] {
+  border-color: rgba(103, 232, 249, 0.24);
+  background: rgba(4, 20, 32, 0.62);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+}
+
+.studio-segment-editor__infographic-style-disclosure > summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 18px;
+  align-items: center;
+  gap: 9px;
+  min-height: 42px;
+  padding: 8px 11px;
+  color: rgba(241, 245, 249, 0.92);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.studio-segment-editor__infographic-style-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.studio-segment-editor__infographic-style-disclosure > summary:hover {
+  background: rgba(34, 211, 238, 0.045);
+}
+
+.studio-segment-editor__infographic-style-disclosure > summary:focus-visible {
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 2px rgba(34, 211, 238, 0.48);
+  outline: none;
+}
+
+.studio-segment-editor__infographic-style-disclosure > summary strong {
+  min-width: 0;
+  font-size: 0.76rem;
+  font-weight: 720;
+  line-height: 1.2;
+}
+
+.studio-segment-editor__infographic-style-disclosure > summary small {
+  color: rgba(148, 163, 184, 0.72);
+  font-size: 0.63rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.studio-segment-editor__infographic-style-disclosure > summary svg {
+  width: 16px;
+  height: 16px;
+  color: rgba(103, 232, 249, 0.78);
+  transition: transform 180ms ease;
+}
+
+.studio-segment-editor__infographic-style-disclosure > summary path {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.6;
+}
+
+.studio-segment-editor__infographic-style-disclosure[open] > summary svg {
+  transform: rotate(180deg);
+}
+
+.studio-segment-editor__infographic-style-body {
+  display: grid;
+  gap: 7px;
+  padding: 0 10px 10px;
+  animation: studio-infographic-style-reveal 170ms ease-out;
+}
+
+@keyframes studio-infographic-style-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-segment-editor__infographic-style-disclosure > summary svg,
+  .studio-segment-editor__infographic-style-body {
+    animation: none;
+    transition: none;
+  }
+}
+
 .studio-segment-editor__infographic-hint {
   display: flex;
   align-items: flex-start;

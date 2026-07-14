@@ -902,6 +902,7 @@ import {
   type WorkspaceSegmentInfographicHistory,
 } from "../features/workspace/workspace-infographic-helpers";
 import { WorkspaceSegmentInfographicOverlay } from "../features/workspace/workspace-infographic-overlay";
+import { WorkspaceInfographicStyleDisclosure } from "../features/workspace/workspace-infographic-style-disclosure";
 import type { WorkspaceMediaAssetRef } from "../../shared/workspace-media-assets";
 import { clearExamplePrefillIntent, readExamplePrefillIntent } from "../lib/example-prefill";
 import { logClientEvent } from "../lib/client-log";
@@ -35970,30 +35971,22 @@ export function WorkspacePage({
                           }}
                         />
                       </label>
-                      <label className="studio-segment-editor__infographic-field">
-                        <span>
-                          <strong>{workspaceText(locale, "Стиль инфографики — необязательно", "Infographic style — optional")}</strong>
-                          <small>{getWorkspaceSegmentInfographicCharacterCount(activeSegmentInfographicStylePrompt)}/{WORKSPACE_SEGMENT_INFOGRAPHIC_STYLE_MAX_CHARS}</small>
-                        </span>
-                        <textarea
-                          value={activeSegmentInfographicStylePrompt}
-                          rows={3}
-                          placeholder={workspaceText(locale, "Например: минимализм, белый текст, голубые акценты", "For example: minimal, white text, blue accents")}
-                          onChange={(event) => {
-                            const value = truncateWorkspaceSegmentInfographicText(
-                              event.target.value,
-                              WORKSPACE_SEGMENT_INFOGRAPHIC_STYLE_MAX_CHARS,
-                            );
-                            setSegmentEditorVideoError(null);
-                            if (activeSegment) {
-                              updateSegmentEditorDraftSegmentByIndex(activeSegment.index, (segment) => ({
-                                ...segment,
-                                infographicStylePromptDraft: value,
-                              }));
-                            }
-                          }}
-                        />
-                      </label>
+                      <WorkspaceInfographicStyleDisclosure
+                        key={`infographic-style:${activeSegment?.index ?? "none"}`}
+                        label={workspaceText(locale, "Стиль инфографики — необязательно", "Infographic style — optional")}
+                        maxCharacters={WORKSPACE_SEGMENT_INFOGRAPHIC_STYLE_MAX_CHARS}
+                        placeholder={workspaceText(locale, "Например: минимализм, белый текст, голубые акценты", "For example: minimal, white text, blue accents")}
+                        value={activeSegmentInfographicStylePrompt}
+                        onChange={(value) => {
+                          setSegmentEditorVideoError(null);
+                          if (activeSegment) {
+                            updateSegmentEditorDraftSegmentByIndex(activeSegment.index, (segment) => ({
+                              ...segment,
+                              infographicStylePromptDraft: value,
+                            }));
+                          }
+                        }}
+                      />
                       <p className="studio-segment-editor__infographic-hint">
                         <span aria-hidden="true">✦</span>
                         {workspaceText(
@@ -38979,24 +38972,20 @@ export function WorkspacePage({
                                 }}
                               />
                             </label>
-                            <label>
-                              <span>{workspaceText(locale, "Стиль инфографики — необязательно", "Infographic style — optional")}</span>
-                              <textarea
-                                className="studio-ai-photo-modal__textarea"
-                                rows={3}
-                                value={segmentAiPhotoModalSegment.infographicStylePromptDraft}
-                                onChange={(event) => {
-                                  const value = truncateWorkspaceSegmentInfographicText(
-                                    event.target.value,
-                                    WORKSPACE_SEGMENT_INFOGRAPHIC_STYLE_MAX_CHARS,
-                                  );
-                                  updateSegmentEditorDraftSegmentByIndex(segmentAiPhotoModalSegment.index, (segment) => ({
-                                    ...segment,
-                                    infographicStylePromptDraft: value,
-                                  }));
-                                }}
-                              />
-                            </label>
+                            <WorkspaceInfographicStyleDisclosure
+                              key={`infographic-modal-style:${segmentAiPhotoModalSegment.index}`}
+                              label={workspaceText(locale, "Стиль инфографики — необязательно", "Infographic style — optional")}
+                              maxCharacters={WORKSPACE_SEGMENT_INFOGRAPHIC_STYLE_MAX_CHARS}
+                              placeholder={workspaceText(locale, "Например: минимализм, белый текст, голубые акценты", "For example: minimal, white text, blue accents")}
+                              textareaClassName="studio-ai-photo-modal__textarea"
+                              value={segmentAiPhotoModalSegment.infographicStylePromptDraft}
+                              onChange={(value) => {
+                                updateSegmentEditorDraftSegmentByIndex(segmentAiPhotoModalSegment.index, (segment) => ({
+                                  ...segment,
+                                  infographicStylePromptDraft: value,
+                                }));
+                              }}
+                            />
                             <p>{workspaceText(locale, "Если стиль не указан, ИИ автоматически подберёт его под сцену.", "If no style is provided, AI will match it to the scene automatically.")}</p>
                           </div>
 
