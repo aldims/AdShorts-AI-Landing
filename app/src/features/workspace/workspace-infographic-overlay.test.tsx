@@ -253,4 +253,45 @@ describe("WorkspaceSegmentInfographicOverlay", () => {
     );
     expect(onTransformCommit).not.toHaveBeenCalled();
   });
+
+  it("keeps history and deletion available from both the toolbar and keyboard", () => {
+    const onDelete = vi.fn();
+    const onRedo = vi.fn();
+    const onUndo = vi.fn();
+    const infographic = createWorkspaceSegmentInfographic({
+      inputHash: "1".repeat(64),
+      intrinsicHeight: 1024,
+      intrinsicWidth: 1024,
+      mediaAssetId: 60,
+      sourceVisualIdentity: "asset:16",
+      text: "Keyboard controls",
+    });
+    const view = render(
+      <WorkspaceSegmentInfographicOverlay
+        canRedo
+        canUndo
+        editable
+        infographic={infographic}
+        isPlaying={false}
+        localTimeSeconds={0}
+        onDelete={onDelete}
+        onRedo={onRedo}
+        onUndo={onUndo}
+        segmentDurationSeconds={5}
+      />,
+    );
+    const object = view.getByRole("group");
+    expect(view.getByRole("toolbar", { name: "Действия с инфографикой" })).toBeTruthy();
+
+    fireEvent.click(view.getByRole("button", { name: "Отменить изменение инфографики" }));
+    fireEvent.click(view.getByRole("button", { name: "Вернуть изменение инфографики" }));
+    fireEvent.click(view.getByRole("button", { name: "Удалить инфографику" }));
+    fireEvent.keyDown(object, { ctrlKey: true, key: "z" });
+    fireEvent.keyDown(object, { ctrlKey: true, key: "z", shiftKey: true });
+    fireEvent.keyDown(object, { key: "Delete" });
+
+    expect(onUndo).toHaveBeenCalledTimes(2);
+    expect(onRedo).toHaveBeenCalledTimes(2);
+    expect(onDelete).toHaveBeenCalledTimes(2);
+  });
 });

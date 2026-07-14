@@ -293,7 +293,11 @@ export const WorkspaceSegmentInfographicOverlay = ({
                 aria-hidden="true"
               />
             ))}
-            <span className="studio-segment-infographic__toolbar">
+            <span
+              className="studio-segment-infographic__toolbar"
+              role="toolbar"
+              aria-label="Действия с инфографикой"
+            >
               <button
                 type="button"
                 aria-label="Отменить изменение инфографики"
