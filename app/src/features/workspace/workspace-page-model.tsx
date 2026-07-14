@@ -507,6 +507,7 @@ export type WorkspaceSegmentImageEditRequest = WorkspaceSegmentImageUpscaleReque
 };
 
 export type WorkspaceSegmentInfographicRequest = {
+  draftId?: string;
   idempotencyKey: string;
   projectId: number;
   segmentIndex: number;
@@ -646,6 +647,7 @@ export type WorkspaceSegmentInfographicJobAsset = StudioCustomVideoFile & {
 export type WorkspaceSegmentInfographicJobStatusResponse = {
   data?: Omit<WorkspaceSegmentImageUpscaleJobStatusPayload, "asset"> & {
     asset?: WorkspaceSegmentInfographicJobAsset;
+    draftId?: string;
     projectId?: number;
     requestFingerprint?: string;
     segmentIndex?: number;

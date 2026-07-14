@@ -88,4 +88,21 @@ describe("workspace infographic pending-job storage", () => {
 
     expect(readStoredWorkspaceSegmentInfographicJobs(EMAIL)).toEqual([]);
   });
+
+  it("round-trips scratch jobs only when they carry their stable draft id", () => {
+    const scratchJob = buildJob({
+      draftId: "scratch:infographic-draft",
+      projectId: 0,
+      requestFingerprint: '{"projectId":0,"draftId":"scratch:infographic-draft"}',
+    });
+    upsertStoredWorkspaceSegmentInfographicJob(EMAIL, scratchJob);
+
+    expect(readStoredWorkspaceSegmentInfographicJobs(EMAIL)).toEqual([scratchJob]);
+
+    upsertStoredWorkspaceSegmentInfographicJob(EMAIL, buildJob({ draftId: undefined, projectId: 0 }));
+    expect(readStoredWorkspaceSegmentInfographicJobs(EMAIL)).toEqual([]);
+
+    upsertStoredWorkspaceSegmentInfographicJob(EMAIL, buildJob({ draftId: "project:42", projectId: 0 }));
+    expect(readStoredWorkspaceSegmentInfographicJobs(EMAIL)).toEqual([]);
+  });
 });

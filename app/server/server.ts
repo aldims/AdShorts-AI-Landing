@@ -4239,6 +4239,7 @@ app.post("/api/studio/segment-infographic/jobs", async (req, res) => {
   const idempotencyKey = typeof req.body?.idempotencyKey === "string" ? req.body.idempotencyKey.trim() : "";
   const language = typeof req.body?.language === "string" ? req.body.language.trim() : "";
   const projectId = Number(req.body?.projectId ?? 0);
+  const draftId = typeof req.body?.draftId === "string" ? req.body.draftId.trim() : "";
   const segmentIndex = normalizeRequiredJsonNonNegativeInteger(req.body?.segmentIndex);
   const sourceMediaAssetId = normalizeRequestPositiveInteger(req.body?.sourceMediaAssetId);
 
@@ -4254,8 +4255,12 @@ app.post("/api/studio/segment-infographic/jobs", async (req, res) => {
     res.status(400).json({ error: "Source media asset id is required." });
     return;
   }
-  if (!Number.isInteger(projectId) || projectId <= 0) {
-    res.status(400).json({ error: "Project id is required." });
+  if (!Number.isInteger(projectId) || projectId < 0 || (projectId === 0 && !draftId)) {
+    res.status(400).json({ error: "Project id or draft id is required." });
+    return;
+  }
+  if (projectId === 0 && !/^scratch:[A-Za-z0-9:_-]{1,192}$/.test(draftId)) {
+    res.status(400).json({ error: "A valid scratch draft id is required." });
     return;
   }
   if (segmentIndex === undefined) {
@@ -4269,6 +4274,7 @@ app.post("/api/studio/segment-infographic/jobs", async (req, res) => {
 
   try {
     const job = await createStudioSegmentInfographicJob(text, session.user, {
+      draftId: projectId === 0 ? draftId : undefined,
       idempotencyKey,
       language,
       projectId,

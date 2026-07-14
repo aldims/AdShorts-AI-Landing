@@ -341,6 +341,7 @@ type AdsflowSegmentAiPhotoJobCreateResponse = {
 
 type AdsflowSegmentAiPhotoJobStatusResponse = {
   asset?: AdsflowSegmentAiPhotoAssetPayload | null;
+  draft_id?: string | null;
   error?: string | null;
   job_id?: string;
   project_id?: number | string | null;
@@ -620,6 +621,7 @@ export type StudioSegmentAiPhotoJob = {
 
 export type StudioSegmentAiPhotoJobStatus = {
   asset?: StudioGeneratedImageAsset;
+  draftId?: string;
   error?: string;
   jobId: string;
   profile: WorkspaceProfile;
@@ -7404,6 +7406,7 @@ export async function createStudioSegmentInfographicJob(
   text: string,
   user: StudioUser,
   options: {
+    draftId?: string;
     idempotencyKey: string;
     language?: string;
     projectId: number;
@@ -7419,7 +7422,8 @@ export async function createStudioSegmentInfographicJob(
   const normalizedIdempotencyKey = String(options.idempotencyKey ?? "").trim();
   const sourceMediaAssetId = normalizePositiveInteger(options.sourceMediaAssetId);
   const segmentIndex = normalizeNonNegativeInteger(options.segmentIndex);
-  const projectId = normalizePositiveInteger(options.projectId);
+  const projectId = normalizeNonNegativeInteger(options.projectId);
+  const draftId = normalizeGenerationText(options.draftId);
 
   if (!normalizedText || Array.from(normalizedText).length > 160) {
     throw new Error("Infographic text must contain between 1 and 160 characters.");
@@ -7430,8 +7434,11 @@ export async function createStudioSegmentInfographicJob(
   if (!sourceMediaAssetId) {
     throw new Error("Source media asset id is required.");
   }
-  if (!projectId) {
-    throw new Error("Project id is required.");
+  if (projectId === null || (projectId === 0 && !draftId)) {
+    throw new Error("Project id or draft id is required.");
+  }
+  if (projectId === 0 && !/^scratch:[A-Za-z0-9:_-]{1,192}$/.test(draftId)) {
+    throw new Error("A valid scratch draft id is required.");
   }
   if (segmentIndex === null) {
     throw new Error("Segment index is required.");
@@ -7446,6 +7453,7 @@ export async function createStudioSegmentInfographicJob(
     "/api/web/segment-infographic/jobs",
     {
       admin_token: env.adsflowAdminToken,
+      draft_id: projectId === 0 ? draftId : undefined,
       external_user_id: externalUserId,
       idempotency_key: normalizedIdempotencyKey,
       language: normalizeStudioLanguage(options.language),
@@ -7492,12 +7500,14 @@ export async function getStudioSegmentInfographicJobStatus(
   const status = String(payload.status ?? "queued").trim() || "queued";
   const safeJobId = String(payload.job_id ?? jobId).trim() || String(jobId ?? "").trim();
   const asset = payload.asset ? await normalizeAdsflowSegmentAiPhotoAsset(payload.asset) : undefined;
-  const projectId = normalizePositiveInteger(payload.project_id);
+  const projectId = normalizeNonNegativeInteger(payload.project_id);
+  const draftId = normalizeGenerationText(payload.draft_id);
   const requestFingerprint = normalizeGenerationText(payload.request_fingerprint);
   const segmentIndex = normalizeNonNegativeInteger(payload.segment_index);
 
   return {
     asset,
+    draftId: draftId || undefined,
     error: normalizeGenerationText(payload.error) || undefined,
     jobId: safeJobId,
     profile: await enrichWorkspaceProfile(payload.user ?? undefined, {

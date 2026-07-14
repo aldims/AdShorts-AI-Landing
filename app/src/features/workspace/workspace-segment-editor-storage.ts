@@ -1328,7 +1328,10 @@ const isStoredWorkspaceSegmentInfographicJob = (value: unknown): value is Stored
       job.sourceMediaAssetId > 0 &&
       /^asset:[1-9]\d*$/.test(job.sourceVisualIdentity) &&
       Number.isInteger(job.projectId) &&
-      job.projectId > 0 &&
+      (
+        job.projectId > 0 ||
+        (job.projectId === 0 && /^scratch:[A-Za-z0-9:_-]{1,192}$/.test(job.draftId ?? ""))
+      ) &&
       Number.isInteger(job.segmentIndex),
   );
 };

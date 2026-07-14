@@ -19239,14 +19239,20 @@ export function WorkspacePage({
     session.email,
   ]);
 
-  const getSegmentInfographicRequestFingerprint = (request: WorkspaceSegmentInfographicRequest) =>
-    JSON.stringify({
+  const getSegmentInfographicRequestFingerprint = (request: WorkspaceSegmentInfographicRequest) => {
+    const fingerprint = {
       projectId: request.projectId,
       segmentIndex: request.segmentIndex,
       sourceMediaAssetId: request.sourceMediaAssetId,
       stylePrompt: request.stylePrompt ?? "",
       text: request.text,
-    });
+    };
+    return JSON.stringify(
+      request.draftId
+        ? { ...fingerprint, draftId: request.draftId }
+        : fingerprint,
+    );
+  };
 
   const pollSegmentEditorInfographicJob = async (
     job: StoredWorkspaceSegmentInfographicJob,
@@ -19257,6 +19263,7 @@ export function WorkspacePage({
       throw new Error("Не удалось запустить создание инфографики.");
     }
     const expectedFingerprint = getSegmentInfographicRequestFingerprint({
+      ...(job.projectId === 0 && job.draftId ? { draftId: job.draftId } : {}),
       idempotencyKey: job.idempotencyKey,
       projectId: job.projectId,
       segmentIndex: job.segmentIndex,
@@ -19321,6 +19328,8 @@ export function WorkspacePage({
           throw new Error(payload?.error ?? "Не удалось получить статус создания инфографики.");
         }
         if (!isWorkspaceSegmentInfographicJobResultContextValid({
+          draftId: payload.data.draftId,
+          expectedDraftId: job.projectId === 0 ? job.draftId : undefined,
           expectedProjectId: job.projectId,
           expectedRequestFingerprint: job.serverRequestFingerprint,
           expectedSegmentIndex: job.segmentIndex,
@@ -19507,11 +19516,11 @@ export function WorkspacePage({
       setSegmentEditorVideoError("Дождитесь завершения текущей операции с сегментом.");
       return;
     }
-    const projectId = getPositiveWorkspaceMediaAssetId(currentDraft.projectId);
-    const sourceMediaAssetId = getWorkspaceSegmentSceneSoundVisualAssetId(targetSegment);
-    const sourceVisualIdentity = getWorkspaceSegmentInfographicSourceVisualIdentity(sourceMediaAssetId);
-    if (!projectId || !sourceMediaAssetId || !sourceVisualIdentity) {
-      setSegmentEditorVideoError("Сначала сохраните визуал сегмента, чтобы создать инфографику.");
+    const persistedProjectId = getPositiveWorkspaceMediaAssetId(currentDraft.projectId);
+    const projectId = persistedProjectId ?? 0;
+    const draftId = getWorkspaceSegmentEditorDraftId(currentDraft) ?? undefined;
+    if (!persistedProjectId && !draftId) {
+      setSegmentEditorVideoError("Не удалось определить черновик сцены. Обновите страницу и попробуйте ещё раз.");
       return;
     }
     if (workspaceBalance !== null && workspaceBalance < STUDIO_SEGMENT_INFOGRAPHIC_CREDIT_COST) {
@@ -19520,15 +19529,6 @@ export function WorkspacePage({
       return;
     }
 
-    const idempotencyKey = createWorkspaceSegmentInfographicIdempotencyKey();
-    const request: WorkspaceSegmentInfographicRequest = {
-      idempotencyKey,
-      projectId,
-      segmentIndex: targetSegmentIndex,
-      sourceMediaAssetId,
-      ...(stylePrompt ? { stylePrompt } : {}),
-      text,
-    };
     const runId = startSegmentVisualRun(
       segmentInfographicRunRef,
       setSegmentEditorGeneratingInfographicRunIds,
@@ -19538,6 +19538,42 @@ export function WorkspacePage({
     setInsufficientCreditsContext(null);
     let pollStarted = false;
     try {
+      let sourceMediaAssetId = getWorkspaceSegmentSceneSoundVisualAssetId(targetSegment);
+      const draftVisualAsset = getWorkspaceSegmentDraftVisualAsset(targetSegment);
+      if (!sourceMediaAssetId && draftVisualAsset) {
+        sourceMediaAssetId = (await ensureStudioUploadedAssetId(draftVisualAsset, {
+          fallbackFileName: draftVisualAsset.fileName || `segment-visual-${targetSegmentIndex + 1}.bin`,
+          fallbackMimeType: draftVisualAsset.mimeType,
+          kind: "segment_source",
+          language: selectedLanguage,
+          mediaType: getWorkspaceSegmentCustomPreviewKind(draftVisualAsset) === "image" ? "photo" : "video",
+          projectId: persistedProjectId ?? undefined,
+          role: "segment_source",
+          segmentIndex: targetSegmentIndex,
+        })) ?? undefined;
+
+        if (sourceMediaAssetId) {
+          updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) =>
+            applyWorkspaceSegmentSceneSoundVisualAssetId(segment, sourceMediaAssetId as number),
+          );
+        }
+      }
+
+      const sourceVisualIdentity = getWorkspaceSegmentInfographicSourceVisualIdentity(sourceMediaAssetId);
+      if (!sourceMediaAssetId || !sourceVisualIdentity) {
+        throw new Error("Не удалось сохранить визуал сцены для создания инфографики.");
+      }
+
+      const idempotencyKey = createWorkspaceSegmentInfographicIdempotencyKey();
+      const request: WorkspaceSegmentInfographicRequest = {
+        ...(persistedProjectId ? {} : { draftId }),
+        idempotencyKey,
+        projectId,
+        segmentIndex: targetSegmentIndex,
+        sourceMediaAssetId,
+        ...(stylePrompt ? { stylePrompt } : {}),
+        text,
+      };
       let response: Response | null = null;
       let payload: WorkspaceSegmentInfographicJobCreateResponse | null = null;
       for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -19574,7 +19610,7 @@ export function WorkspacePage({
       }
       const job: StoredWorkspaceSegmentInfographicJob = {
         createdAt: Date.now(),
-        draftId: getWorkspaceSegmentEditorDraftId(currentDraft) ?? undefined,
+        draftId: persistedProjectId ? undefined : draftId,
         idempotencyKey,
         jobId: payload.data.jobId,
         projectId,
@@ -19599,7 +19635,11 @@ export function WorkspacePage({
       pollStarted = true;
       await pollSegmentEditorInfographicJob(job, runId);
     } catch (error) {
-      if ((segmentEditorDraftRef.current ?? segmentEditorDraft)?.projectId === projectId) {
+      const activeDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+      if (
+        activeDraft?.projectId === projectId &&
+        getWorkspaceSegmentEditorDraftId(activeDraft) === draftId
+      ) {
         setSegmentEditorVideoError(error instanceof Error ? error.message : "Не удалось создать инфографику.");
       }
     } finally {
@@ -19631,7 +19671,7 @@ export function WorkspacePage({
       job.segmentIndex,
     );
     void pollSegmentEditorInfographicJob(job, runId).catch((error) => {
-      if (segmentEditorDraftRef.current?.projectId === job.projectId) {
+      if (isStoredWorkspaceSegmentJobForDraft(job, segmentEditorDraftRef.current)) {
         setSegmentEditorVideoError(error instanceof Error ? error.message : "Не удалось создать инфографику.");
       }
     });

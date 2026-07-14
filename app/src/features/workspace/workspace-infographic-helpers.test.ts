@@ -56,6 +56,40 @@ describe("workspace infographic helpers", () => {
     })).toBe(false);
   });
 
+  it("accepts a scratch job only for the originating draft", () => {
+    const expected = {
+      expectedDraftId: "scratch:current",
+      expectedProjectId: 0,
+      expectedRequestFingerprint: "scratch-request",
+      expectedSegmentIndex: 0,
+      projectId: 0,
+      requestFingerprint: "scratch-request",
+      segmentIndex: 0,
+    };
+
+    expect(isWorkspaceSegmentInfographicJobResultContextValid({
+      ...expected,
+      draftId: "scratch:current",
+    })).toBe(true);
+    expect(isWorkspaceSegmentInfographicJobResultContextValid({
+      ...expected,
+      draftId: "scratch:other",
+    })).toBe(false);
+    expect(isWorkspaceSegmentInfographicJobResultContextValid(expected)).toBe(false);
+  });
+
+  it("keeps persisted-project status compatible without a scratch draft id", () => {
+    expect(isWorkspaceSegmentInfographicJobResultContextValid({
+      expectedDraftId: "project:42",
+      expectedProjectId: 42,
+      expectedRequestFingerprint: "persisted-request",
+      expectedSegmentIndex: 1,
+      projectId: 42,
+      requestFingerprint: "persisted-request",
+      segmentIndex: 1,
+    })).toBe(true);
+  });
+
   it("preserves paid pending jobs when network or 5xx status polling is exhausted", () => {
     expect(getWorkspaceSegmentInfographicStatusFailureAction({
       failureCount: 5,

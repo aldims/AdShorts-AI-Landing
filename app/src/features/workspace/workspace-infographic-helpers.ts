@@ -425,16 +425,25 @@ export const getWorkspaceSegmentInfographicSourceVisualIdentity = (mediaAssetId:
 };
 
 export const isWorkspaceSegmentInfographicJobResultContextValid = (options: {
+  draftId?: string;
+  expectedDraftId?: string;
   expectedProjectId: number;
   expectedRequestFingerprint: string;
   expectedSegmentIndex: number;
   projectId?: number;
   requestFingerprint?: string;
   segmentIndex?: number;
-}) =>
-  options.projectId === options.expectedProjectId &&
-  options.requestFingerprint === options.expectedRequestFingerprint &&
-  options.segmentIndex === options.expectedSegmentIndex;
+}) => {
+  const expectedDraftId = String(options.expectedDraftId ?? "").trim();
+  const draftId = String(options.draftId ?? "").trim();
+  const requiresScratchDraftIdentity = options.expectedProjectId === 0;
+  return (
+    options.projectId === options.expectedProjectId &&
+    (!requiresScratchDraftIdentity || (Boolean(expectedDraftId) && draftId === expectedDraftId)) &&
+    options.requestFingerprint === options.expectedRequestFingerprint &&
+    options.segmentIndex === options.expectedSegmentIndex
+  );
+};
 
 export type WorkspaceSegmentInfographicStatusFailureAction = "preserve" | "remove" | "retry";
 
