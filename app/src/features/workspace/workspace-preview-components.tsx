@@ -676,6 +676,23 @@ type WorkspaceModalVideoPlayerProps = {
   onVolumeChange?: (nextVolume: number) => void;
 };
 
+type WorkspaceFullscreenElement = HTMLDivElement & {
+  webkitRequestFullscreen?: () => Promise<void> | void;
+};
+
+type WorkspaceFullscreenDocument = Document & {
+  webkitExitFullscreen?: () => Promise<void> | void;
+  webkitFullscreenElement?: Element | null;
+};
+
+type WorkspaceFullscreenVideoElement = HTMLVideoElement & {
+  webkitDisplayingFullscreen?: boolean;
+  webkitEnterFullscreen?: () => void;
+  webkitExitFullscreen?: () => void;
+};
+
+const workspaceFullscreenBodyClass = "studio-video-fullscreen-open";
+
 const clampWorkspaceModalPlayerVolume = (value: number) => {
   if (!Number.isFinite(value)) {
     return 0;
@@ -733,11 +750,13 @@ export function WorkspaceModalVideoPlayer({
   onVolumeChange,
 }: WorkspaceModalVideoPlayerProps) {
   const { locale } = useLocale();
+  const playerRef = useRef<WorkspaceFullscreenElement | null>(null);
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const lastNonZeroVolumeRef = useRef(Math.max(0.2, clampWorkspaceModalPlayerVolume(volume)));
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isPlaying, setIsPlaying] = useState(autoPlay);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const shouldPreferMutedAutoplay = autoPlay && preferMutedAutoplay;
   const [isActuallyMuted, setIsActuallyMuted] = useState(shouldPreferMutedAutoplay || clampWorkspaceModalPlayerVolume(volume) <= 0);
   const safeVolume = clampWorkspaceModalPlayerVolume(volume);
@@ -780,6 +799,64 @@ export function WorkspaceModalVideoPlayer({
     setIsPlaying(autoPlay);
     setIsActuallyMuted(shouldPreferMutedAutoplay || safeVolume <= 0);
   }, [autoPlay, shouldPreferMutedAutoplay, videoKey]);
+
+  useEffect(() => {
+    const player = playerRef.current;
+    const video = localVideoRef.current as WorkspaceFullscreenVideoElement | null;
+    const fullscreenDocument = document as WorkspaceFullscreenDocument;
+    const syncFullscreenState = () => {
+      setIsFullscreen(
+        document.fullscreenElement === player ||
+        fullscreenDocument.webkitFullscreenElement === player ||
+        Boolean(video?.webkitDisplayingFullscreen),
+      );
+    };
+    const handleWebkitBeginFullscreen = () => setIsFullscreen(true);
+    const handleWebkitEndFullscreen = () => setIsFullscreen(false);
+
+    syncFullscreenState();
+    document.addEventListener("fullscreenchange", syncFullscreenState);
+    document.addEventListener("webkitfullscreenchange", syncFullscreenState);
+    video?.addEventListener("webkitbeginfullscreen", handleWebkitBeginFullscreen);
+    video?.addEventListener("webkitendfullscreen", handleWebkitEndFullscreen);
+
+    return () => {
+      document.removeEventListener("fullscreenchange", syncFullscreenState);
+      document.removeEventListener("webkitfullscreenchange", syncFullscreenState);
+      video?.removeEventListener("webkitbeginfullscreen", handleWebkitBeginFullscreen);
+      video?.removeEventListener("webkitendfullscreen", handleWebkitEndFullscreen);
+    };
+  }, [videoKey]);
+
+  useEffect(() => {
+    if (!isFullscreen) {
+      return undefined;
+    }
+
+    const previousBodyOverflow = document.body.style.overflow;
+    const bodyHadFullscreenClass = document.body.classList.contains(workspaceFullscreenBodyClass);
+    const handleFullscreenEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") {
+        return;
+      }
+      const fullscreenDocument = document as WorkspaceFullscreenDocument;
+      if (!document.fullscreenElement && !fullscreenDocument.webkitFullscreenElement) {
+        event.preventDefault();
+        setIsFullscreen(false);
+      }
+    };
+
+    document.body.style.overflow = "hidden";
+    document.body.classList.add(workspaceFullscreenBodyClass);
+    document.addEventListener("keydown", handleFullscreenEscape);
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      if (!bodyHadFullscreenClass) {
+        document.body.classList.remove(workspaceFullscreenBodyClass);
+      }
+      document.removeEventListener("keydown", handleFullscreenEscape);
+    };
+  }, [isFullscreen]);
 
   useEffect(() => {
     const element = localVideoRef.current;
@@ -831,6 +908,59 @@ export function WorkspaceModalVideoPlayer({
     updateVolume(0);
   }, [isActuallyMuted, safeVolume, updateVolume]);
 
+  const handleToggleFullscreen = useCallback(async () => {
+    const player = playerRef.current;
+    const video = localVideoRef.current as WorkspaceFullscreenVideoElement | null;
+    if (!player) {
+      return;
+    }
+
+    const fullscreenDocument = document as WorkspaceFullscreenDocument;
+    const activeFullscreenElement =
+      document.fullscreenElement || fullscreenDocument.webkitFullscreenElement;
+
+    try {
+      if (activeFullscreenElement) {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        } else {
+          await fullscreenDocument.webkitExitFullscreen?.();
+        }
+        setIsFullscreen(false);
+        return;
+      }
+      if (video?.webkitDisplayingFullscreen) {
+        video.webkitExitFullscreen?.();
+        setIsFullscreen(false);
+        return;
+      }
+      if (isFullscreen) {
+        setIsFullscreen(false);
+        return;
+      }
+      if (player.requestFullscreen) {
+        await player.requestFullscreen();
+        setIsFullscreen(true);
+        return;
+      }
+      if (player.webkitRequestFullscreen) {
+        await player.webkitRequestFullscreen();
+        setIsFullscreen(true);
+        return;
+      }
+      if (video?.webkitEnterFullscreen) {
+        video.webkitEnterFullscreen();
+        setIsFullscreen(true);
+        return;
+      }
+      setIsFullscreen(true);
+    } catch {
+      // Embedded browsers can expose but reject the native API. Keep the
+      // feature usable by falling back to the viewport-sized player shell.
+      setIsFullscreen(true);
+    }
+  }, [isFullscreen]);
+
   const handleSeek = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
       const element = localVideoRef.current;
@@ -852,9 +982,10 @@ export function WorkspaceModalVideoPlayer({
 
   return (
     <div
+      ref={playerRef}
       className={`studio-video-modal__player is-video${fitMode === "cover" ? " is-cover-media" : ""}${
         shouldRevealUiOnHover ? " is-hover-ui" : ""
-      }${isPlaying ? " is-playing" : ""}`}
+      }${isPlaying ? " is-playing" : ""}${isFullscreen ? " is-fullscreen" : ""}`}
     >
       <div className="studio-video-modal__player-stage" onClick={handleTogglePlayback}>
         <video
@@ -981,6 +1112,27 @@ export function WorkspaceModalVideoPlayer({
           <span className="studio-video-modal__time">
             {formatWorkspaceVideoPlayerTime(currentTime)} / {formatWorkspaceVideoPlayerTime(duration, "duration")}
           </span>
+          <button
+            className="studio-video-modal__control-btn studio-video-modal__control-btn--fullscreen"
+            type="button"
+            aria-label={
+              isFullscreen
+                ? workspaceText(locale, "Выйти из полноэкранного режима", "Exit fullscreen")
+                : workspaceText(locale, "Открыть видео во весь экран", "Open video fullscreen")
+            }
+            aria-pressed={isFullscreen}
+            onClick={handleToggleFullscreen}
+          >
+            {isFullscreen ? (
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                <path d="M8 4.5V8H4.5M12 4.5V8h3.5M8 15.5V12H4.5M12 15.5V12h3.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            ) : (
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                <path d="M8 4.5H4.5V8M12 4.5h3.5V8M8 15.5H4.5V12M12 15.5h3.5V12" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            )}
+          </button>
         </div>
       </div>
     </div>
