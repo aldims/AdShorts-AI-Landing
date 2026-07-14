@@ -177,8 +177,11 @@ describe("studio idea empty state", () => {
     expect(shouldShowWorkspaceStudioIdeaEmptyState({ ...emptyStudio, isContentPlanVisible: true })).toBe(false);
   });
 
-  it("disappears as soon as the user starts an idea", () => {
-    expect(shouldShowWorkspaceStudioIdeaEmptyState({ ...emptyStudio, hasTopicInput: true })).toBe(false);
+  it("remains visible while the user types an idea", () => {
+    expect(shouldShowWorkspaceStudioIdeaEmptyState({ ...emptyStudio, hasTopicInput: true })).toBe(true);
+  });
+
+  it("hides when an idea is controlled by the content-plan source", () => {
     expect(shouldShowWorkspaceStudioIdeaEmptyState({ ...emptyStudio, hasComposerSourceIdea: true })).toBe(false);
   });
 

@@ -1406,7 +1406,6 @@ export const shouldShowWorkspaceStudioIdeaEmptyState = (options: {
   !options.isPreviewStageVisible &&
   !options.isWelcomeVisible &&
   !options.isContentPlanVisible &&
-  !options.hasTopicInput &&
   !options.hasComposerSourceIdea;
 
 export type WorkspaceStudioIdeaSuggestion = {
