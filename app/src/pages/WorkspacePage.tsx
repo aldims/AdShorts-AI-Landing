@@ -35880,7 +35880,7 @@ export function WorkspacePage({
                     </div>
                   ) : isPromptInfographicMode ? (
                     <div className="studio-segment-editor__infographic-form">
-                      <label className="studio-segment-editor__infographic-field">
+                      <label className="studio-segment-editor__infographic-field studio-segment-editor__infographic-text-field">
                         <span>
                           <strong>{workspaceText(locale, "Текст инфографики", "Infographic text")}</strong>
                           <small>{getWorkspaceSegmentInfographicCharacterCount(activeSegmentInfographicText)}/{WORKSPACE_SEGMENT_INFOGRAPHIC_TEXT_MAX_CHARS}</small>

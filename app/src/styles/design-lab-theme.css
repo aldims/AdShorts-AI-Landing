@@ -42802,9 +42802,12 @@ html, body {
 
 .studio-segment-editor__infographic-style-disclosure > summary strong {
   min-width: 0;
+  overflow: hidden;
   font-size: 0.76rem;
   font-weight: 720;
   line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .studio-segment-editor__infographic-style-disclosure > summary small {
@@ -46870,12 +46873,30 @@ html, body {
 .studio-canvas-main.is-segment-editor
   .studio-segment-editor__prompt-visual-panel.is-infographic
   .studio-segment-editor__infographic-form {
+  grid-template-rows: minmax(0, 1fr) auto;
+  align-content: stretch;
   min-height: 0;
   padding: 2px 5px 2px 2px;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
+}
+
+.studio-canvas-main.is-segment-editor
+  .studio-segment-editor__prompt-visual-panel.is-infographic
+  .studio-segment-editor__infographic-text-field {
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+}
+
+.studio-canvas-main.is-segment-editor
+  .studio-segment-editor__prompt-visual-panel.is-infographic
+  .studio-segment-editor__infographic-text-field
+  textarea {
+  height: 100%;
+  min-height: 74px;
+  resize: none;
 }
 
 .studio-canvas-main.is-segment-editor
