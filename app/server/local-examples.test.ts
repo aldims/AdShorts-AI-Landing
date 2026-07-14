@@ -20,7 +20,22 @@ vi.mock("./projects.js", () => ({
   getWorkspaceProjectVideoProxyTarget: projectMocks.getWorkspaceProjectVideoProxyTarget,
 }));
 
-import { resolveLocalExampleVideoTarget, resolveLocalExampleVideoTargetCandidates } from "./local-examples.js";
+import {
+  isLocalExamplesAdmin,
+  resolveLocalExampleVideoTarget,
+  resolveLocalExampleVideoTargetCandidates,
+} from "./local-examples.js";
+
+describe("local examples administration", () => {
+  it("allows the content administrator account regardless of email casing", () => {
+    expect(isLocalExamplesAdmin({ email: "  ALEXMAMONDI@GMAIL.COM  " })).toBe(true);
+  });
+
+  it("rejects regular accounts", () => {
+    expect(isLocalExamplesAdmin({ email: "viewer@example.com" })).toBe(false);
+    expect(isLocalExamplesAdmin(null)).toBe(false);
+  });
+});
 
 describe("local examples video source resolution", () => {
   beforeEach(() => {
