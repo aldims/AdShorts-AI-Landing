@@ -45845,10 +45845,10 @@ html, body {
   }
 }
 
-/* Final segment editor visual matrix overrides. Keep this after mobile hardening rules. */
+/* Visual editor tool deck. Keep this after mobile hardening rules. */
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-panel .studio-canvas-prompt__editor-pane {
   grid-template-rows: auto minmax(120px, 1fr) 0 !important;
-  gap: 8px !important;
+  gap: 12px !important;
   overflow-x: hidden !important;
   overflow-y: auto !important;
   scrollbar-gutter: stable !important;
@@ -45856,47 +45856,65 @@ html, body {
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-topbar {
   display: grid !important;
-  gap: 8px !important;
-  padding: 10px 12px !important;
-  border: 1px solid rgba(129, 140, 248, 0.22) !important;
-  border-radius: 14px !important;
-  background:
-    linear-gradient(180deg, rgba(8, 16, 31, 0.88), rgba(3, 10, 20, 0.78)),
-    rgba(4, 9, 18, 0.86) !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 18px 36px -28px rgba(0, 0, 0, 0.84) !important;
+  gap: 12px !important;
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-heading {
   display: flex !important;
   align-items: center !important;
   justify-content: space-between !important;
-  gap: 8px !important;
+  gap: 14px !important;
+  min-height: 46px !important;
+  padding: 4px 4px 5px !important;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12) !important;
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-heading-title {
-  display: flex !important;
-  align-items: center !important;
-  gap: 8px !important;
+  display: grid !important;
+  gap: 3px !important;
   min-width: 0 !important;
 }
 
-.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-heading-title strong {
-  overflow: hidden !important;
-  color: rgba(241, 245, 249, 0.96) !important;
-  font-size: clamp(0.94rem, 1.18vw, 1.06rem) !important;
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-heading-kicker {
+  color: rgba(167, 139, 250, 0.9) !important;
+  font-size: 0.58rem !important;
   font-weight: 900 !important;
+  letter-spacing: 0.13em !important;
+  line-height: 1 !important;
+  text-transform: uppercase !important;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-heading-line {
+  display: flex !important;
+  align-items: baseline !important;
+  gap: 9px !important;
+  min-width: 0 !important;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-heading-line strong {
+  overflow: hidden !important;
+  color: rgba(248, 250, 252, 0.97) !important;
+  font-size: clamp(1rem, 1.28vw, 1.16rem) !important;
+  font-weight: 850 !important;
+  letter-spacing: -0.025em !important;
   line-height: 1.12 !important;
   text-overflow: ellipsis !important;
   white-space: nowrap !important;
 }
 
-.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-heading-title span:not(.studio-segment-editor__prompt-heading-info) {
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-heading-time {
+  display: inline-flex !important;
+  align-items: center !important;
   flex: 0 0 auto !important;
-  color: rgba(148, 163, 184, 0.72) !important;
-  font-size: 0.68rem !important;
-  font-weight: 820 !important;
+  min-height: 20px !important;
+  padding: 0 7px !important;
+  border: 1px solid rgba(148, 163, 184, 0.13) !important;
+  border-radius: 999px !important;
+  background: rgba(15, 23, 42, 0.56) !important;
+  color: rgba(148, 163, 184, 0.78) !important;
+  font-size: 0.62rem !important;
+  font-variant-numeric: tabular-nums !important;
+  font-weight: 760 !important;
   white-space: nowrap !important;
 }
 
@@ -45917,56 +45935,95 @@ html, body {
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-heading .studio-segment-editor__scene-nav {
   display: inline-flex !important;
   align-items: center !important;
-  gap: 4px !important;
+  gap: 5px !important;
+  padding: 3px !important;
+  border: 1px solid rgba(148, 163, 184, 0.11) !important;
+  border-radius: 11px !important;
+  background: rgba(7, 12, 23, 0.72) !important;
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-heading .studio-segment-editor__scene-nav-button {
-  width: 24px !important;
-  height: 24px !important;
+  width: 28px !important;
+  height: 28px !important;
   border-radius: 8px !important;
-  border-color: rgba(148, 163, 184, 0.14) !important;
-  background: rgba(15, 23, 42, 0.58) !important;
-  color: rgba(226, 232, 240, 0.78) !important;
+  border-color: transparent !important;
+  background: transparent !important;
+  color: rgba(203, 213, 225, 0.78) !important;
+  transition: background 0.16s ease, color 0.16s ease, transform 0.16s ease !important;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-heading .studio-segment-editor__scene-nav-button:hover:not(:disabled),
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-heading .studio-segment-editor__scene-nav-button:focus-visible {
+  background: rgba(139, 92, 246, 0.16) !important;
+  color: rgba(237, 233, 254, 0.98) !important;
+  transform: translateY(-1px) !important;
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-block {
+  --studio-visual-tool-accent: 167, 139, 250;
   display: grid !important;
-  gap: 6px !important;
+  gap: 8px !important;
   width: 100% !important;
+  min-width: 0 !important;
+  padding: 10px !important;
+  overflow: hidden !important;
+  border: 1px solid rgba(148, 163, 184, 0.13) !important;
+  border-radius: 16px !important;
+  background:
+    radial-gradient(circle at 0 0, rgba(var(--studio-visual-tool-accent), 0.09), transparent 38%),
+    linear-gradient(145deg, rgba(14, 20, 34, 0.9), rgba(7, 12, 23, 0.9)) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.055),
+    0 18px 34px -30px rgba(0, 0, 0, 0.92) !important;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-block--edit {
+  --studio-visual-tool-accent: 45, 212, 191;
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-block > .studio-segment-editor__prompt-section-label {
-  display: grid !important;
-  grid-template-columns: auto minmax(0, 1fr) !important;
+  display: flex !important;
   align-items: center !important;
-  gap: 8px !important;
-  color: rgba(216, 180, 254, 0.96) !important;
-  font-size: 0.68rem !important;
-  font-weight: 950 !important;
-  letter-spacing: 0.07em !important;
-  line-height: 1 !important;
-  text-transform: uppercase !important;
+  gap: 7px !important;
+  min-height: 22px !important;
+  padding: 0 2px !important;
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-block > .studio-segment-editor__prompt-section-label::after {
   content: "" !important;
-  height: 2px !important;
+  flex: 1 1 auto !important;
+  height: 1px !important;
   border-radius: 999px !important;
-  background: linear-gradient(90deg, rgba(168, 85, 247, 0.68), rgba(168, 85, 247, 0.18)) !important;
+  background: linear-gradient(90deg, rgba(var(--studio-visual-tool-accent), 0.3), transparent) !important;
 }
 
-.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-block--edit > .studio-segment-editor__prompt-section-label {
-  color: rgba(45, 212, 191, 0.96) !important;
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-section-label strong {
+  color: rgba(241, 245, 249, 0.94) !important;
+  font-size: 0.68rem !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.09em !important;
+  line-height: 1 !important;
+  text-transform: uppercase !important;
 }
 
-.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-block--edit > .studio-segment-editor__prompt-section-label::after {
-  background: linear-gradient(90deg, rgba(45, 212, 191, 0.7), rgba(45, 212, 191, 0.16)) !important;
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-section-label small {
+  flex: 0 0 auto !important;
+  padding: 3px 6px !important;
+  border: 1px solid rgba(var(--studio-visual-tool-accent), 0.15) !important;
+  border-radius: 999px !important;
+  background: rgba(var(--studio-visual-tool-accent), 0.07) !important;
+  color: rgba(203, 213, 225, 0.58) !important;
+  font-size: 0.54rem !important;
+  font-weight: 760 !important;
+  letter-spacing: 0.015em !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu {
   display: grid !important;
   grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  gap: 6px !important;
+  gap: 7px !important;
   width: 100% !important;
   max-width: none !important;
   padding: 2px !important;
@@ -45979,63 +46036,118 @@ html, body {
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button,
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button--icon {
+  position: relative !important;
   display: flex !important;
   align-items: center !important;
   justify-content: flex-start !important;
   width: auto !important;
   min-width: 0 !important;
-  min-height: 42px !important;
+  min-height: 62px !important;
   height: auto !important;
   flex: 1 1 auto !important;
-  padding: 7px 9px !important;
-  overflow: visible !important;
-  border: 1px solid rgba(168, 85, 247, 0.42) !important;
-  border-radius: 8px !important;
+  padding: 8px 32px 8px 9px !important;
+  overflow: hidden !important;
+  border: 1px solid rgba(148, 163, 184, 0.14) !important;
+  border-radius: 12px !important;
   background:
-    linear-gradient(180deg, rgba(88, 28, 135, 0.34), rgba(30, 20, 66, 0.54)),
-    rgba(18, 16, 44, 0.82) !important;
-  color: rgba(233, 213, 255, 0.92) !important;
+    linear-gradient(135deg, rgba(var(--studio-visual-tool-accent), 0.075), transparent 46%),
+    rgba(10, 16, 29, 0.78) !important;
+  color: rgba(226, 232, 240, 0.9) !important;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.1),
-    0 10px 22px -20px rgba(168, 85, 247, 0.52) !important;
+    inset 0 1px 0 rgba(255, 255, 255, 0.045),
+    0 12px 24px -24px rgba(0, 0, 0, 0.9) !important;
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s cubic-bezier(0.22, 1, 0.36, 1) !important;
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-block--edit .studio-segment-editor__prompt-submenu-button {
-  border-color: rgba(45, 212, 191, 0.4) !important;
+  color: rgba(226, 232, 240, 0.9) !important;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button:hover:not(:disabled),
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button:focus-visible {
+  border-color: rgba(var(--studio-visual-tool-accent), 0.48) !important;
   background:
-    linear-gradient(180deg, rgba(13, 148, 136, 0.26), rgba(8, 47, 73, 0.52)),
-    rgba(5, 35, 49, 0.84) !important;
-  color: rgba(204, 251, 241, 0.92) !important;
+    linear-gradient(135deg, rgba(var(--studio-visual-tool-accent), 0.15), transparent 58%),
+    rgba(13, 20, 35, 0.94) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 14px 24px -20px rgba(var(--studio-visual-tool-accent), 0.36) !important;
+  transform: translateY(-2px) !important;
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button.is-active {
-  border-color: rgba(216, 180, 254, 0.86) !important;
+  border-color: rgba(var(--studio-visual-tool-accent), 0.68) !important;
   background:
-    linear-gradient(180deg, rgba(126, 34, 206, 0.46), rgba(49, 31, 94, 0.68)),
-    rgba(25, 18, 58, 0.94) !important;
+    linear-gradient(135deg, rgba(var(--studio-visual-tool-accent), 0.2), transparent 62%),
+    rgba(14, 21, 37, 0.96) !important;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.16),
-    0 0 0 1px rgba(216, 180, 254, 0.12),
-    0 0 18px rgba(168, 85, 247, 0.22) !important;
+    inset 3px 0 0 rgba(var(--studio-visual-tool-accent), 0.78),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 16px 28px -23px rgba(var(--studio-visual-tool-accent), 0.5) !important;
 }
 
-.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-block--edit .studio-segment-editor__prompt-submenu-button.is-active {
-  border-color: rgba(94, 234, 212, 0.78) !important;
-  background:
-    linear-gradient(180deg, rgba(20, 184, 166, 0.34), rgba(10, 75, 86, 0.68)),
-    rgba(5, 48, 64, 0.94) !important;
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button--icon::before {
+  content: "" !important;
+  position: absolute !important;
+  inset: 0 !important;
+  border-radius: inherit !important;
+  background: linear-gradient(115deg, rgba(255, 255, 255, 0.06), transparent 34%) !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: opacity 0.18s ease !important;
 }
 
-.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button--icon::before,
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button--icon::after {
-  content: none !important;
+  content: "›" !important;
+  position: absolute !important;
+  top: 50% !important;
+  right: 12px !important;
+  bottom: auto !important;
+  left: auto !important;
+  width: auto !important;
+  height: auto !important;
+  border-radius: 0 !important;
+  background: none !important;
+  box-shadow: none !important;
+  color: rgba(var(--studio-visual-tool-accent), 0.48) !important;
+  font-size: 1.15rem !important;
+  font-weight: 500 !important;
+  line-height: 1 !important;
+  opacity: 1 !important;
+  pointer-events: none !important;
+  z-index: 2 !important;
+  transform: translateY(-52%) !important;
+  transition: color 0.18s ease, transform 0.18s ease !important;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button:hover:not(:disabled)::before,
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button:focus-visible::before,
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button.is-active::before {
+  opacity: 1 !important;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button:hover:not(:disabled)::after,
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button:focus-visible::after,
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button.is-active::after {
+  color: rgba(var(--studio-visual-tool-accent), 0.94) !important;
+  transform: translate(2px, -52%) !important;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button:disabled {
+  border-color: rgba(148, 163, 184, 0.08) !important;
+  background: rgba(8, 13, 24, 0.54) !important;
+  opacity: 0.5 !important;
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-button-content {
   display: grid !important;
-  grid-template-columns: 54px minmax(0, 1fr) auto !important;
+  grid-template-columns: 42px minmax(0, 1fr) auto !important;
   align-items: center !important;
-  gap: 12px !important;
+  gap: 10px !important;
   width: 100% !important;
   min-width: 0 !important;
 }
@@ -46043,12 +46155,26 @@ html, body {
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button--icon .studio-segment-editor__prompt-tool-icon,
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button--icon .studio-segment-editor__prompt-tool-icon--asset {
   justify-self: center !important;
-  width: 46px !important;
-  height: 46px !important;
+  width: 38px !important;
+  height: 38px !important;
   margin: 0 !important;
+  border: 1px solid rgba(var(--studio-visual-tool-accent), 0.14) !important;
+  border-radius: 11px !important;
+  background: rgba(var(--studio-visual-tool-accent), 0.07) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07) !important;
   opacity: 1 !important;
-  filter: brightness(1.08) saturate(1.15) drop-shadow(0 0 10px rgba(216, 180, 254, 0.22)) !important;
+  filter: brightness(0.96) saturate(0.96) !important;
   transform: none !important;
+  transition: border-color 0.18s ease, background 0.18s ease, filter 0.18s ease, transform 0.18s ease !important;
+}
+
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button:hover:not(:disabled) .studio-segment-editor__prompt-tool-icon,
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button:focus-visible .studio-segment-editor__prompt-tool-icon,
+.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button.is-active .studio-segment-editor__prompt-tool-icon {
+  border-color: rgba(var(--studio-visual-tool-accent), 0.34) !important;
+  background: rgba(var(--studio-visual-tool-accent), 0.13) !important;
+  filter: brightness(1.08) saturate(1.08) drop-shadow(0 6px 12px rgba(var(--studio-visual-tool-accent), 0.16)) !important;
+  transform: translateY(-1px) !important;
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-icon-asset {
@@ -46069,9 +46195,9 @@ html, body {
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-label strong {
   display: block !important;
   overflow: visible !important;
-  color: rgba(245, 243, 255, 0.96) !important;
-  font-size: 0.8rem !important;
-  font-weight: 900 !important;
+  color: rgba(241, 245, 249, 0.94) !important;
+  font-size: 0.78rem !important;
+  font-weight: 820 !important;
   line-height: 1.08 !important;
   overflow-wrap: normal !important;
   text-overflow: clip !important;
@@ -46079,16 +46205,12 @@ html, body {
   word-break: normal !important;
 }
 
-.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-block--edit .studio-segment-editor__prompt-tool-label strong {
-  color: rgba(236, 253, 245, 0.96) !important;
-}
-
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-label small {
   display: block !important;
   overflow: visible !important;
-  color: rgba(203, 213, 225, 0.64) !important;
-  font-size: 0.62rem !important;
-  font-weight: 720 !important;
+  color: rgba(148, 163, 184, 0.67) !important;
+  font-size: 0.6rem !important;
+  font-weight: 650 !important;
   line-height: 1.12 !important;
   overflow-wrap: normal !important;
   text-overflow: clip !important;
@@ -46238,8 +46360,8 @@ html, body {
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-topbar {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
-  column-gap: 10px !important;
-  row-gap: 8px !important;
+  column-gap: 12px !important;
+  row-gap: 10px !important;
   padding: 0 !important;
   border: 0 !important;
   background: transparent !important;
@@ -46260,24 +46382,25 @@ html, body {
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button,
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button--icon {
-  min-height: 64px !important;
-  padding: 8px 14px !important;
+  min-height: 62px !important;
+  padding: 8px 26px 8px 8px !important;
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-button-content {
-  grid-template-columns: 48px minmax(0, 1fr) auto !important;
-  gap: 10px !important;
+  grid-template-columns: 38px minmax(0, 1fr) auto !important;
+  gap: 8px !important;
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button--icon .studio-segment-editor__prompt-tool-icon,
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button--icon .studio-segment-editor__prompt-tool-icon--asset {
   justify-self: center !important;
-  width: 42px !important;
-  height: 42px !important;
+  width: 36px !important;
+  height: 36px !important;
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-label strong {
-  font-size: 0.86rem !important;
+  font-size: 0.76rem !important;
+  letter-spacing: -0.018em !important;
   overflow: visible !important;
   overflow-wrap: normal !important;
   text-overflow: clip !important;
@@ -46285,7 +46408,7 @@ html, body {
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-label small {
-  font-size: 0.66rem !important;
+  font-size: 0.59rem !important;
   overflow: visible !important;
   overflow-wrap: normal !important;
   text-overflow: clip !important;

@@ -26374,9 +26374,12 @@ export function WorkspacePage({
     setReleasedSegmentEditorPromptTool((current) => (current === tab ? null : current));
   };
   const getSegmentEditorPromptVisualToolButtonClass = (tab: WorkspaceSegmentEditorPromptToolTab) =>
-    `studio-segment-editor__prompt-submenu-button studio-segment-editor__prompt-submenu-button--icon${
-      segmentEditorPromptToolTab === tab ? " is-active" : ""
-    }${releasedSegmentEditorPromptTool === tab ? " is-hover-released" : ""}`;
+    `studio-segment-editor__prompt-submenu-button studio-segment-editor__prompt-submenu-button--icon studio-segment-editor__prompt-submenu-button--${tab.replaceAll(
+      "_",
+      "-",
+    )}${segmentEditorPromptToolTab === tab ? " is-active" : ""}${
+      releasedSegmentEditorPromptTool === tab ? " is-hover-released" : ""
+    }`;
   const getSegmentEditorTimelineScaledValue = (ratio: number) => {
     const safeRatio = Math.max(0, Math.min(1, ratio));
     const percentage = `${Number((safeRatio * 100).toFixed(4))}%`;
@@ -35471,8 +35474,15 @@ export function WorkspacePage({
             <div className="studio-segment-editor__prompt-topbar" aria-label={workspaceText(locale, "Режим панели", "Panel mode")}>
               <div className="studio-segment-editor__prompt-heading">
                 <div className="studio-segment-editor__prompt-heading-title">
-                  <strong>{workspaceText(locale, `Визуал — Сцена ${activeSegmentDisplayNumber}`, `Visual — Scene ${activeSegmentDisplayNumber}`)}</strong>
-                  {activeSegmentTimeRangeLabel ? <span>{activeSegmentTimeRangeLabel}</span> : null}
+                  <span className="studio-segment-editor__prompt-heading-kicker">
+                    {workspaceText(locale, "Редактор визуала", "Visual editor")}
+                  </span>
+                  <span className="studio-segment-editor__prompt-heading-line">
+                    <strong>{workspaceText(locale, `Сцена ${activeSegmentDisplayNumber}`, `Scene ${activeSegmentDisplayNumber}`)}</strong>
+                    {activeSegmentTimeRangeLabel ? (
+                      <span className="studio-segment-editor__prompt-heading-time">{activeSegmentTimeRangeLabel}</span>
+                    ) : null}
+                  </span>
                 </div>
                 <div className="studio-segment-editor__scene-nav" aria-label={workspaceText(locale, "Навигация по сценам", "Scene navigation")}>
                   <button
@@ -35500,7 +35510,10 @@ export function WorkspacePage({
                 </div>
               </div>
               <div className="studio-segment-editor__prompt-tool-block studio-segment-editor__prompt-tool-block--create">
-                <span className="studio-segment-editor__prompt-section-label">{workspaceText(locale, "Создать", "Create")}</span>
+                <span className="studio-segment-editor__prompt-section-label">
+                  <strong>{workspaceText(locale, "Создать", "Create")}</strong>
+                  <small>{workspaceText(locale, "Новый источник", "New source")}</small>
+                </span>
                 <div className="studio-segment-editor__prompt-submenu" aria-label={workspaceText(locale, "Инструменты создания сцены", "Scene creation tools")}>
                   <button
                     className={getSegmentEditorPromptVisualToolButtonClass("ai_photo")}
@@ -35577,11 +35590,14 @@ export function WorkspacePage({
                 </div>
               </div>
               <div className="studio-segment-editor__prompt-tool-block studio-segment-editor__prompt-tool-block--edit">
-                <span className="studio-segment-editor__prompt-section-label">{workspaceText(locale, "Изменить", "Edit")}</span>
+                <span className="studio-segment-editor__prompt-section-label">
+                  <strong>{workspaceText(locale, "Изменить", "Edit")}</strong>
+                  <small>{workspaceText(locale, "Текущий кадр", "Current scene")}</small>
+                </span>
                 <div className="studio-segment-editor__prompt-submenu" aria-label={workspaceText(locale, "Инструменты редактирования сцены", "Scene editing tools")}>
                   {canActiveSegmentUseVideoExtension ? (
                     <button
-                      className="studio-segment-editor__prompt-submenu-button studio-segment-editor__prompt-submenu-button--icon"
+                      className="studio-segment-editor__prompt-submenu-button studio-segment-editor__prompt-submenu-button--icon studio-segment-editor__prompt-submenu-button--video-extension"
                       type="button"
                       aria-label={workspaceText(locale, "ИИ продление видео", "AI video extension")}
                       disabled={!canExtendActiveSegmentVideo}
