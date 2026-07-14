@@ -10689,7 +10689,7 @@ export function WorkspacePage({
     selectedVoiceIdByLanguageRef.current[currentVoiceLanguage] = normalizedVoiceId as StudioVoiceOption["id"];
   }, [selectedVoiceId]);
 
-  useEffect(() => {
+  const persistCurrentStudioCreateSettings = (videoMode: StudioVideoMode = selectedVideoMode) => {
     const persistedVoiceId = resolveStudioVoiceIdForLanguage(
       selectedLanguage,
       selectedVoiceId,
@@ -10702,11 +10702,15 @@ export function WorkspacePage({
       subtitleColorId: selectedSubtitleColorId,
       subtitleEnabled: isVoiceoverEnabled && areSubtitlesEnabled,
       subtitleStyleId: selectedSubtitleStyleId,
-      videoMode: selectedVideoMode === "custom" ? "ai_photo" : selectedVideoMode,
+      videoMode: videoMode === "custom" ? "ai_photo" : videoMode,
       voiceEnabled: isVoiceoverEnabled,
       voiceId: persistedVoiceId,
       voiceIdsByLanguage: { ...selectedVoiceIdByLanguageRef.current, [selectedLanguage]: persistedVoiceId },
     });
+  };
+
+  useEffect(() => {
+    persistCurrentStudioCreateSettings();
   }, [
     areSubtitlesEnabled,
     isVoiceoverEnabled,
@@ -10872,6 +10876,7 @@ export function WorkspacePage({
   };
 
   const handleVideoModeSelect = (videoMode: StudioVideoMode) => {
+    persistCurrentStudioCreateSettings(videoMode);
     selectedVideoModeExplicitlyChangedRef.current = true;
     setSelectedVideoMode(videoMode);
     setVideoSelectionError(null);
