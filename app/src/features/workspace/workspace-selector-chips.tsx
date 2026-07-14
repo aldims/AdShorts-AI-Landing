@@ -1581,7 +1581,6 @@ export function StudioBrandSelectorChip({
   onClearBrandText,
   onOpenChange,
   onRemoveBrandLogo,
-  onSystemWatermarkToggle,
   showSystemWatermarkControl = false,
   systemWatermarkEnabled = false,
 }: StudioBrandSelectorChipProps) {
@@ -1608,7 +1607,6 @@ export function StudioBrandSelectorChip({
   const brandLogoPreviewUrl = getStudioCustomAssetPreviewUrl(brandLogoFile);
   const brandTextLength = brandText.length;
   const systemWatermarkText = locale === "en" ? "Made with adshortsai.com" : "Сделано в adshortsai.com";
-  const systemWatermarkTitle = locale === "en" ? "AdShorts AI watermark" : "Водяной знак AdShorts AI";
   const triggerValue = isDirty
     ? locale === "en"
       ? "Apply"
@@ -1875,28 +1873,6 @@ export function StudioBrandSelectorChip({
                       onChange={(event) => onBrandTextChange(event.target.value)}
                     />
                   </label>
-                  {showSystemWatermarkControl ? (
-                    <div className={`studio-brand-selector__watermark${systemWatermarkEnabled ? " is-enabled" : " is-disabled"}`}>
-                      <div className="studio-brand-selector__watermark-copy">
-                        <span>{systemWatermarkTitle}</span>
-                        <small>{systemWatermarkEnabled ? systemWatermarkText : locale === "en" ? "Will not be added to the rebuilt video" : "Не будет добавлен в пересобранное видео"}</small>
-                      </div>
-                      <button
-                        className="studio-brand-selector__watermark-toggle"
-                        type="button"
-                        aria-pressed={systemWatermarkEnabled}
-                        onClick={() => onSystemWatermarkToggle?.(!systemWatermarkEnabled)}
-                      >
-                        {systemWatermarkEnabled
-                          ? locale === "en"
-                            ? "Remove"
-                            : "Убрать"
-                          : locale === "en"
-                            ? "Restore"
-                            : "Вернуть"}
-                      </button>
-                    </div>
-                  ) : null}
                   <button
                     className="studio-video-selector__brand-apply studio-brand-selector__apply"
                     type="button"

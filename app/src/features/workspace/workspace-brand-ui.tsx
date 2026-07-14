@@ -91,7 +91,7 @@ export function WorkspaceSegmentEditorBrandAddButton({
   locale,
   onClick,
 }: WorkspaceSegmentEditorBrandAddButtonProps) {
-  const brandButtonLabel = workspaceText(locale, "Бренд ✏️", "Brand ✏️");
+  const brandButtonLabel = workspaceText(locale, "Добавить бренд", "Add brand");
 
   return (
     <button
@@ -108,7 +108,19 @@ export function WorkspaceSegmentEditorBrandAddButton({
         onClick(event);
       }}
     >
-      {brandButtonLabel}
+      <span className="studio-segment-editor__brand-add-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24">
+          <path d="M5.5 6.5h8.7l4.3 4.3v6.7H5.5z" />
+          <path d="M14.2 6.5v4.3h4.3M9.5 14h5M12 11.5v5" />
+        </svg>
+      </span>
+      <span className="studio-segment-editor__brand-add-copy">
+        <strong>{workspaceText(locale, "Бренд", "Brand")}</strong>
+        <small>{workspaceText(locale, "Лого или текст", "Logo or text")}</small>
+      </span>
+      <svg className="studio-segment-editor__brand-add-arrow" viewBox="0 0 20 20" aria-hidden="true">
+        <path d="m7.5 5 5 5-5 5" />
+      </svg>
     </button>
   );
 }

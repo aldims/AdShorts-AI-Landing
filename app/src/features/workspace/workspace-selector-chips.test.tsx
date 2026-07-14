@@ -8,7 +8,12 @@ import {
   fallbackStudioSubtitleColorOption,
   fallbackStudioSubtitleStyleOption,
 } from "./workspace-segment-editor";
-import { StudioSubtitleSelectorChip, StudioVideoSelectorChip, StudioVoiceSelectorChip } from "./workspace-selector-chips";
+import {
+  StudioBrandSelectorChip,
+  StudioSubtitleSelectorChip,
+  StudioVideoSelectorChip,
+  StudioVoiceSelectorChip,
+} from "./workspace-selector-chips";
 
 describe("StudioVoiceSelectorChip", () => {
   it("selects Alexander when typing voiceover text while voiceover is disabled", () => {
@@ -274,6 +279,38 @@ describe("StudioVideoSelectorChip", () => {
     expect(screen.getByText("1–2 minutes")).toBeTruthy();
     expect(screen.getByText("3–5 minutes")).toBeTruthy();
     expect(screen.queryByText("Logo: .jpg, .png, .webp, .avif")).toBeNull();
+  });
+});
+
+describe("StudioBrandSelectorChip", () => {
+  it("keeps the legacy system-watermark control out of brand settings", () => {
+    render(
+      <LocaleProvider locale="ru">
+        <StudioBrandSelectorChip
+          appliedBrandLogoFile={null}
+          appliedBrandText=""
+          appliedSystemWatermarkEnabled={false}
+          brandLogoFile={null}
+          brandText=""
+          brandUploadError={null}
+          isDirty={false}
+          isPreparingBrandLogo={false}
+          onApplyBrand={vi.fn()}
+          onBrandLogoSelect={vi.fn()}
+          onBrandTextChange={vi.fn()}
+          onClearBrandText={vi.fn()}
+          onRemoveBrandLogo={vi.fn()}
+          showSystemWatermarkControl
+          systemWatermarkEnabled={false}
+        />
+      </LocaleProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Бренд\s*Добавить/ }));
+
+    expect(screen.queryByText("Водяной знак AdShorts AI")).toBeNull();
+    expect(screen.queryByText("Не будет добавлен в пересобранное видео")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Вернуть" })).toBeNull();
   });
 });
 

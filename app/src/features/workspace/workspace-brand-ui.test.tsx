@@ -9,10 +9,13 @@ import {
 } from "./workspace-brand-ui";
 
 describe("workspace segment editor brand UI", () => {
-  it("uses a compact brand edit label on the carousel add button", () => {
+  it("uses a clear add-brand action on the active carousel card", () => {
     render(<WorkspaceSegmentEditorBrandAddButton locale="ru" onClick={vi.fn()} />);
 
-    expect(screen.getByRole("button", { name: "Бренд ✏️" }).textContent).toBe("Бренд ✏️");
+    const button = screen.getByRole("button", { name: "Добавить бренд" });
+
+    expect(button.textContent).toContain("Бренд");
+    expect(button.textContent).toContain("Лого или текст");
   });
 
   it("uses the compact brand edit label on editable overlays", () => {
