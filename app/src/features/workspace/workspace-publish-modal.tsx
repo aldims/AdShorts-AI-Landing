@@ -80,6 +80,25 @@ type WorkspacePublishModalProps = {
   weekdayLabels: string[];
 };
 
+function PublishPlatformIcon({ platform }: { platform: WorkspacePublishPlatform }) {
+  if (platform === "instagram") {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <rect x="3.5" y="3.5" width="17" height="17" rx="5" stroke="currentColor" strokeWidth="1.8" />
+        <circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="1.8" />
+        <circle cx="17.5" cy="6.7" r="1" fill="currentColor" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M21 12c0 3.2-.35 5.15-1.05 5.85-.7.7-3.35 1.05-7.95 1.05s-7.25-.35-7.95-1.05C3.35 17.15 3 15.2 3 12s.35-5.15 1.05-5.85C4.75 5.45 7.4 5.1 12 5.1s7.25.35 7.95 1.05C20.65 6.85 21 8.8 21 12Z" fill="currentColor" />
+      <path d="m10.2 9 5 3-5 3V9Z" fill="#fff" />
+    </svg>
+  );
+}
+
 export function WorkspacePublishModal({
   bootstrap,
   bootstrapError,
@@ -172,15 +191,22 @@ export function WorkspacePublishModal({
       <button className="studio-publish-modal__backdrop route-close" type="button" aria-label={workspaceText(locale, "Закрыть публикацию", "Close publishing")} onClick={onClose} />
       <div className="studio-publish-modal__panel" role="document">
         <button className="studio-publish-modal__close route-close" type="button" aria-label={workspaceText(locale, "Закрыть публикацию", "Close publishing")} onClick={onClose}>
-          ×
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <path d="m5 5 10 10M15 5 5 15" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+          </svg>
         </button>
 
         <div className="studio-publish-modal__header">
           <div className="studio-publish-modal__header-copy">
-            <p className="studio-publish-modal__eyebrow">
-              {workspaceText(locale, `Публикация в ${platformLabel}`, `${platformLabel} publishing`)}
-            </p>
-            <strong id="studio-publish-modal-title">{targetTitle || workspaceText(locale, "Готово к публикации", "Ready to publish")}</strong>
+            <span className={`studio-publish-modal__platform-mark is-${platform}`} aria-hidden="true">
+              <PublishPlatformIcon platform={platform} />
+            </span>
+            <div className="studio-publish-modal__header-text">
+              <p className="studio-publish-modal__eyebrow">
+                {workspaceText(locale, `Публикация в ${platformLabel}`, `${platformLabel} publishing`)}
+              </p>
+              <strong id="studio-publish-modal-title">{targetTitle || workspaceText(locale, "Готово к публикации", "Ready to publish")}</strong>
+            </div>
           </div>
         </div>
 
@@ -198,58 +224,64 @@ export function WorkspacePublishModal({
           <>
             <div className="studio-publish-modal__body">
               <div className="studio-publish-modal__main">
-                {publishError ? (
-                  <div className="studio-publish-modal__inline-state is-error">
-                    <div>
-                      <strong>{workspaceText(locale, "Ошибка публикации", "Publishing error")}</strong>
-                      <p>{publishError}</p>
-                    </div>
+                {publishError || successNotice ? (
+                  <div className="studio-publish-modal__notices">
+                    {publishError ? (
+                      <div className="studio-publish-modal__inline-state is-error">
+                        <div>
+                          <strong>{workspaceText(locale, "Ошибка публикации", "Publishing error")}</strong>
+                          <p>{publishError}</p>
+                        </div>
+                      </div>
+                    ) : null}
+                    {successNotice ? (
+                      <div className="studio-publish-modal__inline-state is-success">
+                        <div>
+                          <strong>{successNotice.title}</strong>
+                          <p>{successNotice.text}</p>
+                          {successNotice.link ? (
+                            <a href={successNotice.link} target="_blank" rel="noopener noreferrer">
+                              {workspaceText(locale, `Открыть в ${platformLabel}`, `Open on ${platformLabel}`)}
+                            </a>
+                          ) : null}
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
-                {successNotice ? (
-                  <div className="studio-publish-modal__inline-state is-success">
-                    <div>
-                      <strong>{successNotice.title}</strong>
-                      <p>{successNotice.text}</p>
-                      {successNotice.link ? (
-                        <a href={successNotice.link} target="_blank" rel="noopener noreferrer">
-                          {workspaceText(locale, `Открыть в ${platformLabel}`, `Open on ${platformLabel}`)}
-                        </a>
-                      ) : null}
-                    </div>
-                  </div>
-                ) : null}
-                <section className="studio-publish-modal__section">
-                  <div className="studio-publish-modal__section-head">
-                    <div>
-                      <span className="studio-publish-modal__section-kicker">{workspaceText(locale, "Платформа", "Platform")}</span>
-                    </div>
-                  </div>
 
-                  <div className="studio-publish-modal__mode-grid studio-publish-modal__platform-grid" role="radiogroup" aria-label={workspaceText(locale, "Платформа публикации", "Publishing platform")}>
-                    {platformOptions.map((option) => {
-                      const isActive = option.id === platform;
-                      const isInstagramOptionDisabled = option.isDisabled === true;
-                      return (
-                        <button
-                          key={option.id}
-                          className={`studio-publish-modal__mode-card${isActive ? " is-active" : ""}${isInstagramOptionDisabled ? " is-disabled" : ""}`}
-                          type="button"
-                          role="radio"
-                          aria-checked={isActive}
-                          disabled={isInFlight || isDisconnectingChannel || isBootstrapLoading || isInstagramOptionDisabled}
-                          onClick={() => onPlatformChange(option.id)}
-                        >
-                          <span>{option.eyebrow}</span>
-                          <strong>{option.title}</strong>
-                          <p>{option.description}</p>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </section>
+                <div className="studio-publish-modal__destination">
+                  <section className="studio-publish-modal__section studio-publish-modal__section--platform">
+                    <div className="studio-publish-modal__section-head">
+                      <div>
+                        <span className="studio-publish-modal__section-kicker">{workspaceText(locale, "Платформа", "Platform")}</span>
+                      </div>
+                    </div>
 
-                <section className="studio-publish-modal__section">
+                    <div className="studio-publish-modal__mode-grid studio-publish-modal__platform-grid" role="radiogroup" aria-label={workspaceText(locale, "Платформа публикации", "Publishing platform")}>
+                      {platformOptions.map((option) => {
+                        const isActive = option.id === platform;
+                        const isInstagramOptionDisabled = option.isDisabled === true;
+                        return (
+                          <button
+                            key={option.id}
+                            className={`studio-publish-modal__mode-card${isActive ? " is-active" : ""}${isInstagramOptionDisabled ? " is-disabled" : ""}`}
+                            type="button"
+                            role="radio"
+                            aria-checked={isActive}
+                            disabled={isInFlight || isDisconnectingChannel || isBootstrapLoading || isInstagramOptionDisabled}
+                            onClick={() => onPlatformChange(option.id)}
+                          >
+                            <span>{option.eyebrow}</span>
+                            <strong>{option.title}</strong>
+                            <p>{option.description}</p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+
+                  <section className="studio-publish-modal__section studio-publish-modal__section--channels">
                   <div className="studio-publish-modal__section-head">
                     <div>
                       <span className="studio-publish-modal__section-kicker">{channelSectionLabel}</span>
@@ -343,9 +375,11 @@ export function WorkspacePublishModal({
                       </button>
                     </div>
                   )}
-                </section>
+                  </section>
+                </div>
 
-                <section className="studio-publish-modal__section">
+                <div className="studio-publish-modal__details">
+                  <section className="studio-publish-modal__section studio-publish-modal__section--settings">
                   <div className="studio-publish-modal__section-head">
                     <div>
                       <span className="studio-publish-modal__section-kicker">{workspaceText(locale, "НАСТРОЙКИ ПУБЛИКАЦИИ", "PUBLISHING SETTINGS")}</span>
@@ -394,9 +428,9 @@ export function WorkspacePublishModal({
                       />
                     </label>
                   </div>
-                </section>
+                  </section>
 
-                <section className="studio-publish-modal__section">
+                  <section className="studio-publish-modal__section studio-publish-modal__section--schedule">
                   <div className="studio-publish-modal__section-head">
                     <div>
                       <span className="studio-publish-modal__section-kicker">{workspaceText(locale, "Планирование", "Scheduling")}</span>
@@ -534,11 +568,30 @@ export function WorkspacePublishModal({
                         : null}
                     </>
                   ) : null}
-                </section>
+                  </section>
+                </div>
               </div>
             </div>
 
             <div className="studio-publish-modal__footer">
+              <div className="studio-publish-modal__footer-summary">
+                <span className={`studio-publish-modal__footer-icon is-${platform}`} aria-hidden="true">
+                  <PublishPlatformIcon platform={platform} />
+                </span>
+                <span className="studio-publish-modal__footer-copy">
+                  <strong>
+                    {selectedChannel?.channelName
+                      || (platform === "instagram"
+                        ? workspaceText(locale, "Выберите аккаунт", "Choose an account")
+                        : workspaceText(locale, "Выберите канал", "Choose a channel"))}
+                  </strong>
+                  <small>
+                    {mode === "schedule"
+                      ? scheduleSummary
+                      : workspaceText(locale, `${platformProductLabel} · публикация сразу`, `${platformProductLabel} · publish now`)}
+                  </small>
+                </span>
+              </div>
               <div className="studio-publish-modal__actions">
                 <button className="studio-publish-modal__secondary-btn" type="button" onClick={onClose}>
                   {workspaceText(locale, "Отмена", "Cancel")}
