@@ -619,6 +619,7 @@ import {
   resolveWorkspaceRetainedScenesDraftState,
   resolveWorkspaceScenesModeSwitchTarget,
   shouldShowStudioGenerationError,
+  shouldUseWorkspaceStudioExpandedPromptLayout,
   shouldShowWorkspaceStartFreshScenesAction,
   shouldShowWorkspaceSegmentEditorFullPreviewBusyIndicator,
   getPublishBootstrapForPlatform,
@@ -10411,8 +10412,10 @@ export function WorkspacePage({
             width: `min(${adaptivePromptPanelWidth}px, calc(100vw - 48px))`,
           }
         : undefined;
-  const hasLongStudioTopicPrompt = topicInput.trim().length > 72 || /[\r\n]/.test(topicInput);
-  const shouldUseExpandedStudioPrompt = composerSourceIdea !== null || hasLongStudioTopicPrompt;
+  const shouldUseExpandedStudioPrompt = shouldUseWorkspaceStudioExpandedPromptLayout({
+    hasComposerSourceIdea: composerSourceIdea !== null,
+    topicInput,
+  });
   const hasStudioPromptAuxiliaryContent =
     shouldUseExpandedStudioPrompt || Boolean(segmentEditorError) || hasAppliedSegmentEditorSession;
   const studioPromptInnerClassName = `studio-canvas-prompt__inner${
@@ -37960,8 +37963,8 @@ export function WorkspacePage({
                       <p>
                         {workspaceText(
                           locale,
-                          "Создавайте с нуля или дорабатывайте готовый ролик. Меняйте визуал, текст, голос и длительность каждой сцены.",
-                          "Create from scratch or refine a finished video. Change the visuals, text, voice, and duration of every scene.",
+                          "Создавайте с нуля или дорабатывайте готовый ролик. Точная настройка каждой сцены и полный набор AI-инструментов.",
+                          "Create from scratch or refine a finished video. Fine-tune every scene with a complete suite of AI tools.",
                         )}
                       </p>
 

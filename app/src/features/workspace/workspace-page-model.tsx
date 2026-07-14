@@ -176,6 +176,14 @@ export const shouldShowStudioGenerationError = (
   generationUiSource: StudioGenerationUiSource,
 ) => Boolean(generateError) && !isStudioGenerationUserFacing(isGenerating, generationUiSource);
 
+export const shouldUseWorkspaceStudioExpandedPromptLayout = (options: {
+  hasComposerSourceIdea: boolean;
+  topicInput: string;
+}) => {
+  // Prompt text scrolls inside the textarea; only auxiliary source metadata needs more panel space.
+  return options.hasComposerSourceIdea;
+};
+
 export type StudioGenerationJob = {
   jobId: string;
   profile: WorkspaceProfile;

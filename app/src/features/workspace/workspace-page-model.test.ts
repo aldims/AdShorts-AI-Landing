@@ -11,6 +11,7 @@ import {
   resolveWorkspaceRetainedScenesDraftState,
   resolveWorkspaceScenesModeSwitchTarget,
   shouldShowStudioGenerationError,
+  shouldUseWorkspaceStudioExpandedPromptLayout,
   shouldShowWorkspaceStartFreshScenesAction,
   shouldShowWorkspaceSegmentEditorFullPreviewBusyIndicator,
   type WorkspacePublishBootstrapPayload,
@@ -128,6 +129,26 @@ describe("studio generation visibility", () => {
     expect(shouldShowStudioGenerationError("Previous failure", true, "segment-editor")).toBe(false);
     expect(shouldShowStudioGenerationError("Previous failure", true, "bootstrap")).toBe(false);
     expect(shouldShowStudioGenerationError("Previous failure", false, "idle")).toBe(true);
+  });
+});
+
+describe("studio prompt layout", () => {
+  it("keeps the composer height stable for long multiline input", () => {
+    expect(
+      shouldUseWorkspaceStudioExpandedPromptLayout({
+        hasComposerSourceIdea: false,
+        topicInput: `${"Подробная идея для будущего Shorts. ".repeat(4)}\nВторая строка сценария.`,
+      }),
+    ).toBe(false);
+  });
+
+  it("expands only when content-plan source metadata is visible", () => {
+    expect(
+      shouldUseWorkspaceStudioExpandedPromptLayout({
+        hasComposerSourceIdea: true,
+        topicInput: "Короткая идея",
+      }),
+    ).toBe(true);
   });
 });
 
