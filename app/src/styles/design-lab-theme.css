@@ -42648,10 +42648,10 @@ html, body {
 .studio-segment-infographic__handle.is-sw { bottom: -22px; left: -22px; cursor: nesw-resize; }
 .studio-segment-infographic__handle.is-se { bottom: -22px; right: -22px; cursor: nwse-resize; }
 
-.studio-segment-infographic__close {
+.studio-segment-infographic__reset {
   position: absolute;
-  right: 7px;
-  top: 7px;
+  right: -4px;
+  top: -61px;
   z-index: 4;
   display: inline-flex;
   align-items: center;
@@ -42661,25 +42661,44 @@ html, body {
   height: 38px;
   min-height: 38px;
   padding: 0;
-  border: 1px solid rgba(207, 250, 254, 0.22);
+  border: 1px solid rgba(103, 232, 249, 0.34);
   border-radius: 999px;
-  background: rgba(5, 18, 28, 0.88);
+  background:
+    linear-gradient(180deg, rgba(17, 38, 53, 0.96), rgba(5, 18, 28, 0.94));
   color: rgba(236, 254, 255, 0.94);
-  box-shadow: 0 8px 20px -12px rgba(0, 0, 0, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  box-shadow:
+    0 10px 24px -12px rgba(0, 0, 0, 0.92),
+    0 0 16px rgba(34, 211, 238, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
   cursor: pointer;
   backdrop-filter: blur(12px);
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    color 150ms ease,
+    transform 150ms ease;
 }
 
-.studio-segment-infographic__close:hover,
-.studio-segment-infographic__close:focus-visible {
-  border-color: rgba(103, 232, 249, 0.5);
+.studio-segment-infographic__reset:hover,
+.studio-segment-infographic__reset:focus-visible {
+  border-color: rgba(103, 232, 249, 0.72);
   background: rgba(8, 35, 48, 0.96);
   color: #fff;
   outline: none;
+  transform: translateY(-1px);
 }
 
-.studio-segment-infographic__close:focus-visible {
+.studio-segment-infographic__reset:focus-visible {
   box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.18), 0 8px 20px -12px rgba(0, 0, 0, 0.9);
+}
+
+.studio-segment-infographic__reset:disabled {
+  border-color: rgba(148, 163, 184, 0.16);
+  background: rgba(8, 18, 28, 0.7);
+  color: rgba(148, 163, 184, 0.46);
+  box-shadow: 0 8px 18px -14px rgba(0, 0, 0, 0.84);
+  cursor: default;
+  transform: none;
 }
 
 .studio-segment-infographic__refreshing {
@@ -42930,11 +42949,12 @@ html, body {
 }
 
 @media (max-width: 720px) {
-  .studio-segment-infographic__close {
+  .studio-segment-infographic__reset {
     width: 44px;
     min-width: 44px;
     height: 44px;
     min-height: 44px;
+    top: -69px;
   }
 
   .studio-segment-editor__infographic-stale {

@@ -280,7 +280,7 @@ describe("WorkspaceSegmentInfographicOverlay", () => {
     );
     const object = view.getByRole("group");
 
-    expect(view.getByRole("button", { name: "Закрыть редактирование инфографики" })).toBeTruthy();
+    expect(view.getByRole("button", { name: "Сбросить положение и размер инфографики" })).toBeTruthy();
     expect(view.queryByRole("button", { name: "Отменить изменение инфографики" })).toBeNull();
     expect(view.queryByRole("button", { name: "Вернуть изменение инфографики" })).toBeNull();
     expect(view.queryByRole("button", { name: "Удалить инфографику" })).toBeNull();
@@ -293,10 +293,14 @@ describe("WorkspaceSegmentInfographicOverlay", () => {
     expect(onDelete).toHaveBeenCalledTimes(1);
   });
 
-  it("closes the editing selection without deleting the infographic and allows selecting it again", () => {
+  it("resets the infographic transform without deleting it", () => {
     const onDelete = vi.fn();
+    const onInteractionStart = vi.fn();
+    const onTransformCommit = vi.fn();
+    const onTransformPreview = vi.fn();
     const infographic = createWorkspaceSegmentInfographic({
       inputHash: "2".repeat(64),
+      initialTransform: { centerX: 0.34, centerY: 0.48, width: 0.46 },
       intrinsicHeight: 1024,
       intrinsicWidth: 1024,
       mediaAssetId: 61,
@@ -310,20 +314,53 @@ describe("WorkspaceSegmentInfographicOverlay", () => {
         isPlaying={false}
         localTimeSeconds={0}
         onDelete={onDelete}
+        onInteractionStart={onInteractionStart}
+        onTransformCommit={onTransformCommit}
+        onTransformPreview={onTransformPreview}
         segmentDurationSeconds={5}
       />,
     );
 
-    fireEvent.click(view.getByRole("button", { name: "Закрыть редактирование инфографики" }));
+    fireEvent.click(view.getByRole("button", { name: "Сбросить положение и размер инфографики" }));
 
     expect(onDelete).not.toHaveBeenCalled();
-    expect(view.queryByRole("button", { name: "Закрыть редактирование инфографики" })).toBeNull();
+    expect(onInteractionStart).toHaveBeenCalledTimes(1);
+    expect(onTransformPreview).toHaveBeenCalledWith({ centerX: 0.5, centerY: 0.28, width: 0.7 });
+    expect(onTransformCommit).toHaveBeenCalledWith({ centerX: 0.5, centerY: 0.28, width: 0.7 });
+    expect(Number.parseFloat(
+      view.getByTestId("segment-infographic-overlay").style.getPropertyValue("--workspace-infographic-center-y"),
+    )).toBeCloseTo(28);
+  });
+
+  it("closes the editing selection with Escape and allows selecting it again", () => {
+    const infographic = createWorkspaceSegmentInfographic({
+      inputHash: "3".repeat(64),
+      intrinsicHeight: 1024,
+      intrinsicWidth: 1024,
+      mediaAssetId: 62,
+      sourceVisualIdentity: "asset:18",
+      text: "Close editing",
+    });
+    const view = render(
+      <WorkspaceSegmentInfographicOverlay
+        editable
+        infographic={infographic}
+        isPlaying={false}
+        localTimeSeconds={0}
+        segmentDurationSeconds={5}
+      />,
+    );
+    const selectedObject = view.getByRole("group", { name: /Перетащите для изменения положения/ });
+
+    fireEvent.keyDown(selectedObject, { key: "Escape" });
+
+    expect(view.queryByRole("button", { name: "Сбросить положение и размер инфографики" })).toBeNull();
     expect(view.container.querySelectorAll(".studio-segment-infographic__handle")).toHaveLength(0);
     const object = view.getByRole("group", { name: /Нажмите, чтобы редактировать/ });
 
     fireEvent.keyDown(object, { key: "Enter" });
 
-    expect(view.getByRole("button", { name: "Закрыть редактирование инфографики" })).toBeTruthy();
+    expect(view.getByRole("button", { name: "Сбросить положение и размер инфографики" })).toBeTruthy();
     expect(view.container.querySelectorAll(".studio-segment-infographic__handle")).toHaveLength(4);
   });
 });

@@ -196,6 +196,16 @@ export const WorkspaceSegmentInfographicOverlay = ({
     ? { aspectRatio: `${infographic.intrinsicWidth} / ${infographic.intrinsicHeight}` }
     : undefined;
   const isEditing = editable && isSelected;
+  const defaultTransform = clampWorkspaceSegmentInfographicTransform(
+    null,
+    infographic.intrinsicWidth,
+    infographic.intrinsicHeight,
+  );
+  const isDefaultTransform = (
+    transientTransform.centerX === defaultTransform.centerX &&
+    transientTransform.centerY === defaultTransform.centerY &&
+    transientTransform.width === defaultTransform.width
+  );
 
   return (
     <div
@@ -226,6 +236,12 @@ export const WorkspaceSegmentInfographicOverlay = ({
             event.stopPropagation();
             setIsSelected(true);
             onInteractionStart?.();
+            return;
+          }
+          if (isEditing && event.key === "Escape") {
+            event.preventDefault();
+            event.stopPropagation();
+            setIsSelected(false);
             return;
           }
           if (isEditing && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
@@ -309,10 +325,11 @@ export const WorkspaceSegmentInfographicOverlay = ({
               />
             ))}
             <button
-              className="studio-segment-infographic__close"
+              className="studio-segment-infographic__reset"
               type="button"
-              aria-label="Закрыть редактирование инфографики"
-              title="Закрыть"
+              aria-label="Сбросить положение и размер инфографики"
+              title="Сбросить положение и размер"
+              disabled={isDefaultTransform}
               onPointerDown={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
@@ -320,11 +337,19 @@ export const WorkspaceSegmentInfographicOverlay = ({
               onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
-                setIsSelected(false);
+                if (isDefaultTransform) {
+                  return;
+                }
+                pendingTransformRef.current = null;
+                setTransientTransform(defaultTransform);
+                onInteractionStart?.();
+                onTransformPreview?.(defaultTransform);
+                onTransformCommit?.(defaultTransform);
               }}
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" strokeLinecap="round" strokeWidth="2" />
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M3 12a9 9 0 1 0 3-6.7L3 8" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.9" />
+                <path d="M3 3v5h5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.9" />
               </svg>
             </button>
           </>
