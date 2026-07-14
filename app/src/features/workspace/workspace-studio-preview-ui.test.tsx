@@ -18,6 +18,15 @@ describe("renderWorkspaceStudioShortsGenerationStatus", () => {
     expect(container.querySelector(".studio-generation-visual__core img")?.getAttribute("src")).toBe(
       "/studio/generation-render-core.webp",
     );
+    const backgroundVideo = container.querySelector<HTMLVideoElement>(".studio-generation-background");
+    expect(backgroundVideo?.autoplay).toBe(true);
+    expect(backgroundVideo?.loop).toBe(true);
+    expect(backgroundVideo?.muted).toBe(true);
+    expect(backgroundVideo?.playsInline).toBe(true);
+    expect(backgroundVideo?.getAttribute("poster")).toBe("/studio/generation-background-poster.webp");
+    expect(backgroundVideo?.querySelector("source")?.getAttribute("src")).toBe(
+      "/studio/generation-background.mp4",
+    );
     expect(container.querySelector(".studio-canvas-preview__generation-progress")).toBeTruthy();
   });
 
