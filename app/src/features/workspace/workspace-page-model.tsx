@@ -1373,3 +1373,20 @@ export const shouldShowWorkspaceStartFreshScenesAction = (options: {
 }) =>
   options.isSegmentEditorActive &&
   (options.hasContent || options.hasResettableChanges);
+
+export const shouldShowWorkspaceStudioIdeaEmptyState = (options: {
+  createMode: StudioCreateMode;
+  hasComposerSourceIdea: boolean;
+  hasTopicInput: boolean;
+  isContentPlanVisible: boolean;
+  isCreateView: boolean;
+  isPreviewStageVisible: boolean;
+  isWelcomeVisible: boolean;
+}) =>
+  options.isCreateView &&
+  options.createMode === "default" &&
+  !options.isPreviewStageVisible &&
+  !options.isWelcomeVisible &&
+  !options.isContentPlanVisible &&
+  !options.hasTopicInput &&
+  !options.hasComposerSourceIdea;

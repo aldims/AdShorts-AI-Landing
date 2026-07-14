@@ -11,6 +11,7 @@ import {
   resolveWorkspaceRetainedScenesDraftState,
   resolveWorkspaceScenesModeSwitchTarget,
   shouldShowStudioGenerationError,
+  shouldShowWorkspaceStudioIdeaEmptyState,
   shouldUseWorkspaceStudioExpandedPromptLayout,
   shouldShowWorkspaceStartFreshScenesAction,
   shouldShowWorkspaceSegmentEditorFullPreviewBusyIndicator,
@@ -149,6 +150,33 @@ describe("studio prompt layout", () => {
         topicInput: "Короткая идея",
       }),
     ).toBe(true);
+  });
+});
+
+describe("studio idea empty state", () => {
+  const emptyStudio = {
+    createMode: "default" as const,
+    hasComposerSourceIdea: false,
+    hasTopicInput: false,
+    isContentPlanVisible: false,
+    isCreateView: true,
+    isPreviewStageVisible: false,
+    isWelcomeVisible: false,
+  };
+
+  it("replaces the blank studio after the welcome guide is closed", () => {
+    expect(shouldShowWorkspaceStudioIdeaEmptyState(emptyStudio)).toBe(true);
+  });
+
+  it("stays hidden while another primary studio state is visible", () => {
+    expect(shouldShowWorkspaceStudioIdeaEmptyState({ ...emptyStudio, isWelcomeVisible: true })).toBe(false);
+    expect(shouldShowWorkspaceStudioIdeaEmptyState({ ...emptyStudio, isPreviewStageVisible: true })).toBe(false);
+    expect(shouldShowWorkspaceStudioIdeaEmptyState({ ...emptyStudio, isContentPlanVisible: true })).toBe(false);
+  });
+
+  it("disappears as soon as the user starts an idea", () => {
+    expect(shouldShowWorkspaceStudioIdeaEmptyState({ ...emptyStudio, hasTopicInput: true })).toBe(false);
+    expect(shouldShowWorkspaceStudioIdeaEmptyState({ ...emptyStudio, hasComposerSourceIdea: true })).toBe(false);
   });
 });
 

@@ -619,6 +619,7 @@ import {
   resolveWorkspaceRetainedScenesDraftState,
   resolveWorkspaceScenesModeSwitchTarget,
   shouldShowStudioGenerationError,
+  shouldShowWorkspaceStudioIdeaEmptyState,
   shouldUseWorkspaceStudioExpandedPromptLayout,
   shouldShowWorkspaceStartFreshScenesAction,
   shouldShowWorkspaceSegmentEditorFullPreviewBusyIndicator,
@@ -2858,6 +2859,16 @@ export function WorkspacePage({
   );
   const closeStudioWelcomeCard = useCallback(() => {
     setIsStudioWelcomeCardClosed(true);
+  }, []);
+  const openStudioWelcomeCard = useCallback(() => {
+    setIsStudioWelcomeCardDismissed(false);
+    setIsStudioWelcomeCardClosed(false);
+  }, []);
+  const handleStudioIdeaSuggestionSelect = useCallback((suggestion: string) => {
+    setTopicInput(suggestion);
+    window.requestAnimationFrame(() => {
+      promptTextareaRef.current?.focus({ preventScroll: false });
+    });
   }, []);
   const handleStudioIdeaPromptImprove = async () => {
     const sourcePrompt = topicInput.trim();
@@ -24937,6 +24948,27 @@ export function WorkspacePage({
       : workspaceText(locale, `${publishProductLabel} отправится в ${publishPlatformLabel} сразу после подтверждения.`, `${publishProductLabel} will be sent to ${publishPlatformLabel} after confirmation.`);
   const shouldRenderStudioContentPlanRail = createMode !== "segment-editor";
   const isStudioContentPlanRailVisible = shouldRenderStudioContentPlanRail && isContentPlanVisible && !isGuest;
+  const shouldShowStudioIdeaEmptyState = shouldShowWorkspaceStudioIdeaEmptyState({
+    createMode,
+    hasComposerSourceIdea: composerSourceIdea !== null,
+    hasTopicInput: Boolean(topicInput.trim()),
+    isContentPlanVisible: isStudioContentPlanRailVisible,
+    isCreateView: studioView === "create",
+    isPreviewStageVisible: shouldRenderStudioPreviewStage,
+    isWelcomeVisible: shouldShowStudioWelcomeCard,
+  });
+  const studioIdeaEmptyStateSuggestions =
+    locale === "en"
+      ? [
+          "3 surprising facts about house cats",
+          "A product Short that makes people want to try it",
+          "A short story with an unexpected ending",
+        ]
+      : [
+          "3 неожиданных факта о домашних кошках",
+          "Рекламный Shorts, после которого хочется попробовать продукт",
+          "Короткая история с неожиданной развязкой",
+        ];
   const contentPlanPanel = shouldRenderStudioContentPlanRail ? (
     <WorkspaceContentPlanPanel
       activePlanId={activeContentPlanId}
@@ -36512,6 +36544,59 @@ export function WorkspacePage({
                   </div>
                 ) : null}
                 <div className="studio-canvas-create-layout">
+                {shouldShowStudioIdeaEmptyState ? (
+                  <section
+                    className="studio-idea-empty-state"
+                    aria-labelledby="studio-idea-empty-state-title"
+                    aria-describedby="studio-idea-empty-state-description"
+                  >
+                    <div className="studio-idea-empty-state__mark" aria-hidden="true">
+                      <svg viewBox="0 0 24 24">
+                        <path d="m12 3 1.7 4.3L18 9l-4.3 1.7L12 15l-1.7-4.3L6 9l4.3-1.7L12 3Z" />
+                        <path d="m18.5 14 .9 2.2 2.1.8-2.1.9-.9 2.1-.8-2.1-2.2-.9 2.2-.8.8-2.2Z" />
+                      </svg>
+                    </div>
+                    <div className="studio-idea-empty-state__copy">
+                      <span>{workspaceText(locale, "НОВЫЙ SHORTS", "NEW SHORT")}</span>
+                      <h2 id="studio-idea-empty-state-title">
+                        {workspaceText(locale, "Создайте свой следующий Shorts", "Create your next Short")}
+                      </h2>
+                      <p id="studio-idea-empty-state-description">
+                        {workspaceText(
+                          locale,
+                          "Опишите идею в поле ниже или выберите готовое направление.",
+                          "Describe your idea below or choose a ready-made direction.",
+                        )}
+                      </p>
+                    </div>
+                    <div
+                      className="studio-idea-empty-state__suggestions"
+                      aria-label={workspaceText(locale, "Примеры идей", "Idea examples")}
+                    >
+                      {studioIdeaEmptyStateSuggestions.map((suggestion, index) => (
+                        <button
+                          key={suggestion}
+                          type="button"
+                          onClick={() => handleStudioIdeaSuggestionSelect(suggestion)}
+                        >
+                          <span aria-hidden="true">{index + 1}</span>
+                          <strong>{suggestion}</strong>
+                          <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="m9 6 6 6-6 6" />
+                          </svg>
+                        </button>
+                      ))}
+                    </div>
+                    <button className="studio-idea-empty-state__guide" type="button" onClick={openStudioWelcomeCard}>
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="12" cy="12" r="9" />
+                        <path d="M9.8 9a2.35 2.35 0 0 1 4.57.78c0 1.74-2.37 2.05-2.37 3.72" />
+                        <path d="M12 17h.01" />
+                      </svg>
+                      {workspaceText(locale, "Как это работает?", "How does it work?")}
+                    </button>
+                  </section>
+                ) : null}
                 {shouldRenderStudioPreviewStage ? (
                 <div
                   className={`studio-canvas-preview${createMode === "segment-editor" ? " is-segment-editor" : ""}${
