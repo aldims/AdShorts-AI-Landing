@@ -180,7 +180,10 @@ export const shouldNotifyStudioGenerationError = (
   generateError: string | null | undefined,
   isGenerating: boolean,
   generationUiSource: StudioGenerationUiSource,
-): generateError is string => Boolean(generateError) && !isStudioGenerationUserFacing(isGenerating, generationUiSource);
+): generateError is string =>
+  Boolean(generateError) &&
+  generationUiSource !== "bootstrap" &&
+  !isStudioGenerationUserFacing(isGenerating, generationUiSource);
 
 export const shouldUseWorkspaceStudioExpandedPromptLayout = (options: {
   hasComposerSourceIdea: boolean;

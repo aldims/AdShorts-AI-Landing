@@ -24705,7 +24705,7 @@ export function WorkspacePage({
           setStatus(workspaceText(locale, "Генерация не удалась", "Generation failed"));
           setGenerateError(latestGenerationError ?? workspaceText(locale, "Генерация не удалась.", "Generation failed."));
           setIsGenerating(false);
-          setGenerationUiSource("idle");
+          setGenerationUiSource("bootstrap");
           return;
         }
 

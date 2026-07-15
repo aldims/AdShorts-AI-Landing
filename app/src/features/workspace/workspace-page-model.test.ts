@@ -153,10 +153,11 @@ describe("studio generation visibility", () => {
     expect(isStudioGenerationUserFacing(true, "idle")).toBe(false);
   });
 
-  it("notifies about errors only after generation stops", () => {
+  it("notifies about current-run errors after generation stops without replaying bootstrap history", () => {
     expect(shouldNotifyStudioGenerationError("Previous failure", true, "studio")).toBe(false);
     expect(shouldNotifyStudioGenerationError("Previous failure", true, "segment-editor")).toBe(false);
     expect(shouldNotifyStudioGenerationError("Previous failure", true, "bootstrap")).toBe(false);
+    expect(shouldNotifyStudioGenerationError("Previous failure", false, "bootstrap")).toBe(false);
     expect(shouldNotifyStudioGenerationError("Previous failure", false, "idle")).toBe(true);
     expect(shouldNotifyStudioGenerationError(null, false, "idle")).toBe(false);
   });
