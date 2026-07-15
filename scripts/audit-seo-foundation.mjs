@@ -9,6 +9,12 @@ const policy = JSON.parse(await readRootFile("seo-index-policy.json"));
 const siteOrigin = policy.siteOrigin.replace(/\/$/, "");
 const indexPaths = new Set(policy.index.map((entry) => entry.url));
 const redirects = new Map(policy.redirect.map((entry) => [entry.url, entry.target]));
+const demandRecoveryPaths = [
+  "/shorts-ne-prohodyat-moderaciyu/",
+  "/shorts-nizkoe-kachestvo-video/",
+  "/gromkost-golosa-i-muzyki-v-shorts/",
+  "/ozvuchka-dlya-shorts-kak-vybrat-golos/",
+];
 const errors = [];
 
 const assert = (condition, message) => {
@@ -59,6 +65,10 @@ for (const pathname of indexPaths) {
 
 for (const pathname of sitemapPaths) {
   assert(indexPaths.has(pathname), `sitemap.xml: contains non-index URL ${pathname}`);
+}
+
+for (const pathname of demandRecoveryPaths) {
+  assert(indexPaths.has(pathname), `seo-index-policy.json: confirmed-demand URL must be index ${pathname}`);
 }
 
 for (const [source, target] of redirects) {
@@ -152,6 +162,14 @@ for (const hubPath of policy.hubs) {
   }
 }
 
+const ruGuidesHtml = await readRootFile("shorts-guides/index.html");
+for (const pathname of demandRecoveryPaths) {
+  assert(
+    ruGuidesHtml.includes(`href="..${pathname}"`),
+    `shorts-guides/index.html: missing confirmed-demand link ${pathname}`,
+  );
+}
+
 const metadata = JSON.parse(await readRootFile("seo-url-metadata.json"));
 assert(Array.isArray(metadata.urls), "seo-url-metadata.json: missing urls array");
 assert(metadata.urls.length === sitemapUrls.length, "seo-url-metadata.json: URL count must match sitemap");
@@ -162,6 +180,7 @@ assert(redirectManifest.redirects.length === policy.redirect.length, "seo-redire
 
 const calculatorHtml = await readRootFile("kalkulyator-stoimosti-shorts/index.html");
 const calculatorJs = await readRootFile("kalkulyator-stoimosti-shorts/calculator.js");
+assert(/<title>Сколько стоит монтаж Shorts:/i.test(calculatorHtml), "calculator: title must answer the validated price query");
 for (const id of ["shorts-calculator", "manual-time", "manual-cost", "ai-time", "ai-cost", "share-result"]) {
   assert(new RegExp(`id=["']${id}["']`).test(calculatorHtml), `calculator: missing #${id}`);
 }

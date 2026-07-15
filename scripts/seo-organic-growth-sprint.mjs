@@ -4,8 +4,8 @@ import path from "node:path";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const siteOrigin = "https://adshortsai.com";
-const dateModified = "2026-07-10";
 const indexPolicy = JSON.parse(await readFile(path.join(rootDir, "seo-index-policy.json"), "utf8"));
+const indexByPath = new Map(indexPolicy.index.map((entry) => [entry.url, entry]));
 const indexPaths = new Set(indexPolicy.index.map((entry) => entry.url));
 
 const priorityRoutes = [
@@ -15,6 +15,10 @@ const priorityRoutes = [
   "/en/youtube-shorts-for-lawyers/",
   "/kak-ubrat-tryasku-v-shorts/",
   "/shorts-ne-nabirayut-prosmotry/",
+  "/shorts-ne-prohodyat-moderaciyu/",
+  "/shorts-nizkoe-kachestvo-video/",
+  "/gromkost-golosa-i-muzyki-v-shorts/",
+  "/ozvuchka-dlya-shorts-kak-vybrat-golos/",
   "/shorts-dlya-kliniki/",
   "/kak-chasto-vykladyvat-shorts/",
   "/kak-sdelat-seriyu-shorts/",
@@ -62,6 +66,26 @@ const priorityRoutes = [
 ].filter((route) => indexPaths.has(route));
 
 const metaOverrides = {
+  "/shorts-ne-prohodyat-moderaciyu/": {
+    title: "Ролик Shorts не прошёл модерацию: причины и что исправить",
+    description:
+      "Что означает ошибка модерации Shorts: проверьте музыку, чужие материалы, формулировки и ограничения, затем исправьте ролик перед повторной публикацией.",
+  },
+  "/shorts-nizkoe-kachestvo-video/": {
+    title: "Почему Shorts в плохом качестве: причины и настройки экспорта",
+    description:
+      "Почему YouTube Shorts выглядит размыто: проверьте исходник, разрешение 1080x1920, битрейт, повторное сжатие и обработку после загрузки.",
+  },
+  "/gromkost-golosa-i-muzyki-v-shorts/": {
+    title: "Как понизить громкость музыки в Shorts и сохранить голос",
+    description:
+      "Как уменьшить громкость музыки в Shorts: настройте баланс с голосом, проверьте ролик на динамике телефона и исключите резкие скачки уровня.",
+  },
+  "/ozvuchka-dlya-shorts-kak-vybrat-golos/": {
+    title: "Нейросеть для Shorts озвучки: голос, темп и паузы",
+    description:
+      "Нейросеть для Shorts озвучки: как выбрать голос, темп, паузы и субтитры, чтобы ролик звучал естественно и удерживал зрителя.",
+  },
   "/en/faceless-youtube-shorts/": {
     title: "Faceless YouTube Shorts: Formats, Hooks and Retention",
     description:
@@ -301,7 +325,7 @@ const hasJsonLdType = (html, typeName) => {
   return false;
 };
 
-const updateArticleJsonLd = (html, locale, { headline, description }) =>
+const updateArticleJsonLd = (html, locale, { headline, description, dateModified }) =>
   html.replace(/\n?\s*<script\s+type="application\/ld\+json">\s*([\s\S]*?)\s*<\/script>/gi, (match, rawJson) => {
     try {
       const data = JSON.parse(rawJson);
@@ -323,7 +347,7 @@ const updateArticleJsonLd = (html, locale, { headline, description }) =>
 const classifyPage = (route) => {
   const slug = route.toLowerCase();
 
-  if (/upload|zagruzh|format|bitreyt|black|chern|copyright|music|muzyka|phone|telefon|background|fon|shake|tryask|audio|zvuk/.test(slug)) {
+  if (/upload|zagruzh|format|bitreyt|black|chern|copyright|music|muzyka|phone|telefon|background|fon|shake|tryask|audio|zvuk|moderac|quality|kachestv|gromkost|ozvuch/.test(slug)) {
     return "production";
   }
 
@@ -670,6 +694,7 @@ const processPage = async (route) => {
   const locale = route.startsWith("/en/") ? "en" : "ru";
   const canonical = routeToCanonical(route);
   const category = classifyPage(route);
+  const dateModified = indexByPath.get(route)?.contentModified ?? indexPolicy.baselineDate;
   let html = await readFile(filePath, "utf8");
   const h1 = extractTagText(html, "h1");
   const currentCanonical = extractCanonical(html);
@@ -690,6 +715,7 @@ const processPage = async (route) => {
   html = updateArticleJsonLd(html, locale, {
     headline: meta?.title ?? extractTitle(html),
     description: meta?.description ?? extractMetaDescription(html),
+    dateModified,
   });
 
   if (!hasJsonLdType(html, "BreadcrumbList")) {

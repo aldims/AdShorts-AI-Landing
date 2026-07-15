@@ -2286,8 +2286,8 @@ const renderGuidesBlock = (locale) => {
   if (locale === "ru" && indexPaths.has("/kalkulyator-stoimosti-shorts/")) {
     pages.unshift({
       slug: "kalkulyator-stoimosti-shorts",
-      h1: "Калькулятор стоимости и времени Shorts",
-      description: "Сравните часы и бюджет ручного создания коротких видео со своим сценарием работы через AI.",
+      h1: "Сколько стоит монтаж Shorts",
+      description: "Рассчитайте цену и время монтажа коротких видео вручную и с AI по своим параметрам.",
     });
   }
   const title = locale === "en" ? "AI generators" : "AI-генераторы";

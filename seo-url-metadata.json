@@ -56,15 +56,15 @@
     },
     {
       "canonical": "https://adshortsai.com/kalkulyator-stoimosti-shorts/",
-      "cluster": "other",
+      "cluster": "pricing",
       "cta_source": "seo_kalkulyator_stoimosti_shorts",
-      "description": "Бесплатный калькулятор стоимости и времени производства Shorts: сравните ручной процесс и создание коротких видео с AI по своим параметрам.",
-      "h1": "Калькулятор стоимости и времени Shorts",
+      "description": "Рассчитайте стоимость монтажа Shorts и время производства: сравните ручную работу и создание коротких видео с AI по своим параметрам.",
+      "h1": "Сколько стоит монтаж Shorts",
       "intent": "informational",
-      "lastmod": "2026-07-10",
+      "lastmod": "2026-07-15",
       "locale": "ru",
-      "target_query": "Калькулятор стоимости и времени Shorts",
-      "title": "Калькулятор стоимости Shorts: время и бюджет производства",
+      "target_query": "Сколько стоит монтаж Shorts",
+      "title": "Сколько стоит монтаж Shorts: калькулятор цены и времени",
       "url": "https://adshortsai.com/kalkulyator-stoimosti-shorts/"
     },
     {
@@ -367,6 +367,32 @@
       "url": "https://adshortsai.com/shorts-ne-nabirayut-prosmotry/"
     },
     {
+      "canonical": "https://adshortsai.com/shorts-ne-prohodyat-moderaciyu/",
+      "cluster": "problems",
+      "cta_source": "seo_shorts_ne_prohodyat_moderaciyu",
+      "description": "Что означает ошибка модерации Shorts: проверьте музыку, чужие материалы, формулировки и ограничения, затем исправьте ролик перед повторной публикацией.",
+      "h1": "Ролик Shorts не прошёл модерацию: что проверить",
+      "intent": "problem-solution",
+      "lastmod": "2026-07-15",
+      "locale": "ru",
+      "target_query": "Ролик Shorts не прошёл модерацию: что проверить",
+      "title": "Ролик Shorts не прошёл модерацию: причины и что исправить",
+      "url": "https://adshortsai.com/shorts-ne-prohodyat-moderaciyu/"
+    },
+    {
+      "canonical": "https://adshortsai.com/shorts-nizkoe-kachestvo-video/",
+      "cluster": "problems",
+      "cta_source": "seo_shorts_nizkoe_kachestvo_video",
+      "description": "Почему YouTube Shorts выглядит размыто: проверьте исходник, разрешение 1080x1920, битрейт, повторное сжатие и обработку после загрузки.",
+      "h1": "Почему Shorts в плохом качестве и как это исправить",
+      "intent": "how-to",
+      "lastmod": "2026-07-15",
+      "locale": "ru",
+      "target_query": "Почему Shorts в плохом качестве и как это исправить",
+      "title": "Почему Shorts в плохом качестве: причины и настройки экспорта",
+      "url": "https://adshortsai.com/shorts-nizkoe-kachestvo-video/"
+    },
+    {
       "canonical": "https://adshortsai.com/nizkoe-uderzhanie-v-youtube-shorts/",
       "cluster": "retention",
       "cta_source": "seo_nizkoe_uderzhanie_v_youtube_shorts",
@@ -482,6 +508,32 @@
       "target_query": "Субтитры для Shorts автоматически",
       "title": "Субтитры для Shorts автоматически: как сделать быстро, без ошибок",
       "url": "https://adshortsai.com/subtitry-dlya-shorts-avtomatom/"
+    },
+    {
+      "canonical": "https://adshortsai.com/ozvuchka-dlya-shorts-kak-vybrat-golos/",
+      "cluster": "commercial",
+      "cta_source": "seo_ozvuchka_dlya_shorts_kak_vybrat_golos",
+      "description": "Нейросеть для Shorts озвучки: как выбрать голос, темп, паузы и субтитры, чтобы ролик звучал естественно и удерживал зрителя.",
+      "h1": "Нейросеть для Shorts озвучки: как выбрать голос",
+      "intent": "commercial",
+      "lastmod": "2026-07-15",
+      "locale": "ru",
+      "target_query": "Нейросеть для Shorts озвучки: как выбрать голос",
+      "title": "Нейросеть для Shorts озвучки: голос, темп и паузы",
+      "url": "https://adshortsai.com/ozvuchka-dlya-shorts-kak-vybrat-golos/"
+    },
+    {
+      "canonical": "https://adshortsai.com/gromkost-golosa-i-muzyki-v-shorts/",
+      "cluster": "other",
+      "cta_source": "seo_gromkost_golosa_i_muzyki_v_shorts",
+      "description": "Как уменьшить громкость музыки в Shorts: настройте баланс с голосом, проверьте ролик на динамике телефона и исключите резкие скачки уровня.",
+      "h1": "Как понизить громкость музыки в Shorts",
+      "intent": "how-to",
+      "lastmod": "2026-07-15",
+      "locale": "ru",
+      "target_query": "Как понизить громкость музыки в Shorts",
+      "title": "Как понизить громкость музыки в Shorts и сохранить голос",
+      "url": "https://adshortsai.com/gromkost-golosa-i-muzyki-v-shorts/"
     },
     {
       "canonical": "https://adshortsai.com/muzyka-dlya-shorts/",
