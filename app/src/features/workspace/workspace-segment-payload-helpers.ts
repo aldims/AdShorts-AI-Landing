@@ -31,6 +31,7 @@ import {
   getWorkspaceSegmentVoiceSourceDurationSeconds,
   getWorkspaceSegmentVoiceSourceEndTime,
   getWorkspaceSegmentVoiceSourceStartTime,
+  getWorkspaceSegmentVoiceLanguage,
   getWorkspaceSegmentVoiceOverrideId,
   formatWorkspaceSegmentEditorMissingVisualScenesMessage,
   hasWorkspaceSegmentDisplayAiVideoAsset,
@@ -96,6 +97,7 @@ export type WorkspaceSegmentEditorPayloadSegment = {
   voiceSourceDuration?: number | null;
   voiceSourceEndTime?: number | null;
   voiceSourceStartTime?: number | null;
+  voiceLanguage?: StudioLanguage | null;
   voiceType?: string | null;
 };
 
@@ -439,6 +441,7 @@ export const buildWorkspaceSegmentEditorPayload = async (
           : null)
       : "none";
     const hasFreshVoiceoverAsset = isWorkspaceSegmentVoiceoverAssetFresh(segment, session);
+    const segmentVoiceLanguage = getWorkspaceSegmentVoiceLanguage(segment, options.language);
     let voiceoverAssetId = hasFreshVoiceoverAsset
       ? getWorkspaceSegmentCustomAssetId(segment.voiceoverAsset) ??
         getWorkspaceSegmentAssetIdFromFirstPartyMediaUrl(segment.voiceoverAsset?.remoteUrl) ??
@@ -449,7 +452,7 @@ export const buildWorkspaceSegmentEditorPayload = async (
         fallbackFileName: segment.voiceoverAsset.fileName || `segment-${segment.index + 1}-voiceover.wav`,
         fallbackMimeType: segment.voiceoverAsset.mimeType || "audio/wav",
         kind: "segment_voiceover",
-        language: options.language,
+        language: segmentVoiceLanguage,
         mediaType: "audio",
         projectId: mediaUploadScope.projectId,
         role: "segment_voiceover",
@@ -511,6 +514,7 @@ export const buildWorkspaceSegmentEditorPayload = async (
       ...(voiceSourceDuration !== null ? { voiceSourceDuration } : {}),
       ...(voiceSourceEndTime !== null ? { voiceSourceEndTime } : {}),
       ...(voiceSourceStartTime !== null ? { voiceSourceStartTime } : {}),
+      voiceLanguage: segmentVoiceLanguage,
       voiceType: segmentVoiceType,
     });
   }

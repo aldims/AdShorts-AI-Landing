@@ -188,6 +188,8 @@ export type WorkspaceSegmentEditorSegment = {
   voiceoverTextHash?: string | null;
   voiceoverVoiceType?: string | null;
   voiceover_asset_id?: number | null;
+  voiceLanguage?: StudioLanguage | null;
+  voice_language?: StudioLanguage | null;
   voiceType?: string | null;
   voice_type?: string | null;
   aiVideoGeneratedMode?: WorkspaceSegmentAiVideoMode | null;

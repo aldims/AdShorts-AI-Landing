@@ -979,6 +979,7 @@ export type StudioSegmentEditorSegment = {
   voiceSourceDuration?: number | null;
   voiceSourceEndTime?: number | null;
   voiceSourceStartTime?: number | null;
+  voiceLanguage?: Locale;
   voiceType?: string | null;
 };
 
@@ -2244,6 +2245,8 @@ export const normalizeStudioSegmentEditorPayload = (
       _voice_source_duration?: unknown;
       _voice_source_end_time?: unknown;
       _voice_source_start_time?: unknown;
+      voiceLanguage?: unknown;
+      voice_language?: unknown;
       voiceType?: unknown;
       voice_type?: unknown;
     };
@@ -2339,6 +2342,9 @@ export const normalizeStudioSegmentEditorPayload = (
         : segmentVoiceTypeText.toLowerCase() === "none"
           ? "none"
           : normalizeStudioVoiceId(segmentVoiceTypeText) ?? null;
+    const segmentVoiceLanguage = normalizeStudioLanguage(
+      normalizeGenerationText(segmentRecord.voiceLanguage ?? segmentRecord.voice_language) || language,
+    );
     const segmentHasVoice =
       segmentVoiceType === "none" ? false : options?.globalVoiceEnabled !== false || Boolean(segmentVoiceType);
     const segmentSubtitleTypeRaw = normalizeGenerationText(segmentRecord.subtitleType ?? segmentRecord.subtitle_type).toLowerCase();
@@ -2408,6 +2414,7 @@ export const normalizeStudioSegmentEditorPayload = (
           ? Math.max(voiceSourceStartTime, voiceSourceEndTime)
           : null,
       voiceSourceStartTime: voiceSourceStartTime !== null ? Math.max(0, voiceSourceStartTime) : null,
+      voiceLanguage: segmentVoiceLanguage,
       voiceType: segmentVoiceType,
     });
   });
@@ -6928,7 +6935,7 @@ export async function createStudioGenerationJob(
               const adsflowVoiceType = resolveStudioSegmentEditorAdsflowVoiceType({
                 globalVoiceEnabled: isVoiceEnabled,
                 globalVoiceId: normalizedVoiceId,
-                language: normalizedLanguage,
+                language: segment.voiceLanguage ?? normalizedLanguage,
                 segmentVoiceType: segment.voiceType,
               });
               const segmentVoiceTypeForPayload =
@@ -7006,6 +7013,7 @@ export async function createStudioGenerationJob(
                 voice_source_duration: voiceSourceDuration,
                 voice_source_end_time: voiceSourceEndTime,
                 voice_source_start_time: voiceSourceStartTime,
+                voice_language: segment.voiceLanguage,
                 effective_voice_type: adsflowVoiceType,
                 voice_type: segmentVoiceTypeForPayload,
                 ...(segmentVoiceModelPath ? { model_path: segmentVoiceModelPath } : {}),

@@ -494,6 +494,18 @@ export const getWorkspaceSegmentVoiceOverrideId = (
   segment: Pick<WorkspaceSegmentEditorSegment, "voiceType" | "voice_type"> | null | undefined,
 ) => normalizeWorkspaceSegmentEditorSetting(segment?.voiceType ?? segment?.voice_type) ?? null;
 
+export const getWorkspaceSegmentVoiceLanguage = (
+  segment:
+    | Pick<WorkspaceSegmentEditorSegment, "voiceLanguage" | "voice_language" | "voiceoverLanguage">
+    | null
+    | undefined,
+  fallbackLanguage?: StudioLanguage | null,
+): StudioLanguage =>
+  normalizeStudioLanguageValue(segment?.voiceLanguage ?? segment?.voice_language) ??
+  normalizeStudioLanguageValue(fallbackLanguage) ??
+  normalizeStudioLanguageValue(segment?.voiceoverLanguage) ??
+  "ru";
+
 const getWorkspaceSegmentVoiceoverAssetIdForInference = (
   segment:
     | (Pick<WorkspaceSegmentEditorSegment, "voiceoverAssetId" | "voiceover_asset_id"> & {
@@ -2759,6 +2771,8 @@ export const restoreWorkspaceSegmentTimelineSnapshot = (
     sourceSegment: WorkspaceSegmentEditorDraftSegment | null | undefined,
   ): WorkspaceSegmentEditorDraftSegment => ({
     ...restoreSpeechTimingState(nextSegment, sourceSegment),
+    voiceLanguage: normalizeStudioLanguageValue(sourceSegment?.voiceLanguage ?? sourceSegment?.voice_language),
+    voice_language: normalizeStudioLanguageValue(sourceSegment?.voiceLanguage ?? sourceSegment?.voice_language),
     voiceoverAsset: cloneStudioCustomVideoFile(sourceSegment?.voiceoverAsset ?? null),
     voiceoverLanguage: sourceSegment?.voiceoverLanguage ?? null,
     voiceoverTextHash: sourceSegment?.voiceoverTextHash ?? null,
@@ -2993,6 +3007,12 @@ export const cloneWorkspaceSegmentEditorDraftSegment = (
   voiceSourceDuration: getWorkspaceSegmentVoiceSourceDurationSeconds(segment),
   voiceSourceEndTime: getWorkspaceSegmentVoiceSourceEndTime(segment),
   voiceSourceStartTime: getWorkspaceSegmentVoiceSourceStartTime(segment),
+  voiceLanguage:
+    normalizeStudioLanguageValue(segment.voiceLanguage ?? segment.voice_language) ??
+    normalizeStudioLanguageValue(segment.voiceoverLanguage),
+  voice_language:
+    normalizeStudioLanguageValue(segment.voiceLanguage ?? segment.voice_language) ??
+    normalizeStudioLanguageValue(segment.voiceoverLanguage),
   voiceoverAsset: cloneStudioCustomVideoFile(segment.voiceoverAsset),
   voiceoverLanguage: typeof segment.voiceoverLanguage === "string" && segment.voiceoverLanguage.trim() ? segment.voiceoverLanguage : null,
   voiceoverTextHash: typeof segment.voiceoverTextHash === "string" && segment.voiceoverTextHash.trim() ? segment.voiceoverTextHash : null,
@@ -3022,6 +3042,10 @@ export const restoreWorkspaceSegmentVoiceTextDraftSnapshot = (
     snapshot.text,
     fallbackLanguage,
   ),
+  voiceLanguage: normalizeStudioLanguageValue(snapshot.voiceLanguage ?? snapshot.voice_language),
+  voice_language: normalizeStudioLanguageValue(snapshot.voiceLanguage ?? snapshot.voice_language),
+  voiceType: snapshot.voiceType,
+  voice_type: snapshot.voice_type,
   voiceoverAsset: cloneStudioCustomVideoFile(snapshot.voiceoverAsset),
   voiceoverLanguage: snapshot.voiceoverLanguage,
   voiceoverTextHash: snapshot.voiceoverTextHash,
@@ -4200,7 +4224,7 @@ export const isWorkspaceSegmentVoiceoverAssetFresh = (
 
   const sessionLanguage = normalizeStudioLanguageValue(session?.language);
   const assetLanguage = normalizeStudioLanguageValue(segment.voiceoverLanguage);
-  const language = sessionLanguage ?? assetLanguage ?? "ru";
+  const language = getWorkspaceSegmentVoiceLanguage(segment, sessionLanguage);
   const voiceOverrideId = getWorkspaceSegmentVoiceOverrideId(segment);
   if (voiceOverrideId === "none") {
     return false;
@@ -6113,6 +6137,8 @@ export const applyWorkspaceSegmentEditorGlobalVoiceToSegments = (
         return clearWorkspaceSegmentEditorVoiceoverGenerationState({
           ...segment,
           subtitleType: isVoiceDisabled ? "none" : segment.subtitleType,
+          voiceLanguage: null,
+          voice_language: null,
           voiceType: null,
         }, {
           resetTimelineToEstimatedVoiceover: true,
@@ -6124,13 +6150,19 @@ export const applyWorkspaceSegmentEditorGlobalVoiceToSegments = (
         return clearWorkspaceSegmentEditorVoiceoverGenerationState({
           ...segment,
           subtitleType: "none",
+          voiceLanguage: null,
+          voice_language: null,
         }, {
           resetTimelineToEstimatedVoiceover: true,
           session: draft,
         });
       }
 
-      return clearWorkspaceSegmentEditorVoiceoverGenerationState(segment, {
+      return clearWorkspaceSegmentEditorVoiceoverGenerationState({
+        ...segment,
+        voiceLanguage: null,
+        voice_language: null,
+      }, {
         resetTimelineToEstimatedVoiceover: true,
         session: draft,
       });
@@ -6716,7 +6748,7 @@ export const isWorkspaceSegmentProjectVoiceoverTimingFresh = (
 
   const sessionLanguage = normalizeStudioLanguageValue(session?.language);
   const voiceoverLanguage = normalizeStudioLanguageValue(segment.voiceoverLanguage);
-  const language = sessionLanguage ?? voiceoverLanguage ?? "ru";
+  const language = getWorkspaceSegmentVoiceLanguage(segment, sessionLanguage);
   const voiceOverrideId = getWorkspaceSegmentVoiceOverrideId(segment);
   if (voiceOverrideId === "none") {
     return false;
@@ -6747,6 +6779,7 @@ export const applyWorkspaceSegmentEditorSceneVoiceSelection = (
   segmentIndex: number,
   selectedVoiceType: string,
   baselineSession?: WorkspaceSegmentEditorDraftSession | null,
+  options?: { language?: StudioLanguage | null },
 ): WorkspaceSegmentEditorDraftSession => {
   const selectedVoiceId = normalizeWorkspaceSegmentEditorSetting(selectedVoiceType);
   if (!selectedVoiceId || selectedVoiceId === "none") {
@@ -6758,10 +6791,20 @@ export const applyWorkspaceSegmentEditorSceneVoiceSelection = (
     return draft;
   }
 
+  const draftLanguage = getWorkspaceSegmentEditorSessionLanguage(draft);
+  const selectedLanguage = normalizeStudioLanguageValue(options?.language) ??
+    getWorkspaceSegmentVoiceLanguage(segment, draftLanguage);
+  const currentLanguage = getWorkspaceSegmentVoiceLanguage(segment, draftLanguage);
+  const languageChanged = currentLanguage !== selectedLanguage;
+
   const currentVoiceId = normalizeWorkspaceSegmentEditorSetting(
     getWorkspaceSegmentEffectiveVoiceId(segment, draft),
   );
-  if (currentVoiceId === selectedVoiceId && isWorkspaceSegmentVoiceoverPlaybackFresh(segment, draft)) {
+  if (
+    currentVoiceId === selectedVoiceId &&
+    !languageChanged &&
+    isWorkspaceSegmentVoiceoverPlaybackFresh(segment, draft)
+  ) {
     return draft;
   }
 
@@ -6780,7 +6823,11 @@ export const applyWorkspaceSegmentEditorSceneVoiceSelection = (
   );
   const hasCompatibleBaselineLanguage = Boolean(
     compatibleBaselineSession &&
-      normalizeStudioLanguageValue(draft.language) === normalizeStudioLanguageValue(compatibleBaselineSession.language),
+      selectedLanguage ===
+        getWorkspaceSegmentVoiceLanguage(
+          baselineSegment,
+          getWorkspaceSegmentEditorSessionLanguage(compatibleBaselineSession),
+        ),
   );
 
   if (
@@ -6807,16 +6854,28 @@ export const applyWorkspaceSegmentEditorSceneVoiceSelection = (
     };
   }
 
-  if (currentVoiceId === selectedVoiceId) {
+  if (currentVoiceId === selectedVoiceId && !languageChanged) {
     return draft;
   }
 
   const projectVoiceId = normalizeWorkspaceSegmentEditorSetting(draft.voiceType);
-  return applyWorkspaceSegmentEditorSceneVoiceOverride(
+  const nextDraft = applyWorkspaceSegmentEditorSceneVoiceOverride(
     draft,
     segmentIndex,
     projectVoiceId === selectedVoiceId ? null : selectedVoiceId,
   );
+  return {
+    ...nextDraft,
+    segments: nextDraft.segments.map((candidate) =>
+      candidate.index === segmentIndex
+        ? {
+            ...candidate,
+            voiceLanguage: selectedLanguage,
+            voice_language: selectedLanguage,
+          }
+        : candidate,
+    ),
+  };
 };
 
 const WORKSPACE_SEGMENT_PROJECT_TTS_RESTORE_RANGE_EPSILON_SECONDS = 0.35;
@@ -8139,6 +8198,16 @@ export const createWorkspaceSegmentEditorDraftSession = (
           textByLanguage: {
             [sourceLanguage]: segment.text,
           },
+          voiceLanguage:
+            normalizeStudioLanguageValue(segment.voiceLanguage ?? segment.voice_language) ??
+            (voiceoverAsset || hasProjectVoiceoverTiming
+              ? normalizeStudioLanguageValue(segment.voiceoverLanguage) ?? sourceLanguage
+              : null),
+          voice_language:
+            normalizeStudioLanguageValue(segment.voiceLanguage ?? segment.voice_language) ??
+            (voiceoverAsset || hasProjectVoiceoverTiming
+              ? normalizeStudioLanguageValue(segment.voiceoverLanguage) ?? sourceLanguage
+              : null),
           voiceoverAsset,
           voiceoverLanguage: segment.voiceoverLanguage ?? (voiceoverAsset || hasProjectVoiceoverTiming ? sourceLanguage : null),
           voiceoverTextHash:
@@ -8581,6 +8650,12 @@ export const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
   const nextInfographic = shouldPreserveLiveInfographic
     ? cloneWorkspaceSegmentInfographic(liveSegment.infographic)
     : freshInfographic;
+  const nextVoiceLanguage = freshVoiceoverAsset || hasFreshProjectVoiceoverTiming
+    ? normalizeStudioLanguageValue(normalizedFreshSegment.voiceLanguage ?? normalizedFreshSegment.voice_language) ??
+      normalizeStudioLanguageValue(normalizedFreshSegment.voiceoverLanguage) ??
+      fallbackLanguage
+    : normalizeStudioLanguageValue(liveSegment.voiceLanguage ?? liveSegment.voice_language) ??
+      (liveSegment.voiceoverAsset ? normalizeStudioLanguageValue(liveSegment.voiceoverLanguage) : null);
 
   return {
     ...normalizedFreshSegment,
@@ -8681,6 +8756,8 @@ export const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
       liveSegment.text,
       fallbackLanguage,
     ),
+    voiceLanguage: nextVoiceLanguage,
+    voice_language: nextVoiceLanguage,
     voiceoverAsset: freshVoiceoverAsset ?? (hasFreshProjectVoiceoverTiming ? null : cloneStudioCustomVideoFile(liveSegment.voiceoverAsset)),
     voiceoverLanguage: freshVoiceoverAsset || hasFreshProjectVoiceoverTiming
       ? normalizedFreshSegment.voiceoverLanguage ?? fallbackLanguage
@@ -8939,6 +9016,8 @@ export const createWorkspaceSegmentEditorInsertedSegment = (options: {
     subtitleType: null,
     text: baseText,
     textByLanguage: { ...textByLanguage },
+    voiceLanguage: null,
+    voice_language: null,
     voiceoverAsset: null,
     voiceoverLanguage: null,
     voiceoverTextHash: null,
@@ -9066,6 +9145,8 @@ export const resetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene = (
       subtitleType: null,
       text: "",
       textByLanguage: { ...emptyTextByLanguage },
+      voiceLanguage: null,
+      voice_language: null,
       voiceoverAsset: null,
       voiceoverLanguage: null,
       voiceoverTextHash: null,
@@ -9378,6 +9459,9 @@ export const normalizeLegacyWorkspaceSegmentEditorDraftSession = (
         : normalizedVoiceoverAsset || hasReusableProjectVoiceoverTiming
           ? getWorkspaceSegmentEditorSessionLanguage(session)
           : null;
+    const normalizedVoiceLanguage =
+      normalizeStudioLanguageValue(segment.voiceLanguage ?? segment.voice_language) ??
+      normalizeStudioLanguageValue(normalizedVoiceoverLanguage);
     const normalizedSceneSoundPrompt = typeof segment.sceneSoundPrompt === "string" ? segment.sceneSoundPrompt : "";
     const normalizedSceneSoundGeneratedFromPrompt =
       typeof segment.sceneSoundGeneratedFromPrompt === "string" && segment.sceneSoundGeneratedFromPrompt.trim()
@@ -9460,6 +9544,7 @@ export const normalizeLegacyWorkspaceSegmentEditorDraftSession = (
       normalizedVoiceoverTextHash !== segment.voiceoverTextHash ||
       normalizedVoiceoverVoiceType !== segment.voiceoverVoiceType ||
       normalizedVoiceoverLanguage !== segment.voiceoverLanguage ||
+      normalizedVoiceLanguage !== normalizeStudioLanguageValue(segment.voiceLanguage ?? segment.voice_language) ||
       normalizedSubtitleColor !== (segment.subtitleColor ?? null) ||
       normalizedSubtitleStyle !== (segment.subtitleStyle ?? null) ||
       normalizedSubtitleType !== (segment.subtitleType ?? null) ||
@@ -9539,6 +9624,8 @@ export const normalizeLegacyWorkspaceSegmentEditorDraftSession = (
         voiceSourceDuration: normalizedVoiceSourceDuration,
         voiceSourceEndTime: normalizedVoiceSourceEndTime,
         voiceSourceStartTime: normalizedVoiceSourceStartTime,
+        voiceLanguage: normalizedVoiceLanguage,
+        voice_language: normalizedVoiceLanguage,
         voiceoverAsset: normalizedVoiceoverAsset,
         voiceoverLanguage: normalizedVoiceoverLanguage,
         voiceoverTextHash: normalizedVoiceoverTextHash,
@@ -9586,6 +9673,8 @@ export const normalizeLegacyWorkspaceSegmentEditorDraftSession = (
       voiceSourceDuration: normalizedVoiceSourceDuration,
       voiceSourceEndTime: normalizedVoiceSourceEndTime,
       voiceSourceStartTime: normalizedVoiceSourceStartTime,
+      voiceLanguage: normalizedVoiceLanguage,
+      voice_language: normalizedVoiceLanguage,
       voiceoverAsset: normalizedVoiceoverAsset,
       voiceoverLanguage: normalizedVoiceoverLanguage,
       voiceoverTextHash: normalizedVoiceoverTextHash,

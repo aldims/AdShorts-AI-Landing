@@ -710,6 +710,7 @@ describe("studio generation worker availability", () => {
               startTime: 0,
               text: "Manual opening scene",
               videoAction: "original",
+              voiceLanguage: "ru",
               voiceoverAssetId: 611,
             },
             {
@@ -778,6 +779,7 @@ describe("studio generation worker availability", () => {
         target_duration_seconds: 10,
         timeline_duration_seconds: 10,
         effective_voice_type: "Liam_Timing",
+        voice_language: "ru",
         voiceover_asset_id: 611,
       }),
     );

@@ -493,6 +493,7 @@ describe("studio generation language resolution", () => {
             index: 0,
             text: "English voice inside a Russian project",
             videoAction: "original",
+            voiceLanguage: "en",
             voiceType: "Aiden",
           },
           {
@@ -507,7 +508,10 @@ describe("studio generation language resolution", () => {
       "ru",
     );
 
-    expect(normalized?.segments[0]?.voiceType).toBe("Aiden");
+    expect(normalized?.segments[0]).toEqual(expect.objectContaining({
+      voiceLanguage: "en",
+      voiceType: "Aiden",
+    }));
     expect(normalized?.segments[1]?.voiceType).toBe("none");
   });
 

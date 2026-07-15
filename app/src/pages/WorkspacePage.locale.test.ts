@@ -8789,11 +8789,15 @@ describe("WorkspacePage studio locale defaults", () => {
   it("exports a scene voice from another language without changing the project language", async () => {
     const segment = createDraftSegment({
       text: "Scene keeps its own voice language",
+      voiceLanguage: "en",
+      voice_language: "en",
       voiceType: DEFAULT_STUDIO_VOICE_ID.en,
     });
 
     const result = await buildWorkspaceSegmentEditorPayload(createDraftSession(segment), { language: "ru" });
 
+    expect(DEFAULT_STUDIO_VOICE_ID.en).toBe(DEFAULT_STUDIO_VOICE_ID.ru);
+    expect(result.payload.segments[0]?.voiceLanguage).toBe("en");
     expect(result.payload.segments[0]?.voiceType).toBe(DEFAULT_STUDIO_VOICE_ID.en);
   });
 

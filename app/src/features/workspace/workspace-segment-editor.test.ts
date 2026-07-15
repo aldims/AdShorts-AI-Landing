@@ -9,6 +9,7 @@ import {
   applyWorkspaceSegmentEditorGlobalVoiceToSegments,
   applyWorkspaceSegmentEditorSceneVoiceOverride,
   applyWorkspaceSegmentEditorSceneVoiceSelection,
+  getWorkspaceSegmentVoiceLanguage,
   getWorkspaceSegmentEffectiveVoiceId,
   getWorkspaceSegmentEffectiveSubtitleSettings,
   getWorkspaceSegmentKnownVisualDurationSeconds,
@@ -685,6 +686,43 @@ it("keeps a fresh generated voiceover when the already selected voice is selecte
 
   expect(selectedDraft).toBe(currentDraft);
   expect(selectedDraft.segments[0]?.voiceoverAsset?.assetId).toBe(802);
+});
+
+it("changes a scene voice language independently when Russian and English share the same voice id", () => {
+  const text = "The language flag must not be inferred from the shared voice id";
+  const currentSegment = createProjectVoiceoverSegment({
+    text,
+    voiceLanguage: "ru",
+    voice_language: "ru",
+    voiceoverAsset: {
+      assetId: 803,
+      durationSeconds: 3.8,
+      fileName: "scene-1-ru.mp3",
+      fileSize: 0,
+      mimeType: "audio/mpeg",
+      remoteUrl: "/api/workspace/media-assets/803",
+      source: "media-library",
+    },
+    voiceoverLanguage: "ru",
+    voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(text),
+    voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+  });
+  const currentDraft = createProjectVoiceoverDraft([currentSegment]);
+
+  const selectedDraft = applyWorkspaceSegmentEditorSceneVoiceSelection(
+    currentDraft,
+    0,
+    DEFAULT_STUDIO_VOICE_ID.en,
+    null,
+    { language: "en" },
+  );
+  const selectedSegment = selectedDraft.segments[0]!;
+
+  expect(DEFAULT_STUDIO_VOICE_ID.en).toBe(DEFAULT_STUDIO_VOICE_ID.ru);
+  expect(getWorkspaceSegmentVoiceLanguage(selectedSegment, "ru")).toBe("en");
+  expect(selectedSegment.voiceLanguage).toBe("en");
+  expect(selectedSegment.voiceoverAsset).toBeNull();
+  expect(selectedSegment.voiceoverLanguage).toBeNull();
 });
 
 it("resets scene duration to pending voiceover estimate after a global voice change", () => {

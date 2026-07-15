@@ -529,6 +529,7 @@ describe("segment editor asset lifecycle mapping", () => {
     expect(segment?.voiceoverAssetId).toBe(555);
     expect(segment?.voiceover_asset_id).toBe(555);
     expect(segment?.voiceover?.media_asset_id).toBe(555);
+    expect(segment?.voiceLanguage).toBe("en");
     expect(segment?.voiceoverLanguage).toBe("en");
     expect(segment?.voiceoverTextHash).toBe("subscribe now");
     expect(segment?.voiceoverVoiceType).toBe("Liam");

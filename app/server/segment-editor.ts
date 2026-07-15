@@ -77,6 +77,7 @@ type AdsflowSegmentEditorSegmentPayload = {
   voiceover_language?: string | null;
   voiceover_text_hash?: string | null;
   voiceover_voice_type?: string | null;
+  voice_language?: string | null;
   voice_type?: string | null;
 };
 
@@ -299,6 +300,7 @@ export type WorkspaceSegmentEditorSegment = {
   voiceoverTextHash: string | null;
   voiceoverVoiceType: string | null;
   voiceover_asset_id: number | null;
+  voiceLanguage: string | null;
   voiceType: string | null;
   aiVideoGeneratedMode?: "ai_video" | "photo_animation" | "talking_photo" | null;
   videoAction?: "ai" | "ai_photo" | "custom" | "image_edit" | "original" | "photo_animation" | "talking_photo" | null;
@@ -2948,6 +2950,10 @@ export const buildWorkspaceSegmentEditorSegment = (
     voiceoverTextHash: normalizeText(payload.voiceover_text_hash) || null,
     voiceoverVoiceType: normalizeText(payload.voiceover_voice_type) || null,
     voiceover_asset_id: voiceoverAssetId,
+    voiceLanguage:
+      normalizeText(payload.voice_language) ||
+      normalizeText(payload.voiceover_language) ||
+      null,
     voiceType: normalizeText(payload.voice_type) || null,
     aiVideoGeneratedMode: isTalkingPhotoSegment ? "talking_photo" : null,
     videoAction: isTalkingPhotoSegment ? "talking_photo" : null,

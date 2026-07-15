@@ -246,6 +246,7 @@ import {
   getWorkspaceSegmentVoiceoverAudioPreviewSource,
   getWorkspaceSegmentVoiceoverDurationSeconds,
   getWorkspaceSegmentVoiceSourceDurationSeconds,
+  getWorkspaceSegmentVoiceLanguage,
   getWorkspaceSegmentVoiceOverrideId,
   formatWorkspaceSegmentEditorMissingVisualScenesMessage,
   applyWorkspaceSegmentEditorGlobalSubtitleSelection,
@@ -1070,6 +1071,7 @@ export {
   getWorkspaceSegmentRecommendedDurationSeconds,
   getWorkspaceSegmentSceneSoundDurationSeconds,
   getWorkspaceSegmentSceneSoundRefreshPrompt,
+  getWorkspaceSegmentVoiceLanguage,
   getWorkspaceSegmentTimelineVoiceoverDurationInfo,
   getWorkspaceSegmentVideoVisualDurationSeconds,
   getWorkspaceSegmentVideoVisualSourceDurationSeconds,
@@ -13014,7 +13016,7 @@ export function WorkspacePage({
       getWorkspaceSegmentEffectiveVoiceId(segment, draft),
     );
     const draftLanguage = getWorkspaceSegmentEditorSessionLanguage(draft);
-    const currentLanguage = getStudioLanguageForVoiceId(currentVoiceType, draftLanguage) ?? draftLanguage;
+    const currentLanguage = getWorkspaceSegmentVoiceLanguage(segment, draftLanguage);
 
     return (
       normalizeWorkspaceSegmentEditorTextForCompare(segment.text) === request.text &&
@@ -13062,8 +13064,7 @@ export function WorkspacePage({
     const segmentTimelineVoiceDurationSession = getSegmentTimelineVoiceDurationSession(segment, draft);
     const segmentTimelineVoiceType = getWorkspaceSegmentEffectiveVoiceId(segment, segmentTimelineVoiceDurationSession);
     const draftLanguage = getWorkspaceSegmentEditorSessionLanguage(draft);
-    const segmentTimelineVoiceGenerationLanguage =
-      getStudioLanguageForVoiceId(segmentTimelineVoiceType, draftLanguage) ?? draftLanguage;
+    const segmentTimelineVoiceGenerationLanguage = getWorkspaceSegmentVoiceLanguage(segment, draftLanguage);
     const segmentTimelineVoiceTextNormalized = normalizeWorkspaceSegmentEditorTextForCompare(segment.text);
     if (!segmentTimelineVoiceGenerationLanguage || !segmentTimelineVoiceTextNormalized || !segmentTimelineVoiceType) {
       return false;
@@ -17071,6 +17072,8 @@ export function WorkspacePage({
                 voiceSourceDuration,
                 voiceSourceEndTime: sourceEndTime,
                 voiceSourceStartTime: sourceStartTime,
+                voiceLanguage: options.language,
+                voice_language: options.language,
                 voiceoverAsset,
                 voiceoverLanguage: options.language,
                 voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(options.text),
@@ -20069,8 +20072,7 @@ export function WorkspacePage({
     const draftLanguage = getWorkspaceSegmentEditorSessionLanguage(currentDraft);
     const language =
       options?.language ??
-      getStudioLanguageForVoiceId(voiceType, draftLanguage) ??
-      draftLanguage;
+      getWorkspaceSegmentVoiceLanguage(targetSegment, draftLanguage);
     if (isSegmentEditorVoiceoverFreshForVoice(targetSegment, language, voiceType)) {
       setSegmentEditorVideoError(null);
       clearSegmentEditorVoiceoverError(targetSegmentIndex);
@@ -20377,6 +20379,8 @@ export function WorkspacePage({
                 voiceSourceDuration,
                 voiceSourceEndTime: sourceEndTime,
                 voiceSourceStartTime: sourceStartTime,
+                voiceLanguage: segmentStatus.language ?? expectedSegment.language,
+                voice_language: segmentStatus.language ?? expectedSegment.language,
                 voiceoverAsset,
                 voiceoverLanguage: segmentStatus.language ?? expectedSegment.language,
                 voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(expectedSegment.text),
@@ -25517,11 +25521,8 @@ export function WorkspacePage({
           return null;
         }
 
-        const language =
-          getStudioLanguageForVoiceId(voiceType, voiceDraft?.language ?? getWorkspaceSegmentEditorSessionLanguage(draft)) ??
-          voiceDraft?.language ??
-          getWorkspaceSegmentEditorSessionLanguage(draft) ??
-          selectedLanguage;
+        const language = voiceDraft?.language ??
+          getWorkspaceSegmentVoiceLanguage(segment, getWorkspaceSegmentEditorSessionLanguage(draft));
 
         return {
           language,
@@ -26241,9 +26242,21 @@ export function WorkspacePage({
       }),
     );
   };
-  const handleSegmentTimelineVoiceSelect = (segmentIndex: number, voiceId: StudioVoiceOption["id"]) => {
+  const handleSegmentTimelineVoiceSelect = (
+    segmentIndex: number,
+    voiceId: StudioVoiceOption["id"],
+    options?: { language?: StudioLanguage | null },
+  ) => {
+    const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+    const currentSegment = currentDraft
+      ? getSegmentEditorDraftSegmentByIndex(currentDraft, segmentIndex)
+      : null;
+    const fallbackLanguage = currentDraft
+      ? getWorkspaceSegmentEditorSessionLanguage(currentDraft)
+      : selectedLanguage;
     const voiceOption = getStudioVoiceOptionById(voiceId);
-    const voiceLanguage = getStudioLanguageForVoiceId(voiceOption?.id ?? voiceId, selectedLanguage) ?? selectedLanguage;
+    const voiceLanguage = normalizeStudioLanguageValue(options?.language) ??
+      getWorkspaceSegmentVoiceLanguage(currentSegment, fallbackLanguage);
     const nextVoiceId =
       voiceOption?.id ??
       resolveStudioVoiceIdForLanguage(
@@ -26255,16 +26268,13 @@ export function WorkspacePage({
     stopSegmentTimelineVoicePreview();
     setSegmentEditorVideoError(null);
     clearSegmentEditorVoiceoverError(segmentIndex);
-    const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
-    const currentSegment = currentDraft
-      ? getSegmentEditorDraftSegmentByIndex(currentDraft, segmentIndex)
-      : null;
     const nextDraft = currentDraft
       ? applyWorkspaceSegmentEditorSceneVoiceSelection(
           currentDraft,
           segmentIndex,
           nextVoiceId,
           segmentEditorChangeBaselineSession,
+          { language: voiceLanguage },
         )
       : null;
     const nextSegment = nextDraft ? getSegmentEditorDraftSegmentByIndex(nextDraft, segmentIndex) : null;
@@ -26282,7 +26292,7 @@ export function WorkspacePage({
       studioSidebarVoiceId,
     );
 
-    handleSegmentTimelineVoiceSelect(segmentIndex, nextVoiceId);
+    handleSegmentTimelineVoiceSelect(segmentIndex, nextVoiceId, { language });
   };
   const handleSegmentTimelineVoicePreview = async (voice: StudioVoiceOption) => {
     if (typeof window === "undefined") {
@@ -31609,17 +31619,10 @@ export function WorkspacePage({
     segmentTimelineVoiceMenuSegment && segmentEditorDraft
       ? getWorkspaceSegmentEffectiveVoiceId(segmentTimelineVoiceMenuSegment, segmentEditorDraft)
       : null;
-  const segmentTimelineVoiceMenuLanguage =
-    getStudioLanguageForVoiceId(
-      segmentTimelineVoiceMenuOverrideOption?.id,
-      segmentEditorDraft ? getWorkspaceSegmentEditorSessionLanguage(segmentEditorDraft) : selectedLanguage,
-    ) ??
-    getStudioLanguageForVoiceId(
-      segmentTimelineVoiceMenuEffectiveDraftVoiceId,
-      segmentEditorDraft ? getWorkspaceSegmentEditorSessionLanguage(segmentEditorDraft) : selectedLanguage,
-    ) ??
-    getStudioLanguageForVoiceId(studioSidebarVoiceId, selectedLanguage) ??
-    selectedLanguage;
+  const segmentTimelineVoiceMenuLanguage = getWorkspaceSegmentVoiceLanguage(
+    segmentTimelineVoiceMenuSegment,
+    segmentEditorDraft ? getWorkspaceSegmentEditorSessionLanguage(segmentEditorDraft) : selectedLanguage,
+  );
   const segmentTimelineVoiceMenuVoiceOptions = studioVoiceOptionsByLanguage[segmentTimelineVoiceMenuLanguage];
   const segmentTimelineVoiceMenuEffectiveVoiceId = segmentTimelineVoiceMenuOverrideOption
     ? segmentTimelineVoiceMenuOverrideOption.id
@@ -31766,6 +31769,7 @@ export function WorkspacePage({
 
         clearSegmentTimelineVoiceTextEditSnapshot();
         void handleSegmentEditorVoiceoverGenerate({
+          language: segmentTimelineVoiceMenuLanguage,
           segmentIndex: segmentTimelineVoiceMenuSegment.index,
           voiceType: segmentTimelineVoiceMenuGenerationVoiceId,
         });
@@ -31776,7 +31780,11 @@ export function WorkspacePage({
       onTextChange={handleSegmentTimelineTextChange}
       onUseGlobalVoice={handleSegmentTimelineVoiceUseGlobal}
       onVoicePreview={handleSegmentTimelineVoicePreview}
-      onVoiceSelect={handleSegmentTimelineVoiceSelect}
+      onVoiceSelect={(segmentIndex, voiceId) => {
+        handleSegmentTimelineVoiceSelect(segmentIndex, voiceId, {
+          language: segmentTimelineVoiceMenuLanguage,
+        });
+      }}
       previewingVoiceId={segmentTimelineVoicePreviewingVoiceId}
       segment={segmentTimelineVoiceMenuSegment}
       segmentArrayIndex={segmentTimelineVoiceMenuArrayIndex}
