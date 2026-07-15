@@ -1,5 +1,6 @@
 import {
   STUDIO_AI_PHOTO_VIDEO_GENERATION_CREDIT_COST,
+  STUDIO_AI_VIDEO_AUDIO_CREDIT_COST,
   STUDIO_AI_VIDEO_GENERATION_CREDIT_COST,
   getStudioSegmentAiVideoCreditCost,
   getStudioSegmentPhotoAnimationCreditCost,
@@ -2407,13 +2408,24 @@ export const getStudioVoiceCreditCost = (_voiceId: string | null | undefined) =>
 
 export const getStudioGenerationRequiredCredits = (
   videoMode: StudioVideoMode,
-  options?: { isSegmentEditorGeneration?: boolean; voiceEnabled?: boolean; voiceId?: string | null },
+  options?: {
+    aiVideoGenerateAudioEnabled?: boolean;
+    isSegmentEditorGeneration?: boolean;
+    voiceEnabled?: boolean;
+    voiceId?: string | null;
+  },
 ) => {
   const baseCredits = options?.isSegmentEditorGeneration
     ? STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST
     : getRequiredCreditsForVideoMode(videoMode);
   const voiceCredits = options?.voiceEnabled === false ? 0 : getStudioVoiceCreditCost(options?.voiceId);
-  return baseCredits + voiceCredits;
+  const aiVideoAudioCredits =
+    !options?.isSegmentEditorGeneration &&
+    videoMode === "ai_video" &&
+    options?.aiVideoGenerateAudioEnabled
+      ? STUDIO_AI_VIDEO_AUDIO_CREDIT_COST
+      : 0;
+  return baseCredits + voiceCredits + aiVideoAudioCredits;
 };
 
 export const getStudioEditVideoGenerationRequiredCredits = (
@@ -2476,6 +2488,7 @@ export const getWorkspaceSegmentEditorGenerationRequiredCredits = (
 export const getWorkspaceGenerationRequiredCredits = (
   videoMode: StudioVideoMode,
   options?: {
+    aiVideoGenerateAudioEnabled?: boolean;
     isSegmentEditorGeneration?: boolean;
     segmentEditorSession?: WorkspaceSegmentEditorDraftSession | WorkspaceSegmentEditorSession | null;
     voiceEnabled?: boolean;
@@ -2487,6 +2500,7 @@ export const getWorkspaceGenerationRequiredCredits = (
   }
 
   return getStudioGenerationRequiredCredits(videoMode, {
+    aiVideoGenerateAudioEnabled: options?.aiVideoGenerateAudioEnabled,
     isSegmentEditorGeneration: options?.isSegmentEditorGeneration,
     voiceEnabled: options?.voiceEnabled,
     voiceId: options?.voiceId,

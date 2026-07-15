@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { DEFAULT_STUDIO_VOICE_ID } from "../../shared/locales";
 import {
+  STUDIO_AI_VIDEO_AUDIO_CREDIT_COST,
   STUDIO_AI_VIDEO_GENERATION_CREDIT_COST,
   STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST,
 } from "../../shared/studio-credit-costs";
@@ -408,6 +409,14 @@ const createFreshSessionFromDraftSegments = (segments: DraftSegment[]): FreshSes
 describe("WorkspacePage generation credits", () => {
   it("requires 80 credits for the full AI video mode", () => {
     expect(getWorkspaceGenerationRequiredCredits("ai_video")).toBe(STUDIO_AI_VIDEO_GENERATION_CREDIT_COST);
+  });
+
+  it("adds 20 credits when generated sounds are enabled for the full AI video mode", () => {
+    expect(
+      getWorkspaceGenerationRequiredCredits("ai_video", {
+        aiVideoGenerateAudioEnabled: true,
+      }),
+    ).toBe(STUDIO_AI_VIDEO_GENERATION_CREDIT_COST + STUDIO_AI_VIDEO_AUDIO_CREDIT_COST);
   });
 
   it("uses segment-editor scene voice overrides for the final generation cost", () => {

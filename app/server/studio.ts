@@ -10,6 +10,7 @@ import {
 } from "./media-assets.js";
 import {
   STUDIO_AI_PHOTO_VIDEO_GENERATION_CREDIT_COST,
+  STUDIO_AI_VIDEO_AUDIO_CREDIT_COST,
   STUDIO_AI_VIDEO_GENERATION_CREDIT_COST,
   STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST,
   STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST_BY_QUALITY,
@@ -1575,7 +1576,12 @@ const normalizeWaveSpeedSegmentTalkingPhotoFileName = (jobId: string) =>
 
 const getStudioGenerationCreditCost = (
   videoMode: string,
-  options?: { isSegmentEditorGeneration?: boolean; voiceEnabled?: boolean; voiceId?: string | null },
+  options?: {
+    aiVideoGenerateAudioEnabled?: boolean;
+    isSegmentEditorGeneration?: boolean;
+    voiceEnabled?: boolean;
+    voiceId?: string | null;
+  },
 ) => {
   const baseCredits = options?.isSegmentEditorGeneration
     ? STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST
@@ -1586,7 +1592,13 @@ const getStudioGenerationCreditCost = (
         : STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST;
 
   const voiceCredits = options?.voiceEnabled === false ? 0 : getStudioVoiceCreditCost(options?.voiceId);
-  return baseCredits + voiceCredits;
+  const aiVideoAudioCredits =
+    !options?.isSegmentEditorGeneration &&
+    videoMode === "ai_video" &&
+    options?.aiVideoGenerateAudioEnabled
+      ? STUDIO_AI_VIDEO_AUDIO_CREDIT_COST
+      : 0;
+  return baseCredits + voiceCredits + aiVideoAudioCredits;
 };
 
 const normalizeStudioLanguage = (value: string | null | undefined): Locale => {
@@ -6738,6 +6750,7 @@ export async function createStudioGenerationJob(
     ? STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST +
       Math.max(0, ...segmentEditorFinalVoiceCredits)
     : getStudioGenerationCreditCost(normalizedVideoMode, {
+        aiVideoGenerateAudioEnabled: normalizedAiVideoGenerateAudioEnabled,
         voiceEnabled: isVoiceEnabled,
         voiceId: normalizedVoiceId,
       });

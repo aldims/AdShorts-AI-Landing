@@ -5992,6 +5992,7 @@ export function WorkspacePage({
     selectedVoiceIdByLanguageRef.current[selectedLanguage],
   );
   const studioCreateRequiredCredits = getStudioGenerationRequiredCredits(selectedVideoMode, {
+    aiVideoGenerateAudioEnabled: isAiVideoGenerateAudioEnabled,
     voiceEnabled: isVoiceoverEnabled,
     voiceId: resolvedSelectedVoiceId,
   });
@@ -22765,6 +22766,7 @@ export function WorkspacePage({
       requestedVoiceId: options?.voiceId ?? null,
     });
     const requiredCredits = getWorkspaceGenerationRequiredCredits(effectiveVideoMode, {
+      aiVideoGenerateAudioEnabled: effectiveAiVideoGenerateAudioEnabled,
       isSegmentEditorGeneration,
       segmentEditorSession: options?.segmentEditorSession,
       voiceEnabled: effectiveVoiceEnabled,

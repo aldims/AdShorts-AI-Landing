@@ -33734,6 +33734,11 @@ html.platform-windows .studio-voice-selector__menu {
   gap: 8px;
 }
 
+.studio-video-selector__option-group {
+  display: grid;
+  min-width: 0;
+}
+
 .studio-video-selector__option {
   appearance: none;
   -webkit-appearance: none;
@@ -33820,63 +33825,124 @@ html.platform-windows .studio-voice-selector__menu {
     rgba(255, 255, 255, 0.04);
 }
 
-.studio-video-selector__audio-toggle {
-  appearance: none;
-  -webkit-appearance: none;
-  display: flex;
+.studio-video-selector__option-group.has-audio-setting .studio-video-selector__option {
+  border-bottom-color: rgba(125, 211, 252, 0.14);
+  border-radius: 14px 14px 0 0;
+}
+
+.studio-video-selector__option-group.has-audio-setting .studio-video-selector__option:hover {
+  transform: none;
+}
+
+.studio-video-selector__audio-setting {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 14px;
+  gap: 8px;
   width: 100%;
-  padding: 9px 12px;
+  padding: 8px 12px 9px;
   border: 1px solid rgba(56, 189, 248, 0.18);
-  border-radius: 13px;
-  background: rgba(56, 189, 248, 0.06);
+  border-top: 0;
+  border-radius: 0 0 14px 14px;
+  background:
+    linear-gradient(180deg, rgba(59, 130, 246, 0.08), rgba(56, 189, 248, 0.12)),
+    rgba(255, 255, 255, 0.04);
   color: white;
-  text-align: left;
-  cursor: pointer;
   transition: border-color 0.2s ease, background-color 0.2s ease;
 }
 
-.studio-video-selector__audio-toggle:hover {
-  border-color: rgba(125, 211, 252, 0.32);
-  background: rgba(56, 189, 248, 0.1);
-}
-
-.studio-video-selector__audio-toggle:focus-visible {
-  outline: 2px solid rgba(125, 211, 252, 0.78);
-  outline-offset: 2px;
-}
-
-.studio-video-selector__audio-toggle-copy {
-  display: grid;
-  gap: 2px;
+.studio-video-selector__audio-label {
   min-width: 0;
-}
-
-.studio-video-selector__audio-toggle-copy strong {
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   font-weight: 750;
 }
 
-.studio-video-selector__audio-toggle-copy small {
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 0.68rem;
-  line-height: 1.35;
+.studio-video-selector__audio-cost {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 0 7px;
+  border: 1px solid rgba(255, 216, 104, 0.24);
+  border-radius: 999px;
+  background: rgba(255, 216, 104, 0.12);
+  color: rgba(255, 226, 150, 0.94);
+  font-size: 0.64rem;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
-.studio-video-selector__audio-toggle-control {
+.studio-video-selector__audio-info {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  display: inline-grid;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  place-items: center;
+  border-radius: 50%;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.56);
+  cursor: help;
+  transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.studio-video-selector__audio-info:hover,
+.studio-video-selector__audio-info:focus-visible {
+  outline: none;
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.studio-video-selector__audio-tooltip {
+  position: absolute;
+  z-index: 4;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  width: 242px;
+  padding: 9px 10px;
+  border: 1px solid rgba(125, 211, 252, 0.24);
+  border-radius: 10px;
+  background: rgba(10, 14, 28, 0.96);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.32);
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 0.68rem;
+  font-weight: 500;
+  line-height: 1.4;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 4px);
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.studio-video-selector__audio-info:hover .studio-video-selector__audio-tooltip,
+.studio-video-selector__audio-info:focus-visible .studio-video-selector__audio-tooltip {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.studio-video-selector__audio-switch {
+  appearance: none;
+  -webkit-appearance: none;
   position: relative;
   flex: 0 0 auto;
   width: 38px;
   height: 22px;
+  padding: 0;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.09);
+  cursor: pointer;
   transition: border-color 0.2s ease, background-color 0.2s ease;
 }
 
-.studio-video-selector__audio-toggle-control span {
+.studio-video-selector__audio-switch:focus-visible {
+  outline: 2px solid rgba(125, 211, 252, 0.78);
+  outline-offset: 2px;
+}
+
+.studio-video-selector__audio-switch span {
   position: absolute;
   top: 3px;
   left: 3px;
@@ -33888,17 +33954,19 @@ html.platform-windows .studio-voice-selector__menu {
   transition: transform 0.2s ease, background-color 0.2s ease;
 }
 
-.studio-video-selector__audio-toggle.is-enabled {
+.studio-video-selector__audio-setting.is-enabled {
   border-color: rgba(56, 189, 248, 0.34);
-  background: rgba(56, 189, 248, 0.14);
+  background:
+    linear-gradient(180deg, rgba(59, 130, 246, 0.1), rgba(56, 189, 248, 0.16)),
+    rgba(255, 255, 255, 0.04);
 }
 
-.studio-video-selector__audio-toggle.is-enabled .studio-video-selector__audio-toggle-control {
+.studio-video-selector__audio-setting.is-enabled .studio-video-selector__audio-switch {
   border-color: rgba(125, 211, 252, 0.58);
   background: linear-gradient(135deg, #38bdf8, #6366f1);
 }
 
-.studio-video-selector__audio-toggle.is-enabled .studio-video-selector__audio-toggle-control span {
+.studio-video-selector__audio-setting.is-enabled .studio-video-selector__audio-switch span {
   background: #fff;
   transform: translateX(16px);
 }

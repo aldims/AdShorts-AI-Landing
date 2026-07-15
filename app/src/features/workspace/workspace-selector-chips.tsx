@@ -10,6 +10,7 @@ import {
 import { createPortal } from "react-dom";
 import {
   STUDIO_AI_PHOTO_VIDEO_GENERATION_CREDIT_COST,
+  STUDIO_AI_VIDEO_AUDIO_CREDIT_COST,
   STUDIO_AI_VIDEO_GENERATION_CREDIT_COST,
 } from "../../../shared/studio-credit-costs";
 import { DEFAULT_STUDIO_VOICE_ID } from "../../../shared/locales";
@@ -1312,6 +1313,7 @@ export function StudioVideoSelectorChip({
   const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null);
   const menuId = useId();
   const brandSettingsId = useId();
+  const aiVideoAudioTooltipId = useId();
   const rootRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -1452,52 +1454,78 @@ export function StudioVideoSelectorChip({
                     ? STUDIO_AI_VIDEO_GENERATION_CREDIT_COST
                     : STUDIO_AI_PHOTO_VIDEO_GENERATION_CREDIT_COST;
                   return (
-                    <button
+                    <div
                       key={option.id}
-                      className={`studio-video-selector__option${selectedVideoMode === option.id ? " is-selected" : ""}`}
-                      type="button"
-                      role="menuitemradio"
-                      aria-checked={selectedVideoMode === option.id}
-                      onClick={() => {
-                        onSelectVideoMode(option.id);
-                        setIsOpen(false);
-                      }}
+                      className={`studio-video-selector__option-group${
+                        option.id === "ai_video" && selectedVideoMode === "ai_video" ? " has-audio-setting" : ""
+                      }`}
                     >
-                      <span className="studio-video-selector__option-row">
-                        <span className="studio-video-selector__option-title">
-                          <span>{optionCopy.label}</span>
-                          <span className="studio-video-selector__cost">{creditCost} ⚡</span>
+                      <button
+                        className={`studio-video-selector__option${selectedVideoMode === option.id ? " is-selected" : ""}`}
+                        type="button"
+                        role="menuitemradio"
+                        aria-checked={selectedVideoMode === option.id}
+                        onClick={() => {
+                          onSelectVideoMode(option.id);
+                          setIsOpen(false);
+                        }}
+                      >
+                        <span className="studio-video-selector__option-row">
+                          <span className="studio-video-selector__option-title">
+                            <span>{optionCopy.label}</span>
+                            <span className="studio-video-selector__cost">{creditCost} ⚡</span>
+                          </span>
+                          {optionCopy.duration ? (
+                            <span className="studio-video-selector__option-duration">{optionCopy.duration}</span>
+                          ) : null}
                         </span>
-                        {optionCopy.duration ? (
-                          <span className="studio-video-selector__option-duration">{optionCopy.duration}</span>
-                        ) : null}
-                      </span>
-                      <small>{optionCopy.description}</small>
-                      {optionCopy.detail ? <small className="studio-video-selector__option-detail">{optionCopy.detail}</small> : null}
-                    </button>
+                        <small>{optionCopy.description}</small>
+                        {optionCopy.detail ? <small className="studio-video-selector__option-detail">{optionCopy.detail}</small> : null}
+                      </button>
+                      {option.id === "ai_video" && selectedVideoMode === "ai_video" ? (
+                        <div className={`studio-video-selector__audio-setting${isAiVideoGenerateAudioEnabled ? " is-enabled" : ""}`}>
+                          <span className="studio-video-selector__audio-label">
+                            {locale === "en" ? "Sounds" : "Звуки"}
+                          </span>
+                          <span className="studio-video-selector__audio-cost">
+                            +{STUDIO_AI_VIDEO_AUDIO_CREDIT_COST} ⚡
+                          </span>
+                          <button
+                            className="studio-video-selector__audio-info"
+                            type="button"
+                            aria-describedby={aiVideoAudioTooltipId}
+                            aria-label={locale === "en" ? "About generated sounds" : "О сгенерированных звуках"}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                              <circle cx="8" cy="8" r="6.25" stroke="currentColor" strokeWidth="1.5" />
+                              <path d="M8 7.1v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                              <circle cx="8" cy="4.7" r=".8" fill="currentColor" />
+                            </svg>
+                            <span
+                              className="studio-video-selector__audio-tooltip"
+                              id={aiVideoAudioTooltipId}
+                              role="tooltip"
+                            >
+                              {locale === "en"
+                                ? "Adds atmosphere and sound effects generated together with every AI-video scene."
+                                : "Добавляет атмосферу и звуковые эффекты, сгенерированные вместе с каждой сценой AI-видео."}
+                            </span>
+                          </button>
+                          <button
+                            className="studio-video-selector__audio-switch"
+                            type="button"
+                            role="switch"
+                            aria-label={locale === "en" ? "Sounds" : "Звуки"}
+                            aria-checked={isAiVideoGenerateAudioEnabled}
+                            onClick={() => onAiVideoGenerateAudioToggle(!isAiVideoGenerateAudioEnabled)}
+                          >
+                            <span aria-hidden="true" />
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
                   );
                 })}
-                {selectedVideoMode === "ai_video" ? (
-                  <button
-                    className={`studio-video-selector__audio-toggle${isAiVideoGenerateAudioEnabled ? " is-enabled" : ""}`}
-                    type="button"
-                    role="switch"
-                    aria-checked={isAiVideoGenerateAudioEnabled}
-                    onClick={() => onAiVideoGenerateAudioToggle(!isAiVideoGenerateAudioEnabled)}
-                  >
-                    <span className="studio-video-selector__audio-toggle-copy">
-                      <strong>{locale === "en" ? "Generate sounds" : "Генерировать звуки"}</strong>
-                      <small>
-                        {locale === "en"
-                          ? "Atmosphere and sound effects inside AI video"
-                          : "Атмосфера и звуковые эффекты внутри AI-видео"}
-                      </small>
-                    </span>
-                    <span className="studio-video-selector__audio-toggle-control" aria-hidden="true">
-                      <span />
-                    </span>
-                  </button>
-                ) : null}
               </div>
 
               <div className="studio-video-selector__section">

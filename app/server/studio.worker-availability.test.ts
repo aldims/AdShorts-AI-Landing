@@ -144,7 +144,7 @@ describe("studio generation worker availability", () => {
     expect(paths).not.toContain("/api/web/credits/consume");
   });
 
-  it("reserves exactly 80 credits and forwards the full AI video mode", async () => {
+  it("adds the 20-credit sounds charge and forwards it with the full AI video mode", async () => {
     const { createStudioGenerationJob } = await loadStudioModule();
     const calls: Array<{ body: Record<string, unknown>; pathname: string }> = [];
 
@@ -163,8 +163,8 @@ describe("studio generation worker availability", () => {
         }
         if (url.pathname === "/api/web/credits/consume") {
           return jsonResponse({
-            consumed: { purchased: 80, subscription: 0 },
-            user: { balance: 20, plan: "PRO", user_id: "123" },
+            consumed: { purchased: 100, subscription: 0 },
+            user: { balance: 0, plan: "PRO", user_id: "123" },
           });
         }
         if (url.pathname === "/api/web/generations") {
@@ -197,11 +197,11 @@ describe("studio generation worker availability", () => {
 
     const consumeBody = calls.find((call) => call.pathname === "/api/web/credits/consume")?.body;
     const generationBody = calls.find((call) => call.pathname === "/api/web/generations")?.body;
-    expect(consumeBody).toEqual(expect.objectContaining({ amount: 80 }));
+    expect(consumeBody).toEqual(expect.objectContaining({ amount: 100 }));
     expect(generationBody).toEqual(
       expect.objectContaining({
         ai_video_generate_audio: true,
-        credit_cost: 80,
+        credit_cost: 100,
         video_mode: "ai_video",
         video_mode_changed: true,
       }),

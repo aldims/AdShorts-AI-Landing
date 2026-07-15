@@ -287,9 +287,14 @@ describe("StudioVideoSelectorChip", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: /Визуал\s*AI видео/ }));
-    const toggle = screen.getByRole("switch", { name: /Генерировать звуки/ });
+    const toggle = screen.getByRole("switch", { name: "Звуки" });
 
     expect(toggle.getAttribute("aria-checked")).toBe("false");
+    expect(screen.getByText("+20 ⚡")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "О сгенерированных звуках" })).toBeTruthy();
+    expect(
+      screen.getByRole("tooltip").textContent,
+    ).toContain("атмосферу и звуковые эффекты");
     fireEvent.click(toggle);
     expect(onAiVideoGenerateAudioToggle).toHaveBeenCalledWith(true);
   });
