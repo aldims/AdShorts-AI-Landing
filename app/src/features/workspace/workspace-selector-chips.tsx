@@ -1304,8 +1304,10 @@ export function StudioVideoSelectorChip({
 }: StudioVideoSelectorChipProps) {
   const { locale } = useLocale();
   const [isOpen, setIsOpen] = useState(false);
+  const [isBrandSettingsOpen, setIsBrandSettingsOpen] = useState(false);
   const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null);
   const menuId = useId();
+  const brandSettingsId = useId();
   const rootRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -1323,9 +1325,13 @@ export function StudioVideoSelectorChip({
     .join(" · ");
   const brandLogoPreviewUrl = getStudioCustomAssetPreviewUrl(brandLogoFile);
   const brandTextLength = brandText.length;
+  const hasBrand = hasStudioBranding({ brandLogoFile, brandText });
 
   useEffect(() => {
-    if (!isOpen) return undefined;
+    if (!isOpen) {
+      setIsBrandSettingsOpen(false);
+      return undefined;
+    }
 
     const handlePointerDown = (event: PointerEvent) => {
       const target = event.target as Node;
@@ -1472,11 +1478,17 @@ export function StudioVideoSelectorChip({
               <div className="studio-video-selector__section">
                 <span className="studio-video-selector__menu-title">{locale === "en" ? "Brand" : "Бренд"}</span>
                 <div
-                  className={`studio-video-selector__brand${
-                    hasStudioBranding({ brandLogoFile, brandText }) ? " is-selected" : ""
-                  }`}
+                  className={`studio-video-selector__brand studio-video-selector__brand--collapsible${
+                    hasBrand ? " is-selected" : ""
+                  }${isBrandSettingsOpen ? " is-open" : ""}`}
                 >
-                  <div className="studio-video-selector__brand-head">
+                  <button
+                    className="studio-video-selector__brand-toggle"
+                    type="button"
+                    aria-expanded={isBrandSettingsOpen}
+                    aria-controls={brandSettingsId}
+                    onClick={() => setIsBrandSettingsOpen((open) => !open)}
+                  >
                     <div className="studio-video-selector__brand-preview" aria-hidden="true">
                       {brandLogoPreviewUrl ? (
                         <img src={brandLogoPreviewUrl} alt="" />
@@ -1485,72 +1497,82 @@ export function StudioVideoSelectorChip({
                       )}
                     </div>
                     <div className="studio-video-selector__brand-copy">
-                      <span>{hasStudioBranding({ brandLogoFile, brandText }) ? (locale === "en" ? "Brand added" : "Бренд добавлен") : (locale === "en" ? "Add brand" : "Добавить бренд")}</span>
+                      <span>{hasBrand ? (locale === "en" ? "Brand added" : "Бренд добавлен") : (locale === "en" ? "Add brand" : "Добавить бренд")}</span>
                       <small title={brandLogoFile?.fileName ?? brandText}>{getStudioBrandSummary({ brandLogoFile, brandText }, locale)}</small>
                     </div>
-                    <div className="studio-video-selector__brand-actions">
-                      <button
-                        className="studio-video-selector__custom-action"
-                        type="button"
-                        aria-label={brandLogoFile ? (locale === "en" ? "Replace logo" : "Заменить логотип") : (locale === "en" ? "Add logo" : "Добавить логотип")}
-                        title={brandLogoFile ? (locale === "en" ? "Replace logo" : "Заменить логотип") : (locale === "en" ? "Add logo" : "Добавить логотип")}
-                        onClick={openBrandLogoPicker}
-                      >
-                        {isPreparingBrandLogo ? (
-                          <span className="studio-video-selector__spinner" aria-hidden="true"></span>
-                        ) : (
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                            <path d="M12 4v11m0 0 4-4m-4 4-4-4M5 18.5h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                          </svg>
-                        )}
-                      </button>
-                      {brandLogoFile ? (
-                        <button
-                          className="studio-video-selector__custom-action studio-video-selector__custom-action--danger"
-                          type="button"
-                          aria-label={locale === "en" ? "Remove logo" : "Убрать логотип"}
-                          title={locale === "en" ? "Remove logo" : "Убрать логотип"}
-                          onClick={onRemoveBrandLogo}
-                        >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                            <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
-                          </svg>
-                        </button>
-                      ) : null}
-                    </div>
-                  </div>
-                  <label className="studio-video-selector__brand-field">
-                    <span className="studio-video-selector__brand-field-heading">
-                      <span>{locale === "en" ? "Brand text" : "Текст бренда"}</span>
-                      <span className="studio-video-selector__brand-meta">
-                        <span>{brandTextLength}/{STUDIO_BRAND_TEXT_MAX_CHARS}</span>
-                        {brandText ? (
-                          <button className="studio-video-selector__brand-clear" type="button" onClick={onClearBrandText}>
-                            {locale === "en" ? "Clear text" : "Очистить текст"}
-                          </button>
-                        ) : null}
-                      </span>
-                    </span>
-                    <input
-                      className="studio-video-selector__brand-input"
-                      type="text"
-                      value={brandText}
-                      maxLength={STUDIO_BRAND_TEXT_MAX_CHARS}
-                      placeholder={locale === "en" ? "Example: adshortsai.com" : "Например, adshortsai.com"}
-                      onChange={(event) => onBrandTextChange(event.target.value)}
-                    />
-                  </label>
-                  <button
-                    className="studio-video-selector__brand-apply"
-                    type="button"
-                    disabled={isPreparingBrandLogo}
-                    onClick={() => {
-                      setIsOpen(false);
-                      triggerRef.current?.focus();
-                    }}
-                  >
-                    {locale === "en" ? "Apply" : "Применить"}
+                    <svg className="studio-video-selector__brand-toggle-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                      <path d="m4 6 4 4 4-4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
                   </button>
+                  {isBrandSettingsOpen ? (
+                    <div className="studio-video-selector__brand-settings" id={brandSettingsId}>
+                      <div className="studio-video-selector__brand-logo-row">
+                        <span>{locale === "en" ? "Logo" : "Логотип"}</span>
+                        <div className="studio-video-selector__brand-actions">
+                          <button
+                            className="studio-video-selector__custom-action"
+                            type="button"
+                            aria-label={brandLogoFile ? (locale === "en" ? "Replace logo" : "Заменить логотип") : (locale === "en" ? "Add logo" : "Добавить логотип")}
+                            title={brandLogoFile ? (locale === "en" ? "Replace logo" : "Заменить логотип") : (locale === "en" ? "Add logo" : "Добавить логотип")}
+                            onClick={openBrandLogoPicker}
+                          >
+                            {isPreparingBrandLogo ? (
+                              <span className="studio-video-selector__spinner" aria-hidden="true"></span>
+                            ) : (
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                <path d="M12 4v11m0 0 4-4m-4 4-4-4M5 18.5h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            )}
+                          </button>
+                          {brandLogoFile ? (
+                            <button
+                              className="studio-video-selector__custom-action studio-video-selector__custom-action--danger"
+                              type="button"
+                              aria-label={locale === "en" ? "Remove logo" : "Убрать логотип"}
+                              title={locale === "en" ? "Remove logo" : "Убрать логотип"}
+                              onClick={onRemoveBrandLogo}
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+                              </svg>
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                      <label className="studio-video-selector__brand-field">
+                        <span className="studio-video-selector__brand-field-heading">
+                          <span>{locale === "en" ? "Brand text" : "Текст бренда"}</span>
+                          <span className="studio-video-selector__brand-meta">
+                            <span>{brandTextLength}/{STUDIO_BRAND_TEXT_MAX_CHARS}</span>
+                            {brandText ? (
+                              <button className="studio-video-selector__brand-clear" type="button" onClick={onClearBrandText}>
+                                {locale === "en" ? "Clear text" : "Очистить текст"}
+                              </button>
+                            ) : null}
+                          </span>
+                        </span>
+                        <input
+                          className="studio-video-selector__brand-input"
+                          type="text"
+                          value={brandText}
+                          maxLength={STUDIO_BRAND_TEXT_MAX_CHARS}
+                          placeholder={locale === "en" ? "Example: adshortsai.com" : "Например, adshortsai.com"}
+                          onChange={(event) => onBrandTextChange(event.target.value)}
+                        />
+                      </label>
+                      <button
+                        className="studio-video-selector__brand-apply"
+                        type="button"
+                        disabled={isPreparingBrandLogo}
+                        onClick={() => {
+                          setIsOpen(false);
+                          triggerRef.current?.focus();
+                        }}
+                      >
+                        {locale === "en" ? "Apply" : "Применить"}
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
                 {brandUploadError ? <p className="studio-video-selector__error">{brandUploadError}</p> : null}
               </div>

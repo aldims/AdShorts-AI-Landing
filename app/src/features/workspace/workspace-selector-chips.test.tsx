@@ -242,6 +242,13 @@ describe("StudioVideoSelectorChip", () => {
     expect(screen.queryByText("Скоро")).toBeNull();
     expect(screen.getByText("1–2 минуты")).toBeTruthy();
     expect(screen.getByText("3–5 минут")).toBeTruthy();
+    const brandToggle = screen.getByRole("button", { name: /Добавить бренд.*Лого или текст бренда/ });
+    expect(brandToggle.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByText("Текст бренда")).toBeNull();
+
+    fireEvent.click(brandToggle);
+
+    expect(brandToggle.getAttribute("aria-expanded")).toBe("true");
     const brandHeading = screen.getByText("Текст бренда").parentElement;
     expect(brandHeading?.className).toContain("studio-video-selector__brand-field-heading");
     expect(brandHeading?.querySelector(".studio-video-selector__brand-meta")?.textContent).toContain("0/50");

@@ -33706,6 +33706,89 @@ html.platform-windows .studio-voice-selector__menu {
     rgba(255, 255, 255, 0.04);
 }
 
+.studio-video-selector__brand--collapsible {
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.studio-video-selector__brand-toggle {
+  appearance: none;
+  -webkit-appearance: none;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  min-height: 54px;
+  padding: 8px 10px;
+  border: 0;
+  background: transparent;
+  color: white;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.studio-video-selector__brand-toggle:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.studio-video-selector__brand-toggle:focus-visible {
+  outline: 2px solid rgba(125, 211, 252, 0.74);
+  outline-offset: -2px;
+}
+
+.studio-video-selector__brand--collapsible .studio-video-selector__brand-preview {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+}
+
+.studio-video-selector__brand--collapsible .studio-video-selector__brand-copy {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.studio-video-selector__brand--collapsible .studio-video-selector__brand-copy span {
+  flex: 0 0 auto;
+}
+
+.studio-video-selector__brand--collapsible .studio-video-selector__brand-copy small {
+  min-width: 0;
+}
+
+.studio-video-selector__brand-toggle-icon {
+  color: rgba(255, 255, 255, 0.52);
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.studio-video-selector__brand--collapsible.is-open .studio-video-selector__brand-toggle-icon {
+  color: rgba(186, 230, 253, 0.92);
+  transform: rotate(180deg);
+}
+
+.studio-video-selector__brand-settings {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.studio-video-selector__brand-logo-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .studio-video-selector__brand-head {
   display: grid;
   grid-template-columns: 44px minmax(0, 1fr) auto;
