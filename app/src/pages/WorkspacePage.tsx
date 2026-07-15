@@ -384,6 +384,7 @@ import {
   canWorkspaceSegmentCreateInfographic,
   canWorkspaceSegmentUsePhotoAnimationTool,
   canWorkspaceSegmentUsePhotoEditingTools,
+  dispatchWorkspaceSegmentPromptVisualToolAction,
   getWorkspacePhotoAnimationUploadSourceAsset,
   getWorkspaceSegmentAiPhotoPromptPrefill,
   getWorkspaceSegmentImageEditSource,
@@ -26327,10 +26328,13 @@ export function WorkspacePage({
     event.currentTarget.blur();
     setSegmentEditorBrandCloseRequestId((current) => current + 1);
     setReleasedSegmentEditorPromptTool(tab);
-    handleSegmentEditorPromptVisualToolSelect(tab);
-    if (tab === "upload") {
-      segmentAiPhotoModalFileInputRef.current?.click();
-    }
+    dispatchWorkspaceSegmentPromptVisualToolAction(tab, {
+      openFilePicker: () => {
+        setSegmentEditorVideoError(null);
+        segmentAiPhotoModalFileInputRef.current?.click();
+      },
+      selectTab: handleSegmentEditorPromptVisualToolSelect,
+    });
   };
   const handleSegmentEditorPromptBrandToolButtonClick = (event: ReactMouseEvent<HTMLButtonElement>) => {
     event.currentTarget.blur();

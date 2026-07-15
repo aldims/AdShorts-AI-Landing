@@ -644,6 +644,21 @@ export const isWorkspaceSegmentVisualModalTabAllowed = (
 export const isWorkspaceSegmentReadyVisualSelectionTab = (tab: WorkspaceSegmentVisualModalTab) =>
   tab === "library" || tab === "upload";
 
+export const dispatchWorkspaceSegmentPromptVisualToolAction = (
+  tab: WorkspaceSegmentVisualModalTab,
+  actions: {
+    openFilePicker: () => void;
+    selectTab: (tab: WorkspaceSegmentVisualModalTab) => void;
+  },
+) => {
+  if (tab === "upload") {
+    actions.openFilePicker();
+    return;
+  }
+
+  actions.selectTab(tab);
+};
+
 export const resolveWorkspaceSegmentVisualModalTab = (
   segment: WorkspaceSegmentEditorDraftSegment,
   tab: WorkspaceSegmentVisualModalTab,
