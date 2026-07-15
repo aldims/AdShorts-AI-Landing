@@ -46752,20 +46752,6 @@ html, body {
   text-transform: uppercase !important;
 }
 
-.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-section-label small {
-  flex: 0 0 auto !important;
-  padding: 3px 6px !important;
-  border: 1px solid rgba(var(--studio-visual-tool-accent), 0.15) !important;
-  border-radius: 999px !important;
-  background: rgba(var(--studio-visual-tool-accent), 0.07) !important;
-  color: rgba(203, 213, 225, 0.58) !important;
-  font-size: 0.54rem !important;
-  font-weight: 760 !important;
-  letter-spacing: 0.015em !important;
-  line-height: 1 !important;
-  white-space: nowrap !important;
-}
-
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu {
   display: grid !important;
   grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
@@ -47039,8 +47025,9 @@ html, body {
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-submit-row .studio-segment-editor__prompt-submit {
   flex: 0 0 auto !important;
-  width: clamp(172px, 13vw, 230px) !important;
+  width: max-content !important;
   min-width: 0 !important;
+  max-width: 100% !important;
   min-height: 42px !important;
   padding: 0 16px !important;
   font-size: clamp(0.82rem, 0.9vw, 0.96rem) !important;

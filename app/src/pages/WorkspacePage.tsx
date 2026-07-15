@@ -35566,7 +35566,6 @@ export function WorkspacePage({
               <div className="studio-segment-editor__prompt-tool-block studio-segment-editor__prompt-tool-block--create">
                 <span className="studio-segment-editor__prompt-section-label">
                   <strong>{workspaceText(locale, "Создать", "Create")}</strong>
-                  <small>{workspaceText(locale, "Новый источник", "New source")}</small>
                 </span>
                 <div className="studio-segment-editor__prompt-submenu" aria-label={workspaceText(locale, "Инструменты создания сцены", "Scene creation tools")}>
                   <button
@@ -35646,7 +35645,6 @@ export function WorkspacePage({
               <div className="studio-segment-editor__prompt-tool-block studio-segment-editor__prompt-tool-block--edit">
                 <span className="studio-segment-editor__prompt-section-label">
                   <strong>{workspaceText(locale, "Изменить", "Edit")}</strong>
-                  <small>{workspaceText(locale, "Текущий кадр", "Current scene")}</small>
                 </span>
                 <div className="studio-segment-editor__prompt-submenu" aria-label={workspaceText(locale, "Инструменты редактирования сцены", "Scene editing tools")}>
                   {canActiveSegmentUseVideoExtension ? (
