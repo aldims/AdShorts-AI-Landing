@@ -1152,7 +1152,8 @@ describe("segment editor asset lifecycle mapping", () => {
       "The city welcomed its unexpected hero.",
     ];
     const timelineDurations = [4.7, 5.2, 4.4, 4.6, 5];
-    const voiceoverDurations = [4.696, 4.504, 4.42, 3.9, 4.96];
+    const voiceoverDurations = [4.96, 4.504, 4.42, 3.9, 4.96];
+    const preciseFirstSpeechDuration = 4.6;
     const voiceoverAssetIds = [9137, 9138, 9139, 9140, 9141];
     let timelineCursor = 0;
     const timelineSegments = texts.map((text, index) => {
@@ -1184,9 +1185,20 @@ describe("segment editor asset lifecycle mapping", () => {
           project_id: 4214,
           segments: timelineSegments.map((segment, index) => ({
             ...segment,
-            speech_duration: index === 4 ? 16.991 : voiceoverDurations[index],
-            speech_end_time: index === 4 ? 21.551 : voiceoverDurations[index],
+            speech_duration: index === 0
+              ? preciseFirstSpeechDuration
+              : index === 4
+                ? 16.991
+                : voiceoverDurations[index],
+            speech_end_time: index === 0
+              ? preciseFirstSpeechDuration
+              : index === 4
+                ? 21.551
+                : voiceoverDurations[index],
             speech_start_time: index === 4 ? 4.56 : 0,
+            speech_words: index === 0
+              ? [{ confidence: 1, end_time: 4.5, start_time: 0, text: "It was an ordinary day" }]
+              : [],
             voice_source_duration: index === 4 ? 16.991 : voiceoverDurations[index],
             voice_source_end_time: index === 4 ? 21.551 : voiceoverDurations[index],
             voice_source_start_time: index === 4 ? 4.56 : 0,
@@ -1236,7 +1248,11 @@ describe("segment editor asset lifecycle mapping", () => {
     );
 
     expect(session.segments.map((segment) => segment.voiceoverAssetId)).toEqual(voiceoverAssetIds);
-    expect(session.segments.map((segment) => segment.speechDuration)).toEqual(voiceoverDurations);
+    expect(session.segments.map((segment) => segment.speechDuration)).toEqual([
+      preciseFirstSpeechDuration,
+      ...voiceoverDurations.slice(1),
+    ]);
+    expect(session.segments[0]?.speechDurationSource).toBeNull();
     expect(session.segments.map((segment) => segment.voiceSourceDuration)).toEqual(voiceoverDurations);
     expect(session.segments.map((segment) => segment.voiceSourceStartTime)).toEqual([0, 0, 0, 0, 0]);
     expect(session.segments.map((segment) => segment.voiceSourceEndTime)).toEqual(voiceoverDurations);

@@ -1209,6 +1209,190 @@ describe("workspace segment editor subtitle availability", () => {
 });
 
 describe("workspace segment editor visual and voiceover mismatch", () => {
+  it("ignores a per-scene voiceover render tail when AI video covers the authoritative scene", () => {
+    const text = "Представьте мир, где астероид пролетел мимо Земли.";
+    const segment = createProjectVoiceoverSegment({
+      currentAsset: {
+        assetId: 9395,
+        durationSeconds: 7.041,
+        kind: "source_ai_video",
+        libraryKind: "ai_video",
+        mediaType: "video",
+        mimeType: "video/mp4",
+        role: "source_ai_video",
+        sourceKind: "ai_generated",
+      } as any,
+      duration: 6.98,
+      endTime: 6.98,
+      mediaType: "video",
+      speechDuration: 6.92,
+      speechEndTime: 6.92,
+      speechStartTime: 0,
+      speechWords: [
+        {
+          confidence: 1,
+          endTime: 6.8,
+          startTime: 0,
+          text,
+        },
+      ],
+      text,
+      voiceSourceDuration: 7.22,
+      voiceSourceEndTime: 7.22,
+      voiceSourceStartTime: 0,
+      voiceover: {
+        download_url: "/api/workspace/media-assets/9399",
+        file_name: "segment-voiceover.wav",
+        file_size: 0,
+        media_asset_id: 9399,
+        mime_type: "audio/wav",
+      },
+      voiceoverAsset: {
+        assetId: 9399,
+        durationSeconds: 7.22,
+        fileName: "segment-voiceover.wav",
+        fileSize: 0,
+        mimeType: "audio/wav",
+        remoteUrl: "/api/workspace/media-assets/9399",
+        source: "media-library",
+      },
+      voiceoverAssetId: 9399,
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(text),
+      voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+    const draft = createProjectVoiceoverDraft([segment]);
+
+    expect(getWorkspaceSegmentTimelineVoiceoverDurationInfo(segment, draft, { allowEstimated: false })).toEqual({
+      durationSeconds: 6.98,
+      source: "actual",
+    });
+    expect(
+      getWorkspaceSegmentVisualAudioDurationMismatchInfo(segment, draft, {
+        includeAnyVideoVisual: true,
+        visualDurationSeconds: 7.041,
+      }),
+    ).toBeNull();
+    const hydratedDraft = createWorkspaceSegmentEditorDraftSession(draft);
+    expect(hydratedDraft.segments[0]).toEqual(expect.objectContaining({
+      duration: 7.041,
+      endTime: 7.041,
+    }));
+    expect(
+      getWorkspaceSegmentVisualAudioDurationMismatchInfo(hydratedDraft.segments[0]!, hydratedDraft, {
+        includeAnyVideoVisual: true,
+        visualDurationSeconds: 7.041,
+      }),
+    ).toBeNull();
+
+    const previouslyStretchedSegment = {
+      ...segment,
+      currentAsset: {
+        ...segment.currentAsset!,
+        durationSeconds: null,
+      },
+      duration: 7.22,
+      durationSyncMode: "voiceover" as const,
+      endTime: 7.22,
+    };
+    expect(
+      getWorkspaceSegmentTimelineVoiceoverDurationInfo(
+        previouslyStretchedSegment,
+        createProjectVoiceoverDraft([previouslyStretchedSegment]),
+        { allowEstimated: false },
+      ),
+    ).toEqual({
+      durationSeconds: 7.22,
+      source: "actual",
+    });
+    const repairedPreviouslyStretchedSegment = syncWorkspaceSegmentMeasuredVideoVisualDuration(
+      previouslyStretchedSegment,
+      7.041,
+      { voiceoverDurationSeconds: 7.22 },
+    );
+    expect(repairedPreviouslyStretchedSegment).toEqual(expect.objectContaining({
+      duration: 7.041,
+      durationMode: "auto",
+      durationSyncMode: "voiceover",
+      endTime: 7.041,
+      manualDurationSeconds: null,
+    }));
+    expect(
+      getWorkspaceSegmentVisualAudioDurationMismatchInfo(
+        repairedPreviouslyStretchedSegment,
+        createProjectVoiceoverDraft([repairedPreviouslyStretchedSegment]),
+        {
+          includeAnyVideoVisual: true,
+          visualDurationSeconds: 7.041,
+        },
+      ),
+    ).toBeNull();
+  });
+
+  it("still warns when AI video is shorter than the logical spoken scene", () => {
+    const text = "Полная озвучка сцены.";
+    const segment = createProjectVoiceoverSegment({
+      currentAsset: {
+        assetId: 9395,
+        durationSeconds: 6.5,
+        kind: "source_ai_video",
+        libraryKind: "ai_video",
+        mediaType: "video",
+        mimeType: "video/mp4",
+        role: "source_ai_video",
+        sourceKind: "ai_generated",
+      } as any,
+      duration: 6.98,
+      endTime: 6.98,
+      mediaType: "video",
+      speechDuration: 6.92,
+      speechEndTime: 6.92,
+      speechStartTime: 0,
+      speechWords: [
+        {
+          confidence: 1,
+          endTime: 6.8,
+          startTime: 0,
+          text,
+        },
+      ],
+      text,
+      voiceSourceDuration: 7.22,
+      voiceSourceEndTime: 7.22,
+      voiceSourceStartTime: 0,
+      voiceover: {
+        download_url: "/api/workspace/media-assets/9399",
+        file_name: "segment-voiceover.wav",
+        file_size: 0,
+        media_asset_id: 9399,
+        mime_type: "audio/wav",
+      },
+      voiceoverAsset: {
+        assetId: 9399,
+        durationSeconds: 7.22,
+        fileName: "segment-voiceover.wav",
+        fileSize: 0,
+        mimeType: "audio/wav",
+        remoteUrl: "/api/workspace/media-assets/9399",
+        source: "media-library",
+      },
+      voiceoverAssetId: 9399,
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(text),
+      voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+    const draft = createProjectVoiceoverDraft([segment]);
+
+    expect(
+      getWorkspaceSegmentVisualAudioDurationMismatchInfo(segment, draft, {
+        includeAnyVideoVisual: true,
+        visualDurationSeconds: 6.5,
+      }),
+    ).toEqual({
+      visualDurationSeconds: 6.5,
+      voiceoverDurationSeconds: 6.92,
+      voiceoverDurationSource: "actual",
+    });
+  });
+
   it("does not warn about visual and voiceover mismatch when video is explicitly synced to voiceover", () => {
     const visualSyncedSegment = createProjectVoiceoverSegment({
       customVideo: {

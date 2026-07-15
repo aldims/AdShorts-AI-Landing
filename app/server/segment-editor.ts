@@ -2036,6 +2036,7 @@ export async function getWorkspaceProjectSegmentVoiceoverDuration(
 const SEGMENT_EDITOR_STANDALONE_VOICEOVER_REQUIRED_MESSAGE =
   "Этот проект создан в старом формате озвучки и не поддерживает редактирование по сценам.";
 const SEGMENT_EDITOR_DISABLED_VOICE_TYPES = new Set(["none", "silent", "no_voice"]);
+const SEGMENT_EDITOR_SPEECH_TIMING_EPSILON_SECONDS = 0.075;
 
 const normalizeSegmentEditorVoiceKey = (value: unknown) =>
   normalizeText(value).toLowerCase().replace(/[\s-]+/g, "_");
@@ -2057,6 +2058,36 @@ const assertWorkspaceSegmentEditorStandaloneVoiceovers = (session: WorkspaceSegm
   if (missingVoiceover) {
     throw new WorkspaceSegmentEditorError(SEGMENT_EDITOR_STANDALONE_VOICEOVER_REQUIRED_MESSAGE, 409);
   }
+};
+
+const hasWorkspaceSegmentEditorCoherentPreciseSpeechTiming = (
+  segment: WorkspaceSegmentEditorSegment,
+) => {
+  const slotDurationSeconds = Number(segment.duration);
+  const speechDurationSeconds = Number(segment.speechDuration);
+  if (
+    !Number.isFinite(slotDurationSeconds) ||
+    slotDurationSeconds <= 0 ||
+    !Number.isFinite(speechDurationSeconds) ||
+    speechDurationSeconds <= 0 ||
+    speechDurationSeconds > slotDurationSeconds + SEGMENT_EDITOR_SPEECH_TIMING_EPSILON_SECONDS ||
+    segment.speechWords.length === 0
+  ) {
+    return false;
+  }
+
+  const wordStartTimes = segment.speechWords.map((word) => Number(word.startTime)).filter(Number.isFinite);
+  const wordEndTimes = segment.speechWords.map((word) => Number(word.endTime)).filter(Number.isFinite);
+  if (wordStartTimes.length !== segment.speechWords.length || wordEndTimes.length !== segment.speechWords.length) {
+    return false;
+  }
+
+  const speechWordsDurationSeconds = Math.max(...wordEndTimes) - Math.min(...wordStartTimes);
+  return (
+    speechWordsDurationSeconds > 0 &&
+    speechWordsDurationSeconds <= slotDurationSeconds + SEGMENT_EDITOR_SPEECH_TIMING_EPSILON_SECONDS &&
+    speechWordsDurationSeconds <= speechDurationSeconds + SEGMENT_EDITOR_SPEECH_TIMING_EPSILON_SECONDS
+  );
 };
 
 const enrichWorkspaceSegmentEditorSessionWithVoiceoverDurations = async (
@@ -2118,12 +2149,14 @@ const enrichWorkspaceSegmentEditorSessionWithVoiceoverDurations = async (
         return segment;
       }
 
+      const preservePreciseSpeechTiming = hasWorkspaceSegmentEditorCoherentPreciseSpeechTiming(segment);
+
       return {
         ...segment,
-        speechDuration: durationSeconds,
-        speechDurationSource: "audio",
-        speechEndTime: durationSeconds,
-        speechStartTime: 0,
+        speechDuration: preservePreciseSpeechTiming ? segment.speechDuration : durationSeconds,
+        speechDurationSource: preservePreciseSpeechTiming ? segment.speechDurationSource : "audio",
+        speechEndTime: preservePreciseSpeechTiming ? segment.speechEndTime : durationSeconds,
+        speechStartTime: preservePreciseSpeechTiming ? segment.speechStartTime : 0,
         voiceSourceDuration: durationSeconds,
         voiceSourceEndTime: durationSeconds,
         voiceSourceStartTime: 0,

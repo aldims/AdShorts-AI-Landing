@@ -5010,14 +5010,24 @@ export const syncWorkspaceSegmentMeasuredVideoVisualDuration = (
 
   const storedDurationExtensionSourceDurationSeconds =
     getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment);
-  const voiceoverDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(options?.voiceoverDurationSeconds);
+  const rawVoiceoverDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(options?.voiceoverDurationSeconds);
+  const voiceoverDurationSeconds = resolveWorkspaceSegmentSceneVoiceoverTimelineDurationSeconds(
+    segment,
+    rawVoiceoverDurationSeconds,
+    measuredVisualDuration,
+  );
+  const shouldRepairVoiceoverRenderTail =
+    rawVoiceoverDurationSeconds !== null &&
+    voiceoverDurationSeconds !== null &&
+    rawVoiceoverDurationSeconds > voiceoverDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS;
   const shouldLoopMeasuredVideoToVoiceover =
     storedDurationExtensionSourceDurationSeconds === null &&
     voiceoverDurationSeconds !== null &&
     voiceoverDurationSeconds > measuredVisualDuration + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS;
   if (
     normalizeWorkspaceSegmentDurationSyncMode(segment.durationSyncMode) === "voiceover" &&
-    !shouldLoopMeasuredVideoToVoiceover
+    !shouldLoopMeasuredVideoToVoiceover &&
+    !shouldRepairVoiceoverRenderTail
   ) {
     return segment;
   }
@@ -5026,7 +5036,8 @@ export const syncWorkspaceSegmentMeasuredVideoVisualDuration = (
   if (
     knownVisualDuration !== null &&
     areWorkspaceSegmentDurationValuesEqual(knownVisualDuration, measuredVisualDuration) &&
-    !shouldLoopMeasuredVideoToVoiceover
+    !shouldLoopMeasuredVideoToVoiceover &&
+    !shouldRepairVoiceoverRenderTail
   ) {
     return segment;
   }
@@ -5048,11 +5059,11 @@ export const syncWorkspaceSegmentMeasuredVideoVisualDuration = (
   return {
     ...segment,
     duration,
-    durationMode: shouldLoopMeasuredVideoToVoiceover ? "auto" : "manual",
-    durationSyncMode: shouldLoopMeasuredVideoToVoiceover ? "voiceover" : "visual",
+    durationMode: shouldLoopMeasuredVideoToVoiceover || shouldRepairVoiceoverRenderTail ? "auto" : "manual",
+    durationSyncMode: shouldLoopMeasuredVideoToVoiceover || shouldRepairVoiceoverRenderTail ? "voiceover" : "visual",
     durationSyncModeUserSelected: false,
     endTime: roundWorkspaceSegmentTimelineSeconds(startTime + duration),
-    manualDurationSeconds: shouldLoopMeasuredVideoToVoiceover ? null : duration,
+    manualDurationSeconds: shouldLoopMeasuredVideoToVoiceover || shouldRepairVoiceoverRenderTail ? null : duration,
     startTime,
   };
 };
@@ -5420,6 +5431,64 @@ const getWorkspaceSegmentEstimatedProjectVoiceoverLeakDuration = (
     : null;
 };
 
+const resolveWorkspaceSegmentSceneVoiceoverTimelineDurationSeconds = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  sourceDurationSeconds: number | null | undefined,
+  measuredVisualDurationSeconds?: number | null,
+) => {
+  const normalizedSourceDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(sourceDurationSeconds);
+  if (normalizedSourceDurationSeconds === null) {
+    return null;
+  }
+
+  const slotDurationSeconds = getWorkspaceSegmentCanonicalSlotDurationSeconds(segment);
+  const speechWordsRange = getWorkspaceSegmentSpeechWordsRange(segment);
+  const speechWordsDurationSeconds =
+    speechWordsRange !== null
+      ? normalizeWorkspaceSegmentManualDurationSeconds(
+          speechWordsRange.endTime - speechWordsRange.startTime,
+        )
+      : null;
+  const explicitSpeechDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(segment.speechDuration);
+  const explicitSpeechDurationIsSourceEcho =
+    explicitSpeechDurationSeconds !== null &&
+    Math.abs(explicitSpeechDurationSeconds - normalizedSourceDurationSeconds) <=
+      WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS;
+  const preciseSpeechDurationCandidates = [
+    speechWordsDurationSeconds,
+    !explicitSpeechDurationIsSourceEcho &&
+    (speechWordsDurationSeconds !== null || segment.speechDurationSource === "audio")
+      ? explicitSpeechDurationSeconds
+      : null,
+  ].filter((value): value is number => value !== null);
+  const preciseSpeechDurationSeconds = preciseSpeechDurationCandidates.length > 0
+    ? Math.max(...preciseSpeechDurationCandidates)
+    : null;
+  const visualDurationSeconds = getWorkspaceSegmentKnownVisualDurationSeconds(segment);
+  const coveredTimelineDurationCandidates = [
+    slotDurationSeconds,
+    visualDurationSeconds,
+    normalizeWorkspaceSegmentManualDurationSeconds(measuredVisualDurationSeconds),
+  ].filter(
+    (durationSeconds): durationSeconds is number =>
+      durationSeconds !== null &&
+      preciseSpeechDurationSeconds !== null &&
+      preciseSpeechDurationSeconds > 0 &&
+      preciseSpeechDurationSeconds <= durationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS &&
+      normalizedSourceDurationSeconds > durationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS,
+  );
+
+  // A durable per-scene voiceover file can contain a small render tail after
+  // the last spoken word. That tail is required for clean audio playback, but
+  // it must not make the logical scene longer or trigger a false video-shortfall
+  // warning when the authoritative scene slot already contains all speech.
+  if (coveredTimelineDurationCandidates.length > 0) {
+    return roundWorkspaceSegmentTimelineSeconds(Math.min(...coveredTimelineDurationCandidates));
+  }
+
+  return roundWorkspaceSegmentTimelineSeconds(normalizedSourceDurationSeconds);
+};
+
 export const getWorkspaceSegmentExplicitVoiceoverDurationSeconds = (
   segment: WorkspaceSegmentEditorDraftSegment,
   session?: Pick<WorkspaceSegmentEditorDraftSession, "language" | "ttsAssetId" | "voiceType"> | null,
@@ -5432,7 +5501,7 @@ export const getWorkspaceSegmentExplicitVoiceoverDurationSeconds = (
     playableAssetDuration !== null &&
     !hasVoiceSourceRange &&
     isWorkspaceSegmentVoiceoverAssetFresh(segment, session)
-      ? playableAssetDuration
+      ? resolveWorkspaceSegmentSceneVoiceoverTimelineDurationSeconds(segment, playableAssetDuration)
       : null;
   const voiceSourceDuration = getWorkspaceSegmentVoiceSourceDurationSeconds(segment);
   if (
@@ -5440,7 +5509,9 @@ export const getWorkspaceSegmentExplicitVoiceoverDurationSeconds = (
     !isWorkspaceSegmentProjectVoiceoverFullAssetDurationLeak(segment, session, voiceSourceDuration) &&
     !isWorkspaceSegmentVoiceoverDurationObviousVisualEcho(segment, voiceSourceDuration)
   ) {
-    return roundWorkspaceSegmentTimelineSeconds(voiceSourceDuration);
+    return isWorkspaceSegmentVoiceoverAssetFresh(segment, session)
+      ? resolveWorkspaceSegmentSceneVoiceoverTimelineDurationSeconds(segment, voiceSourceDuration)
+      : roundWorkspaceSegmentTimelineSeconds(voiceSourceDuration);
   }
 
   const speechWordsRange = getWorkspaceSegmentSpeechWordsRange(segment);
@@ -5496,7 +5567,9 @@ export const getWorkspaceSegmentExplicitVoiceoverDurationSeconds = (
     return getWorkspaceSegmentEstimatedVoiceoverDurationSeconds(segment) ?? null;
   }
 
-  return playableAssetDuration;
+  return isWorkspaceSegmentVoiceoverAssetFresh(segment, session)
+    ? resolveWorkspaceSegmentSceneVoiceoverTimelineDurationSeconds(segment, playableAssetDuration)
+    : playableAssetDuration;
 };
 
 export const isWorkspaceSegmentProjectVoiceoverFullAssetDurationLeak = (
@@ -6888,7 +6961,10 @@ export const getWorkspaceSegmentFreshVoiceoverDurationSeconds = (
   session?: Pick<WorkspaceSegmentEditorDraftSession, "language" | "ttsAssetId" | "voiceType"> | null,
 ) => {
   const sceneVoiceoverAssetDurationSeconds = isWorkspaceSegmentFreshSceneVoiceoverAsset(segment, session)
-    ? getStudioCustomVideoFileDurationSeconds(segment.voiceoverAsset)
+    ? resolveWorkspaceSegmentSceneVoiceoverTimelineDurationSeconds(
+        segment,
+        getStudioCustomVideoFileDurationSeconds(segment.voiceoverAsset),
+      )
     : null;
   const voiceoverDurationSeconds =
     sceneVoiceoverAssetDurationSeconds ??
