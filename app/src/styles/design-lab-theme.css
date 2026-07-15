@@ -9518,8 +9518,8 @@ textarea {
 
 .studio-segment-seedance-settings__duration {
   display: inline-grid;
-  grid-template-columns: minmax(112px, 1.25fr) minmax(96px, 1fr);
-  min-width: 218px;
+  grid-template-columns: minmax(126px, 1.3fr) minmax(112px, 1fr);
+  min-width: 248px;
   min-height: 38px;
   padding: 2px;
   border: 1px solid rgba(181, 198, 230, 0.1);
@@ -9587,41 +9587,51 @@ textarea {
   gap: 5px;
   padding: 0 7px 0 9px;
   border-radius: 9px;
-  cursor: text;
+  cursor: pointer;
 }
 
 .studio-segment-seedance-settings__manual-value {
+  position: relative;
   display: inline-flex;
-  align-items: baseline;
-  gap: 2px;
+  align-items: center;
   flex: 0 0 auto;
 }
 
-.studio-segment-seedance-settings__manual input {
-  width: 26px;
-  padding: 0;
+.studio-segment-seedance-settings__manual select {
+  width: 58px;
+  padding: 3px 17px 3px 5px;
   border: 0;
+  border-radius: 6px;
   outline: 0;
   background: transparent;
   color: rgba(242, 246, 255, 0.95);
   font: inherit;
-  font-size: 0.7rem;
+  font-size: 0.64rem;
   font-weight: 850;
   line-height: 1;
-  text-align: right;
-  appearance: textfield;
-}
-
-.studio-segment-seedance-settings__manual input::-webkit-inner-spin-button,
-.studio-segment-seedance-settings__manual input::-webkit-outer-spin-button {
-  margin: 0;
+  cursor: pointer;
   appearance: none;
 }
 
-.studio-segment-seedance-settings__manual small {
-  color: rgba(175, 190, 216, 0.6);
-  font-size: 0.56rem;
-  font-weight: 720;
+.studio-segment-seedance-settings__manual select option {
+  background: #111827;
+  color: #f5f7ff;
+}
+
+.studio-segment-seedance-settings__manual-value svg {
+  position: absolute;
+  right: 4px;
+  width: 11px;
+  height: 11px;
+  pointer-events: none;
+}
+
+.studio-segment-seedance-settings__manual-value path {
+  fill: none;
+  stroke: rgba(190, 204, 230, 0.78);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
 }
 
 .studio-segment-seedance-settings__audio {
@@ -9642,9 +9652,8 @@ textarea {
 
 .studio-segment-seedance-settings__audio-copy {
   display: inline-flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 3px;
+  align-items: center;
+  gap: 6px;
 }
 
 .studio-segment-seedance-settings__audio small {

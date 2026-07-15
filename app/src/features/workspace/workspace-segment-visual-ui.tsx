@@ -50,6 +50,7 @@ export type WorkspaceSegmentSeedanceSettingsOptions = {
   onGenerateAudioChange: (generateAudio: boolean) => void;
   value: StudioSegmentPhotoAnimationDurationSeconds;
   voiceoverDurationSeconds?: number | null;
+  voiceoverMatched?: boolean;
 };
 
 export const formatSegmentVisualCreditsLabel = (credits: number) => `${credits} ⚡`;
@@ -224,7 +225,9 @@ export const renderWorkspaceSegmentSeedanceSettings = (
   });
   const hasVoiceover = Number.isFinite(Number(options.voiceoverDurationSeconds)) && Number(options.voiceoverDurationSeconds) > 0;
   const isVoiceoverMode = options.durationMode === "voiceover";
+  const isVoiceoverMatched = options.voiceoverMatched === true;
   const audioCreditCost = getStudioSegmentSeedanceAudioCreditCost(effectiveDuration, true);
+  const manualDurationOptions = getStudioSegmentPhotoAnimationDurationOptions("premium");
 
   return (
     <div className={`studio-segment-seedance-settings${options.className ? ` ${options.className}` : ""}`}>
@@ -238,38 +241,52 @@ export const renderWorkspaceSegmentSeedanceSettings = (
           type="button"
           role="radio"
           aria-checked={isVoiceoverMode}
-          disabled={options.disabled}
+          disabled={options.disabled || isVoiceoverMatched}
           title={
-            hasVoiceover
-              ? workspaceText(locale, "Длительность по текущей озвучке", "Match the current voiceover")
-              : workspaceText(locale, "Озвучки нет — будет использовано 5 секунд", "No voiceover — 5 seconds will be used")
+            isVoiceoverMatched
+              ? workspaceText(
+                  locale,
+                  "Видео уже совпадает с озвучкой — продление не требуется",
+                  "The video already matches the voiceover — no extension is needed",
+                )
+              : hasVoiceover
+                ? workspaceText(locale, "Длительность по текущей озвучке", "Match the current voiceover")
+                : workspaceText(locale, "Озвучки нет — будет использовано 5 секунд", "No voiceover — 5 seconds will be used")
           }
           onClick={() => options.onDurationModeChange("voiceover")}
         >
           <span>{workspaceText(locale, "По озвучке", "Voiceover")}</span>
-          <strong>{voiceoverDuration}{workspaceText(locale, "с", "s")}</strong>
+          <strong>
+            {isVoiceoverMatched
+              ? workspaceText(locale, "Совпадает", "Matched")
+              : `${voiceoverDuration}${workspaceText(locale, "с", "s")}`}
+          </strong>
         </button>
         <label className={`studio-segment-seedance-settings__manual${!isVoiceoverMode ? " is-active" : ""}`}>
           <span>{workspaceText(locale, "Вручную", "Manual")}</span>
           <span className="studio-segment-seedance-settings__manual-value">
-            <input
-              type="number"
-              inputMode="numeric"
-              min={4}
-              max={12}
-              step={1}
+            <select
               value={normalizedManualDuration}
               disabled={options.disabled}
-              aria-label={workspaceText(locale, "Длительность от 4 до 12 секунд", "Duration from 4 to 12 seconds")}
+              aria-label={workspaceText(locale, "Ручная длительность видео", "Manual video duration")}
               onFocus={() => options.onDurationModeChange("manual")}
+              onPointerDown={() => options.onDurationModeChange("manual")}
               onChange={(event) => {
                 options.onDurationModeChange("manual");
                 options.onDurationChange(
                   normalizeStudioSegmentPhotoAnimationDurationSeconds("premium", event.currentTarget.value),
                 );
               }}
-            />
-            <small>{workspaceText(locale, "сек", "sec")}</small>
+            >
+              {manualDurationOptions.map((durationSeconds) => (
+                <option key={durationSeconds} value={durationSeconds}>
+                  {durationSeconds} {workspaceText(locale, "сек", "sec")}
+                </option>
+              ))}
+            </select>
+            <svg viewBox="0 0 12 12" aria-hidden="true">
+              <path d="m3 4.75 3 3 3-3" />
+            </svg>
           </span>
         </label>
       </div>

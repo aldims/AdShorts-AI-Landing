@@ -1390,6 +1390,30 @@ export const resolveWorkspaceSegmentDurationExtensionRequestTiming = (options: {
   };
 };
 
+export const resolveWorkspaceSegmentSeedanceExtensionSelection = (options: {
+  durationMode: StudioSegmentSeedanceDurationMode;
+  manualDurationSeconds: unknown;
+  voiceoverTailDurationSeconds?: number | null;
+}) => {
+  const voiceoverTailDurationSeconds = options.voiceoverTailDurationSeconds;
+  const voiceoverMatched =
+    typeof voiceoverTailDurationSeconds === "number" &&
+    Number.isFinite(voiceoverTailDurationSeconds) &&
+    voiceoverTailDurationSeconds <= WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS;
+  const durationMode =
+    options.durationMode === "voiceover" && voiceoverMatched ? "manual" : options.durationMode;
+
+  return {
+    durationMode,
+    durationSeconds: resolveStudioSegmentSeedanceDurationSeconds({
+      durationMode,
+      manualDurationSeconds: options.manualDurationSeconds,
+      voiceoverDurationSeconds: voiceoverTailDurationSeconds,
+    }),
+    voiceoverMatched,
+  };
+};
+
 export const applyWorkspaceSegmentMeasuredSceneVoiceoverDuration = (
   segment: WorkspaceSegmentEditorDraftSegment,
   options: {
@@ -25209,11 +25233,14 @@ export function WorkspacePage({
     const voiceoverTailDurationSeconds = voiceoverDurationSeconds !== null
       ? Math.max(0, voiceoverDurationSeconds - extensionPlan.sourceDurationSeconds)
       : null;
+    const extensionSelection = resolveWorkspaceSegmentSeedanceExtensionSelection({
+      durationMode: segmentSeedanceDurationMode,
+      manualDurationSeconds: selectedSegmentPhotoAnimationDurationSeconds,
+      voiceoverTailDurationSeconds,
+    });
     const requestedExtensionDurationSeconds = normalizeStudioSegmentPhotoAnimationDurationSeconds(
       generationQuality,
-      options?.durationSeconds ?? resolveSegmentSeedanceDurationSeconds(targetSegment, currentDraft, {
-        voiceoverDurationSeconds: voiceoverTailDurationSeconds,
-      }),
+      options?.durationSeconds ?? extensionSelection.durationSeconds,
     );
     const extensionTiming = resolveWorkspaceSegmentDurationExtensionRequestTiming({
       requestedExtensionDurationSeconds,
@@ -31019,12 +31046,13 @@ export function WorkspacePage({
     segmentTimelineDurationMenuSourceSeconds !== null
       ? Math.max(0, segmentTimelineDurationMenuVoiceoverSeconds - segmentTimelineDurationMenuSourceSeconds)
       : null;
+  const segmentTimelineDurationExtensionSelection = resolveWorkspaceSegmentSeedanceExtensionSelection({
+    durationMode: segmentSeedanceDurationMode,
+    manualDurationSeconds: selectedSegmentPhotoAnimationDurationSeconds,
+    voiceoverTailDurationSeconds: segmentTimelineDurationMenuVoiceoverTailSeconds,
+  });
   const segmentTimelineDurationSelectedExtensionDurationSeconds =
-    resolveStudioSegmentSeedanceDurationSeconds({
-      durationMode: segmentSeedanceDurationMode,
-      manualDurationSeconds: selectedSegmentPhotoAnimationDurationSeconds,
-      voiceoverDurationSeconds: segmentTimelineDurationMenuVoiceoverTailSeconds,
-    });
+    segmentTimelineDurationExtensionSelection.durationSeconds;
   const segmentTimelineDurationMenuFullVideoSeconds = segmentTimelineDurationMenuSourceSeconds;
   const segmentTimelineDurationMenuVideoLongerThanVoiceover =
     segmentTimelineDurationMenuFullVideoSeconds !== null &&
@@ -31387,13 +31415,14 @@ export function WorkspacePage({
           ? renderSegmentSeedanceSettings({
               className: "studio-segment-seedance-settings--duration-extension",
               disabled: isSegmentTimelineDurationAiExtensionPending,
-              durationMode: segmentSeedanceDurationMode,
+              durationMode: segmentTimelineDurationExtensionSelection.durationMode,
               generateAudio: isSegmentSeedanceGenerateAudioEnabled,
               onDurationChange: setSelectedSegmentPhotoAnimationDurationSeconds,
               onDurationModeChange: setSegmentSeedanceDurationMode,
               onGenerateAudioChange: setIsSegmentSeedanceGenerateAudioEnabled,
               value: segmentTimelineDurationSelectedExtensionDurationSeconds,
               voiceoverDurationSeconds: segmentTimelineDurationMenuVoiceoverTailSeconds,
+              voiceoverMatched: segmentTimelineDurationExtensionSelection.voiceoverMatched,
             })
           : null
       }

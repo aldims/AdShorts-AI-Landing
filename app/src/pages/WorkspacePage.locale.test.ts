@@ -178,6 +178,7 @@ import {
   resolveWorkspaceSegmentEditorStructureChangePermission,
   resolveWorkspaceSegmentDurationMenuTrimLabels,
   resolveWorkspaceSegmentDurationExtensionRequestTiming,
+  resolveWorkspaceSegmentSeedanceExtensionSelection,
   resolveWorkspaceSegmentVideoTrimDuration,
   resolveWorkspaceSegmentTimelineVisualDurationDisplay,
   resolveWorkspaceSegmentGeneratedVoiceoverEdited,
@@ -7250,6 +7251,32 @@ describe("WorkspacePage studio locale defaults", () => {
       sourceDurationSeconds: 5,
       tailDurationSeconds: 5,
       targetDurationSeconds: 10,
+    });
+  });
+
+  it("does not treat an already matched voiceover as a missing five-second duration", () => {
+    expect(
+      resolveWorkspaceSegmentSeedanceExtensionSelection({
+        durationMode: "voiceover",
+        manualDurationSeconds: 8,
+        voiceoverTailDurationSeconds: 0,
+      }),
+    ).toEqual({
+      durationMode: "manual",
+      durationSeconds: 8,
+      voiceoverMatched: true,
+    });
+
+    expect(
+      resolveWorkspaceSegmentSeedanceExtensionSelection({
+        durationMode: "voiceover",
+        manualDurationSeconds: 8,
+        voiceoverTailDurationSeconds: null,
+      }),
+    ).toEqual({
+      durationMode: "voiceover",
+      durationSeconds: 5,
+      voiceoverMatched: false,
     });
   });
 
