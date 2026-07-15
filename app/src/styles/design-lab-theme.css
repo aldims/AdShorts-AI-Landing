@@ -31721,8 +31721,10 @@ button.studio-segment-editor__timeline-label:focus-visible {
 }
 
 .studio-segment-editor__timeline-duration-extend-button {
-  flex: 1 1 190px;
-  min-width: 190px;
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 0;
+  margin-left: auto;
   background:
     linear-gradient(135deg, rgba(105, 87, 255, 0.3), rgba(42, 132, 229, 0.2)),
     rgba(13, 18, 31, 0.88);
@@ -31841,10 +31843,6 @@ button.studio-segment-editor__timeline-label:focus-visible {
     flex-wrap: wrap;
   }
 
-  .studio-segment-editor__timeline-duration-extend-button {
-    flex-basis: 100%;
-    width: 100%;
-  }
 }
 
 .studio-segment-editor__timeline-subtitle-menu {
