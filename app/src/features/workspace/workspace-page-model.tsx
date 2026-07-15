@@ -1340,6 +1340,23 @@ export const workspaceCreditTopupPacks: Array<Record<Locale, WorkspaceCreditTopu
 
 export type StudioCreateMode = "default" | "segment-editor";
 
+export const resolveWorkspaceStudioCreateModeDuringGeneration = (
+  createMode: StudioCreateMode,
+  isGenerationVisible: boolean,
+): StudioCreateMode => (isGenerationVisible ? "default" : createMode);
+
+export const shouldRedirectWorkspaceScenesModeDuringGeneration = (options: {
+  createMode: StudioCreateMode;
+  isGenerationVisible: boolean;
+  isScenesRoute: boolean;
+  isStudioCreateView: boolean;
+  isStudioPathname: boolean;
+}) =>
+  options.isGenerationVisible &&
+  options.isStudioPathname &&
+  options.isStudioCreateView &&
+  (options.createMode === "segment-editor" || options.isScenesRoute);
+
 export type WorkspaceScenesModeSwitchTarget = "current" | "project" | "scratch";
 
 export type WorkspaceRetainedScenesDraftState<TDraft> = {

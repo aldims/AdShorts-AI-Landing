@@ -624,10 +624,12 @@ import {
   isWorkspaceSegmentEditorProjectUnavailableError,
   isWorkspaceSegmentEditorPreparingError,
   isStudioGenerationUserFacing,
+  resolveWorkspaceStudioCreateModeDuringGeneration,
   resolveWorkspaceRetainedScenesDraftState,
   resolveWorkspaceScenesModeSwitchTarget,
   shouldDisableWorkspaceScenesCreateMode,
   shouldNotifyStudioGenerationError,
+  shouldRedirectWorkspaceScenesModeDuringGeneration,
   shouldShowWorkspaceStudioIdeaEmptyState,
   shouldShowWorkspaceStudioWelcomeCard,
   shouldUseWorkspaceStudioExpandedPromptLayout,
@@ -2126,7 +2128,12 @@ export function WorkspacePage({
   const [segmentEditorLoadedSession, setSegmentEditorLoadedSession] = useState<WorkspaceSegmentEditorSession | null>(null);
   const [segmentEditorDraft, setSegmentEditorDraft] = useState<WorkspaceSegmentEditorDraftSession | null>(null);
   const isScratchSegmentEditorDraft = isWorkspaceSegmentEditorScratchDraft(segmentEditorDraft);
-  const isScenesCreateMode = createMode === "segment-editor";
+  const isUserFacingGeneration = isStudioGenerationUserFacing(isGenerating, generationUiSource);
+  const visibleStudioCreateMode = resolveWorkspaceStudioCreateModeDuringGeneration(
+    createMode,
+    isUserFacingGeneration,
+  );
+  const isScenesCreateMode = visibleStudioCreateMode === "segment-editor";
   const hasScratchSegmentEditorRenderableScene =
     isScratchSegmentEditorDraft && hasWorkspaceSegmentEditorRenderableScratchScene(segmentEditorDraft);
   const hasSegmentEditorTextAndVoiceForSubtitles = (draft: WorkspaceSegmentEditorDraftSession | null) => {
@@ -4080,7 +4087,7 @@ export function WorkspacePage({
     };
   }, [isAnyWorkspaceModalOpen]);
 
-  const isSegmentEditorPageActive = activeTab === "studio" && studioView === "create" && createMode === "segment-editor";
+  const isSegmentEditorPageActive = activeTab === "studio" && studioView === "create" && isScenesCreateMode;
 
   useEffect(() => {
     if (typeof document === "undefined") return undefined;
@@ -5885,7 +5892,6 @@ export function WorkspacePage({
   const isGeneratedVideoDismissed = Boolean(generatedVideoDismissKey) && dismissedStudioPreviewKey === generatedVideoDismissKey;
   const visibleGeneratedVideo = isGeneratedVideoDismissed ? null : generatedVideo;
   const visibleGeneratedVideoPlaybackUrl = isGeneratedVideoDismissed ? null : generatedVideoPlaybackUrl;
-  const isUserFacingGeneration = isStudioGenerationUserFacing(isGenerating, generationUiSource);
   const isScenesCreateModeDisabled = shouldDisableWorkspaceScenesCreateMode({
     isEditHidden: isEditHideEnabled,
     isGenerationVisible: isUserFacingGeneration,
@@ -11382,6 +11388,41 @@ export function WorkspacePage({
   };
 
   useEffect(() => {
+    const isScenesRoute =
+      routeStudioState.section === "edit" ||
+      (routeStudioState.section === "create" && routeStudioState.mode === "scenes");
+    if (!shouldRedirectWorkspaceScenesModeDuringGeneration({
+      createMode,
+      isGenerationVisible: isUserFacingGeneration,
+      isScenesRoute,
+      isStudioCreateView: studioView === "create",
+      isStudioPathname,
+    })) {
+      return;
+    }
+
+    if (createMode === "segment-editor") {
+      cancelPendingSegmentEditorLoad("studio-generation-visible");
+      stashCurrentSegmentEditorDraft();
+      closeSegmentAiPhotoModal({ immediate: true });
+      resetSegmentEditorPreviewPlaybackState({ clearRefs: true });
+    }
+
+    navigateToStudioCreateWaitingRoute({ replace: true });
+  }, [
+    createMode,
+    isStudioPathname,
+    isUserFacingGeneration,
+    routeStudioState.mode,
+    routeStudioState.section,
+    studioView,
+  ]);
+
+  useEffect(() => {
+    if (isUserFacingGeneration) {
+      return;
+    }
+
     if (
       !isStudioPathname ||
       routeStudioState.section !== "create" ||
@@ -11405,6 +11446,7 @@ export function WorkspacePage({
   }, [
     createMode,
     generatedMediaLibraryEntries,
+    isUserFacingGeneration,
     isStudioPathname,
     isScratchSegmentEditorDraft,
     routeStudioState.mode,
@@ -12373,6 +12415,10 @@ export function WorkspacePage({
       return;
     }
 
+    if (isUserFacingGeneration) {
+      return;
+    }
+
     if (shouldDeferSegmentEditorRouteRestore(pendingStudioRouteSectionRef.current)) {
       return;
     }
@@ -12651,6 +12697,7 @@ export function WorkspacePage({
     isSegmentEditorLoading,
     isSegmentEditorConsumedSourceProject,
     isStudioPathname,
+    isUserFacingGeneration,
     routeStudioState.projectId,
     routeStudioState.section,
     routeStudioState.segmentIndex,

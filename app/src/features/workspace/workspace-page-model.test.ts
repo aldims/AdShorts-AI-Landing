@@ -10,10 +10,12 @@ import {
   isWorkspaceSegmentEditorProjectUnavailableError,
   isWorkspaceSegmentSceneSoundRunBusy,
   isStudioGenerationUserFacing,
+  resolveWorkspaceStudioCreateModeDuringGeneration,
   resolveWorkspaceRetainedScenesDraftState,
   resolveWorkspaceScenesModeSwitchTarget,
   shouldDisableWorkspaceScenesCreateMode,
   shouldNotifyStudioGenerationError,
+  shouldRedirectWorkspaceScenesModeDuringGeneration,
   shouldShowWorkspaceStudioIdeaEmptyState,
   shouldShowWorkspaceStudioWelcomeCard,
   shouldUseWorkspaceStudioExpandedPromptLayout,
@@ -37,6 +39,37 @@ describe("segment editor session loading", () => {
 });
 
 describe("studio creation mode switching", () => {
+  it("forces idea mode while Shorts creation is visible", () => {
+    expect(resolveWorkspaceStudioCreateModeDuringGeneration("segment-editor", true)).toBe("default");
+    expect(resolveWorkspaceStudioCreateModeDuringGeneration("default", true)).toBe("default");
+    expect(resolveWorkspaceStudioCreateModeDuringGeneration("segment-editor", false)).toBe("segment-editor");
+  });
+
+  it("redirects direct scenes routes during generation without blocking other Studio sections", () => {
+    const baseOptions = {
+      createMode: "default" as const,
+      isGenerationVisible: true,
+      isScenesRoute: true,
+      isStudioCreateView: true,
+      isStudioPathname: true,
+    };
+
+    expect(shouldRedirectWorkspaceScenesModeDuringGeneration(baseOptions)).toBe(true);
+    expect(
+      shouldRedirectWorkspaceScenesModeDuringGeneration({
+        ...baseOptions,
+        isScenesRoute: false,
+        isStudioCreateView: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldRedirectWorkspaceScenesModeDuringGeneration({
+        ...baseOptions,
+        isGenerationVisible: false,
+      }),
+    ).toBe(false);
+  });
+
   it("blocks scenes mode while Shorts creation is visible", () => {
     expect(
       shouldDisableWorkspaceScenesCreateMode({
