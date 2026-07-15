@@ -13,6 +13,9 @@ export const normalizeExamplePrefillStudioSettings = (value) => {
     const videoMode = normalizeText(payload.videoMode);
     const voiceId = normalizeText(payload.voiceId);
     const brandText = normalizeText(payload.brandText);
+    if (typeof payload.aiVideoGenerateAudioEnabled === "boolean") {
+        settings.aiVideoGenerateAudioEnabled = payload.aiVideoGenerateAudioEnabled;
+    }
     if (isSupportedLocale(language)) {
         settings.language = language;
     }

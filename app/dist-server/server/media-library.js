@@ -8,7 +8,7 @@ import { getWorkspaceProjects } from "./projects.js";
 import { listWorkspaceSavedReferences } from "./workspace-references.js";
 import { getWorkspaceProjectSegmentVideoProxyTarget, getWorkspaceSegmentEditorSession, getWorkspaceSegmentEditorSessionForAccessibleProject, } from "./segment-editor.js";
 import { clearWorkspaceMediaIndex, getWorkspaceMediaIndexProjectEntry, listWorkspaceMediaIndexProjectEntries, pruneWorkspaceMediaIndexProjects, upsertWorkspaceMediaIndexProjectEntry, } from "./workspace-media-index.js";
-import { postAdsflowJson, upstreamPolicies } from "./upstream-client.js";
+import { buildAdsflowUrl, postAdsflowJson, upstreamPolicies } from "./upstream-client.js";
 const WORKSPACE_MEDIA_LIBRARY_CACHE_TTL_MS = 60_000;
 const WORKSPACE_MEDIA_LIBRARY_DURABLE_SYNC_TIMEOUT_MS = 3_500;
 const WORKSPACE_MEDIA_LIBRARY_INDEX_SYNC_BUDGET_MS = 2_000;
@@ -17,10 +17,12 @@ const WORKSPACE_MEDIA_LIBRARY_INDEX_SYNC_MIN_REMAINING_MS = 250;
 const WORKSPACE_MEDIA_LIBRARY_SEGMENT_CONCURRENCY = 6;
 const WORKSPACE_MEDIA_LIBRARY_DEFAULT_LIMIT = 24;
 const WORKSPACE_MEDIA_LIBRARY_MAX_LIMIT = 96;
-const WORKSPACE_MEDIA_LIBRARY_INDEX_SCHEMA_VERSION = "media-v6-durable-video-posters";
+const WORKSPACE_MEDIA_LIBRARY_INDEX_SCHEMA_VERSION = "media-v7-segment-library-kind";
 const workspaceMediaLibraryCache = new Map();
 const workspaceMediaLibraryInFlight = new Map();
 const workspaceMediaLibraryIndexWarmInFlight = new Set();
+const workspaceDurableMediaLibrarySnapshots = new Map();
+const workspaceDurableMediaLibraryQueues = new Map();
 const normalizeText = (value) => String(value ?? "").replace(/\s+/g, " ").trim();
 const normalizeInteger = (value) => {
     const numeric = Number(value);
@@ -71,6 +73,17 @@ const cloneWorkspaceMediaLibraryPage = (page) => ({
     nextCursor: page.nextCursor,
     total: page.total,
 });
+const runWorkspaceDurableMediaLibraryTask = (cacheKey, task) => {
+    const previousTask = workspaceDurableMediaLibraryQueues.get(cacheKey) ?? Promise.resolve();
+    const request = previousTask.catch(() => undefined).then(task);
+    const queueTail = request.then(() => undefined, () => undefined);
+    workspaceDurableMediaLibraryQueues.set(cacheKey, queueTail);
+    return request.finally(() => {
+        if (workspaceDurableMediaLibraryQueues.get(cacheKey) === queueTail) {
+            workspaceDurableMediaLibraryQueues.delete(cacheKey);
+        }
+    });
+};
 const buildWorkspaceMediaLibraryPreviewUrl = (options) => {
     const previewUrl = new URL("/api/workspace/media-library-preview", env.appUrl);
     previewUrl.searchParams.set("kind", options.kind);
@@ -474,99 +487,123 @@ export const buildWorkspaceReferenceMediaLibraryItems = async (user) => {
         });
     });
 };
-const fetchWorkspaceDurableMediaLibraryItems = async (user, options) => {
+export const fetchWorkspaceDurableMediaLibraryItems = async (user, options) => {
     if (!env.adsflowApiBaseUrl || !env.adsflowAdminToken) {
         return {
             hasMore: false,
             items: [],
         };
     }
-    const externalUserId = await resolvePreferredExternalUserId(user);
     const targetItemCount = Math.max(1, (options?.offset ?? 0) + (options?.limit ?? WORKSPACE_MEDIA_LIBRARY_DEFAULT_LIMIT));
     const requestPageSize = Math.max(WORKSPACE_MEDIA_LIBRARY_DEFAULT_LIMIT, Math.min(WORKSPACE_MEDIA_LIBRARY_MAX_LIMIT, options?.limit ?? WORKSPACE_MEDIA_LIBRARY_MAX_LIMIT));
     const existingItems = options?.existingItems ?? [];
-    const collectedItems = [];
-    const visitedCursors = new Set();
     const maxWaitMs = typeof options?.maxWaitMs === "number" && Number.isFinite(options.maxWaitMs) && options.maxWaitMs > 0
         ? Math.trunc(options.maxWaitMs)
         : null;
-    const deadlineController = maxWaitMs ? new AbortController() : null;
-    let didReachDeadline = false;
-    const deadlineTimeoutId = deadlineController && maxWaitMs
-        ? setTimeout(() => {
-            didReachDeadline = true;
-            deadlineController.abort("media-library-durable-timeout");
-        }, maxWaitMs)
-        : null;
-    let nextCursor = 0;
-    let hasMore = false;
-    try {
-        while (!visitedCursors.has(nextCursor)) {
-            if (deadlineController?.signal.aborted) {
+    const cacheKey = getWorkspaceMediaLibraryCacheKey(user);
+    const loadSnapshot = async () => {
+        const cachedSnapshot = cacheKey ? workspaceDurableMediaLibrarySnapshots.get(cacheKey) : null;
+        const hasFreshSnapshot = Boolean(cachedSnapshot && cachedSnapshot.expiresAt > Date.now());
+        let collectedItems = hasFreshSnapshot
+            ? cloneWorkspaceMediaLibraryItems(cachedSnapshot?.items ?? [])
+            : [];
+        let hasMore = hasFreshSnapshot ? Boolean(cachedSnapshot?.hasMore) : true;
+        let nextCursor = hasFreshSnapshot ? cachedSnapshot?.nextCursor ?? null : 0;
+        const visitedCursors = new Set();
+        let externalUserId = null;
+        const deadlineController = maxWaitMs ? new AbortController() : null;
+        let didReachDeadline = false;
+        const deadlineTimeoutId = deadlineController && maxWaitMs
+            ? setTimeout(() => {
                 didReachDeadline = true;
-                hasMore = true;
-                break;
-            }
-            visitedCursors.add(nextCursor);
-            const payload = await postAdsflowJson("/api/web/media-library", {
-                admin_token: env.adsflowAdminToken,
-                external_user_id: externalUserId,
-                user_email: user.email ?? undefined,
-                user_name: user.name ?? undefined,
-                limit: requestPageSize,
-                cursor: nextCursor,
-                status: "ready",
-            }, upstreamPolicies.adsflowMetadata, {
-                assetKind: "media-library",
-                endpoint: "web.media-library",
-            }, {
-                signal: deadlineController?.signal,
-            }).catch((error) => {
+                deadlineController.abort("media-library-durable-timeout");
+            }, maxWaitMs)
+            : null;
+        try {
+            while (hasMore &&
+                nextCursor !== null &&
+                dedupeWorkspaceMediaLibraryPageItems([...existingItems, ...collectedItems]).length < targetItemCount) {
                 if (deadlineController?.signal.aborted) {
                     didReachDeadline = true;
+                    break;
                 }
-                console.warn("[workspace] Failed to load durable media library", {
-                    error: error instanceof Error ? error.message : "Unknown durable media library error.",
-                    timedOut: Boolean(deadlineController?.signal.aborted),
+                if (visitedCursors.has(nextCursor)) {
+                    hasMore = false;
+                    nextCursor = null;
+                    break;
+                }
+                visitedCursors.add(nextCursor);
+                const requestCursor = nextCursor;
+                externalUserId ??= await resolvePreferredExternalUserId(user);
+                const payload = await postAdsflowJson("/api/web/media-library", {
+                    admin_token: env.adsflowAdminToken,
+                    external_user_id: externalUserId,
+                    user_email: user.email ?? undefined,
+                    user_name: user.name ?? undefined,
+                    limit: requestPageSize,
+                    cursor: requestCursor,
+                    status: "ready",
+                }, upstreamPolicies.adsflowMetadata, {
+                    assetKind: "media-library",
+                    endpoint: "web.media-library",
+                }, {
+                    signal: deadlineController?.signal,
+                }).catch((error) => {
+                    if (deadlineController?.signal.aborted) {
+                        didReachDeadline = true;
+                    }
+                    console.warn("[workspace] Failed to load durable media library", {
+                        error: error instanceof Error ? error.message : "Unknown durable media library error.",
+                        timedOut: Boolean(deadlineController?.signal.aborted),
+                    });
+                    return null;
                 });
-                return null;
-            });
-            if (!Array.isArray(payload?.assets)) {
-                return {
-                    hasMore: didReachDeadline,
-                    items: collectedItems,
-                };
-            }
-            collectedItems.push(...payload.assets
-                .map((item) => isAdsflowMediaAssetPayload(item)
-                ? buildWorkspaceDurableMediaLibraryItem(item)
-                : null)
-                .filter((item) => Boolean(item)));
-            const dedupedVisibleCount = dedupeWorkspaceMediaLibraryPageItems([
-                ...existingItems,
-                ...collectedItems,
-            ]).length;
-            const payloadNextCursor = normalizeInteger(payload.next_cursor);
-            if (payloadNextCursor === null) {
-                hasMore = false;
-                break;
-            }
-            if (dedupedVisibleCount >= targetItemCount) {
+                if (!Array.isArray(payload?.assets)) {
+                    hasMore = true;
+                    break;
+                }
+                const pageItems = payload.assets
+                    .map((item) => isAdsflowMediaAssetPayload(item)
+                    ? buildWorkspaceDurableMediaLibraryItem(item)
+                    : null)
+                    .filter((item) => Boolean(item));
+                collectedItems = dedupeWorkspaceMediaLibraryPageItems([...collectedItems, ...pageItems]);
+                const payloadNextCursor = normalizeInteger(payload.next_cursor);
+                if (payloadNextCursor === null) {
+                    hasMore = false;
+                    nextCursor = null;
+                    break;
+                }
+                if (payloadNextCursor === requestCursor || visitedCursors.has(payloadNextCursor)) {
+                    hasMore = false;
+                    nextCursor = null;
+                    break;
+                }
                 hasMore = true;
-                break;
+                nextCursor = payloadNextCursor;
             }
-            nextCursor = payloadNextCursor;
         }
-    }
-    finally {
-        if (deadlineTimeoutId) {
-            clearTimeout(deadlineTimeoutId);
+        finally {
+            if (deadlineTimeoutId) {
+                clearTimeout(deadlineTimeoutId);
+            }
         }
-    }
-    return {
-        hasMore: hasMore || didReachDeadline,
-        items: collectedItems,
+        if (cacheKey) {
+            workspaceDurableMediaLibrarySnapshots.set(cacheKey, {
+                expiresAt: Date.now() + WORKSPACE_MEDIA_LIBRARY_CACHE_TTL_MS,
+                hasMore: hasMore || didReachDeadline,
+                items: cloneWorkspaceMediaLibraryItems(collectedItems),
+                nextCursor,
+            });
+        }
+        return {
+            hasMore: hasMore || didReachDeadline,
+            items: cloneWorkspaceMediaLibraryItems(collectedItems),
+        };
     };
+    return cacheKey
+        ? runWorkspaceDurableMediaLibraryTask(cacheKey, loadSnapshot)
+        : loadSnapshot();
 };
 const getWorkspacePhotoOriginalPreviewUrl = (segment) => segment.originalExternalPreviewUrl ??
     segment.originalExternalPlaybackUrl ??
@@ -708,11 +745,20 @@ export const buildWorkspacePersistedMediaLibraryItems = (project, session) => {
                 if (aiVideoPreviewUrl && isWorkspaceMediaLibraryAssetVisible(segment.currentAsset?.assetId, segment.currentAsset?.lifecycle)) {
                     const originalAssetMediaType = normalizeText(segment.originalAsset?.mediaType).toLowerCase();
                     const originalAssetMimeType = normalizeText(segment.originalAsset?.mimeType).toLowerCase();
-                    const currentClassifier = `${normalizeText(segment.currentAsset?.kind)} ${normalizeText(segment.currentAsset?.role)} ${normalizeText(segment.currentAsset?.sourceKind)} ${normalizeText(segment.currentAsset?.libraryKind)}`.toLowerCase();
+                    const currentClassifier = [
+                        segment.currentAsset?.kind,
+                        segment.currentAsset?.role,
+                        segment.currentAsset?.sourceKind,
+                        segment.currentAsset?.libraryKind,
+                        segment.currentAsset?.renderedAnimationMode,
+                        segment.originalAsset?.libraryKind,
+                    ].map(normalizeText).join(" ").toLowerCase();
                     const isTalkingPhotoVariant = currentClassifier.includes("talking_photo") ||
                         currentClassifier.includes("talking-photo") ||
                         currentClassifier.includes("talking_avatar");
-                    const isPhotoAnimationVariant = originalAssetMediaType === "photo" ||
+                    const isPhotoAnimationVariant = currentClassifier.includes("photo_animation") ||
+                        currentClassifier.includes("photo-animation") ||
+                        originalAssetMediaType === "photo" ||
                         originalAssetMediaType === "image" ||
                         originalAssetMimeType.startsWith("image/");
                     const videoKind = isTalkingPhotoVariant ? "talking_photo" : isPhotoAnimationVariant ? "photo_animation" : "ai_video";
@@ -998,7 +1044,26 @@ export const getWorkspaceMediaLibrarySegmentPreviewUrl = (segment, kind) => {
     }
     return segment.currentPreviewUrl ?? segment.currentPlaybackUrl ?? segment.originalPreviewUrl ?? segment.originalPlaybackUrl ?? null;
 };
-const resolveWorkspaceMediaLibraryPreviewSource = async (user, rawPreviewUrl) => {
+export const getWorkspaceMediaLibraryPreviewAssetId = (rawPreviewUrl) => {
+    const normalizedPreviewUrl = normalizeText(rawPreviewUrl);
+    if (!normalizedPreviewUrl) {
+        return null;
+    }
+    try {
+        const resolvedUrl = new URL(normalizedPreviewUrl, env.appUrl);
+        if (resolvedUrl.origin !== new URL(env.appUrl).origin) {
+            return null;
+        }
+        const workspaceRouteMatch = resolvedUrl.pathname.match(/^\/api\/workspace\/media-assets\/(\d+)(?:\/(?:playback|poster|preview))?$/i);
+        const legacyDownloadRouteMatch = resolvedUrl.pathname.match(/^\/api\/media\/(\d+)\/download$/i);
+        const assetId = Number(workspaceRouteMatch?.[1] ?? legacyDownloadRouteMatch?.[1] ?? 0);
+        return Number.isFinite(assetId) && assetId > 0 ? Math.trunc(assetId) : null;
+    }
+    catch {
+        return null;
+    }
+};
+export const resolveWorkspaceMediaLibraryPreviewSource = async (user, rawPreviewUrl) => {
     const normalizedPreviewUrl = normalizeText(rawPreviewUrl);
     if (!normalizedPreviewUrl) {
         return null;
@@ -1011,6 +1076,18 @@ const resolveWorkspaceMediaLibraryPreviewSource = async (user, rawPreviewUrl) =>
         return null;
     }
     const version = getWorkspaceMediaLibraryUrlMarker(normalizedPreviewUrl) || normalizedPreviewUrl;
+    const mediaAssetId = getWorkspaceMediaLibraryPreviewAssetId(normalizedPreviewUrl);
+    if (mediaAssetId) {
+        const externalUserId = await resolvePreferredExternalUserId(user);
+        return {
+            headers: undefined,
+            upstreamUrl: buildAdsflowUrl(`/api/media/${mediaAssetId}/download`, {
+                admin_token: env.adsflowAdminToken,
+                external_user_id: externalUserId,
+            }),
+            version,
+        };
+    }
     if (resolvedUrl.pathname === "/api/workspace/project-segment-video") {
         const projectId = Number(resolvedUrl.searchParams.get("projectId") ?? 0);
         const segmentIndex = Number(resolvedUrl.searchParams.get("segmentIndex") ?? -1);
@@ -1114,6 +1191,7 @@ export const invalidateWorkspaceMediaLibraryCache = (user) => {
     }
     workspaceMediaLibraryCache.delete(cacheKey);
     workspaceMediaLibraryInFlight.delete(cacheKey);
+    workspaceDurableMediaLibrarySnapshots.delete(cacheKey);
 };
 export const getWorkspaceMediaLibraryItems = async (user, options) => {
     const shouldBypassCache = Boolean(options?.bypassCache);
@@ -1121,6 +1199,9 @@ export const getWorkspaceMediaLibraryItems = async (user, options) => {
     const limit = parseWorkspaceMediaLibraryLimit(options?.limit);
     const baseCacheKey = getWorkspaceMediaLibraryCacheKey(user);
     const cacheKey = baseCacheKey ? `${baseCacheKey}:offset:${offset}:limit:${limit}` : null;
+    if (shouldBypassCache && baseCacheKey) {
+        workspaceDurableMediaLibrarySnapshots.delete(baseCacheKey);
+    }
     if (!shouldBypassCache && cacheKey) {
         const cachedEntry = workspaceMediaLibraryCache.get(cacheKey);
         if (cachedEntry && cachedEntry.expiresAt > Date.now()) {

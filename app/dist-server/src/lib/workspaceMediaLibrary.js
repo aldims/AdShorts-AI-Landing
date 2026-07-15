@@ -1,4 +1,5 @@
 const FALLBACK_WORKSPACE_DOWNLOAD_NAME = "adshorts-video";
+export const isWorkspaceMediaLibraryDisplayItem = (item) => item.kind === "ai_photo" || item.kind === "ai_video";
 export const normalizeWorkspaceMediaLibraryCreatedAt = (value) => {
     const timestamp = typeof value === "number"
         ? value

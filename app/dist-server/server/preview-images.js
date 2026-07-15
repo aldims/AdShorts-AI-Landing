@@ -11,7 +11,8 @@ import { createPreparedAssetStore, } from "./prepared-asset-store.js";
 import { fetchUpstreamResponse, upstreamPolicies, } from "./upstream-client.js";
 const WORKSPACE_PREVIEW_IMAGES_ROOT_DIR = join(env.assetCacheDir, "workspace-preview-images");
 const WORKSPACE_PREVIEW_IMAGE_CONCURRENCY = 4;
-const WORKSPACE_PREVIEW_IMAGE_MAX_DIMENSION = 640;
+export const WORKSPACE_PREVIEW_IMAGE_MAX_DIMENSION = 480;
+const WORKSPACE_PREVIEW_IMAGE_SCHEMA_VERSION = "preview-v2-480-webp";
 const WORKSPACE_PREVIEW_IMAGE_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
 const WORKSPACE_PREVIEW_IMAGE_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 const previewImageStore = createPreparedAssetStore({
@@ -26,27 +27,20 @@ const previewImageQueue = createAssetPreparationQueue({
     name: "workspace-preview-images",
 });
 const normalizeText = (value) => String(value ?? "").replace(/\s+/g, " ").trim();
+const configureWorkspacePreviewImageTransformer = (transformer) => transformer
+    .rotate()
+    .resize({
+    fit: "inside",
+    height: WORKSPACE_PREVIEW_IMAGE_MAX_DIMENSION,
+    width: WORKSPACE_PREVIEW_IMAGE_MAX_DIMENSION,
+    withoutEnlargement: true,
+})
+    .webp({ effort: 4, quality: 78 });
+export const transformWorkspacePreviewImageBuffer = (source) => configureWorkspacePreviewImageTransformer(sharp(source)).toBuffer();
 const transformToPreviewBuffer = async (source) => {
-    const transformer = sharp()
-        .rotate()
-        .resize({
-        fit: "inside",
-        height: WORKSPACE_PREVIEW_IMAGE_MAX_DIMENSION,
-        width: WORKSPACE_PREVIEW_IMAGE_MAX_DIMENSION,
-        withoutEnlargement: true,
-    })
-        .jpeg({ quality: 82 });
+    const transformer = configureWorkspacePreviewImageTransformer(sharp());
     if (source.upstreamUrl.protocol === "file:") {
-        return sharp(fileURLToPath(source.upstreamUrl))
-            .rotate()
-            .resize({
-            fit: "inside",
-            height: WORKSPACE_PREVIEW_IMAGE_MAX_DIMENSION,
-            width: WORKSPACE_PREVIEW_IMAGE_MAX_DIMENSION,
-            withoutEnlargement: true,
-        })
-            .jpeg({ quality: 82 })
-            .toBuffer();
+        return configureWorkspacePreviewImageTransformer(sharp(fileURLToPath(source.upstreamUrl))).toBuffer();
     }
     const response = await fetchUpstreamResponse(source.upstreamUrl, {
         headers: source.upstreamHeaders,
@@ -78,7 +72,7 @@ export const getWorkspacePreviewImageCacheKey = (source) => {
     const normalizedVersion = normalizeText(source.version);
     const normalizedTargetUrl = new URL(source.targetUrl.toString());
     normalizedTargetUrl.searchParams.delete("admin_token");
-    return `${normalizedVersion}:${normalizedTargetUrl.toString()}`;
+    return `${WORKSPACE_PREVIEW_IMAGE_SCHEMA_VERSION}:${normalizedVersion}:${normalizedTargetUrl.toString()}`;
 };
 export async function ensureWorkspacePreviewImage(source) {
     previewImageStore.scheduleCleanup();
@@ -97,8 +91,8 @@ export async function ensureWorkspacePreviewImage(source) {
         try {
             const buffer = await transformToPreviewBuffer(source);
             const absolutePath = await previewImageStore.writeBufferToFile(source.cacheKey, buffer, {
-                contentType: "image/jpeg",
-                fileName: "preview.jpg",
+                contentType: "image/webp",
+                fileName: "preview.webp",
                 savedAt: new Date().toISOString(),
             });
             logServerEvent("info", "prepared-asset.ready", {

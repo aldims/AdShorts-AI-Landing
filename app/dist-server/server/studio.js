@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { env } from "./env.js";
 import { buildAuthScopedCacheKey, buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
 import { buildWorkspaceMediaAssetRef, mergeWorkspaceMediaAssetRefs, } from "./media-assets.js";
-import { STUDIO_AI_PHOTO_VIDEO_GENERATION_CREDIT_COST, STUDIO_AI_VIDEO_GENERATION_CREDIT_COST, STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST, STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST_BY_QUALITY, STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST, STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST_BY_QUALITY, STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST, STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST, STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST, buildStudioVoiceoverProviderText, getStudioBatchVoiceoverCreditCost, getStudioSegmentPhotoAnimationCreditCost, getStudioSegmentSceneSoundCreditCost, getStudioSegmentTalkingPhotoCreditCost, getStudioVoiceoverCreditCostForText, normalizeStudioSegmentPhotoAnimationDurationSeconds, STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS, STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST, STUDIO_WORKSPACE_CHARACTER_REFERENCE_CREDIT_COST, STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST, } from "../shared/studio-credit-costs.js";
+import { STUDIO_AI_PHOTO_VIDEO_GENERATION_CREDIT_COST, STUDIO_AI_VIDEO_AUDIO_CREDIT_COST, STUDIO_AI_VIDEO_GENERATION_CREDIT_COST, STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST, STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST_BY_QUALITY, STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST, STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST, STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST, buildStudioVoiceoverProviderText, getStudioBatchVoiceoverCreditCost, getStudioSegmentAiVideoCreditCost as getSharedStudioSegmentAiVideoCreditCost, getStudioSegmentPhotoAnimationCreditCost, getStudioSegmentSceneSoundCreditCost, getStudioSegmentTalkingPhotoCreditCost, getStudioVoiceoverCreditCostForText, normalizeStudioSegmentPhotoAnimationDurationSeconds, STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS, STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST, STUDIO_WORKSPACE_CHARACTER_REFERENCE_CREDIT_COST, STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST, } from "../shared/studio-credit-costs.js";
 import { normalizeExamplePrefillStudioSettings, } from "../shared/example-prefill.js";
 import { DEFAULT_LOCALE, DEFAULT_STUDIO_VOICE_ID, SUPPORTED_LOCALES, isSupportedLocale, } from "../shared/locales.js";
 import { ensureWorkspaceProjectPlayback, getWorkspaceProjectPlaybackCacheKey, warmWorkspaceProjectPlayback, } from "./project-playback.js";
@@ -484,8 +484,8 @@ const normalizeStudioSegmentVisualQuality = (value) => {
         : "standard";
 };
 const getStudioSegmentAiPhotoCreditCost = (quality) => STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST_BY_QUALITY[quality] ?? STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST;
-const getStudioSegmentAiVideoCreditCost = (quality) => STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST_BY_QUALITY[quality] ?? STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST;
-const getStudioSegmentPhotoAnimationRequiredCredits = (quality, durationSeconds) => getStudioSegmentPhotoAnimationCreditCost(quality, durationSeconds);
+const getStudioSegmentAiVideoCreditCost = (_quality, durationSeconds, generateAudio = false) => getSharedStudioSegmentAiVideoCreditCost(durationSeconds, generateAudio);
+const getStudioSegmentPhotoAnimationRequiredCredits = (quality, durationSeconds, generateAudio = false) => getStudioSegmentPhotoAnimationCreditCost(quality, durationSeconds, generateAudio);
 const studioMultilingualVoiceIds = new Set([
     "Liam_Timing",
     "Elena",
@@ -584,7 +584,12 @@ const getStudioGenerationCreditCost = (videoMode, options) => {
                 ? STUDIO_AI_PHOTO_VIDEO_GENERATION_CREDIT_COST
                 : STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST;
     const voiceCredits = options?.voiceEnabled === false ? 0 : getStudioVoiceCreditCost(options?.voiceId);
-    return baseCredits + voiceCredits;
+    const aiVideoAudioCredits = !options?.isSegmentEditorGeneration &&
+        videoMode === "ai_video" &&
+        options?.aiVideoGenerateAudioEnabled
+        ? STUDIO_AI_VIDEO_AUDIO_CREDIT_COST
+        : 0;
+    return baseCredits + voiceCredits + aiVideoAudioCredits;
 };
 const normalizeStudioLanguage = (value) => {
     const normalized = String(value ?? "").trim().toLowerCase();
@@ -1015,6 +1020,7 @@ export const normalizeStudioSegmentEditorPayload = (value, language, fallbackPro
         }
         const videoAction = normalizeStudioSegmentVideoAction(segmentRecord.videoAction);
         const customVideoAssetId = normalizePositiveInteger(segmentRecord.customVideoAssetId) ?? undefined;
+        const customVideoGenerateAudio = normalizeWorkspaceBooleanFlag(segmentRecord.customVideoGenerateAudio);
         const customVideoFileDataUrl = String(segmentRecord.customVideoFileDataUrl ?? "").trim() || undefined;
         const customVideoFileMimeType = String(segmentRecord.customVideoFileMimeType ?? "").trim() || undefined;
         const customVideoFileName = String(segmentRecord.customVideoFileName ?? "").trim() || undefined;
@@ -1076,6 +1082,7 @@ export const normalizeStudioSegmentEditorPayload = (value, language, fallbackPro
             : segmentVoiceTypeText.toLowerCase() === "none"
                 ? "none"
                 : normalizeStudioVoiceId(segmentVoiceTypeText) ?? null;
+        const segmentVoiceLanguage = normalizeStudioLanguage(normalizeGenerationText(segmentRecord.voiceLanguage ?? segmentRecord.voice_language) || language);
         const segmentHasVoice = segmentVoiceType === "none" ? false : options?.globalVoiceEnabled !== false || Boolean(segmentVoiceType);
         const segmentSubtitleTypeRaw = normalizeGenerationText(segmentRecord.subtitleType ?? segmentRecord.subtitle_type).toLowerCase();
         const segmentSubtitleType = segmentHasVoice ? segmentSubtitleTypeRaw || null : "none";
@@ -1097,6 +1104,9 @@ export const normalizeStudioSegmentEditorPayload = (value, language, fallbackPro
         }
         segments.push({
             customVideoAssetId: attachesCustomVisual ? customVideoAssetId : undefined,
+            customVideoGenerateAudio: attachesCustomVisual && customVideoGenerateAudio !== null
+                ? customVideoGenerateAudio
+                : undefined,
             customVideoFileDataUrl: attachesCustomVisual ? customVideoFileDataUrl : undefined,
             customVideoFileMimeType: attachesCustomVisual ? customVideoFileMimeType : undefined,
             customVideoFileName: attachesCustomVisual ? customVideoFileName : undefined,
@@ -1128,6 +1138,7 @@ export const normalizeStudioSegmentEditorPayload = (value, language, fallbackPro
                 ? Math.max(voiceSourceStartTime, voiceSourceEndTime)
                 : null,
             voiceSourceStartTime: voiceSourceStartTime !== null ? Math.max(0, voiceSourceStartTime) : null,
+            voiceLanguage: segmentVoiceLanguage,
             voiceType: segmentVoiceType,
         });
     });
@@ -2836,6 +2847,7 @@ const normalizeAdsflowSegmentAiVideoAsset = (jobId, payload) => {
         assetId: normalizePositiveInteger(payload?.media_asset_id) ?? null,
         fileName: normalizeGenerationText(payload?.file_name) || `segment-ai-video-${jobId}.mp4`,
         fileSize: Math.max(0, Number(payload?.file_size ?? 0)),
+        generateAudio: payload?.generate_audio === true,
         mimeType: normalizeGenerationText(payload?.mime_type) || "video/mp4",
         posterUrl: buildStudioSegmentAiVideoJobPosterProxyUrl(jobId),
         remoteUrl,
@@ -2892,6 +2904,7 @@ const normalizeAdsflowSegmentPhotoAnimationAsset = (jobId, payload) => {
         assetId: normalizePositiveInteger(payload?.media_asset_id) ?? null,
         fileName: normalizeGenerationText(payload?.file_name) || `segment-photo-animation-${jobId}.mp4`,
         fileSize: Math.max(0, Number(payload?.file_size ?? 0)),
+        generateAudio: payload?.generate_audio === true,
         mimeType: normalizeGenerationText(payload?.mime_type) || "video/mp4",
         posterUrl: null,
         remoteUrl,
@@ -4362,6 +4375,7 @@ export async function createStudioGenerationJob(prompt, user, options) {
     assertAdsflowConfigured();
     const normalizedPrompt = normalizePrompt(prompt);
     const normalizedVideoMode = normalizeStudioVideoMode(options?.videoMode);
+    const normalizedAiVideoGenerateAudioEnabled = normalizedVideoMode === "ai_video" && options?.aiVideoGenerateAudioEnabled === true;
     const normalizedCustomVideoFileName = String(options?.customVideoFileName ?? "").trim() || undefined;
     const normalizedCustomVideoFileMimeType = String(options?.customVideoFileMimeType ?? "").trim() || undefined;
     const normalizedCustomVideoFileDataUrl = String(options?.customVideoFileDataUrl ?? "").trim() || undefined;
@@ -4416,6 +4430,7 @@ export async function createStudioGenerationJob(prompt, user, options) {
         ? STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST +
             Math.max(0, ...segmentEditorFinalVoiceCredits)
         : getStudioGenerationCreditCost(normalizedVideoMode, {
+            aiVideoGenerateAudioEnabled: normalizedAiVideoGenerateAudioEnabled,
             voiceEnabled: isVoiceEnabled,
             voiceId: normalizedVoiceId,
         });
@@ -4449,6 +4464,7 @@ export async function createStudioGenerationJob(prompt, user, options) {
     const shouldAddWatermark = requiresFreeWatermark || (typeof options?.addWatermark === "boolean" ? options.addWatermark : false);
     const normalizedVersionRootProjectAdId = normalizePositiveInteger(options?.versionRootProjectAdId) ?? undefined;
     const prefillSettings = normalizeExamplePrefillStudioSettings({
+        aiVideoGenerateAudioEnabled: normalizedAiVideoGenerateAudioEnabled,
         brandText: normalizedBrandText,
         language: normalizedLanguage,
         musicType: normalizedMusicType,
@@ -4576,7 +4592,7 @@ export async function createStudioGenerationJob(prompt, user, options) {
                     const adsflowVoiceType = resolveStudioSegmentEditorAdsflowVoiceType({
                         globalVoiceEnabled: isVoiceEnabled,
                         globalVoiceId: normalizedVoiceId,
-                        language: normalizedLanguage,
+                        language: segment.voiceLanguage ?? normalizedLanguage,
                         segmentVoiceType: segment.voiceType,
                     });
                     const segmentVoiceTypeForPayload = segment.voiceType === null || segment.voiceType === undefined ? undefined : adsflowVoiceType;
@@ -4609,6 +4625,7 @@ export async function createStudioGenerationJob(prompt, user, options) {
                         _voice_source_end_time: voiceSourceEndTime,
                         _voice_source_start_time: voiceSourceStartTime,
                         custom_video_asset_id: segmentAssetId,
+                        custom_video_generate_audio: segment.customVideoGenerateAudio,
                         custom_video_mime_type: segment.customVideoFileMimeType,
                         custom_video_original_name: segment.customVideoFileName,
                         duration: segment.duration,
@@ -4650,6 +4667,7 @@ export async function createStudioGenerationJob(prompt, user, options) {
                         voice_source_duration: voiceSourceDuration,
                         voice_source_end_time: voiceSourceEndTime,
                         voice_source_start_time: voiceSourceStartTime,
+                        voice_language: segment.voiceLanguage,
                         effective_voice_type: adsflowVoiceType,
                         voice_type: segmentVoiceTypeForPayload,
                         ...(segmentVoiceModelPath ? { model_path: segmentVoiceModelPath } : {}),
@@ -4731,6 +4749,7 @@ export async function createStudioGenerationJob(prompt, user, options) {
                 subtitle_color: normalizedSubtitleColorId,
                 subtitle_style: normalizedSubtitleStyleId,
                 video_mode: normalizedVideoMode,
+                ai_video_generate_audio: normalizedAiVideoGenerateAudioEnabled,
                 video_mode_changed: Boolean(options?.videoModeChanged),
                 voice_type: isVoiceEnabled ? undefined : "none",
                 voice_code: normalizedVoiceId,
@@ -5607,8 +5626,9 @@ export async function createStudioSegmentAiVideoJob(prompt, user, options) {
     const normalizedLanguage = normalizeStudioLanguage(options?.language);
     const normalizedQuality = normalizeStudioSegmentVisualQuality(options?.quality);
     const normalizedBillingQuality = normalizeStudioSegmentVisualQuality(options?.billingQuality || normalizedQuality);
-    const normalizedDurationSeconds = normalizeStudioSegmentVisualDurationSeconds(options?.durationSeconds);
-    const requiredCredits = getStudioSegmentAiVideoCreditCost(normalizedBillingQuality);
+    const normalizedDurationSeconds = normalizeStudioSegmentPhotoAnimationDurationSeconds(normalizedBillingQuality, options?.durationSeconds);
+    const generateAudio = options?.generateAudio === true;
+    const requiredCredits = getStudioSegmentAiVideoCreditCost(normalizedBillingQuality, normalizedDurationSeconds, generateAudio);
     const upstreamPrompt = await translateStudioGenerationPromptToEnglish(normalizedPrompt, {
         sourceLanguage: normalizedLanguage,
         timeoutMs: OPENROUTER_STUDIO_VISUAL_JOB_TRANSLATION_TIMEOUT_MS,
@@ -5626,6 +5646,7 @@ export async function createStudioSegmentAiVideoJob(prompt, user, options) {
         admin_token: env.adsflowAdminToken,
         credit_cost: requiredCredits,
         external_user_id: externalUserId,
+        generate_audio: generateAudio,
         ...buildStudioSegmentVisualDurationPayload(normalizedDurationSeconds),
         ...buildStudioSegmentVisualQualityPayload(normalizedQuality),
         character_ids: characterIds,
@@ -5661,7 +5682,8 @@ export async function createStudioSegmentPhotoAnimationJob(prompt, user, options
     const normalizedQuality = normalizeStudioSegmentVisualQuality(options?.quality);
     const normalizedDurationSeconds = normalizeStudioSegmentVisualDurationSeconds(options?.durationSeconds);
     const normalizedPhotoAnimationDurationSeconds = normalizeStudioSegmentPhotoAnimationDurationSeconds(normalizedQuality, normalizedDurationSeconds);
-    const requiredCredits = getStudioSegmentPhotoAnimationRequiredCredits(normalizedQuality, normalizedPhotoAnimationDurationSeconds);
+    const generateAudio = options?.generateAudio === true;
+    const requiredCredits = getStudioSegmentPhotoAnimationRequiredCredits(normalizedQuality, normalizedPhotoAnimationDurationSeconds, generateAudio);
     const upstreamPrompt = await translateStudioGenerationPromptToEnglish(normalizedPrompt, {
         sourceLanguage: normalizedLanguage,
         timeoutMs: OPENROUTER_STUDIO_VISUAL_JOB_TRANSLATION_TIMEOUT_MS,
@@ -5730,6 +5752,7 @@ export async function createStudioSegmentPhotoAnimationJob(prompt, user, options
         duration_extension_source_video_mime_type: normalizedDurationExtensionSourceVideoFileMimeType,
         duration_extension_source_video_original_name: normalizedDurationExtensionSourceVideoFileName,
         external_user_id: externalUserId,
+        generate_audio: generateAudio,
         ...buildStudioSegmentVisualDurationExtensionPayload({
             baseDurationSeconds: options?.durationExtensionBaseDurationSeconds,
             mode: options?.durationExtensionMode,

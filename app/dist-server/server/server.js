@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
+import { pathToFileURL } from "node:url";
 import express from "express";
 import cors from "cors";
 import { fromNodeHeaders, toNodeHandler } from "better-auth/node";
@@ -20,6 +21,7 @@ import { getWorkspaceMediaLibraryItems, getWorkspaceMediaLibraryPreviewPath, inv
 import { createWorkspaceSavedReference, deleteWorkspaceSavedReference, listWorkspaceSavedReferences, updateWorkspaceSavedReference, } from "./workspace-references.js";
 import { clearWorkspaceMediaIndex } from "./workspace-media-index.js";
 import { ensureWorkspaceVideoPoster, getWorkspaceVideoPosterCacheKey, } from "./project-posters.js";
+import { ensureWorkspacePreviewImage, getWorkspacePreviewImageCacheKey, } from "./preview-images.js";
 import { ensureWorkspaceMediaAssetPlayback, getWorkspaceMediaAssetPlaybackCacheKey, } from "./media-asset-playback.js";
 import { ensureWorkspaceSegmentVideoCache, getWorkspaceSegmentVideoCacheKey, } from "./segment-video-cache.js";
 import { createTelegramOidcSession, getTelegramUserProfile, getTelegramUserProfileFromIdToken, parseTelegramOidcSession, parseTelegramLoginNonce, serializeTelegramLoginNonce, serializeTelegramOidcSession, TELEGRAM_LOGIN_NONCE_COOKIE_NAME, TELEGRAM_LOGIN_NONCE_MAX_AGE_MS, TELEGRAM_OIDC_SESSION_COOKIE_NAME, verifyTelegramLogin, } from "./telegram.js";
@@ -717,6 +719,7 @@ const parseStudioGenerateMultipartBody = async (req) => {
         : undefined;
     return {
         addWatermark: getFormDataOptionalBoolean(formData, "addWatermark"),
+        aiVideoGenerateAudioEnabled: getFormDataBoolean(formData, "aiVideoGenerateAudioEnabled", false),
         brandChanged: getFormDataOptionalBoolean(formData, "brandChanged"),
         clearBranding: getFormDataOptionalBoolean(formData, "clearBranding"),
         brandLogoAssetId: normalizeRequestPositiveInteger(getFormDataString(formData, "brandLogoAssetId")),
@@ -2074,6 +2077,51 @@ const proxyWorkspaceMediaAssetDownload = async (req, res) => {
     }
 };
 app.get("/api/media/:assetId/download", proxyWorkspaceMediaAssetDownload);
+app.get("/api/workspace/media-assets/:assetId/preview", async (req, res) => {
+    const session = await auth.api.getSession({
+        headers: fromNodeHeaders(req.headers),
+    });
+    if (!session?.user) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const assetId = Number(req.params.assetId ?? 0);
+    if (!Number.isFinite(assetId) || assetId <= 0) {
+        res.status(400).json({ error: "Asset id is required." });
+        return;
+    }
+    const safeAssetId = Math.trunc(assetId);
+    const version = typeof req.query.v === "string" ? req.query.v.trim() : "";
+    try {
+        const externalUserId = await resolvePreferredExternalUserId(session.user);
+        const upstreamUrl = buildAdsflowUrl(`/api/media/${safeAssetId}/download`, {
+            admin_token: env.adsflowAdminToken,
+            external_user_id: externalUserId,
+        });
+        const cacheTargetUrl = buildAdsflowUrl(`/api/media/${safeAssetId}/download`, {
+            external_user_id: externalUserId,
+        });
+        const previewPath = await ensureWorkspacePreviewImage({
+            cacheKey: getWorkspacePreviewImageCacheKey({
+                previewId: `workspace-media-asset:${safeAssetId}:tile`,
+                targetUrl: cacheTargetUrl,
+                version: version || `asset:${safeAssetId}`,
+            }),
+            upstreamUrl,
+        });
+        res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
+        res.sendFile(previewPath);
+    }
+    catch (error) {
+        console.error("[workspace] Failed to build media asset preview", {
+            assetId: safeAssetId,
+            error: getServerErrorMessage(error, "Failed to build media asset preview."),
+        });
+        res.status(502).json({
+            error: error instanceof Error ? error.message : "Failed to build media asset preview.",
+        });
+    }
+});
 app.get("/api/workspace/media-assets/:assetId", proxyWorkspaceMediaAssetDownload);
 app.get("/api/workspace/media-assets/:assetId/playback", async (req, res) => {
     const session = await auth.api.getSession({
@@ -2143,6 +2191,7 @@ app.get("/api/workspace/media-assets/:assetId/poster", async (req, res) => {
         return;
     }
     const version = typeof req.query.v === "string" ? req.query.v.trim() : "";
+    const shouldBuildTilePreview = typeof req.query.tile === "string" && req.query.tile.trim() === "1";
     try {
         const externalUserId = await resolvePreferredExternalUserId(session.user);
         const upstreamUrl = buildAdsflowUrl(`/api/media/${Math.trunc(assetId)}/download`, {
@@ -2158,6 +2207,20 @@ app.get("/api/workspace/media-assets/:assetId/poster", async (req, res) => {
             }),
             upstreamUrl,
         });
+        if (shouldBuildTilePreview) {
+            const posterUrl = pathToFileURL(posterPath);
+            const tilePreviewPath = await ensureWorkspacePreviewImage({
+                cacheKey: getWorkspacePreviewImageCacheKey({
+                    previewId: `workspace-media-asset:${Math.trunc(assetId)}:poster-tile`,
+                    targetUrl: posterUrl,
+                    version: `poster:${version || `asset:${Math.trunc(assetId)}`}`,
+                }),
+                upstreamUrl: posterUrl,
+            });
+            res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
+            res.sendFile(tilePreviewPath);
+            return;
+        }
         res.setHeader("Cache-Control", "private, max-age=86400, stale-while-revalidate=604800");
         res.sendFile(posterPath);
     }
@@ -3172,6 +3235,7 @@ app.post("/api/studio/generate", async (req, res) => {
         ? await parseStudioGenerateMultipartBody(req)
         : {
             addWatermark: typeof req.body?.addWatermark === "boolean" ? req.body.addWatermark : undefined,
+            aiVideoGenerateAudioEnabled: req.body?.aiVideoGenerateAudioEnabled === true,
             brandChanged: typeof req.body?.brandChanged === "boolean" ? req.body.brandChanged : undefined,
             clearBranding: typeof req.body?.clearBranding === "boolean" ? req.body.clearBranding : undefined,
             brandLogoAssetId: normalizeRequestPositiveInteger(req.body?.brandLogoAssetId),
@@ -3204,6 +3268,7 @@ app.post("/api/studio/generate", async (req, res) => {
             voiceId: typeof req.body?.voiceId === "string" ? req.body.voiceId.trim() : "",
         };
     const prompt = requestBody.prompt;
+    const aiVideoGenerateAudioEnabled = requestBody.aiVideoGenerateAudioEnabled;
     const addWatermark = requestBody.addWatermark;
     const brandChanged = requestBody.brandChanged;
     const clearBranding = requestBody.clearBranding;
@@ -3289,6 +3354,7 @@ app.post("/api/studio/generate", async (req, res) => {
     try {
         const job = await createStudioGenerationJob(prompt, session.user, {
             addWatermark: effectiveAddWatermark,
+            aiVideoGenerateAudioEnabled,
             brandChanged: effectiveBrandChanged,
             clearBranding: effectiveClearBranding,
             brandLogoFileDataUrl,
@@ -3870,6 +3936,7 @@ app.post("/api/studio/segment-ai-video/jobs", async (req, res) => {
     const referenceAssetIds = normalizeRequestPositiveIntegerList(req.body?.referenceAssetIds);
     const sceneReferenceAssetIds = normalizeRequestPositiveIntegerList(req.body?.sceneReferenceAssetIds);
     const durationSeconds = normalizeRequestDurationSeconds(req.body?.durationSeconds ?? req.body?.duration);
+    const generateAudio = req.body?.generateAudio === true;
     const projectId = Number(req.body?.projectId ?? 0);
     const segmentIndex = normalizeRequiredJsonNonNegativeInteger(req.body?.segmentIndex);
     if (!prompt) {
@@ -3891,6 +3958,7 @@ app.post("/api/studio/segment-ai-video/jobs", async (req, res) => {
             characterContinuityMode,
             characterIds,
             durationSeconds,
+            generateAudio,
             preserveCharacters,
             quality,
             projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : undefined,
@@ -3995,6 +4063,7 @@ app.post("/api/studio/segment-photo-animation/jobs", async (req, res) => {
     const customVideoFileMimeType = typeof req.body?.customVideoFileMimeType === "string" ? req.body.customVideoFileMimeType.trim() : "";
     const customVideoFileName = typeof req.body?.customVideoFileName === "string" ? req.body.customVideoFileName.trim() : "";
     const durationSeconds = normalizeRequestDurationSeconds(req.body?.durationSeconds ?? req.body?.duration);
+    const generateAudio = req.body?.generateAudio === true;
     const durationExtensionMode = typeof req.body?.durationExtensionMode === "string" ? req.body.durationExtensionMode.trim() : "";
     const durationExtensionBaseDurationSeconds = normalizeRequestDurationSeconds(req.body?.durationExtensionBaseDurationSeconds ?? req.body?.duration_extension_base_duration_seconds);
     const durationExtensionTailDurationSeconds = normalizeRequestDurationSeconds(req.body?.durationExtensionTailDurationSeconds ?? req.body?.duration_extension_tail_duration_seconds);
@@ -4044,6 +4113,7 @@ app.post("/api/studio/segment-photo-animation/jobs", async (req, res) => {
             durationExtensionTailDurationSeconds,
             durationExtensionTargetDurationSeconds,
             durationSeconds,
+            generateAudio,
             language,
             projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : undefined,
             quality,
