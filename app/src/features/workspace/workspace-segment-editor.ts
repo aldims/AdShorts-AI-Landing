@@ -506,6 +506,39 @@ export const getWorkspaceSegmentVoiceLanguage = (
   normalizeStudioLanguageValue(segment?.voiceoverLanguage) ??
   "ru";
 
+export const getWorkspaceSegmentVoiceOverrideForLanguage = (
+  segment: Pick<WorkspaceSegmentEditorSegment, "voiceType" | "voice_type"> | null | undefined,
+  language: StudioLanguage,
+) => {
+  const normalizedVoiceId = getCanonicalStudioVoiceOptionId(getWorkspaceSegmentVoiceOverrideId(segment));
+  if (!normalizedVoiceId || normalizedVoiceId === "none") {
+    return null;
+  }
+
+  const normalizedVoiceKey = normalizedVoiceId.toLowerCase();
+  return (
+    studioVoiceOptionsByLanguage[language].find((voice) => voice.id.toLowerCase() === normalizedVoiceKey)?.id ?? null
+  );
+};
+
+export const getWorkspaceSegmentVoiceLanguageSelectionPatch = (
+  segment:
+    | Pick<WorkspaceSegmentEditorSegment, "voiceLanguage" | "voiceType" | "voice_language" | "voice_type">
+    | null
+    | undefined,
+  language: StudioLanguage,
+) => {
+  const voiceType = getWorkspaceSegmentVoiceOverrideForLanguage(segment, language);
+  const voiceLanguage = voiceType ? language : null;
+
+  return {
+    voiceLanguage,
+    voiceType,
+    voice_language: voiceLanguage,
+    voice_type: voiceType,
+  };
+};
+
 const getWorkspaceSegmentVoiceoverAssetIdForInference = (
   segment:
     | (Pick<WorkspaceSegmentEditorSegment, "voiceoverAssetId" | "voiceover_asset_id"> & {

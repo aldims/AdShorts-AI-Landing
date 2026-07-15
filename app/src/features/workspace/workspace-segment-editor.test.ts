@@ -10,6 +10,7 @@ import {
   applyWorkspaceSegmentEditorSceneVoiceOverride,
   applyWorkspaceSegmentEditorSceneVoiceSelection,
   getWorkspaceSegmentVoiceLanguage,
+  getWorkspaceSegmentVoiceLanguageSelectionPatch,
   getWorkspaceSegmentEffectiveVoiceId,
   getWorkspaceSegmentEffectiveSubtitleSettings,
   getWorkspaceSegmentKnownVisualDurationSeconds,
@@ -756,6 +757,38 @@ it("changes a scene voice language independently when Russian and English share 
   expect(selectedSegment.voiceLanguage).toBe("en");
   expect(selectedSegment.voiceoverAsset).toBeNull();
   expect(selectedSegment.voiceoverLanguage).toBeNull();
+});
+
+it("removes stale source-language metadata when an inherited voice switches language", () => {
+  const inheritedVoiceSegment = createProjectVoiceoverSegment({
+    voiceLanguage: "ru",
+    voiceType: null,
+    voice_language: "ru",
+    voice_type: null,
+  });
+  const sharedVoiceOverrideSegment = createProjectVoiceoverSegment({
+    voiceLanguage: "ru",
+    voiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    voice_language: "ru",
+    voice_type: DEFAULT_STUDIO_VOICE_ID.ru,
+  });
+
+  const inheritedPatch = getWorkspaceSegmentVoiceLanguageSelectionPatch(inheritedVoiceSegment, "en");
+  const sharedOverridePatch = getWorkspaceSegmentVoiceLanguageSelectionPatch(sharedVoiceOverrideSegment, "en");
+
+  expect(inheritedPatch).toEqual({
+    voiceLanguage: null,
+    voiceType: null,
+    voice_language: null,
+    voice_type: null,
+  });
+  expect(getWorkspaceSegmentVoiceLanguage({ ...inheritedVoiceSegment, ...inheritedPatch }, "en")).toBe("en");
+  expect(sharedOverridePatch).toEqual({
+    voiceLanguage: "en",
+    voiceType: DEFAULT_STUDIO_VOICE_ID.en,
+    voice_language: "en",
+    voice_type: DEFAULT_STUDIO_VOICE_ID.en,
+  });
 });
 
 it("resets scene duration to pending voiceover estimate after a global voice change", () => {

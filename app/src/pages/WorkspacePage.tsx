@@ -318,6 +318,7 @@ import {
   shouldShowWorkspaceSegmentAiDurationExtensionVoiceoverTrim,
   shouldSuppressWorkspaceSegmentEditorEmptyDraftChanges,
   shouldUseWorkspaceSegmentProjectVoiceoverSegmentProxyInFullPreview,
+  getWorkspaceSegmentVoiceLanguageSelectionPatch,
   studioVoiceOptionsByLanguage,
   syncWorkspaceSegmentMeasuredVideoVisualDuration,
   truncateStudioCustomAssetName,
@@ -333,7 +334,6 @@ import {
   getWorkspaceSegmentDraftVisualStatus,
   getWorkspaceSegmentVisualTimelineHistoryState,
   getWorkspaceSegmentEditorPendingInsertedSegmentIndices,
-  getWorkspaceSegmentVoiceOverrideForLanguage,
   hasOnlyWorkspaceSegmentEditorDurationChecklistChanges,
   isWorkspaceSegmentAppliedVisualResetChange,
   isWorkspaceSegmentDraftSceneSoundEdited,
@@ -13543,7 +13543,12 @@ export function WorkspacePage({
         updateSegmentEditorDraft((currentDraft) => ({
           ...currentDraft,
           language,
-          segments: currentDraft.segments.map((segment) => clearSegmentEditorVoiceoverGenerationState(segment)),
+          segments: currentDraft.segments.map((segment) =>
+            clearSegmentEditorVoiceoverGenerationState({
+              ...segment,
+              ...getWorkspaceSegmentVoiceLanguageSelectionPatch(segment, language),
+            }),
+          ),
           ttsAssetId: null,
           voiceType: nextVoiceId,
         }));
@@ -13603,9 +13608,14 @@ export function WorkspacePage({
               cachedLocalizedSegments[index]?.text ??
               segment.originalText,
             text: cachedLocalizedSegments[index]?.text ?? segment.text,
-            voiceType: options?.applyGlobalVoiceToAllSegments
-              ? null
-              : getWorkspaceSegmentVoiceOverrideForLanguage(segment, language),
+            ...(options?.applyGlobalVoiceToAllSegments
+              ? {
+                  voiceLanguage: null,
+                  voiceType: null,
+                  voice_language: null,
+                  voice_type: null,
+                }
+              : getWorkspaceSegmentVoiceLanguageSelectionPatch(segment, language)),
           }, {
             preserveUserSelectedVisualDuration: false,
             previousText: segment.textByLanguage?.[previousLanguage] ?? segment.text,
@@ -13657,9 +13667,14 @@ export function WorkspacePage({
               [previousLanguage]: currentLanguageText,
               [language]: nextText,
             },
-            voiceType: options?.applyGlobalVoiceToAllSegments
-              ? null
-              : getWorkspaceSegmentVoiceOverrideForLanguage(segment, language),
+            ...(options?.applyGlobalVoiceToAllSegments
+              ? {
+                  voiceLanguage: null,
+                  voiceType: null,
+                  voice_language: null,
+                  voice_type: null,
+                }
+              : getWorkspaceSegmentVoiceLanguageSelectionPatch(segment, language)),
           }, {
             preserveUserSelectedVisualDuration: false,
             previousText: currentLanguageText,
@@ -13681,7 +13696,12 @@ export function WorkspacePage({
             updateSegmentEditorDraft((draft) => ({
               ...draft,
               language: previousLanguage,
-              segments: draft.segments.map((segment) => clearSegmentEditorVoiceoverGenerationState(segment)),
+              segments: draft.segments.map((segment) =>
+                clearSegmentEditorVoiceoverGenerationState({
+                  ...segment,
+                  ...getWorkspaceSegmentVoiceLanguageSelectionPatch(segment, previousLanguage),
+                }),
+              ),
               ttsAssetId: null,
               voiceType: previousVoiceId,
           }));
@@ -25625,6 +25645,7 @@ export function WorkspacePage({
 
           return clearSegmentEditorVoiceoverGenerationState({
             ...segment,
+            ...getWorkspaceSegmentVoiceLanguageSelectionPatch(segment, language),
             originalText: nextOriginalText,
             originalTextByLanguage: {
               ...segment.originalTextByLanguage,

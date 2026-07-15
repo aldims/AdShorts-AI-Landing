@@ -36,12 +36,10 @@ import { getStudioMusicOptionCopy, studioMusicOptions } from "./workspace-studio
 import { formatWorkspaceSegmentDurationInputValue } from "./workspace-utils";
 import type {
   StudioCustomVideoFile,
-  StudioLanguage,
   StudioSubtitleColorOption,
   StudioSubtitleStyleOption,
   WorkspaceSegmentEditorDraftSegment,
   WorkspaceSegmentEditorDraftSession,
-  WorkspaceSegmentEditorSegment,
 } from "./workspace-types";
 
 export const isWorkspaceSegmentDraftSubtitleEdited = (
@@ -542,26 +540,6 @@ export const isWorkspaceSegmentDraftSceneSoundEdited = (
     getWorkspaceSegmentSceneSoundGenerationKey(baselineSegment)
   );
 };
-
-const normalizeWorkspaceSegmentVoiceOverrideForLanguage = (
-  voiceId: string | null | undefined,
-  language: StudioLanguage,
-) => {
-  const normalizedVoiceId = getCanonicalStudioVoiceOptionId(voiceId);
-  if (!normalizedVoiceId || normalizedVoiceId === "none") {
-    return null;
-  }
-
-  const normalizedVoiceKey = normalizedVoiceId.toLowerCase();
-  return (
-    studioVoiceOptionsByLanguage[language].find((voice) => voice.id.toLowerCase() === normalizedVoiceKey)?.id ?? null
-  );
-};
-
-export const getWorkspaceSegmentVoiceOverrideForLanguage = (
-  segment: Pick<WorkspaceSegmentEditorSegment, "voiceType" | "voice_type"> | null | undefined,
-  language: StudioLanguage,
-) => normalizeWorkspaceSegmentVoiceOverrideForLanguage(getWorkspaceSegmentVoiceOverrideId(segment), language);
 
 export const isWorkspaceSegmentDraftVoiceEdited = (
   segment: WorkspaceSegmentEditorDraftSegment,
