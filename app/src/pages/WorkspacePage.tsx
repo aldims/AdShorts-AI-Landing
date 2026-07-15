@@ -256,6 +256,7 @@ import {
   hasWorkspaceSegmentEditorGeneratedShortsFromProject,
   hasWorkspaceSegmentEditorRenderableScratchScene,
   hasWorkspaceSegmentEditorUnreflectedLiveGeneratedVideo,
+  hasWorkspaceSegmentEditorUnreflectedLiveGeneratedVoiceover,
   hasStudioBranding,
   hasWorkspaceSegmentExplicitDraftVisual,
   hasWorkspaceSegmentPersistedMediaReference,
@@ -11951,10 +11952,16 @@ export function WorkspacePage({
           normalizedSession,
           liveDraftChangeBaseline,
         );
+        const hasUnreflectedLiveGeneratedVoiceover = hasWorkspaceSegmentEditorUnreflectedLiveGeneratedVoiceover(
+          liveDraft,
+          normalizedSession,
+          liveDraftChangeBaseline,
+        );
         const shouldReplaceCleanLiveDraftWithFreshSession =
           options?.bypassCache === true &&
           options.openDraft === false &&
           !hasUnreflectedLiveGeneratedVideo &&
+          !hasUnreflectedLiveGeneratedVoiceover &&
           ((liveDraftChangeChecklist !== null && liveDraftChangeChecklist.length === 0) ||
             hasOnlyStaleLiveDraftDurationDrift);
         if (shouldReplaceCleanLiveDraftWithFreshSession) {

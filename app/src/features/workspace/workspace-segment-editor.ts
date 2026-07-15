@@ -8473,6 +8473,26 @@ const isWorkspaceSegmentGeneratedVideoReflectedInRefreshSegment = (
   return shouldPromoteFreshServerVideoToPhotoAnimation(liveSegment, candidateSegment);
 };
 
+const getWorkspaceSegmentRefreshVoiceoverAsset = (
+  candidateSegment: WorkspaceSegmentEditorSegment | WorkspaceSegmentEditorDraftSegment | null | undefined,
+) => {
+  if (!candidateSegment) {
+    return null;
+  }
+
+  const candidateDraftAsset = "voiceoverAsset" in candidateSegment ? candidateSegment.voiceoverAsset : null;
+  return candidateDraftAsset ?? createWorkspaceSegmentVoiceoverAsset(candidateSegment, candidateSegment.index);
+};
+
+const isWorkspaceSegmentVoiceoverReflectedInRefreshSegment = (
+  liveSegment: WorkspaceSegmentEditorDraftSegment,
+  candidateSegment: WorkspaceSegmentEditorSegment | WorkspaceSegmentEditorDraftSegment | null | undefined,
+) =>
+  areStudioCustomVideoFilesSameIdentity(
+    liveSegment.voiceoverAsset,
+    getWorkspaceSegmentRefreshVoiceoverAsset(candidateSegment),
+  );
+
 export const hasWorkspaceSegmentEditorUnreflectedLiveGeneratedVideo = (
   liveDraft: WorkspaceSegmentEditorDraftSession,
   freshSession: WorkspaceSegmentEditorSession,
@@ -8493,6 +8513,27 @@ export const hasWorkspaceSegmentEditorUnreflectedLiveGeneratedVideo = (
 
     const freshSegment = getWorkspaceSegmentSessionSegmentByIndex(freshSession.segments, liveSegment);
     return !isWorkspaceSegmentGeneratedVideoReflectedInRefreshSegment(liveSegment, freshSegment, mode);
+  });
+
+export const hasWorkspaceSegmentEditorUnreflectedLiveGeneratedVoiceover = (
+  liveDraft: WorkspaceSegmentEditorDraftSession,
+  freshSession: WorkspaceSegmentEditorSession,
+  baselineSession?: WorkspaceSegmentEditorDraftSession | WorkspaceSegmentEditorSession | null,
+) =>
+  liveDraft.segments.some((liveSegment) => {
+    if (!isWorkspaceSegmentVoiceoverAssetFresh(liveSegment, liveDraft)) {
+      return false;
+    }
+
+    const baselineSegment = baselineSession
+      ? getWorkspaceSegmentSessionSegmentByIndex(baselineSession.segments, liveSegment)
+      : null;
+    if (isWorkspaceSegmentVoiceoverReflectedInRefreshSegment(liveSegment, baselineSegment)) {
+      return false;
+    }
+
+    const freshSegment = getWorkspaceSegmentSessionSegmentByIndex(freshSession.segments, liveSegment);
+    return !isWorkspaceSegmentVoiceoverReflectedInRefreshSegment(liveSegment, freshSegment);
   });
 
 export const shouldPreserveWorkspaceSegmentLiveOriginalVisualOnRefresh = (segment: WorkspaceSegmentEditorDraftSegment) =>
@@ -8582,7 +8623,18 @@ export const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
   const freshVoiceSourceEndTime = getWorkspaceSegmentVoiceSourceEndTime(normalizedFreshSegment);
   const hasFreshProjectVoiceoverTiming =
     !freshVoiceoverAsset && hasWorkspaceSegmentProjectVoiceoverTimingData(normalizedFreshSegment);
-  const freshProjectVoiceoverDurationCandidates = hasFreshProjectVoiceoverTiming
+  const baselineVoiceoverAsset = getWorkspaceSegmentRefreshVoiceoverAsset(baselineSegment);
+  const shouldPreserveLiveVoiceover = Boolean(
+    !freshVoiceoverAsset &&
+      isWorkspaceSegmentVoiceoverAssetFresh(liveSegment, {
+        language: fallbackLanguage,
+        ttsAssetId: fallbackTtsAssetId,
+        voiceType: fallbackVoiceType ?? "",
+      }) &&
+      !areStudioCustomVideoFilesSameIdentity(liveSegment.voiceoverAsset, baselineVoiceoverAsset),
+  );
+  const shouldUseFreshProjectVoiceoverTiming = hasFreshProjectVoiceoverTiming && !shouldPreserveLiveVoiceover;
+  const freshProjectVoiceoverDurationCandidates = shouldUseFreshProjectVoiceoverTiming
     ? [
         freshVoiceSourceDuration,
         normalizeWorkspaceSegmentManualDurationSeconds(normalizedFreshSegment.speechDuration),
@@ -8610,7 +8662,7 @@ export const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
   const liveVoiceSourceDuration = getWorkspaceSegmentVoiceSourceDurationSeconds(liveSegment);
   const hasUserSelectedLiveDuration = liveSegment.durationSyncModeUserSelected === true;
   const shouldAdoptFreshProjectVoiceoverSourceDuration =
-    hasFreshProjectVoiceoverTiming &&
+    shouldUseFreshProjectVoiceoverTiming &&
     freshVoiceSourceDuration !== null &&
     !hasUserSelectedLiveDuration &&
     (liveVoiceSourceDuration === null ||
@@ -8666,10 +8718,10 @@ export const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
       voiceType: liveVoiceOverrideId ?? freshVoiceOverrideId,
     },
     {
-      hasProjectVoiceoverTiming: hasFreshProjectVoiceoverTiming,
+      hasProjectVoiceoverTiming: shouldUseFreshProjectVoiceoverTiming,
       sessionTtsAssetId: fallbackTtsAssetId,
       sessionVoiceType: fallbackVoiceType,
-      voiceoverAsset: freshVoiceoverAsset,
+      voiceoverAsset: shouldPreserveLiveVoiceover ? liveSegment.voiceoverAsset : freshVoiceoverAsset,
     },
   );
   const liveSceneSoundAsset =
@@ -8702,7 +8754,7 @@ export const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
   const nextInfographic = shouldPreserveLiveInfographic
     ? cloneWorkspaceSegmentInfographic(liveSegment.infographic)
     : freshInfographic;
-  const nextVoiceLanguage = freshVoiceoverAsset || hasFreshProjectVoiceoverTiming
+  const nextVoiceLanguage = freshVoiceoverAsset || shouldUseFreshProjectVoiceoverTiming
     ? normalizeStudioLanguageValue(normalizedFreshSegment.voiceLanguage ?? normalizedFreshSegment.voice_language) ??
       normalizeStudioLanguageValue(normalizedFreshSegment.voiceoverLanguage) ??
       fallbackLanguage
@@ -8794,11 +8846,22 @@ export const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
         ? true
         : liveSegment.sceneSoundPromptInitialized,
     sceneSoundReset: shouldPreserveSceneSoundReset,
-    speechDuration: freshProjectVoiceoverDuration ?? normalizedFreshSegment.speechDuration,
-    speechDurationSource: freshProjectVoiceoverDuration !== null ? "audio" : normalizedFreshSegment.speechDurationSource ?? null,
-    voiceSourceDuration: freshVoiceSourceDuration,
-    voiceSourceEndTime: freshVoiceSourceEndTime,
-    voiceSourceStartTime: freshVoiceSourceStartTime,
+    speechDuration: shouldPreserveLiveVoiceover
+      ? liveSegment.speechDuration
+      : freshProjectVoiceoverDuration ?? normalizedFreshSegment.speechDuration,
+    speechDurationSource: shouldPreserveLiveVoiceover
+      ? liveSegment.speechDurationSource ?? null
+      : freshProjectVoiceoverDuration !== null
+        ? "audio"
+        : normalizedFreshSegment.speechDurationSource ?? null,
+    speechEndTime: shouldPreserveLiveVoiceover ? liveSegment.speechEndTime : normalizedFreshSegment.speechEndTime,
+    speechStartTime: shouldPreserveLiveVoiceover ? liveSegment.speechStartTime : normalizedFreshSegment.speechStartTime,
+    speechWords: shouldPreserveLiveVoiceover
+      ? liveSegment.speechWords.map((word) => ({ ...word }))
+      : normalizedFreshSegment.speechWords.map((word) => ({ ...word })),
+    voiceSourceDuration: shouldPreserveLiveVoiceover ? liveSegment.voiceSourceDuration : freshVoiceSourceDuration,
+    voiceSourceEndTime: shouldPreserveLiveVoiceover ? liveSegment.voiceSourceEndTime : freshVoiceSourceEndTime,
+    voiceSourceStartTime: shouldPreserveLiveVoiceover ? liveSegment.voiceSourceStartTime : freshVoiceSourceStartTime,
     subtitleColor: getWorkspaceSegmentSubtitleColorOverrideId(liveSegment),
     subtitleStyle: getWorkspaceSegmentSubtitleStyleOverrideId(liveSegment),
     subtitleType: getWorkspaceSegmentSubtitleTypeOverrideId(liveSegment),
@@ -8810,14 +8873,14 @@ export const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
     ),
     voiceLanguage: nextVoiceLanguage,
     voice_language: nextVoiceLanguage,
-    voiceoverAsset: freshVoiceoverAsset ?? (hasFreshProjectVoiceoverTiming ? null : cloneStudioCustomVideoFile(liveSegment.voiceoverAsset)),
-    voiceoverLanguage: freshVoiceoverAsset || hasFreshProjectVoiceoverTiming
+    voiceoverAsset: freshVoiceoverAsset ?? (shouldUseFreshProjectVoiceoverTiming ? null : cloneStudioCustomVideoFile(liveSegment.voiceoverAsset)),
+    voiceoverLanguage: freshVoiceoverAsset || shouldUseFreshProjectVoiceoverTiming
       ? normalizedFreshSegment.voiceoverLanguage ?? fallbackLanguage
       : liveSegment.voiceoverLanguage,
-    voiceoverTextHash: freshVoiceoverAsset || hasFreshProjectVoiceoverTiming
+    voiceoverTextHash: freshVoiceoverAsset || shouldUseFreshProjectVoiceoverTiming
       ? normalizedFreshSegment.voiceoverTextHash ?? getWorkspaceSegmentVoiceoverTextHash(liveSegment.text)
       : liveSegment.voiceoverTextHash,
-    voiceoverVoiceType: freshVoiceoverAsset || hasFreshProjectVoiceoverTiming
+    voiceoverVoiceType: freshVoiceoverAsset || shouldUseFreshProjectVoiceoverTiming
       ? normalizedFreshSegment.voiceoverVoiceType ??
         voiceOverrideId ??
         normalizeWorkspaceSegmentEditorSetting(fallbackVoiceType) ??

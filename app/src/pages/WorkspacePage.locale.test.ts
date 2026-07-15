@@ -17,6 +17,7 @@ import {
   getWorkspaceSegmentLatestVisualAction,
   getWorkspaceSegmentVoiceOverrideId,
   hasWorkspaceSegmentEditorGeneratedShortsFromProject,
+  hasWorkspaceSegmentEditorUnreflectedLiveGeneratedVoiceover,
   isWorkspaceSegmentVoiceoverPlaybackFresh,
   isWorkspaceSegmentPersistedForVisualJobBinding,
 } from "../features/workspace/workspace-segment-editor";
@@ -4317,6 +4318,82 @@ describe("WorkspacePage studio locale defaults", () => {
     });
     expect(refreshedDraft.segments[1]?.speechWords).toEqual([
       { confidence: 1, endTime: 10.05, startTime: 5.47, text: "Second" },
+    ]);
+  });
+
+  it("preserves a newly generated scene voiceover when a refresh still returns old project timing", () => {
+    const text = "Imagine a world where the asteroid missed Earth";
+    const baselineSegment = createDraftSegment({
+      speechDuration: 2.4,
+      speechEndTime: 2.4,
+      speechStartTime: 0,
+      speechWords: [{ confidence: 1, endTime: 2.3, startTime: 0.1, text: "Imagine a world" }],
+      text,
+      textByLanguage: { en: text },
+      voiceSourceDuration: 2.4,
+      voiceSourceEndTime: 2.4,
+      voiceSourceStartTime: 0,
+    });
+    const baselineSession = {
+      ...createFreshSession(baselineSegment),
+      language: "en" as const,
+      ttsAssetId: 700,
+      voiceType: "Liam",
+    };
+    const liveSegment = createDraftSegment({
+      ...baselineSegment,
+      speechDuration: 4.2,
+      speechDurationSource: "audio",
+      speechEndTime: 4.2,
+      speechWords: [{ confidence: 1, endTime: 4.1, startTime: 0.1, text }],
+      voiceSourceDuration: 4.2,
+      voiceSourceEndTime: 4.2,
+      voiceoverAsset: {
+        assetId: 901,
+        durationSeconds: 4.2,
+        fileName: "generated-english-voice.wav",
+        fileSize: 1200,
+        mimeType: "audio/wav",
+        remoteUrl: "/api/workspace/media-assets/901/playback",
+      },
+      voiceoverLanguage: "en",
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(text),
+      voiceoverVoiceType: "Liam",
+    });
+    const liveDraft = {
+      ...createDraftSession(liveSegment),
+      language: "en" as const,
+      ttsAssetId: 700,
+      voiceType: "Liam",
+    };
+
+    expect(
+      hasWorkspaceSegmentEditorUnreflectedLiveGeneratedVoiceover(
+        liveDraft,
+        baselineSession,
+        baselineSession,
+      ),
+    ).toBe(true);
+
+    const refreshedDraft = refreshWorkspaceSegmentEditorDraftWithFreshSession(liveDraft, baselineSession, {
+      baselineSession,
+    });
+
+    expect(refreshedDraft.segments[0]).toMatchObject({
+      speechDuration: 4.2,
+      speechDurationSource: "audio",
+      speechEndTime: 4.2,
+      speechStartTime: 0,
+      voiceSourceDuration: 4.2,
+      voiceSourceEndTime: 4.2,
+      voiceSourceStartTime: 0,
+      voiceoverAsset: expect.objectContaining({ assetId: 901 }),
+      voiceoverLanguage: "en",
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(text),
+      voiceoverVoiceType: "Liam",
+    });
+    expect(refreshedDraft.segments[0]?.speechWords).toEqual([
+      { confidence: 1, endTime: 4.1, startTime: 0.1, text },
     ]);
   });
 
