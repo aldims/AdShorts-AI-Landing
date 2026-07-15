@@ -35,6 +35,8 @@ describe("renderWorkspaceSegmentSeedanceSettings", () => {
     const { onDurationChange, onDurationModeChange } = renderSettings();
     const durationSelect = screen.getByRole("combobox", { name: "Ручная длительность видео" });
 
+    expect(screen.getByRole("radio", { name: /По озвучке/ })).toBeTruthy();
+    expect(screen.getByText("Вручную")).toBeTruthy();
     expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual([
       "4 сек",
       "5 сек",
@@ -53,12 +55,12 @@ describe("renderWorkspaceSegmentSeedanceSettings", () => {
     expect(onDurationChange).toHaveBeenCalledWith(12);
   });
 
-  it("marks voiceover extension as unnecessary when video and voiceover already match", () => {
+  it("only shows the extension duration when voiceover does not exceed the video", () => {
     renderSettings({ voiceoverDurationSeconds: 0, voiceoverMatched: true });
 
-    const voiceoverOption = screen.getByRole("radio", { name: /По озвучке/ }) as HTMLButtonElement;
-    expect(voiceoverOption.disabled).toBe(true);
-    expect(voiceoverOption.textContent).toContain("Совпадает");
+    expect(screen.queryByRole("radio", { name: /По озвучке/ })).toBeNull();
+    expect(screen.getByText("Продлить на")).toBeTruthy();
+    expect(screen.getByRole("combobox", { name: "На сколько продлить видео" })).toBeTruthy();
   });
 
   it("keeps the sound price immediately after its label", () => {

@@ -231,43 +231,45 @@ export const renderWorkspaceSegmentSeedanceSettings = (
 
   const durationControl = (
     <div
-      className="studio-segment-seedance-settings__duration"
+      className={`studio-segment-seedance-settings__duration${isVoiceoverMatched ? " is-manual-only" : ""}`}
       role="group"
       aria-label={workspaceText(locale, "Длительность видео", "Video duration")}
     >
-      <button
-        className={`studio-segment-seedance-settings__voice${isVoiceoverMode ? " is-active" : ""}`}
-        type="button"
-        role="radio"
-        aria-checked={isVoiceoverMode}
-        disabled={options.disabled || isVoiceoverMatched}
-        title={
-          isVoiceoverMatched
-            ? workspaceText(
-                locale,
-                "Видео уже совпадает с озвучкой — продление не требуется",
-                "The video already matches the voiceover — no extension is needed",
-              )
-            : hasVoiceover
+      {!isVoiceoverMatched ? (
+        <button
+          className={`studio-segment-seedance-settings__voice${isVoiceoverMode ? " is-active" : ""}`}
+          type="button"
+          role="radio"
+          aria-checked={isVoiceoverMode}
+          disabled={options.disabled}
+          title={
+            hasVoiceover
               ? workspaceText(locale, "Длительность по текущей озвучке", "Match the current voiceover")
               : workspaceText(locale, "Озвучки нет — будет использовано 5 секунд", "No voiceover — 5 seconds will be used")
-        }
-        onClick={() => options.onDurationModeChange("voiceover")}
+          }
+          onClick={() => options.onDurationModeChange("voiceover")}
+        >
+          <span>{workspaceText(locale, "По озвучке", "Voiceover")}</span>
+          <strong>{`${voiceoverDuration}${workspaceText(locale, "с", "s")}`}</strong>
+        </button>
+      ) : null}
+      <label
+        className={`studio-segment-seedance-settings__manual${!isVoiceoverMode || isVoiceoverMatched ? " is-active" : ""}`}
       >
-        <span>{workspaceText(locale, "По озвучке", "Voiceover")}</span>
-        <strong>
+        <span>
           {isVoiceoverMatched
-            ? workspaceText(locale, "Совпадает", "Matched")
-            : `${voiceoverDuration}${workspaceText(locale, "с", "s")}`}
-        </strong>
-      </button>
-      <label className={`studio-segment-seedance-settings__manual${!isVoiceoverMode ? " is-active" : ""}`}>
-        <span>{workspaceText(locale, "Вручную", "Manual")}</span>
+            ? workspaceText(locale, "Продлить на", "Extend by")
+            : workspaceText(locale, "Вручную", "Manual")}
+        </span>
         <span className="studio-segment-seedance-settings__manual-value">
           <select
             value={normalizedManualDuration}
             disabled={options.disabled}
-            aria-label={workspaceText(locale, "Ручная длительность видео", "Manual video duration")}
+            aria-label={
+              isVoiceoverMatched
+                ? workspaceText(locale, "На сколько продлить видео", "Video extension duration")
+                : workspaceText(locale, "Ручная длительность видео", "Manual video duration")
+            }
             onFocus={() => options.onDurationModeChange("manual")}
             onPointerDown={() => options.onDurationModeChange("manual")}
             onChange={(event) => {
