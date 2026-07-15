@@ -2879,15 +2879,19 @@ export const isWorkspaceSegmentCachedLanguageTextUsable = (
     return false;
   }
 
-  if (targetLanguage !== "ru") {
-    return true;
-  }
-
   const normalizedTargetText = normalizeWorkspaceLocalizedTextForCompare(targetText);
   const normalizedSourceText = normalizeWorkspaceLocalizedTextForCompare(sourceText);
 
   if (!normalizedTargetText) {
     return !normalizedSourceText;
+  }
+
+  if (targetLanguage === "en") {
+    // Older voice-menu builds could save the unchanged Russian source under
+    // the English cache key. Treat such entries as stale so selecting English
+    // requests a real translation. A valid English translation may still keep
+    // a Cyrillic brand or proper name, so only reject an unchanged source copy.
+    return !hasWorkspaceCyrillicText(normalizedTargetText) || normalizedTargetText !== normalizedSourceText;
   }
 
   if (hasWorkspaceCyrillicText(normalizedTargetText)) {
@@ -3026,8 +3030,21 @@ export const restoreWorkspaceSegmentVoiceTextDraftSnapshot = (
   segment: WorkspaceSegmentEditorDraftSegment,
   snapshot: WorkspaceSegmentEditorDraftSegment,
   fallbackLanguage: StudioLanguage = "ru",
-): WorkspaceSegmentEditorDraftSegment => ({
+): WorkspaceSegmentEditorDraftSegment => restoreWorkspaceSegmentTimelineDurationState({
   ...segment,
+  _voice_render_source_end_time: snapshot._voice_render_source_end_time ?? null,
+  _voice_render_source_start_time: snapshot._voice_render_source_start_time ?? null,
+  _voice_source_duration: snapshot._voice_source_duration ?? null,
+  _voice_source_end_time: snapshot._voice_source_end_time ?? null,
+  _voice_source_start_time: snapshot._voice_source_start_time ?? null,
+  estimatedVoiceoverDurationSeconds: snapshot.estimatedVoiceoverDurationSeconds ?? null,
+  estimatedVoiceoverTextHash: snapshot.estimatedVoiceoverTextHash ?? null,
+  originalText: snapshot.originalText,
+  originalTextByLanguage: cloneWorkspaceSegmentEditorLocalizedTextMap(
+    snapshot.originalTextByLanguage,
+    snapshot.originalText,
+    fallbackLanguage,
+  ),
   speechDuration: snapshot.speechDuration,
   speechDurationSource: snapshot.speechDurationSource ?? null,
   speechEndTime: snapshot.speechEndTime,
@@ -3036,6 +3053,9 @@ export const restoreWorkspaceSegmentVoiceTextDraftSnapshot = (
   voiceSourceDuration: snapshot.voiceSourceDuration ?? null,
   voiceSourceEndTime: snapshot.voiceSourceEndTime ?? null,
   voiceSourceStartTime: snapshot.voiceSourceStartTime ?? null,
+  voice_source_duration: snapshot.voice_source_duration ?? null,
+  voice_source_end_time: snapshot.voice_source_end_time ?? null,
+  voice_source_start_time: snapshot.voice_source_start_time ?? null,
   text: snapshot.text,
   textByLanguage: cloneWorkspaceSegmentEditorLocalizedTextMap(
     snapshot.textByLanguage,
@@ -3050,7 +3070,7 @@ export const restoreWorkspaceSegmentVoiceTextDraftSnapshot = (
   voiceoverLanguage: snapshot.voiceoverLanguage,
   voiceoverTextHash: snapshot.voiceoverTextHash,
   voiceoverVoiceType: snapshot.voiceoverVoiceType,
-});
+}, snapshot);
 
 export const restoreWorkspaceSegmentVoiceTextDraftSessionSnapshot = (
   draft: WorkspaceSegmentEditorDraftSession,

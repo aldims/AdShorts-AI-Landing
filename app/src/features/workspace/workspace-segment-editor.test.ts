@@ -33,6 +33,7 @@ import {
   canWorkspaceSegmentUseVideoExtensionTool,
   isWorkspaceTalkingPhotoMediaAsset,
   isWorkspaceSegmentProjectTimelineVoiceoverAvailable,
+  isWorkspaceSegmentCachedLanguageTextUsable,
   isWorkspaceSegmentStaleMeasuredRenderedPhotoDuration,
   isWorkspaceSegmentVoiceoverPlaybackFresh,
   invalidateWorkspaceSegmentSceneSoundForVisualChange,
@@ -87,6 +88,38 @@ describe("resolveWorkspaceSegmentSceneSoundPrompt", () => {
 
   it("keeps a user-provided sound description", () => {
     expect(resolveWorkspaceSegmentSceneSoundPrompt("  rain   on glass ")).toBe("rain on glass");
+  });
+});
+
+describe("isWorkspaceSegmentCachedLanguageTextUsable", () => {
+  it("rejects Russian source text that was incorrectly cached as English", () => {
+    expect(
+      isWorkspaceSegmentCachedLanguageTextUsable(
+        "Представьте мир, где астероид пролетел мимо Земли.",
+        "en",
+        "Представьте мир, где астероид пролетел мимо Земли.",
+      ),
+    ).toBe(false);
+  });
+
+  it("accepts a translated English cache entry", () => {
+    expect(
+      isWorkspaceSegmentCachedLanguageTextUsable(
+        "Imagine a world where the asteroid missed Earth.",
+        "en",
+        "Представьте мир, где астероид пролетел мимо Земли.",
+      ),
+    ).toBe(true);
+  });
+
+  it("accepts an English translation that preserves a Cyrillic proper name", () => {
+    expect(
+      isWorkspaceSegmentCachedLanguageTextUsable(
+        "The story begins in Москва.",
+        "en",
+        "История начинается в Москве.",
+      ),
+    ).toBe(true);
   });
 });
 

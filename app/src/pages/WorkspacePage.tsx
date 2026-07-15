@@ -13493,6 +13493,8 @@ export function WorkspacePage({
       return;
     }
 
+    const translateRunId = segmentEditorLanguageTranslateRunRef.current + 1;
+    segmentEditorLanguageTranslateRunRef.current = translateRunId;
     const previousLanguage = selectedLanguage;
     const previousVoiceId = resolvedSelectedVoiceId;
     const wasVoiceoverEnabledInDraft = !isCurrentDraftVoiceDisabled;
@@ -13519,7 +13521,7 @@ export function WorkspacePage({
       }
     }
 
-    const currentDraft = segmentEditorDraft;
+    const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
     if (!currentDraft || currentDraft.segments.length === 0) {
       return;
     }
@@ -13569,7 +13571,7 @@ export function WorkspacePage({
             ...segment,
             originalText:
               cachedLocalizedSegments[index]?.originalText ??
-              segment.originalTextByLanguage?.[previousLanguage] ??
+              cachedLocalizedSegments[index]?.text ??
               segment.originalText,
             text: cachedLocalizedSegments[index]?.text ?? segment.text,
             voiceType: options?.applyGlobalVoiceToAllSegments
@@ -13582,11 +13584,11 @@ export function WorkspacePage({
         ),
         ttsAssetId: null,
       }), WORKSPACE_SEGMENT_EDITOR_VOICE_TEXT_TIMELINE_REBUILD_OPTIONS);
+      setHasEditedSegmentSubtitleBulkTextInput(false);
+      setSegmentSubtitleBulkTextInput("");
       return;
     }
 
-    const translateRunId = segmentEditorLanguageTranslateRunRef.current + 1;
-    segmentEditorLanguageTranslateRunRef.current = translateRunId;
     const sourceTexts = currentDraft.segments.map((segment) => segment.textByLanguage?.[previousLanguage] ?? segment.text);
     const sourceOriginalTexts = currentDraft.segments.map(
       (segment) => segment.originalTextByLanguage?.[previousLanguage] ?? segment.originalText,
@@ -13636,6 +13638,8 @@ export function WorkspacePage({
         }),
         ttsAssetId: null,
       }), WORKSPACE_SEGMENT_EDITOR_VOICE_TEXT_TIMELINE_REBUILD_OPTIONS);
+      setHasEditedSegmentSubtitleBulkTextInput(false);
+      setSegmentSubtitleBulkTextInput("");
     } catch (error) {
       if (segmentEditorLanguageTranslateRunRef.current !== translateRunId) {
         return;
@@ -25462,23 +25466,173 @@ export function WorkspacePage({
       voiceId,
     }));
   };
-  const handleSegmentTimelineGlobalVoiceLanguageSelect = (language: StudioLanguage) => {
-    const currentDraft =
+  const handleSegmentTimelineGlobalVoiceLanguageSelect = async (language: StudioLanguage) => {
+    const currentVoiceDraft =
       segmentTimelineGlobalVoiceDraftRef.current ?? segmentTimelineGlobalVoiceDraft ?? getCurrentSegmentTimelineGlobalVoiceDraft();
+    const currentProjectDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+    const fallbackSourceLanguage: StudioLanguage = language === "en" ? "ru" : "en";
+    const hasMislabeledCurrentLanguageText = Boolean(
+      currentProjectDraft?.segments.some((segment) =>
+        !isWorkspaceSegmentCachedLanguageTextUsable(
+          segment.text,
+          language,
+          segment.textByLanguage?.[fallbackSourceLanguage],
+        ),
+      ),
+    );
+    if (currentVoiceDraft.language === language && !hasMislabeledCurrentLanguageText) {
+      return;
+    }
+    const sourceLanguage = currentVoiceDraft.language === language
+      ? fallbackSourceLanguage
+      : currentVoiceDraft.language;
+
     const nextVoiceId =
       resolveStudioVoiceIdForLanguage(
         language,
         selectedVoiceIdByLanguageRef.current[language],
-        currentDraft.voiceId,
+        currentVoiceDraft.voiceId,
       ) ?? getDefaultStudioVoiceId(language);
-
-    commitSegmentTimelineGlobalVoiceDraft({
-      ...currentDraft,
+    const nextVoiceDraft: SegmentTimelineGlobalVoiceDraft = {
+      ...currentVoiceDraft,
       isEnabled: true,
       language,
       voiceId: nextVoiceId,
-    });
+    };
+    const translateRunId = segmentEditorLanguageTranslateRunRef.current + 1;
+    segmentEditorLanguageTranslateRunRef.current = translateRunId;
+
+    commitSegmentTimelineGlobalVoiceDraft(nextVoiceDraft);
     latestExplicitStudioVoiceSelectionRef.current = { language, voiceId: nextVoiceId };
+    setSegmentSubtitleBulkTextError(null);
+
+    if (!currentProjectDraft || currentProjectDraft.segments.length === 0) {
+      return;
+    }
+
+    let didCaptureSnapshot = false;
+    if (!segmentTimelineBulkVoiceTextEditSnapshotRef.current) {
+      segmentTimelineBulkVoiceTextEditSnapshotRef.current = {
+        segments: currentProjectDraft.segments.map((segment) =>
+          cloneWorkspaceSegmentEditorDraftSegment(segment, sourceLanguage),
+        ),
+        ttsAssetId: currentProjectDraft.ttsAssetId,
+      };
+      didCaptureSnapshot = true;
+    }
+
+    const cachedLocalizedSegments = currentProjectDraft.segments.map((segment) => {
+      const sourceOriginalText = segment.originalTextByLanguage?.[sourceLanguage] ?? segment.originalText;
+      const sourceText = segment.textByLanguage?.[sourceLanguage] ?? segment.text;
+      const cachedOriginalText = segment.originalTextByLanguage?.[language] ?? null;
+      const cachedText = segment.textByLanguage?.[language] ?? null;
+      const isCachedOriginalTextUsable = isWorkspaceSegmentCachedLanguageTextUsable(
+        cachedOriginalText,
+        language,
+        sourceOriginalText,
+      );
+      const isCachedTextUsable = isWorkspaceSegmentCachedLanguageTextUsable(cachedText, language, sourceText);
+
+      return {
+        originalText: isCachedOriginalTextUsable ? cachedOriginalText : null,
+        staleOriginalText: typeof cachedOriginalText === "string" && !isCachedOriginalTextUsable,
+        staleText: typeof cachedText === "string" && !isCachedTextUsable,
+        text: isCachedTextUsable ? cachedText : null,
+      };
+    });
+    const hasCachedTargetTexts = cachedLocalizedSegments.every((segment) => typeof segment.text === "string");
+    const staleCachedTargetCount = cachedLocalizedSegments.filter(
+      (segment) => segment.staleOriginalText || segment.staleText,
+    ).length;
+    const sourceTexts = currentProjectDraft.segments.map(
+      (segment) => segment.textByLanguage?.[sourceLanguage] ?? segment.text,
+    );
+    const sourceOriginalTexts = currentProjectDraft.segments.map(
+      (segment) => segment.originalTextByLanguage?.[sourceLanguage] ?? segment.originalText,
+    );
+
+    logSegmentEditorDiagnostics(
+      "client.segment-editor.global-voice.language.select",
+      {
+        hasCachedTargetTexts,
+        language,
+        previousLanguage: sourceLanguage,
+        segmentCount: currentProjectDraft.segments.length,
+        staleCachedTargetCount,
+      },
+      { draft: currentProjectDraft, level: staleCachedTargetCount > 0 ? "warn" : "info" },
+    );
+
+    try {
+      const [translatedTexts, translatedOriginalTexts] = hasCachedTargetTexts
+        ? [
+            cachedLocalizedSegments.map((segment) => segment.text ?? ""),
+            cachedLocalizedSegments.map((segment) => segment.originalText ?? segment.text ?? ""),
+          ]
+        : await Promise.all([
+            translateSegmentEditorTexts(sourceTexts, sourceLanguage, language),
+            translateSegmentEditorTexts(sourceOriginalTexts, sourceLanguage, language),
+          ]);
+
+      if (segmentEditorLanguageTranslateRunRef.current !== translateRunId) {
+        return;
+      }
+
+      updateSegmentEditorDraft((draft) => ({
+        ...draft,
+        segments: draft.segments.map((segment, index) => {
+          const currentSourceText = segment.textByLanguage?.[sourceLanguage] ?? sourceTexts[index] ?? segment.text;
+          const currentSourceOriginalText =
+            segment.originalTextByLanguage?.[sourceLanguage] ??
+            sourceOriginalTexts[index] ??
+            segment.originalText;
+          const nextText = translatedTexts[index] ?? "";
+          const nextOriginalText = translatedOriginalTexts[index] ?? nextText;
+
+          return clearSegmentEditorVoiceoverGenerationState({
+            ...segment,
+            originalText: nextOriginalText,
+            originalTextByLanguage: {
+              ...segment.originalTextByLanguage,
+              [sourceLanguage]: currentSourceOriginalText,
+              [language]: nextOriginalText,
+            },
+            text: nextText,
+            textByLanguage: {
+              ...segment.textByLanguage,
+              [sourceLanguage]: currentSourceText,
+              [language]: nextText,
+            },
+          }, {
+            preserveUserSelectedVisualDuration: false,
+            previousText: segment.text,
+          });
+        }),
+        ttsAssetId: null,
+      }), WORKSPACE_SEGMENT_EDITOR_VOICE_TEXT_TIMELINE_REBUILD_OPTIONS);
+      setHasEditedSegmentSubtitleBulkTextInput(false);
+      setSegmentSubtitleBulkTextInput("");
+    } catch (error) {
+      if (segmentEditorLanguageTranslateRunRef.current !== translateRunId) {
+        return;
+      }
+
+      if (
+        segmentTimelineGlobalVoiceDraftRef.current?.language === language &&
+        segmentTimelineGlobalVoiceDraftRef.current.voiceId === nextVoiceId
+      ) {
+        commitSegmentTimelineGlobalVoiceDraft(currentVoiceDraft);
+        latestExplicitStudioVoiceSelectionRef.current = currentVoiceDraft.isEnabled
+          ? { language: currentVoiceDraft.language, voiceId: currentVoiceDraft.voiceId }
+          : null;
+      }
+      if (didCaptureSnapshot) {
+        clearSegmentTimelineBulkVoiceTextEditSnapshot();
+      }
+      setSegmentSubtitleBulkTextError(
+        error instanceof Error ? error.message : "Не удалось перевести текст озвучки.",
+      );
+    }
   };
   const getSegmentEditorGlobalVoiceoverTargets = (draft: WorkspaceSegmentEditorDraftSession) =>
     draft.segments.filter(
@@ -36310,6 +36464,7 @@ export function WorkspacePage({
                     onOpenChange={(isOpen) => {
                       handleSegmentTimelineGlobalControlOpenChange("voice", isOpen);
                       if (!isOpen) {
+                        segmentEditorLanguageTranslateRunRef.current += 1;
                         restorePendingSegmentTimelineBulkVoiceTextEdit();
                       }
                     }}

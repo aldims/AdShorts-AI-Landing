@@ -8438,6 +8438,12 @@ describe("WorkspacePage studio locale defaults", () => {
     const originalText = "Исходный текст озвучки";
     const editedText = "Новый текст без генерации озвучки";
     const snapshotSegment = createDraftSegment({
+      duration: 6.4,
+      endTime: 6.4,
+      estimatedVoiceoverDurationSeconds: null,
+      estimatedVoiceoverTextHash: null,
+      originalText,
+      originalTextByLanguage: { ru: originalText },
       speechDuration: 6.4,
       text: originalText,
       textByLanguage: { ru: originalText },
@@ -8455,6 +8461,12 @@ describe("WorkspacePage studio locale defaults", () => {
     });
     const editedSegment = {
       ...snapshotSegment,
+      duration: 7.2,
+      endTime: 7.2,
+      estimatedVoiceoverDurationSeconds: 7.2,
+      estimatedVoiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(editedText),
+      originalText: "Translated draft text",
+      originalTextByLanguage: { en: "Translated draft text", ru: originalText },
       speechDuration: null,
       speechEndTime: null,
       speechStartTime: null,
@@ -8465,6 +8477,12 @@ describe("WorkspacePage studio locale defaults", () => {
 
     expect(restoreWorkspaceSegmentVoiceTextDraftSnapshot(editedSegment, snapshotSegment)).toEqual(
       expect.objectContaining({
+        duration: 6.4,
+        endTime: 6.4,
+        estimatedVoiceoverDurationSeconds: null,
+        estimatedVoiceoverTextHash: null,
+        originalText,
+        originalTextByLanguage: { ru: originalText },
         speechDuration: 6.4,
         text: originalText,
         textByLanguage: { ru: originalText },

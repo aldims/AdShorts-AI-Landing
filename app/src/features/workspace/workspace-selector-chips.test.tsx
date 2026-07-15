@@ -16,6 +16,34 @@ import {
 } from "./workspace-selector-chips";
 
 describe("StudioVoiceSelectorChip", () => {
+  it("requests text-language synchronization when English is selected", () => {
+    const onSelectLanguage = vi.fn();
+
+    render(
+      <LocaleProvider locale="ru">
+        <StudioVoiceSelectorChip
+          bulkTextValue="Русский текст озвучки"
+          isEnabled
+          onBulkTextChange={vi.fn()}
+          onSelect={vi.fn()}
+          onSelectLanguage={onSelectLanguage}
+          onToggleEnabled={vi.fn()}
+          selectedLanguage="ru"
+          selectedVoiceId="Liam_Timing"
+          voiceOptions={[
+            { description: "Выразительный голос", id: "Liam_Timing", label: "Александр" },
+          ]}
+        />
+      </LocaleProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Озвучка\s*Александр/ }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: /Английский/ }));
+
+    expect(onSelectLanguage).toHaveBeenCalledWith("en");
+    expect(screen.getByLabelText("Текст озвучки")).toBeTruthy();
+  });
+
   it("selects Alexander when typing voiceover text while voiceover is disabled", () => {
     const onBulkTextChange = vi.fn();
     const onSelect = vi.fn();
