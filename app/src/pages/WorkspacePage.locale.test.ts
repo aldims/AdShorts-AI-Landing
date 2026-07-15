@@ -915,6 +915,7 @@ describe("WorkspacePage example prefill settings", () => {
     expect(
       resolveWorkspaceExamplePrefillInitialStudioState({
         prefillSettings: {
+          aiVideoGenerateAudioEnabled: true,
           brandText: "adshortsai.com",
           language: "ru",
           musicType: "dramatic",
@@ -928,6 +929,7 @@ describe("WorkspacePage example prefill settings", () => {
         routeDefaults: getWorkspaceInitialStudioDefaults("ru"),
       }),
     ).toMatchObject({
+      aiVideoGenerateAudioEnabled: true,
       brandText: "adshortsai.com",
       language: "ru",
       musicType: "dramatic",

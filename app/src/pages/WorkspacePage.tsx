@@ -1501,6 +1501,7 @@ type SegmentTimelineVoiceHistory = {
 };
 
 type StudioCreateInitialSettings = {
+  aiVideoGenerateAudioEnabled: boolean;
   language: StudioLanguage;
   musicName: string | null;
   musicType: StudioMusicType;
@@ -1578,6 +1579,8 @@ const resolveStudioCreateInitialSettings = (
   const storedMusicName = normalizeStoredStudioCreateTextValue(storedSettings?.musicName);
 
   return {
+    aiVideoGenerateAudioEnabled:
+      storedSettings?.aiVideoGenerateAudioEnabled ?? fallbackSettings.aiVideoGenerateAudioEnabled,
     language,
     musicName: defaultMusicName ? storedMusicName || defaultMusicName : null,
     musicType,
@@ -1783,6 +1786,7 @@ export function WorkspacePage({
   const initialStudioCreateSettings = resolveStudioCreateInitialSettings(
     initialStoredStudioCreateSettingsRef.current,
     {
+      aiVideoGenerateAudioEnabled: examplePrefillInitialStudioState.aiVideoGenerateAudioEnabled,
       language: examplePrefillInitialStudioState.language,
       musicType: examplePrefillInitialStudioState.musicType,
       subtitleColorId: examplePrefillInitialStudioState.subtitleColorId,
@@ -1851,6 +1855,9 @@ export function WorkspacePage({
     en: initialStudioCreateSettings.voiceIdsByLanguage.en,
   });
   const [selectedVideoMode, setSelectedVideoMode] = useState<StudioVideoMode>(initialStudioCreateSettings.videoMode);
+  const [isAiVideoGenerateAudioEnabled, setIsAiVideoGenerateAudioEnabled] = useState(
+    initialStudioCreateSettings.aiVideoGenerateAudioEnabled,
+  );
   const selectedVideoModeExplicitlyChangedRef = useRef(false);
   const selectedSegmentAiPhotoQuality: StudioSegmentVisualQuality = "premium";
   const selectedSegmentAiVideoQuality: StudioSegmentVisualQuality = "premium";
@@ -1950,6 +1957,7 @@ export function WorkspacePage({
   }, [initialStudioCreateMode, session.email]);
 
   const applyStudioCreateSettingsSnapshot = (settings: StudioCreateInitialSettings) => {
+    setIsAiVideoGenerateAudioEnabled(settings.aiVideoGenerateAudioEnabled);
     setSelectedLanguage(settings.language);
     setIsVoiceoverEnabled(settings.voiceEnabled);
     setAreSubtitlesEnabled(settings.subtitleEnabled);
@@ -1985,6 +1993,7 @@ export function WorkspacePage({
 
     applyStudioCreateSettingsSnapshot(
       resolveStudioCreateInitialSettings(storedSettings, {
+        aiVideoGenerateAudioEnabled: isAiVideoGenerateAudioEnabled,
         language: selectedLanguage,
         musicType: selectedMusicType,
         subtitleColorId: selectedSubtitleColorId,
@@ -5968,6 +5977,7 @@ export function WorkspacePage({
   });
   const buildCurrentExamplePrefillSettings = (): ExamplePrefillStudioSettings => {
     const settings: ExamplePrefillStudioSettings = {
+      aiVideoGenerateAudioEnabled: isAiVideoGenerateAudioEnabled,
       language: selectedLanguage,
       subtitleColorId: selectedSubtitleColorId,
       subtitleEnabled: isVoiceoverEnabled && areSubtitlesEnabled,
@@ -6018,6 +6028,10 @@ export function WorkspacePage({
     const nextVoiceEnabled = typeof settings.voiceEnabled === "boolean" ? settings.voiceEnabled : isVoiceoverEnabled;
 
     activeExamplePrefillSettingsRef.current = settings;
+
+    if (typeof settings.aiVideoGenerateAudioEnabled === "boolean") {
+      setIsAiVideoGenerateAudioEnabled(settings.aiVideoGenerateAudioEnabled);
+    }
 
     if (nextLanguage || requestedVoiceLanguage) {
       setSelectedLanguage(effectiveLanguage);
@@ -10627,6 +10641,7 @@ export function WorkspacePage({
       selectedVoiceIdByLanguageRef.current[selectedLanguage],
     );
     persistStudioCreateSettings(session.email, {
+      aiVideoGenerateAudioEnabled: isAiVideoGenerateAudioEnabled,
       language: selectedLanguage,
       musicName: selectedMusicType === "custom" ? null : selectedMusicName,
       musicType: selectedMusicType === "custom" ? "ai" : selectedMusicType,
@@ -10644,6 +10659,7 @@ export function WorkspacePage({
     persistCurrentStudioCreateSettings();
   }, [
     areSubtitlesEnabled,
+    isAiVideoGenerateAudioEnabled,
     isVoiceoverEnabled,
     selectedLanguage,
     selectedMusicName,
@@ -10811,6 +10827,10 @@ export function WorkspacePage({
     selectedVideoModeExplicitlyChangedRef.current = true;
     setSelectedVideoMode(videoMode);
     setVideoSelectionError(null);
+  };
+
+  const handleAiVideoGenerateAudioToggle = (enabled: boolean) => {
+    setIsAiVideoGenerateAudioEnabled(enabled);
   };
 
   const handleBrandLogoSelect = async (file: File) => {
@@ -22623,6 +22643,11 @@ export function WorkspacePage({
       requestedVideoMode: options?.videoMode ?? null,
       selectedVideoMode,
     });
+    const effectiveAiVideoGenerateAudioEnabled =
+      effectiveVideoMode === "ai_video" &&
+      (typeof options?.aiVideoGenerateAudioEnabled === "boolean"
+        ? options.aiVideoGenerateAudioEnabled
+        : isAiVideoGenerateAudioEnabled);
     const reportGeneratePreflightFailure = (errorMessage: string, statusLabel: string) => {
       console.warn("[studio] generate.preflight-blocked", {
         effectiveVideoMode,
@@ -22670,6 +22695,7 @@ export function WorkspacePage({
       brandChangedOverride: options?.brandChanged ?? null,
       clearBrandingOverride: options?.clearBranding ?? null,
       effectiveVideoMode,
+      effectiveAiVideoGenerateAudioEnabled,
       isRegeneration: Boolean(options?.isRegeneration),
       projectId: options?.projectId ?? null,
       promptLength: nextTopic.trim().length,
@@ -23028,6 +23054,7 @@ export function WorkspacePage({
       appendStudioFormValue(formData, "subtitleStyleId", effectiveSubtitleStyleId);
       appendStudioFormValue(formData, "versionRootProjectAdId", options?.versionRootProjectAdId);
       appendStudioFormValue(formData, "videoMode", effectiveVideoMode);
+      appendStudioFormValue(formData, "aiVideoGenerateAudioEnabled", effectiveAiVideoGenerateAudioEnabled);
       appendStudioFormValue(formData, "videoModeChanged", Boolean(options?.videoModeChanged));
       appendStudioFormValue(formData, "voiceEnabled", effectiveVoiceEnabled);
       appendStudioFormValue(formData, "voiceId", effectiveVoiceId);
@@ -37327,6 +37354,7 @@ export function WorkspacePage({
                                   chip === "Видео" ? (
                                     <StudioVideoSelectorChip
                                   key={chip}
+                                  isAiVideoGenerateAudioEnabled={isAiVideoGenerateAudioEnabled}
                                   brandLogoFile={selectedBrandLogo}
                                   brandText={brandText}
                                   brandUploadError={brandSelectionError}
@@ -37336,6 +37364,7 @@ export function WorkspacePage({
                                   onBrandTextChange={handleBrandTextChange}
                                   onClearBrandText={handleClearBrandText}
                                   onRemoveBrandLogo={handleRemoveBrandLogo}
+                                  onAiVideoGenerateAudioToggle={handleAiVideoGenerateAudioToggle}
                                   onSelectVideoMode={handleVideoModeSelect}
                                   selectedVideoMode={selectedVideoMode}
                                 />

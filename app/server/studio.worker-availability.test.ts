@@ -183,6 +183,7 @@ describe("studio generation worker availability", () => {
         email: "alex@example.test",
         name: "Alex",
       }, {
+        aiVideoGenerateAudioEnabled: true,
         language: "ru",
         videoMode: "ai_video",
         videoModeChanged: true,
@@ -199,6 +200,7 @@ describe("studio generation worker availability", () => {
     expect(consumeBody).toEqual(expect.objectContaining({ amount: 80 }));
     expect(generationBody).toEqual(
       expect.objectContaining({
+        ai_video_generate_audio: true,
         credit_cost: 80,
         video_mode: "ai_video",
         video_mode_changed: true,

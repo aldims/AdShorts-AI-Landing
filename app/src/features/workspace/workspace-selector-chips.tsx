@@ -211,6 +211,7 @@ type StudioMusicSelectorChipProps = {
 };
 
 type StudioVideoSelectorChipProps = {
+  isAiVideoGenerateAudioEnabled: boolean;
   brandLogoFile: StudioBrandLogoFile | null;
   brandText: string;
   brandUploadError: string | null;
@@ -220,6 +221,7 @@ type StudioVideoSelectorChipProps = {
   onBrandTextChange: (value: string) => void;
   onClearBrandText: () => void;
   onRemoveBrandLogo: () => void;
+  onAiVideoGenerateAudioToggle: (enabled: boolean) => void;
   onSelectVideoMode: (videoMode: StudioVideoMode) => void;
   selectedVideoMode: StudioVideoMode;
 };
@@ -1290,6 +1292,7 @@ export function StudioVoiceSelectorChip({
 }
 
 export function StudioVideoSelectorChip({
+  isAiVideoGenerateAudioEnabled,
   brandLogoFile,
   brandText,
   brandUploadError,
@@ -1299,6 +1302,7 @@ export function StudioVideoSelectorChip({
   onBrandTextChange,
   onClearBrandText,
   onRemoveBrandLogo,
+  onAiVideoGenerateAudioToggle,
   onSelectVideoMode,
   selectedVideoMode,
 }: StudioVideoSelectorChipProps) {
@@ -1473,6 +1477,27 @@ export function StudioVideoSelectorChip({
                     </button>
                   );
                 })}
+                {selectedVideoMode === "ai_video" ? (
+                  <button
+                    className={`studio-video-selector__audio-toggle${isAiVideoGenerateAudioEnabled ? " is-enabled" : ""}`}
+                    type="button"
+                    role="switch"
+                    aria-checked={isAiVideoGenerateAudioEnabled}
+                    onClick={() => onAiVideoGenerateAudioToggle(!isAiVideoGenerateAudioEnabled)}
+                  >
+                    <span className="studio-video-selector__audio-toggle-copy">
+                      <strong>{locale === "en" ? "Generate sounds" : "Генерировать звуки"}</strong>
+                      <small>
+                        {locale === "en"
+                          ? "Atmosphere and sound effects inside AI video"
+                          : "Атмосфера и звуковые эффекты внутри AI-видео"}
+                      </small>
+                    </span>
+                    <span className="studio-video-selector__audio-toggle-control" aria-hidden="true">
+                      <span />
+                    </span>
+                  </button>
+                ) : null}
               </div>
 
               <div className="studio-video-selector__section">

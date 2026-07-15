@@ -9,6 +9,7 @@ describe("example prefill normalization", () => {
   it("keeps valid studio settings and removes empty values", () => {
     expect(
       normalizeExamplePrefillStudioSettings({
+        aiVideoGenerateAudioEnabled: true,
         brandText: "  Brand copy  ",
         language: "ru",
         musicType: "ai",
@@ -20,6 +21,7 @@ describe("example prefill normalization", () => {
         voiceId: " Bys_24000 ",
       }),
     ).toEqual({
+      aiVideoGenerateAudioEnabled: true,
       brandText: "Brand copy",
       language: "ru",
       musicType: "ai",

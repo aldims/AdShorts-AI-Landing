@@ -223,7 +223,9 @@ describe("StudioVideoSelectorChip", () => {
           brandText=""
           brandUploadError={null}
           customVideoFile={null}
+          isAiVideoGenerateAudioEnabled={false}
           isPreparingBrandLogo={false}
+          onAiVideoGenerateAudioToggle={vi.fn()}
           onBrandLogoSelect={vi.fn()}
           onBrandTextChange={vi.fn()}
           onClearBrandText={vi.fn()}
@@ -262,6 +264,36 @@ describe("StudioVideoSelectorChip", () => {
     expect(screen.queryByRole("menuitemradio", { name: /AI видео/ })).toBeNull();
   });
 
+  it("toggles generated sounds for the selected AI video mode", () => {
+    const onAiVideoGenerateAudioToggle = vi.fn();
+    render(
+      <LocaleProvider locale="ru">
+        <StudioVideoSelectorChip
+          brandLogoFile={null}
+          brandText=""
+          brandUploadError={null}
+          customVideoFile={null}
+          isAiVideoGenerateAudioEnabled={false}
+          isPreparingBrandLogo={false}
+          onAiVideoGenerateAudioToggle={onAiVideoGenerateAudioToggle}
+          onBrandLogoSelect={vi.fn()}
+          onBrandTextChange={vi.fn()}
+          onClearBrandText={vi.fn()}
+          onRemoveBrandLogo={vi.fn()}
+          onSelectVideoMode={vi.fn()}
+          selectedVideoMode="ai_video"
+        />
+      </LocaleProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Визуал\s*AI видео/ }));
+    const toggle = screen.getByRole("switch", { name: /Генерировать звуки/ });
+
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+    fireEvent.click(toggle);
+    expect(onAiVideoGenerateAudioToggle).toHaveBeenCalledWith(true);
+  });
+
   it("localizes the creation-mode durations in the English UI", () => {
     render(
       <LocaleProvider locale="en">
@@ -270,7 +302,9 @@ describe("StudioVideoSelectorChip", () => {
           brandText=""
           brandUploadError={null}
           customVideoFile={null}
+          isAiVideoGenerateAudioEnabled={false}
           isPreparingBrandLogo={false}
+          onAiVideoGenerateAudioToggle={vi.fn()}
           onBrandLogoSelect={vi.fn()}
           onBrandTextChange={vi.fn()}
           onClearBrandText={vi.fn()}

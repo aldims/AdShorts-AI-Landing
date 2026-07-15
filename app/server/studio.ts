@@ -6618,6 +6618,7 @@ export async function createStudioGenerationJob(
   user: StudioUser,
   options?: {
     addWatermark?: boolean;
+    aiVideoGenerateAudioEnabled?: boolean;
     brandChanged?: boolean;
     clearBranding?: boolean;
     brandLogoAssetId?: number;
@@ -6653,6 +6654,8 @@ export async function createStudioGenerationJob(
 
   const normalizedPrompt = normalizePrompt(prompt);
   const normalizedVideoMode = normalizeStudioVideoMode(options?.videoMode);
+  const normalizedAiVideoGenerateAudioEnabled =
+    normalizedVideoMode === "ai_video" && options?.aiVideoGenerateAudioEnabled === true;
   const normalizedCustomVideoFileName = String(options?.customVideoFileName ?? "").trim() || undefined;
   const normalizedCustomVideoFileMimeType = String(options?.customVideoFileMimeType ?? "").trim() || undefined;
   const normalizedCustomVideoFileDataUrl = String(options?.customVideoFileDataUrl ?? "").trim() || undefined;
@@ -6762,6 +6765,7 @@ export async function createStudioGenerationJob(
     requiresFreeWatermark || (typeof options?.addWatermark === "boolean" ? options.addWatermark : false);
   const normalizedVersionRootProjectAdId = normalizePositiveInteger(options?.versionRootProjectAdId) ?? undefined;
   const prefillSettings = normalizeExamplePrefillStudioSettings({
+    aiVideoGenerateAudioEnabled: normalizedAiVideoGenerateAudioEnabled,
     brandText: normalizedBrandText,
     language: normalizedLanguage,
     musicType: normalizedMusicType,
@@ -7061,6 +7065,7 @@ export async function createStudioGenerationJob(
         subtitle_color: normalizedSubtitleColorId,
         subtitle_style: normalizedSubtitleStyleId,
         video_mode: normalizedVideoMode,
+        ai_video_generate_audio: normalizedAiVideoGenerateAudioEnabled,
         video_mode_changed: Boolean(options?.videoModeChanged),
         voice_type: isVoiceEnabled ? undefined : "none",
         voice_code: normalizedVoiceId,

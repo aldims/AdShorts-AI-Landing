@@ -33610,6 +33610,89 @@ html.platform-windows .studio-voice-selector__menu {
     rgba(255, 255, 255, 0.04);
 }
 
+.studio-video-selector__audio-toggle {
+  appearance: none;
+  -webkit-appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid rgba(56, 189, 248, 0.18);
+  border-radius: 13px;
+  background: rgba(56, 189, 248, 0.06);
+  color: white;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.studio-video-selector__audio-toggle:hover {
+  border-color: rgba(125, 211, 252, 0.32);
+  background: rgba(56, 189, 248, 0.1);
+}
+
+.studio-video-selector__audio-toggle:focus-visible {
+  outline: 2px solid rgba(125, 211, 252, 0.78);
+  outline-offset: 2px;
+}
+
+.studio-video-selector__audio-toggle-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.studio-video-selector__audio-toggle-copy strong {
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.studio-video-selector__audio-toggle-copy small {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.68rem;
+  line-height: 1.35;
+}
+
+.studio-video-selector__audio-toggle-control {
+  position: relative;
+  flex: 0 0 auto;
+  width: 38px;
+  height: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.09);
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.studio-video-selector__audio-toggle-control span {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.76);
+  box-shadow: 0 2px 7px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s ease, background-color 0.2s ease;
+}
+
+.studio-video-selector__audio-toggle.is-enabled {
+  border-color: rgba(56, 189, 248, 0.34);
+  background: rgba(56, 189, 248, 0.14);
+}
+
+.studio-video-selector__audio-toggle.is-enabled .studio-video-selector__audio-toggle-control {
+  border-color: rgba(125, 211, 252, 0.58);
+  background: linear-gradient(135deg, #38bdf8, #6366f1);
+}
+
+.studio-video-selector__audio-toggle.is-enabled .studio-video-selector__audio-toggle-control span {
+  background: #fff;
+  transform: translateX(16px);
+}
+
 .studio-video-selector__custom {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

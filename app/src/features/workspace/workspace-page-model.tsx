@@ -108,6 +108,7 @@ export type Props = {
 
 export type WorkspaceGenerateOptions = {
   addWatermark?: boolean;
+  aiVideoGenerateAudioEnabled?: boolean;
   brandChanged?: boolean;
   clearBranding?: boolean;
   brandLogoFile?: StudioBrandLogoFile | null;

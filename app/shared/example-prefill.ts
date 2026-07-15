@@ -19,6 +19,7 @@ export type ExamplePrefillStudioMusicType =
 export type ExamplePrefillStudioVideoMode = "ai_photo" | "ai_video" | "custom" | "standard";
 
 export type ExamplePrefillStudioSettings = {
+  aiVideoGenerateAudioEnabled?: boolean;
   brandText?: string;
   language?: ExamplePrefillStudioLanguage;
   musicType?: ExamplePrefillStudioMusicType;
@@ -54,6 +55,10 @@ export const normalizeExamplePrefillStudioSettings = (
   const videoMode = normalizeText(payload.videoMode);
   const voiceId = normalizeText(payload.voiceId);
   const brandText = normalizeText(payload.brandText);
+
+  if (typeof payload.aiVideoGenerateAudioEnabled === "boolean") {
+    settings.aiVideoGenerateAudioEnabled = payload.aiVideoGenerateAudioEnabled;
+  }
 
   if (isSupportedLocale(language)) {
     settings.language = language;

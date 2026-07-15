@@ -1159,6 +1159,7 @@ const parseStudioGenerateMultipartBody = async (req: express.Request) => {
 
   return {
     addWatermark: getFormDataOptionalBoolean(formData, "addWatermark"),
+    aiVideoGenerateAudioEnabled: getFormDataBoolean(formData, "aiVideoGenerateAudioEnabled", false),
     brandChanged: getFormDataOptionalBoolean(formData, "brandChanged"),
     clearBranding: getFormDataOptionalBoolean(formData, "clearBranding"),
     brandLogoAssetId: normalizeRequestPositiveInteger(getFormDataString(formData, "brandLogoAssetId")),
@@ -4058,6 +4059,7 @@ app.post("/api/studio/generate", async (req, res) => {
       ? await parseStudioGenerateMultipartBody(req)
       : {
         addWatermark: typeof req.body?.addWatermark === "boolean" ? req.body.addWatermark : undefined,
+        aiVideoGenerateAudioEnabled: req.body?.aiVideoGenerateAudioEnabled === true,
         brandChanged: typeof req.body?.brandChanged === "boolean" ? req.body.brandChanged : undefined,
         clearBranding: typeof req.body?.clearBranding === "boolean" ? req.body.clearBranding : undefined,
         brandLogoAssetId: normalizeRequestPositiveInteger(req.body?.brandLogoAssetId),
@@ -4096,6 +4098,7 @@ app.post("/api/studio/generate", async (req, res) => {
         voiceId: typeof req.body?.voiceId === "string" ? req.body.voiceId.trim() : "",
       };
   const prompt = requestBody.prompt;
+  const aiVideoGenerateAudioEnabled = requestBody.aiVideoGenerateAudioEnabled;
   const addWatermark = requestBody.addWatermark;
   const brandChanged = requestBody.brandChanged;
   const clearBranding = requestBody.clearBranding;
@@ -4197,6 +4200,7 @@ app.post("/api/studio/generate", async (req, res) => {
   try {
     const job = await createStudioGenerationJob(prompt, session.user, {
       addWatermark: effectiveAddWatermark,
+      aiVideoGenerateAudioEnabled,
       brandChanged: effectiveBrandChanged,
       clearBranding: effectiveClearBranding,
       brandLogoFileDataUrl,

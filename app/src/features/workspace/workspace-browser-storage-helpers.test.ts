@@ -116,9 +116,13 @@ describe("studio create settings storage", () => {
   });
 
   it("persists the full AI video mode for the current account", () => {
-    persistStudioCreateSettings(" User@Example.Test ", { videoMode: "ai_video" });
+    persistStudioCreateSettings(" User@Example.Test ", {
+      aiVideoGenerateAudioEnabled: true,
+      videoMode: "ai_video",
+    });
 
     expect(readStoredStudioCreateSettings("user@example.test")?.videoMode).toBe("ai_video");
+    expect(readStoredStudioCreateSettings("user@example.test")?.aiVideoGenerateAudioEnabled).toBe(true);
     expect(readStoredStudioCreateSettings("other@example.test")).toBeNull();
   });
 });

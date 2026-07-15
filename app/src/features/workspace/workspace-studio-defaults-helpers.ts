@@ -113,6 +113,7 @@ export const getWorkspaceInitialStudioDefaults = (
 };
 
 export type WorkspaceExamplePrefillInitialStudioState = {
+  aiVideoGenerateAudioEnabled: boolean;
   brandText: string;
   language: StudioLanguage;
   musicType: StudioMusicType;
@@ -168,6 +169,10 @@ export const resolveWorkspaceExamplePrefillInitialStudioState = (options: {
   const subtitleEnabled = voiceEnabled && (typeof settings?.subtitleEnabled === "boolean" ? settings.subtitleEnabled : true);
 
   return {
+    aiVideoGenerateAudioEnabled:
+      typeof settings?.aiVideoGenerateAudioEnabled === "boolean"
+        ? settings.aiVideoGenerateAudioEnabled
+        : false,
     brandText,
     language,
     musicType: resolveWorkspaceExamplePrefillInitialMusicType(settings),

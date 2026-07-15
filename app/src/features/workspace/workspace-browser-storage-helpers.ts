@@ -19,6 +19,7 @@ const getStudioWelcomeCardDismissStorageKey = (owner: string) =>
   `${STUDIO_WELCOME_CARD_DISMISS_STORAGE_KEY_PREFIX}${owner}`;
 
 export type StoredStudioCreateSettings = {
+  aiVideoGenerateAudioEnabled?: boolean;
   language?: string;
   musicName?: string | null;
   musicType?: string;
@@ -109,6 +110,7 @@ const normalizeStoredStudioCreateSettings = (value: unknown): StoredStudioCreate
   const source = value as Record<string, unknown>;
   const voiceIdsByLanguage = normalizeStoredStudioCreateVoiceIdsByLanguage(source.voiceIdsByLanguage);
   const settings: StoredStudioCreateSettings = {
+    aiVideoGenerateAudioEnabled: normalizeStoredStudioCreateBoolean(source.aiVideoGenerateAudioEnabled),
     language: normalizeStoredStudioCreateString(source.language),
     musicName: normalizeStoredStudioCreateString(source.musicName) ?? null,
     musicType: normalizeStoredStudioCreateString(source.musicType),
