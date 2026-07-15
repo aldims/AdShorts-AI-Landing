@@ -233,6 +233,24 @@ describe("WorkspaceSegmentTimelineDurationMenu", () => {
     expect(screen.queryByRole("button", { name: /Сохранить/ })).toBeNull();
   });
 
+  it("separates extension settings from the primary generation action", () => {
+    render(
+      <WorkspaceSegmentTimelineDurationMenu
+        {...baseDurationProps}
+        durationSwitch={<div>Seedance controls</div>}
+      />,
+    );
+
+    expect(screen.getByText("Параметры продления")).toBeTruthy();
+    expect(screen.getByText("Настройте длительность и звук нового фрагмента")).toBeTruthy();
+    expect(screen.getByText("Seedance controls")).toBeTruthy();
+    expect(
+      document
+        .querySelector(".studio-segment-editor__timeline-duration-generation-footer")
+        ?.contains(screen.getByRole("button", { name: /Продлить с ИИ на 5с/ })),
+    ).toBe(true);
+  });
+
   it("allows custom video trim duration alongside video and voiceover presets", () => {
     const onApplyDuration = vi.fn(() => ({ duration: 7 }));
     const onClose = vi.fn();
