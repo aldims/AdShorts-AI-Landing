@@ -4585,6 +4585,36 @@ describe("workspace segment editor project voiceover timeline", () => {
     ).toBe(false);
   });
 
+  it("does not reuse project TTS when only the global voice language changed", () => {
+    const segment = createProjectVoiceoverSegment({
+      voiceSourceDuration: 4,
+      voiceSourceEndTime: 4,
+      voiceSourceStartTime: 0,
+    });
+    const baselineSession = createProjectVoiceoverDraft([segment]);
+    const unchangedSession = {
+      ...baselineSession,
+      finalVideoStale: true,
+    };
+    const englishSession = {
+      ...unchangedSession,
+      language: "en" as const,
+    };
+
+    expect(
+      canReuseWorkspaceSegmentProjectTimelineVoiceover(segment, unchangedSession, {
+        baselineSession,
+        isGlobalVoiceEdited: false,
+      }),
+    ).toBe(true);
+    expect(
+      canReuseWorkspaceSegmentProjectTimelineVoiceover(segment, englishSession, {
+        baselineSession,
+        isGlobalVoiceEdited: false,
+      }),
+    ).toBe(false);
+  });
+
   it("does not use the project TTS timeline when voiceover metadata conflicts with the current scene", () => {
     const segment = createProjectVoiceoverSegment({
       duration: 5,

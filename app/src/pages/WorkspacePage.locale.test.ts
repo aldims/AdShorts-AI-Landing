@@ -1834,6 +1834,26 @@ describe("WorkspacePage segment editor draft persistence", () => {
     ).toBe(draft);
   });
 
+  it("treats a voice language change as a global Shorts edit when the voice id is unchanged", () => {
+    const segment = createDraftSegment({ index: 0 });
+    const baseline = {
+      ...createDraftSession(segment),
+      language: "ru" as const,
+      voiceType: "Alexander",
+    };
+    const draft = {
+      ...baseline,
+      language: "en" as const,
+    };
+
+    expect(buildWorkspaceSegmentEditorChangeChecklist(draft, baseline)).toEqual([
+      expect.objectContaining({
+        kind: "global",
+        resetSettingIds: ["voice"],
+      }),
+    ]);
+  });
+
   it("does not classify a concurrent custom-video replacement as duration-only drift", () => {
     const baselineSegment = createDraftSegment({
       duration: 4,

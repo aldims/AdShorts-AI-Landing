@@ -6,7 +6,7 @@ import {
   getStudioCustomVideoFileIdentityKey,
   getWorkspaceSegmentCurrentVisualIdentityKey,
   getWorkspaceSegmentCustomAssetId,
-  getWorkspaceSegmentEditorProjectVoiceType,
+  getWorkspaceSegmentEditorSessionLanguage,
   getWorkspaceSegmentEffectiveVoiceEnabled,
   getWorkspaceSegmentEffectiveVoiceId,
   getWorkspaceSegmentEditorMissingVisualSceneNumbers,
@@ -15,7 +15,9 @@ import {
   getWorkspaceSegmentSubtitleStyleOverrideId,
   getWorkspaceSegmentSubtitleTypeOverrideId,
   getWorkspaceSegmentVoiceOverrideId,
+  getWorkspaceSegmentVoiceLanguage,
   hasWorkspaceSegmentExplicitDraftVisual,
+  isWorkspaceSegmentEditorProjectVoiceSelectionEdited,
   isWorkspaceSegmentCurrentVisualDifferentFromOriginal,
   isWorkspaceSegmentDraftDurationEdited,
   isWorkspaceSegmentDraftTextEdited,
@@ -25,6 +27,7 @@ import {
   isWorkspaceSegmentVisualResetApplied,
   normalizeWorkspaceSegmentEditorSetting,
   normalizeWorkspaceSegmentEditorTextForCompare,
+  normalizeStudioLanguageValue,
   studioVoiceOptionsByLanguage,
 } from "./workspace-segment-editor";
 import { getStudioSubtitleStyleDisplayLabel } from "./workspace-subtitle-preview-helpers";
@@ -332,6 +335,7 @@ const getWorkspaceSegmentEditorSettingsSnapshot = (session?: WorkspaceSegmentEdi
     subtitleStyleId: subtitleEnabled ? normalizeWorkspaceSegmentEditorSetting(session?.subtitleStyle) ?? "modern" : null,
     voiceEnabled,
     voiceId: voiceEnabled ? normalizeWorkspaceSegmentEditorSetting(session?.voiceType) ?? "" : null,
+    voiceLanguage: voiceEnabled && session ? getWorkspaceSegmentEditorSessionLanguage(session) : null,
   };
 };
 
@@ -577,6 +581,9 @@ export const isWorkspaceSegmentDraftVoiceEdited = (
   const voiceOverrideChanged =
     normalizeInheritedVoiceOverride(getWorkspaceSegmentVoiceOverrideId(segment), options?.draftSession) !==
     normalizeInheritedVoiceOverride(getWorkspaceSegmentVoiceOverrideId(baselineSegment), options?.baselineSession);
+  const voiceLanguageOverrideChanged =
+    normalizeStudioLanguageValue(segment.voiceLanguage ?? segment.voice_language) !==
+    normalizeStudioLanguageValue(baselineSegment?.voiceLanguage ?? baselineSegment?.voice_language);
   const getSceneVoiceoverAssetKey = (
     asset: WorkspaceSegmentEditorDraftSegment["voiceoverAsset"],
     session?: Pick<WorkspaceSegmentEditorDraftSession, "ttsAssetId"> | null,
@@ -593,7 +600,7 @@ export const isWorkspaceSegmentDraftVoiceEdited = (
   const baselineVoiceoverAssetKey = getSceneVoiceoverAssetKey(baselineSegment?.voiceoverAsset ?? null, options?.baselineSession);
   const voiceoverAssetChanged = currentVoiceoverAssetKey !== baselineVoiceoverAssetKey;
 
-  if (voiceOverrideChanged || voiceoverAssetChanged) {
+  if (voiceOverrideChanged || voiceLanguageOverrideChanged || voiceoverAssetChanged) {
     return true;
   }
 
@@ -612,8 +619,8 @@ export const isWorkspaceSegmentEffectiveVoiceEdited = (
   segment: WorkspaceSegmentEditorDraftSegment,
   baselineSegment: WorkspaceSegmentEditorDraftSegment | null | undefined,
   options: {
-    baselineSession: Pick<WorkspaceSegmentEditorDraftSession, "voiceType"> | null | undefined;
-    draftSession: Pick<WorkspaceSegmentEditorDraftSession, "voiceType">;
+    baselineSession: Pick<WorkspaceSegmentEditorDraftSession, "language" | "voiceType"> | null | undefined;
+    draftSession: Pick<WorkspaceSegmentEditorDraftSession, "language" | "voiceType">;
   },
 ) => {
   const currentVoiceEnabled = getWorkspaceSegmentEffectiveVoiceEnabled(segment, options.draftSession);
@@ -632,7 +639,22 @@ export const isWorkspaceSegmentEffectiveVoiceEdited = (
   const baselineVoiceId = baselineSegment
     ? getWorkspaceSegmentEffectiveVoiceId(baselineSegment, options.baselineSession)
     : baselineProjectVoiceId;
-  return currentVoiceId !== baselineVoiceId;
+  if (currentVoiceId !== baselineVoiceId) {
+    return true;
+  }
+
+  const currentVoiceLanguage = getWorkspaceSegmentVoiceLanguage(
+    segment,
+    getWorkspaceSegmentEditorSessionLanguage(options.draftSession),
+  );
+  const baselineVoiceLanguage = getWorkspaceSegmentVoiceLanguage(
+    baselineSegment,
+    options.baselineSession
+      ? getWorkspaceSegmentEditorSessionLanguage(options.baselineSession)
+      : getWorkspaceSegmentEditorSessionLanguage({ language: "", voiceType: baselineVoiceId ?? "" }),
+  );
+
+  return currentVoiceLanguage !== baselineVoiceLanguage;
 };
 
 export const canReuseWorkspaceSegmentProjectTimelineVoiceover = (
@@ -645,10 +667,7 @@ export const canReuseWorkspaceSegmentProjectTimelineVoiceover = (
 ) => {
   const baselineSession = options?.baselineSession?.projectId === draft.projectId ? options.baselineSession : null;
   const baselineSegment = baselineSession?.segments.find((candidate) => candidate.index === segment.index) ?? null;
-  const isDraftGlobalVoiceEdited = Boolean(
-    baselineSession &&
-      getWorkspaceSegmentEditorProjectVoiceType(draft) !== getWorkspaceSegmentEditorProjectVoiceType(baselineSession),
-  );
+  const isDraftGlobalVoiceEdited = isWorkspaceSegmentEditorProjectVoiceSelectionEdited(draft, baselineSession);
   const isVoiceSettingsEdited = baselineSession
     ? isWorkspaceSegmentDraftVoiceEdited(segment, baselineSegment, {
         baselineSession,
@@ -1010,7 +1029,11 @@ export const buildWorkspaceSegmentEditorChangeChecklist = (
     resetSettingIds.push("subtitle");
   }
 
-  if (draftSettings.voiceEnabled !== baselineSettings.voiceEnabled || draftSettings.voiceId !== baselineSettings.voiceId) {
+  if (
+    draftSettings.voiceEnabled !== baselineSettings.voiceEnabled ||
+    draftSettings.voiceId !== baselineSettings.voiceId ||
+    draftSettings.voiceLanguage !== baselineSettings.voiceLanguage
+  ) {
     globalChanges.push(
       lowerCaseWorkspaceChecklistLabelPrefix(
         getWorkspaceSegmentEditorChecklistVoiceSettingsLabel(draftSettings, locale),

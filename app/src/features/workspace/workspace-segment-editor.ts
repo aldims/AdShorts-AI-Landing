@@ -1000,6 +1000,38 @@ export const getWorkspaceSegmentEditorSessionLanguage = (
   session: Pick<WorkspaceSegmentEditorSession, "language" | "voiceType">,
 ): StudioLanguage => normalizeStudioLanguageValue(session.language) ?? getStudioLanguageForVoiceId(session.voiceType) ?? "ru";
 
+export const isWorkspaceSegmentEditorProjectVoiceSelectionEdited = (
+  draft:
+    | Pick<WorkspaceSegmentEditorSession, "language" | "segments" | "ttsAssetId" | "voiceType">
+    | null
+    | undefined,
+  baseline:
+    | Pick<WorkspaceSegmentEditorSession, "language" | "segments" | "ttsAssetId" | "voiceType">
+    | null
+    | undefined,
+) => {
+  if (!draft || !baseline) {
+    return false;
+  }
+
+  const draftVoiceType = getWorkspaceSegmentEditorProjectVoiceType(draft);
+  const baselineVoiceType = getWorkspaceSegmentEditorProjectVoiceType(baseline);
+  const draftVoiceEnabled = Boolean(draftVoiceType && draftVoiceType !== "none");
+  const baselineVoiceEnabled = Boolean(baselineVoiceType && baselineVoiceType !== "none");
+
+  if (draftVoiceEnabled !== baselineVoiceEnabled) {
+    return true;
+  }
+  if (!draftVoiceEnabled) {
+    return false;
+  }
+
+  return (
+    draftVoiceType !== baselineVoiceType ||
+    getWorkspaceSegmentEditorSessionLanguage(draft) !== getWorkspaceSegmentEditorSessionLanguage(baseline)
+  );
+};
+
 export const studioVideoOptions: StudioVideoOption[] = [
   {
     id: "ai_photo",

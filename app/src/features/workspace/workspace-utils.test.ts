@@ -15,16 +15,28 @@ describe("workspace voice timeline edit display", () => {
 
     expect(
       isWorkspaceSegmentEffectiveVoiceEdited(segment, baselineSegment, {
-        baselineSession: { voiceType: "none" },
-        draftSession: { voiceType: "Misha" },
+        baselineSession: { language: "ru", voiceType: "none" },
+        draftSession: { language: "ru", voiceType: "Misha" },
       }),
     ).toBe(true);
     expect(
       isWorkspaceSegmentEffectiveVoiceEdited({ ...segment, voiceType: "none" }, baselineSegment, {
-        baselineSession: { voiceType: "none" },
-        draftSession: { voiceType: "Misha" },
+        baselineSession: { language: "ru", voiceType: "none" },
+        draftSession: { language: "ru", voiceType: "Misha" },
       }),
     ).toBe(false);
+  });
+
+  it("detects a global voice language change when both languages share the same voice id", () => {
+    const segment = { voiceType: null, voice_type: null, voiceoverVoiceType: null } as any;
+    const baselineSegment = { voiceType: null, voice_type: null, voiceoverVoiceType: null } as any;
+
+    expect(
+      isWorkspaceSegmentEffectiveVoiceEdited(segment, baselineSegment, {
+        baselineSession: { language: "ru", voiceType: "Alexander" },
+        draftSession: { language: "en", voiceType: "Alexander" },
+      }),
+    ).toBe(true);
   });
 
   it("keeps voice undo available while a reverted text change can be restored", () => {

@@ -214,7 +214,7 @@ import {
   getWorkspaceSegmentEditorEffectiveSubtitleSelection,
   getWorkspaceSegmentEditorGenerationRequiredCredits,
   getWorkspaceSegmentEditorDraftId,
-  getWorkspaceSegmentEditorProjectVoiceType,
+  isWorkspaceSegmentEditorProjectVoiceSelectionEdited,
   getWorkspaceSegmentEditorReservedSegmentIndexes,
   getWorkspaceSegmentEditorSessionLanguage,
   getWorkspaceSegmentEditorVisibleTimelineDisplayRange,
@@ -1516,8 +1516,10 @@ type SegmentTimelineGlobalVoiceDraft = {
 };
 
 type SegmentTimelineBulkVoiceTextEditSnapshot = {
+  language: WorkspaceSegmentEditorDraftSession["language"];
   segments: WorkspaceSegmentEditorDraftSegment[];
   ttsAssetId: WorkspaceSegmentEditorDraftSession["ttsAssetId"];
+  voiceType: WorkspaceSegmentEditorDraftSession["voiceType"];
 };
 
 type SegmentTimelineVoiceHistoryEntry = {
@@ -2736,13 +2738,31 @@ export function WorkspacePage({
       return;
     }
 
+    const restoredVoiceLanguage = getWorkspaceSegmentEditorSessionLanguage({
+      language: snapshot.language,
+      voiceType: snapshot.voiceType,
+    });
+    const restoredVoiceType = normalizeWorkspaceSegmentEditorSetting(snapshot.voiceType);
+    const restoredGlobalVoiceDraft: SegmentTimelineGlobalVoiceDraft = {
+      isEnabled: Boolean(restoredVoiceType && restoredVoiceType !== "none"),
+      language: restoredVoiceLanguage,
+      voiceId:
+        restoredVoiceType && restoredVoiceType !== "none"
+          ? restoredVoiceType
+          : getDefaultStudioVoiceId(restoredVoiceLanguage),
+    };
+    segmentTimelineGlobalVoiceDraftRef.current = restoredGlobalVoiceDraft;
+    setSegmentTimelineGlobalVoiceDraft(restoredGlobalVoiceDraft);
+
     const snapshotSegmentsByIndex = new Map(
       snapshot.segments.map((segment) => [segment.index, segment]),
     );
     let didRestoreSegment = false;
     const nextDraft = rebuildWorkspaceSegmentEditorDraftSessionTimeline({
       ...currentDraft,
+      language: snapshot.language,
       ttsAssetId: snapshot.ttsAssetId,
+      voiceType: snapshot.voiceType,
       segments: currentDraft.segments.map((segment) => {
         const snapshotSegment = snapshotSegmentsByIndex.get(segment.index);
         if (!snapshotSegment) {
@@ -2750,7 +2770,7 @@ export function WorkspacePage({
         }
 
         didRestoreSegment = true;
-        return restoreWorkspaceSegmentVoiceTextDraftSnapshot(segment, snapshotSegment, currentDraft.language || selectedLanguage);
+        return restoreWorkspaceSegmentVoiceTextDraftSnapshot(segment, snapshotSegment, restoredVoiceLanguage);
       }),
     });
 
@@ -7985,8 +8005,10 @@ export function WorkspacePage({
     !shouldSuppressSegmentEditorEmptyDraftChanges &&
       segmentEditorDraft &&
       segmentEditorChangeDisplayBaseSession &&
-      getWorkspaceSegmentEditorProjectVoiceType(segmentEditorDraft) !==
-        getWorkspaceSegmentEditorProjectVoiceType(segmentEditorChangeDisplayBaseSession),
+      isWorkspaceSegmentEditorProjectVoiceSelectionEdited(
+        segmentEditorDraft,
+        segmentEditorChangeDisplayBaseSession,
+      ),
   );
   const isSegmentTimelineGlobalSubtitleEdited = Boolean(
     !shouldSuppressSegmentEditorEmptyDraftChanges &&
@@ -14427,8 +14449,10 @@ export function WorkspacePage({
       !segmentTimelineBulkVoiceTextEditSnapshotRef.current
     ) {
       segmentTimelineBulkVoiceTextEditSnapshotRef.current = {
+        language: currentDraft.language,
         segments: currentDraft.segments.map((segment) => cloneWorkspaceSegmentEditorDraftSegment(segment, selectedLanguage)),
         ttsAssetId: currentDraft.ttsAssetId,
+        voiceType: currentDraft.voiceType,
       };
     }
 
@@ -25513,10 +25537,12 @@ export function WorkspacePage({
     let didCaptureSnapshot = false;
     if (!segmentTimelineBulkVoiceTextEditSnapshotRef.current) {
       segmentTimelineBulkVoiceTextEditSnapshotRef.current = {
+        language: currentProjectDraft.language,
         segments: currentProjectDraft.segments.map((segment) =>
           cloneWorkspaceSegmentEditorDraftSegment(segment, sourceLanguage),
         ),
         ttsAssetId: currentProjectDraft.ttsAssetId,
+        voiceType: currentProjectDraft.voiceType,
       };
       didCaptureSnapshot = true;
     }
@@ -25580,6 +25606,7 @@ export function WorkspacePage({
 
       updateSegmentEditorDraft((draft) => ({
         ...draft,
+        language,
         segments: draft.segments.map((segment, index) => {
           const currentSourceText = segment.textByLanguage?.[sourceLanguage] ?? sourceTexts[index] ?? segment.text;
           const currentSourceOriginalText =
