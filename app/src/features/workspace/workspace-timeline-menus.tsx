@@ -362,53 +362,37 @@ export function WorkspaceSegmentTimelineDurationMenu({
             />
             <div className="studio-segment-editor__timeline-duration-prompt-actions">
               <div className="studio-segment-editor__timeline-duration-action-cluster">
-                <div className="studio-segment-editor__timeline-duration-generation-settings">
-                  <div className="studio-segment-editor__timeline-duration-generation-heading">
-                    <strong>{workspaceText(locale, "Параметры продления", "Extension settings")}</strong>
-                    <span>
-                      {workspaceText(
-                        locale,
-                        "Настройте длительность и звук нового фрагмента",
-                        "Set the duration and sound for the new clip",
-                      )}
-                    </span>
-                  </div>
-                  <div className="studio-segment-editor__timeline-duration-generation-controls">
-                    {qualitySwitch}
-                    {durationSwitch}
-                  </div>
-                </div>
-                <div className="studio-segment-editor__timeline-duration-generation-footer">
-                  {shouldShowLoopedDurationSummary ? (
-                    <button
-                      className="studio-segment-editor__timeline-duration-keep-button"
-                      type="button"
-                      onClick={onClose}
-                    >
-                      {workspaceText(locale, "Оставить с повтором", "Keep replaying")}
-                    </button>
-                  ) : null}
+                {qualitySwitch}
+                {durationSwitch}
+                {shouldShowLoopedDurationSummary ? (
                   <button
-                    className="studio-segment-editor__timeline-duration-extend-button"
+                    className="studio-segment-editor__timeline-duration-keep-button"
                     type="button"
-                    disabled={isExtensionDisabled}
-                    title={
-                      canRequestAiExtension
-                        ? workspaceText(locale, "Сгенерировать ИИ-продление", "Generate AI extension")
-                        : workspaceText(locale, "Нет доступного кадра для ИИ-продления", "No available frame for AI extension")
-                    }
-                    onClick={onAiExtensionClick}
+                    onClick={onClose}
                   >
-                    {isExtensionPending ? (
-                      <span className="studio-segment-editor__prompt-action-spinner" aria-hidden="true"></span>
-                    ) : (
-                      <>
-                        <span>{extensionButtonLabel}</span>
-                        <small>{extensionCreditLabel}</small>
-                      </>
-                    )}
+                    {workspaceText(locale, "Оставить с повтором", "Keep replaying")}
                   </button>
-                </div>
+                ) : null}
+                <button
+                  className="studio-segment-editor__timeline-duration-extend-button"
+                  type="button"
+                  disabled={isExtensionDisabled}
+                  title={
+                    canRequestAiExtension
+                      ? workspaceText(locale, "Сгенерировать ИИ-продление", "Generate AI extension")
+                      : workspaceText(locale, "Нет доступного кадра для ИИ-продления", "No available frame for AI extension")
+                  }
+                  onClick={onAiExtensionClick}
+                >
+                  {isExtensionPending ? (
+                    <span className="studio-segment-editor__prompt-action-spinner" aria-hidden="true"></span>
+                  ) : (
+                    <>
+                      <span>{extensionButtonLabel}</span>
+                      <small>{extensionCreditLabel}</small>
+                    </>
+                  )}
+                </button>
               </div>
             </div>
           </div>

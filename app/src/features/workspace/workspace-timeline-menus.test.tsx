@@ -233,7 +233,7 @@ describe("WorkspaceSegmentTimelineDurationMenu", () => {
     expect(screen.queryByRole("button", { name: /Сохранить/ })).toBeNull();
   });
 
-  it("separates extension settings from the primary generation action", () => {
+  it("keeps extension settings and the primary action in one concise row", () => {
     render(
       <WorkspaceSegmentTimelineDurationMenu
         {...baseDurationProps}
@@ -241,12 +241,16 @@ describe("WorkspaceSegmentTimelineDurationMenu", () => {
       />,
     );
 
-    expect(screen.getByText("Параметры продления")).toBeTruthy();
-    expect(screen.getByText("Настройте длительность и звук нового фрагмента")).toBeTruthy();
-    expect(screen.getByText("Seedance controls")).toBeTruthy();
+    expect(screen.queryByText("Параметры продления")).toBeNull();
+    expect(screen.queryByText("Настройте длительность и звук нового фрагмента")).toBeNull();
     expect(
       document
-        .querySelector(".studio-segment-editor__timeline-duration-generation-footer")
+        .querySelector(".studio-segment-editor__timeline-duration-action-cluster")
+        ?.contains(screen.getByText("Seedance controls")),
+    ).toBe(true);
+    expect(
+      document
+        .querySelector(".studio-segment-editor__timeline-duration-action-cluster")
         ?.contains(screen.getByRole("button", { name: /Продлить с ИИ на 5с/ })),
     ).toBe(true);
   });

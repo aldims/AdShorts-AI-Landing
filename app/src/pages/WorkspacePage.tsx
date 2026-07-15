@@ -31417,7 +31417,6 @@ export function WorkspacePage({
               disabled: isSegmentTimelineDurationAiExtensionPending,
               durationMode: segmentTimelineDurationExtensionSelection.durationMode,
               generateAudio: isSegmentSeedanceGenerateAudioEnabled,
-              layout: "panel",
               onDurationChange: setSelectedSegmentPhotoAnimationDurationSeconds,
               onDurationModeChange: setSegmentSeedanceDurationMode,
               onGenerateAudioChange: setIsSegmentSeedanceGenerateAudioEnabled,

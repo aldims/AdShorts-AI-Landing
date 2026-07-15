@@ -68,13 +68,4 @@ describe("renderWorkspaceSegmentSeedanceSettings", () => {
     expect(soundCopy?.textContent).toBe("Звук+5 ⚡");
   });
 
-  it("explains duration and sound in the extension panel layout", () => {
-    renderSettings({ layout: "panel", voiceoverDurationSeconds: 0, voiceoverMatched: true });
-
-    expect(screen.getByText("Длительность фрагмента")).toBeTruthy();
-    expect(screen.getByText("4–12 сек или по озвучке")).toBeTruthy();
-    expect(screen.getByText("Звук в видео")).toBeTruthy();
-    expect(screen.getByText("1 кредит / сек")).toBeTruthy();
-    expect(screen.getByRole("switch", { name: /Добавить звук/ })).toBeTruthy();
-  });
 });
