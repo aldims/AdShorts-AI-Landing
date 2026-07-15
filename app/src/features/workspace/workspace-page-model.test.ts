@@ -13,7 +13,7 @@ import {
   resolveWorkspaceRetainedScenesDraftState,
   resolveWorkspaceScenesModeSwitchTarget,
   shouldDisableWorkspaceScenesCreateMode,
-  shouldShowStudioGenerationError,
+  shouldNotifyStudioGenerationError,
   shouldShowWorkspaceStudioIdeaEmptyState,
   shouldShowWorkspaceStudioWelcomeCard,
   shouldUseWorkspaceStudioExpandedPromptLayout,
@@ -153,11 +153,12 @@ describe("studio generation visibility", () => {
     expect(isStudioGenerationUserFacing(true, "idle")).toBe(false);
   });
 
-  it("does not show stale errors while a generation is visible", () => {
-    expect(shouldShowStudioGenerationError("Previous failure", true, "studio")).toBe(false);
-    expect(shouldShowStudioGenerationError("Previous failure", true, "segment-editor")).toBe(false);
-    expect(shouldShowStudioGenerationError("Previous failure", true, "bootstrap")).toBe(false);
-    expect(shouldShowStudioGenerationError("Previous failure", false, "idle")).toBe(true);
+  it("notifies about errors only after generation stops", () => {
+    expect(shouldNotifyStudioGenerationError("Previous failure", true, "studio")).toBe(false);
+    expect(shouldNotifyStudioGenerationError("Previous failure", true, "segment-editor")).toBe(false);
+    expect(shouldNotifyStudioGenerationError("Previous failure", true, "bootstrap")).toBe(false);
+    expect(shouldNotifyStudioGenerationError("Previous failure", false, "idle")).toBe(true);
+    expect(shouldNotifyStudioGenerationError(null, false, "idle")).toBe(false);
   });
 });
 
@@ -241,7 +242,6 @@ describe("studio welcome card", () => {
   const newUserStudio = {
     createMode: "default" as const,
     hasCreatedVideo: false,
-    hasGenerationError: false,
     isBootstrapPending: false,
     isClosed: false,
     isCreateView: true,
@@ -267,10 +267,9 @@ describe("studio welcome card", () => {
     ).toBe(true);
   });
 
-  it("does not cover loading, generation, errors, or another creation mode", () => {
+  it("does not cover loading, generation, or another creation mode", () => {
     expect(shouldShowWorkspaceStudioWelcomeCard({ ...newUserStudio, isBootstrapPending: true })).toBe(false);
     expect(shouldShowWorkspaceStudioWelcomeCard({ ...newUserStudio, isGenerationVisible: true })).toBe(false);
-    expect(shouldShowWorkspaceStudioWelcomeCard({ ...newUserStudio, hasGenerationError: true })).toBe(false);
     expect(shouldShowWorkspaceStudioWelcomeCard({ ...newUserStudio, createMode: "segment-editor" })).toBe(false);
   });
 });

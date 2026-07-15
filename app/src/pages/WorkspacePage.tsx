@@ -624,7 +624,7 @@ import {
   resolveWorkspaceRetainedScenesDraftState,
   resolveWorkspaceScenesModeSwitchTarget,
   shouldDisableWorkspaceScenesCreateMode,
-  shouldShowStudioGenerationError,
+  shouldNotifyStudioGenerationError,
   shouldShowWorkspaceStudioIdeaEmptyState,
   shouldShowWorkspaceStudioWelcomeCard,
   shouldUseWorkspaceStudioExpandedPromptLayout,
@@ -1251,6 +1251,7 @@ export type {
 const SEGMENT_EDITOR_CREATE_SHORTS_PREPARING_JOB_ID = "__segment_editor_create_shorts_preparing__";
 const FIRST_VIDEO_PAYMENT_PROFILE_POLL_ATTEMPTS = 6;
 const FIRST_VIDEO_PAYMENT_PROFILE_POLL_INTERVAL_MS = 2_000;
+const STUDIO_GENERATION_ERROR_TOAST_DURATION_MS = 5_000;
 
 export const resolveWorkspaceSegmentDurationMenuTrimLabels = (options: {
   currentVideoDurationSeconds: number | null | undefined;
@@ -2752,6 +2753,23 @@ export function WorkspacePage({
     },
     [],
   );
+
+  useEffect(() => {
+    if (!shouldNotifyStudioGenerationError(generateError, isGenerating, generationUiSource)) {
+      return undefined;
+    }
+
+    const errorMessage = generateError;
+    showStudioToast(errorMessage, {
+      durationMs: STUDIO_GENERATION_ERROR_TOAST_DURATION_MS,
+      kind: "error",
+    });
+    const timer = window.setTimeout(() => {
+      setGenerateError((currentError) => (currentError === errorMessage ? null : currentError));
+    }, STUDIO_GENERATION_ERROR_TOAST_DURATION_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [generateError, generationUiSource, isGenerating, showStudioToast]);
 
   useEffect(() => {
     if (!segmentEditorVideoError) {
@@ -5824,14 +5842,12 @@ export function WorkspacePage({
     : isEditHideEnabled
       ? workspaceText(locale, "Режим «По сценам» скоро будет доступен", "Scenes mode is coming soon")
       : undefined;
-  const shouldShowGenerateError = shouldShowStudioGenerationError(generateError, isGenerating, generationUiSource);
   const hasCreatedStudioVideo =
     Boolean(generatedVideoPlaybackUrl) ||
     projects.some((project) => project.status === "ready" && Boolean(String(project.videoUrl ?? "").trim()));
   const shouldShowStudioWelcomeCard = shouldShowWorkspaceStudioWelcomeCard({
     createMode,
     hasCreatedVideo: hasCreatedStudioVideo,
-    hasGenerationError: shouldShowGenerateError,
     isBootstrapPending: isWorkspaceBootstrapPending,
     isClosed: isStudioWelcomeCardClosed,
     isCreateView: studioView === "create",
@@ -5861,8 +5877,7 @@ export function WorkspacePage({
     createMode === "segment-editor" ||
     Boolean(studioInlinePreview) ||
     isWorkspaceBootstrapPending ||
-    isUserFacingGeneration ||
-    shouldShowGenerateError;
+    isUserFacingGeneration;
   const previewModalPrimaryVideoUrl = isProjectPreviewModalOpen
     ? projectPreviewModal?.videoUrl ?? null
     : isPreviewModalOpen
@@ -36482,11 +36497,6 @@ export function WorkspacePage({
             ) : null}
 
               <div className={`studio-canvas-content${createMode === "segment-editor" ? " is-segment-editor" : ""}`}>
-                {createMode === "default" && generateError && visibleGeneratedVideo ? (
-                  <div className="studio-segment-editor__status is-error" role="status" aria-live="polite">
-                    {generateError}
-                  </div>
-                ) : null}
                 {segmentEditorError ? (
                   <div className="studio-segment-editor__status is-error" role="status" aria-live="polite">
                     {segmentEditorError}
@@ -37249,17 +37259,12 @@ export function WorkspacePage({
                   </div>
                 ) : (
                   <div
-                    className={`studio-canvas-preview__placeholder${isWorkspaceBootstrapPending ? " is-bootstrap-loading" : ""}${isUserFacingGeneration ? " is-generating" : ""}${shouldShowGenerateError ? " is-error" : ""}${shouldShowStudioWelcomeCard ? " has-welcome-card" : ""}`}
+                    className={`studio-canvas-preview__placeholder${isWorkspaceBootstrapPending ? " is-bootstrap-loading" : ""}${isUserFacingGeneration ? " is-generating" : ""}${shouldShowStudioWelcomeCard ? " has-welcome-card" : ""}`}
                     role={isUserFacingGeneration || isWorkspaceBootstrapPending ? "status" : undefined}
                     aria-live={isUserFacingGeneration || isWorkspaceBootstrapPending ? "polite" : undefined}
                   >
                     {isUserFacingGeneration ? (
                       renderStudioShortsGenerationStatus()
-                    ) : shouldShowGenerateError ? (
-                      <>
-                        <strong>{workspaceText(locale, "Ошибка генерации", "Generation error")}</strong>
-                        <p>{generateError}</p>
-                      </>
                     ) : isWorkspaceBootstrapPending ? (
                       <>
                         <span className="studio-canvas-preview__spinner" aria-hidden="true"></span>

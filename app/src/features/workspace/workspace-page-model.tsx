@@ -176,11 +176,11 @@ export const shouldDisableWorkspaceScenesCreateMode = (options: {
   isGenerationVisible: boolean;
 }) => options.isEditHidden || options.isGenerationVisible;
 
-export const shouldShowStudioGenerationError = (
+export const shouldNotifyStudioGenerationError = (
   generateError: string | null | undefined,
   isGenerating: boolean,
   generationUiSource: StudioGenerationUiSource,
-) => Boolean(generateError) && !isStudioGenerationUserFacing(isGenerating, generationUiSource);
+): generateError is string => Boolean(generateError) && !isStudioGenerationUserFacing(isGenerating, generationUiSource);
 
 export const shouldUseWorkspaceStudioExpandedPromptLayout = (options: {
   hasComposerSourceIdea: boolean;
@@ -1383,7 +1383,6 @@ export const shouldShowWorkspaceStartFreshScenesAction = (options: {
 export const shouldShowWorkspaceStudioWelcomeCard = (options: {
   createMode: StudioCreateMode;
   hasCreatedVideo: boolean;
-  hasGenerationError: boolean;
   isBootstrapPending: boolean;
   isClosed: boolean;
   isCreateView: boolean;
@@ -1395,7 +1394,6 @@ export const shouldShowWorkspaceStudioWelcomeCard = (options: {
   options.createMode === "default" &&
   !options.isBootstrapPending &&
   !options.isGenerationVisible &&
-  !options.hasGenerationError &&
   (options.isManuallyOpened || (!options.hasCreatedVideo && !options.isClosed && !options.isDismissed));
 
 export const shouldShowWorkspaceStudioIdeaEmptyState = (options: {
