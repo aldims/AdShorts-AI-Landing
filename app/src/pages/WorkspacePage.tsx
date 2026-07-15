@@ -426,6 +426,7 @@ import {
   getStudioRouteSection,
   getStudioRouteState,
   getStudioViewFromRouteSection,
+  resolveWorkspaceSegmentEditorFreshRouteAttemptedKeyAfterLoad,
   resolveWorkspaceSegmentEditorScratchDraftOpenSource,
   resolveWorkspaceSegmentEditorPendingRouteSync,
   shouldPreserveWorkspaceSegmentEditorExplicitReset,
@@ -1141,6 +1142,7 @@ export {
 export {
   resolveWorkspaceSegmentEditorScratchDraftOpenSource,
   resolveWorkspaceSegmentEditorPendingRouteSync,
+  resolveWorkspaceSegmentEditorFreshRouteAttemptedKeyAfterLoad,
   shouldPreserveWorkspaceSegmentEditorExplicitReset,
   shouldResetWorkspaceSegmentEditorConsumedSourceProject,
   shouldRequestWorkspaceSegmentEditorOpenRouteRefresh,
@@ -12383,14 +12385,26 @@ export function WorkspacePage({
         initialSegmentMode: "route",
         openDraft: false,
         replaceRoute: true,
-      }).then(() => {
+      }).then((draft) => {
         if (segmentEditorFreshRouteFetchKeyRef.current === restoreKey) {
           segmentEditorFreshRouteFetchKeyRef.current = null;
         }
+        segmentEditorFreshRouteAttemptedKeyRef.current =
+          resolveWorkspaceSegmentEditorFreshRouteAttemptedKeyAfterLoad(
+            restoreKey,
+            segmentEditorFreshRouteAttemptedKeyRef.current,
+            draft !== null,
+          );
       }).catch(() => {
         if (segmentEditorFreshRouteFetchKeyRef.current === restoreKey) {
           segmentEditorFreshRouteFetchKeyRef.current = null;
         }
+        segmentEditorFreshRouteAttemptedKeyRef.current =
+          resolveWorkspaceSegmentEditorFreshRouteAttemptedKeyAfterLoad(
+            restoreKey,
+            segmentEditorFreshRouteAttemptedKeyRef.current,
+            false,
+          );
       });
     };
 
@@ -27273,6 +27287,22 @@ export function WorkspacePage({
           normalizeWorkspaceSegmentEditorTextForCompare(currentDraftSegment.text) ===
             normalizeWorkspaceSegmentEditorTextForCompare(segment.text);
         if (!hasSameGeneratedVoiceover) {
+          return;
+        }
+
+        if (
+          shouldIgnoreWorkspaceSegmentMeasuredVoiceoverDuration(
+            currentDraftSegment,
+            currentDraft,
+            sourceUrl,
+            nextDurationSeconds,
+          )
+        ) {
+          writeSegmentEditorVoiceDurationDebugTrace("measure.skip-render-tail", {
+            durationSeconds: nextDurationSeconds,
+            segmentIndex: segment.index,
+            sourceUrl,
+          });
           return;
         }
 

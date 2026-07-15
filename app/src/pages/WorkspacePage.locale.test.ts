@@ -152,6 +152,7 @@ import {
   resolveWorkspaceSegmentEditorChangeDisplayBaselineSession,
   resolveWorkspaceSegmentEditorCreateShortsPreflight,
   resolveWorkspaceSegmentEditorLoadedBaselineSession,
+  resolveWorkspaceSegmentEditorFreshRouteAttemptedKeyAfterLoad,
   resolveWorkspaceSegmentEditorPendingRouteSync,
   resolveWorkspaceSegmentEditorScratchDraftOpenSource,
   shouldResetWorkspaceSegmentEditorConsumedSourceProject,
@@ -3105,6 +3106,18 @@ describe("WorkspacePage studio route transitions", () => {
     expect(shouldRequestWorkspaceSegmentEditorFreshRouteSession("3731:1", null, "3731:1")).toBe(false);
     expect(shouldRequestWorkspaceSegmentEditorFreshRouteSession("3731:2", null, "3731:1")).toBe(true);
     expect(shouldRequestWorkspaceSegmentEditorFreshRouteSession("", null, null)).toBe(false);
+  });
+
+  it("allows an aborted fresh edit-route session to retry", () => {
+    expect(
+      resolveWorkspaceSegmentEditorFreshRouteAttemptedKeyAfterLoad("4230:0", "4230:0", false),
+    ).toBeNull();
+    expect(
+      resolveWorkspaceSegmentEditorFreshRouteAttemptedKeyAfterLoad("4230:0", "4230:0", true),
+    ).toBe("4230:0");
+    expect(
+      resolveWorkspaceSegmentEditorFreshRouteAttemptedKeyAfterLoad("4230:0", "4231:0", false),
+    ).toBe("4231:0");
   });
 
   it("keeps an explicit reset authoritative during a delayed server refresh", () => {

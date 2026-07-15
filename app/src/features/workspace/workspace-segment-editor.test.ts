@@ -1262,6 +1262,23 @@ describe("workspace segment editor visual and voiceover mismatch", () => {
     });
     const draft = createProjectVoiceoverDraft([segment]);
 
+    expect(
+      shouldIgnoreWorkspaceSegmentMeasuredVoiceoverDuration(
+        segment,
+        draft,
+        "/api/workspace/media-assets/9399",
+        7.22,
+      ),
+    ).toBe(true);
+    expect(
+      shouldIgnoreWorkspaceSegmentMeasuredVoiceoverDuration(
+        { ...segment, text: `${text} Обновлено.` },
+        draft,
+        "/api/workspace/media-assets/9399",
+        7.22,
+      ),
+    ).toBe(false);
+
     expect(getWorkspaceSegmentTimelineVoiceoverDurationInfo(segment, draft, { allowEstimated: false })).toEqual({
       durationSeconds: 6.98,
       source: "actual",

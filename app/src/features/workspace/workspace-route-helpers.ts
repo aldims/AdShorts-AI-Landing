@@ -99,6 +99,21 @@ export const shouldRequestWorkspaceSegmentEditorFreshRouteSession = (
   return inFlightRouteKey !== normalizedRestoreKey && attemptedRouteKey !== normalizedRestoreKey;
 };
 
+export const resolveWorkspaceSegmentEditorFreshRouteAttemptedKeyAfterLoad = (
+  restoreKey: string,
+  attemptedRouteKey: string | null,
+  didLoad: boolean,
+) => {
+  if (didLoad || attemptedRouteKey !== restoreKey) {
+    return attemptedRouteKey;
+  }
+
+  // An aborted route refresh must remain retryable. This is especially
+  // important when React verifies effect cleanup by aborting the first load:
+  // the stored draft is already visible, but its server timing is still stale.
+  return null;
+};
+
 export const shouldRequestWorkspaceSegmentEditorOpenRouteRefresh = (
   didReachPendingRoute: boolean,
   isSegmentEditorLoading: boolean,

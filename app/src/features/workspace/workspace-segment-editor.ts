@@ -5711,6 +5711,17 @@ export const shouldIgnoreWorkspaceSegmentMeasuredVoiceoverDuration = (
     return false;
   }
 
+  const resolvedSceneTimelineDurationSeconds = isWorkspaceSegmentVoiceoverAssetFresh(segment, session)
+    ? resolveWorkspaceSegmentSceneVoiceoverTimelineDurationSeconds(segment, normalizedMeasuredDurationSeconds)
+    : null;
+  if (
+    resolvedSceneTimelineDurationSeconds !== null &&
+    resolvedSceneTimelineDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS <
+      normalizedMeasuredDurationSeconds
+  ) {
+    return true;
+  }
+
   const knownVoiceoverDurationSeconds = getWorkspaceSegmentVoiceoverDurationSeconds(segment, session);
   if (
     knownVoiceoverDurationSeconds === null ||
