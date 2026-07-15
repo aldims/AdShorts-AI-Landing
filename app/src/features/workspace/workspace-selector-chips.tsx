@@ -546,7 +546,7 @@ export function StudioSubtitleSelectorChip({
 
               <div className="studio-subtitle-selector__section">
                 <div className="studio-subtitle-selector__section-head">
-                  <span>{locale === "en" ? "Examples" : "Примеры"}</span>
+                  <span>{locale === "en" ? "Example" : "Пример"}</span>
                 </div>
                 <div className="studio-subtitle-selector__examples">
                   {studioSubtitleExampleOptions.map((example) => {
@@ -1447,7 +1447,6 @@ export function StudioVideoSelectorChip({
                         aria-checked={selectedVideoMode === option.id}
                         onClick={() => {
                           onSelectVideoMode(option.id);
-                          setIsOpen(false);
                         }}
                       >
                         <span className="studio-video-selector__option-row">

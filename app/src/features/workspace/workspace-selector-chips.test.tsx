@@ -214,7 +214,7 @@ describe("StudioVoiceSelectorChip", () => {
 });
 
 describe("StudioVideoSelectorChip", () => {
-  it("selects the available AI video mode and closes the menu", () => {
+  it("selects the available AI video mode without closing the menu", () => {
     const onSelectVideoMode = vi.fn();
     render(
       <LocaleProvider locale="ru">
@@ -261,7 +261,7 @@ describe("StudioVideoSelectorChip", () => {
     fireEvent.click(aiVideoOption);
 
     expect(onSelectVideoMode).toHaveBeenCalledWith("ai_video");
-    expect(screen.queryByRole("menuitemradio", { name: /AI видео/ })).toBeNull();
+    expect(screen.getByRole("menuitemradio", { name: /AI видео/ })).toBeTruthy();
   });
 
   it("toggles generated sounds for the selected AI video mode", () => {
@@ -386,6 +386,8 @@ describe("StudioSubtitleSelectorChip", () => {
     fireEvent.click(trigger);
 
     expect(screen.getByRole("button", { name: /Современный\s*Универсальный стиль для Shorts\./ })).toBeTruthy();
+    expect(screen.getByText("Пример")).toBeTruthy();
+    expect(screen.queryByText("Примеры")).toBeNull();
   });
 
   it("shows English subtitle style, color and example copy in the English UI", () => {
@@ -413,6 +415,8 @@ describe("StudioSubtitleSelectorChip", () => {
 
     expect(screen.getByRole("button", { name: /Modern\s*Current default for Shorts in Manrope\./ })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Purple" })).toBeTruthy();
+    expect(screen.getByText("Example")).toBeTruthy();
+    expect(screen.queryByText("Examples")).toBeNull();
     expect(screen.getByRole("button", { name: "Subtitle example: Final call to action" })).toBeTruthy();
     expect(screen.getByText("Grab")).toBeTruthy();
     expect(screen.queryByText("Final call to action")).toBeNull();
