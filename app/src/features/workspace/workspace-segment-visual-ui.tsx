@@ -2,9 +2,12 @@ import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { createPortal } from "react-dom";
 import type { Locale } from "../../lib/i18n";
 import {
+  getStudioSegmentSeedanceAudioCreditCost,
   getStudioSegmentPhotoAnimationDurationOptions,
   normalizeStudioSegmentPhotoAnimationDurationSeconds,
+  resolveStudioSegmentSeedanceDurationSeconds,
   type StudioSegmentPhotoAnimationDurationSeconds,
+  type StudioSegmentSeedanceDurationMode,
   type StudioSegmentVisualQuality,
 } from "../../../shared/studio-credit-costs";
 import { workspaceText } from "./workspace-page-model";
@@ -35,6 +38,18 @@ export type WorkspaceSegmentPhotoAnimationDurationSwitchOptions = {
   onChange: (durationSeconds: StudioSegmentPhotoAnimationDurationSeconds) => void;
   quality: StudioSegmentVisualQuality;
   value: StudioSegmentPhotoAnimationDurationSeconds;
+};
+
+export type WorkspaceSegmentSeedanceSettingsOptions = {
+  className?: string;
+  disabled?: boolean;
+  durationMode: StudioSegmentSeedanceDurationMode;
+  generateAudio: boolean;
+  onDurationChange: (durationSeconds: StudioSegmentPhotoAnimationDurationSeconds) => void;
+  onDurationModeChange: (mode: StudioSegmentSeedanceDurationMode) => void;
+  onGenerateAudioChange: (generateAudio: boolean) => void;
+  value: StudioSegmentPhotoAnimationDurationSeconds;
+  voiceoverDurationSeconds?: number | null;
 };
 
 export const formatSegmentVisualCreditsLabel = (credits: number) => `${credits} ⚡`;
@@ -188,6 +203,97 @@ export const renderWorkspaceSegmentPhotoAnimationDurationSwitch = (
           );
         })}
       </div>
+    </div>
+  );
+};
+
+export const renderWorkspaceSegmentSeedanceSettings = (
+  locale: Locale,
+  options: WorkspaceSegmentSeedanceSettingsOptions,
+) => {
+  const normalizedManualDuration = normalizeStudioSegmentPhotoAnimationDurationSeconds("premium", options.value);
+  const effectiveDuration = resolveStudioSegmentSeedanceDurationSeconds({
+    durationMode: options.durationMode,
+    manualDurationSeconds: normalizedManualDuration,
+    voiceoverDurationSeconds: options.voiceoverDurationSeconds,
+  });
+  const voiceoverDuration = resolveStudioSegmentSeedanceDurationSeconds({
+    durationMode: "voiceover",
+    manualDurationSeconds: normalizedManualDuration,
+    voiceoverDurationSeconds: options.voiceoverDurationSeconds,
+  });
+  const hasVoiceover = Number.isFinite(Number(options.voiceoverDurationSeconds)) && Number(options.voiceoverDurationSeconds) > 0;
+  const isVoiceoverMode = options.durationMode === "voiceover";
+  const audioCreditCost = getStudioSegmentSeedanceAudioCreditCost(effectiveDuration, true);
+
+  return (
+    <div className={`studio-segment-seedance-settings${options.className ? ` ${options.className}` : ""}`}>
+      <div
+        className="studio-segment-seedance-settings__duration"
+        role="group"
+        aria-label={workspaceText(locale, "Длительность видео", "Video duration")}
+      >
+        <button
+          className={`studio-segment-seedance-settings__voice${isVoiceoverMode ? " is-active" : ""}`}
+          type="button"
+          role="radio"
+          aria-checked={isVoiceoverMode}
+          disabled={options.disabled}
+          title={
+            hasVoiceover
+              ? workspaceText(locale, "Длительность по текущей озвучке", "Match the current voiceover")
+              : workspaceText(locale, "Озвучки нет — будет использовано 5 секунд", "No voiceover — 5 seconds will be used")
+          }
+          onClick={() => options.onDurationModeChange("voiceover")}
+        >
+          <span>{workspaceText(locale, "По озвучке", "Voiceover")}</span>
+          <strong>{voiceoverDuration}{workspaceText(locale, "с", "s")}</strong>
+        </button>
+        <label className={`studio-segment-seedance-settings__manual${!isVoiceoverMode ? " is-active" : ""}`}>
+          <span>{workspaceText(locale, "Вручную", "Manual")}</span>
+          <span className="studio-segment-seedance-settings__manual-value">
+            <input
+              type="number"
+              inputMode="numeric"
+              min={4}
+              max={12}
+              step={1}
+              value={normalizedManualDuration}
+              disabled={options.disabled}
+              aria-label={workspaceText(locale, "Длительность от 4 до 12 секунд", "Duration from 4 to 12 seconds")}
+              onFocus={() => options.onDurationModeChange("manual")}
+              onChange={(event) => {
+                options.onDurationModeChange("manual");
+                options.onDurationChange(
+                  normalizeStudioSegmentPhotoAnimationDurationSeconds("premium", event.currentTarget.value),
+                );
+              }}
+            />
+            <small>{workspaceText(locale, "сек", "sec")}</small>
+          </span>
+        </label>
+      </div>
+      <button
+        className={`studio-segment-seedance-settings__audio${options.generateAudio ? " is-active" : ""}`}
+        type="button"
+        role="switch"
+        aria-checked={options.generateAudio}
+        disabled={options.disabled}
+        title={workspaceText(
+          locale,
+          `Сгенерировать звук вместе с видео: +${audioCreditCost} кредитов`,
+          `Generate sound with the video: +${audioCreditCost} credits`,
+        )}
+        onClick={() => options.onGenerateAudioChange(!options.generateAudio)}
+      >
+        <span className="studio-segment-seedance-settings__audio-copy">
+          <strong>{workspaceText(locale, "Звук", "Sound")}</strong>
+          <small>+{audioCreditCost} ⚡</small>
+        </span>
+        <span className="studio-segment-seedance-settings__audio-track" aria-hidden="true">
+          <span />
+        </span>
+      </button>
     </div>
   );
 };

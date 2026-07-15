@@ -13,6 +13,7 @@ import {
   getStudioBatchVoiceoverCreditCost,
   getStudioSegmentTalkingPhotoCreditCost,
   getStudioSegmentTalkingPhotoCreditCostForDuration,
+  getStudioSegmentAiVideoCreditCost,
   getStudioSegmentVoiceoverCreditCost,
   getStudioVoiceoverCharacterCount,
   getStudioVoiceoverCreditCostForText,
@@ -20,6 +21,7 @@ import {
   getStudioSegmentSceneSoundCreditCost,
   getStudioSegmentPhotoAnimationDurationOptions,
   normalizeStudioSegmentPhotoAnimationDurationSeconds,
+  resolveStudioSegmentSeedanceDurationSeconds,
 } from "./studio-credit-costs";
 
 describe("video generation credit costs", () => {
@@ -35,22 +37,29 @@ describe("video generation credit costs", () => {
 });
 
 describe("photo animation credit costs", () => {
-  it("prices standard 5s and 8s animation durations", () => {
-    expect(getStudioSegmentPhotoAnimationDurationOptions("standard")).toEqual([5, 8]);
-    expect(getStudioSegmentPhotoAnimationCreditCost("standard", 5)).toBe(5);
-    expect(getStudioSegmentPhotoAnimationCreditCost("standard", 8)).toBe(8);
+  it("prices every Seedance second at three credits", () => {
+    expect(getStudioSegmentPhotoAnimationDurationOptions("standard")).toEqual([4, 5, 6, 7, 8, 9, 10, 11, 12]);
+    expect(getStudioSegmentPhotoAnimationCreditCost("standard", 5)).toBe(15);
+    expect(getStudioSegmentPhotoAnimationCreditCost("standard", 8)).toBe(24);
+    expect(getStudioSegmentAiVideoCreditCost(12)).toBe(36);
   });
 
-  it("prices premium 5s and 10s animation durations", () => {
-    expect(getStudioSegmentPhotoAnimationDurationOptions("premium")).toEqual([5, 10]);
-    expect(getStudioSegmentPhotoAnimationCreditCost("premium", 5)).toBe(10);
-    expect(getStudioSegmentPhotoAnimationCreditCost("premium", 10)).toBe(20);
+  it("adds one credit per second when generated sound is enabled", () => {
+    expect(getStudioSegmentPhotoAnimationDurationOptions("premium")).toEqual([4, 5, 6, 7, 8, 9, 10, 11, 12]);
+    expect(getStudioSegmentPhotoAnimationCreditCost("premium", 5, true)).toBe(20);
+    expect(getStudioSegmentAiVideoCreditCost(10, true)).toBe(40);
   });
 
-  it("normalizes unsupported durations to the nearest option for the selected quality", () => {
-    expect(normalizeStudioSegmentPhotoAnimationDurationSeconds("standard", 10)).toBe(8);
-    expect(normalizeStudioSegmentPhotoAnimationDurationSeconds("premium", 8)).toBe(10);
-    expect(normalizeStudioSegmentPhotoAnimationDurationSeconds("premium", 6)).toBe(5);
+  it("clamps duration to 4-12 seconds and rounds up provider seconds", () => {
+    expect(normalizeStudioSegmentPhotoAnimationDurationSeconds("standard", 2)).toBe(4);
+    expect(normalizeStudioSegmentPhotoAnimationDurationSeconds("premium", 8.1)).toBe(9);
+    expect(normalizeStudioSegmentPhotoAnimationDurationSeconds("premium", 20)).toBe(12);
+  });
+
+  it("uses actual voiceover duration by default and five seconds without it", () => {
+    expect(resolveStudioSegmentSeedanceDurationSeconds({ durationMode: "voiceover", voiceoverDurationSeconds: 7.2 })).toBe(8);
+    expect(resolveStudioSegmentSeedanceDurationSeconds({ durationMode: "voiceover" })).toBe(5);
+    expect(resolveStudioSegmentSeedanceDurationSeconds({ durationMode: "manual", manualDurationSeconds: 11 })).toBe(11);
   });
 });
 

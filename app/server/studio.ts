@@ -13,13 +13,12 @@ import {
   STUDIO_AI_VIDEO_GENERATION_CREDIT_COST,
   STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST,
   STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST_BY_QUALITY,
-  STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST,
-  STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST_BY_QUALITY,
   STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST,
   STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST,
   STUDIO_SEGMENT_IMAGE_UPSCALE_CREDIT_COST,
   buildStudioVoiceoverProviderText,
   getStudioBatchVoiceoverCreditCost,
+  getStudioSegmentAiVideoCreditCost as getSharedStudioSegmentAiVideoCreditCost,
   getStudioSegmentPhotoAnimationCreditCost,
   getStudioSegmentSceneSoundCreditCost,
   getStudioSegmentTalkingPhotoCreditCost,
@@ -372,6 +371,7 @@ type AdsflowSegmentAiVideoAssetPayload = {
   download_url?: string | null;
   file_name?: string | null;
   file_size?: number | null;
+  generate_audio?: boolean | null;
   media_asset_id?: number | null;
   mime_type?: string | null;
   remote_url?: string | null;
@@ -593,6 +593,7 @@ export type StudioGeneratedVideoAsset = {
   assetId?: number | null;
   fileName: string;
   fileSize: number;
+  generateAudio?: boolean;
   mimeType: string;
   posterUrl: string | null;
   remoteUrl: string;
@@ -949,6 +950,7 @@ const STUDIO_SEGMENT_INFOGRAPHIC_TIMING_SCALE = 2;
 
 export type StudioSegmentEditorSegment = {
   customVideoAssetId?: number;
+  customVideoGenerateAudio?: boolean;
   customVideoFileDataUrl?: string;
   customVideoFileMimeType?: string;
   customVideoFileName?: string;
@@ -1418,13 +1420,17 @@ const normalizeStudioSegmentVisualQuality = (value: unknown): StudioSegmentVisua
 const getStudioSegmentAiPhotoCreditCost = (quality: StudioSegmentVisualQuality) =>
   STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST_BY_QUALITY[quality] ?? STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST;
 
-const getStudioSegmentAiVideoCreditCost = (quality: StudioSegmentVisualQuality) =>
-  STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST_BY_QUALITY[quality] ?? STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST;
+const getStudioSegmentAiVideoCreditCost = (
+  _quality: StudioSegmentVisualQuality,
+  durationSeconds: unknown,
+  generateAudio = false,
+) => getSharedStudioSegmentAiVideoCreditCost(durationSeconds, generateAudio);
 
 const getStudioSegmentPhotoAnimationRequiredCredits = (
   quality: StudioSegmentVisualQuality,
   durationSeconds: unknown,
-) => getStudioSegmentPhotoAnimationCreditCost(quality, durationSeconds);
+  generateAudio = false,
+) => getStudioSegmentPhotoAnimationCreditCost(quality, durationSeconds, generateAudio);
 
 const studioMultilingualVoiceIds = new Set([
   "Liam_Timing",
@@ -2179,6 +2185,7 @@ export const normalizeStudioSegmentEditorPayload = (
 
     const segmentRecord = segment as {
       customVideoAssetId?: unknown;
+      customVideoGenerateAudio?: unknown;
       customVideoFileDataUrl?: unknown;
       customVideoFileMimeType?: unknown;
       customVideoFileName?: unknown;
@@ -2235,6 +2242,7 @@ export const normalizeStudioSegmentEditorPayload = (
 
     const videoAction = normalizeStudioSegmentVideoAction(segmentRecord.videoAction);
     const customVideoAssetId = normalizePositiveInteger(segmentRecord.customVideoAssetId) ?? undefined;
+    const customVideoGenerateAudio = normalizeWorkspaceBooleanFlag(segmentRecord.customVideoGenerateAudio);
     const customVideoFileDataUrl = String(segmentRecord.customVideoFileDataUrl ?? "").trim() || undefined;
     const customVideoFileMimeType = String(segmentRecord.customVideoFileMimeType ?? "").trim() || undefined;
     const customVideoFileName = String(segmentRecord.customVideoFileName ?? "").trim() || undefined;
@@ -2352,6 +2360,9 @@ export const normalizeStudioSegmentEditorPayload = (
 
     segments.push({
       customVideoAssetId: attachesCustomVisual ? customVideoAssetId : undefined,
+      customVideoGenerateAudio: attachesCustomVisual && customVideoGenerateAudio !== null
+        ? customVideoGenerateAudio
+        : undefined,
       customVideoFileDataUrl: attachesCustomVisual ? customVideoFileDataUrl : undefined,
       customVideoFileMimeType: attachesCustomVisual ? customVideoFileMimeType : undefined,
       customVideoFileName: attachesCustomVisual ? customVideoFileName : undefined,
@@ -4574,6 +4585,7 @@ const normalizeAdsflowSegmentAiVideoAsset = (
     assetId: normalizePositiveInteger(payload?.media_asset_id) ?? null,
     fileName: normalizeGenerationText(payload?.file_name) || `segment-ai-video-${jobId}.mp4`,
     fileSize: Math.max(0, Number(payload?.file_size ?? 0)),
+    generateAudio: payload?.generate_audio === true,
     mimeType: normalizeGenerationText(payload?.mime_type) || "video/mp4",
     posterUrl: buildStudioSegmentAiVideoJobPosterProxyUrl(jobId),
     remoteUrl,
@@ -4641,6 +4653,7 @@ const normalizeAdsflowSegmentPhotoAnimationAsset = (
     assetId: normalizePositiveInteger(payload?.media_asset_id) ?? null,
     fileName: normalizeGenerationText(payload?.file_name) || `segment-photo-animation-${jobId}.mp4`,
     fileSize: Math.max(0, Number(payload?.file_size ?? 0)),
+    generateAudio: payload?.generate_audio === true,
     mimeType: normalizeGenerationText(payload?.mime_type) || "video/mp4",
     posterUrl: null,
     remoteUrl,
@@ -6938,6 +6951,7 @@ export async function createStudioGenerationJob(
                 _voice_source_end_time: voiceSourceEndTime,
                 _voice_source_start_time: voiceSourceStartTime,
                 custom_video_asset_id: segmentAssetId,
+                custom_video_generate_audio: segment.customVideoGenerateAudio,
                 custom_video_mime_type: segment.customVideoFileMimeType,
                 custom_video_original_name: segment.customVideoFileName,
                 duration: segment.duration,
@@ -8183,6 +8197,7 @@ export async function createStudioSegmentAiVideoJob(
   options?: {
     billingQuality?: string;
     durationSeconds?: number;
+    generateAudio?: boolean;
     imageAssetId?: number;
     imageDataUrl?: string;
     imageFileName?: string;
@@ -8208,8 +8223,16 @@ export async function createStudioSegmentAiVideoJob(
   const normalizedLanguage = normalizeStudioLanguage(options?.language);
   const normalizedQuality = normalizeStudioSegmentVisualQuality(options?.quality);
   const normalizedBillingQuality = normalizeStudioSegmentVisualQuality(options?.billingQuality || normalizedQuality);
-  const normalizedDurationSeconds = normalizeStudioSegmentVisualDurationSeconds(options?.durationSeconds);
-  const requiredCredits = getStudioSegmentAiVideoCreditCost(normalizedBillingQuality);
+  const normalizedDurationSeconds = normalizeStudioSegmentPhotoAnimationDurationSeconds(
+    normalizedBillingQuality,
+    options?.durationSeconds,
+  );
+  const generateAudio = options?.generateAudio === true;
+  const requiredCredits = getStudioSegmentAiVideoCreditCost(
+    normalizedBillingQuality,
+    normalizedDurationSeconds,
+    generateAudio,
+  );
   const upstreamPrompt = await translateStudioGenerationPromptToEnglish(normalizedPrompt, {
     sourceLanguage: normalizedLanguage,
     timeoutMs: OPENROUTER_STUDIO_VISUAL_JOB_TRANSLATION_TIMEOUT_MS,
@@ -8229,6 +8252,7 @@ export async function createStudioSegmentAiVideoJob(
       admin_token: env.adsflowAdminToken,
       credit_cost: requiredCredits,
       external_user_id: externalUserId,
+      generate_audio: generateAudio,
       ...buildStudioSegmentVisualDurationPayload(normalizedDurationSeconds),
       ...buildStudioSegmentVisualQualityPayload(normalizedQuality),
       character_ids: characterIds,
@@ -8280,6 +8304,7 @@ export async function createStudioSegmentPhotoAnimationJob(
     durationExtensionTailDurationSeconds?: number;
     durationExtensionTargetDurationSeconds?: number;
     durationSeconds?: number;
+    generateAudio?: boolean;
     language?: string;
     projectId?: number;
     quality?: string;
@@ -8300,9 +8325,11 @@ export async function createStudioSegmentPhotoAnimationJob(
     normalizedQuality,
     normalizedDurationSeconds,
   );
+  const generateAudio = options?.generateAudio === true;
   const requiredCredits = getStudioSegmentPhotoAnimationRequiredCredits(
     normalizedQuality,
     normalizedPhotoAnimationDurationSeconds,
+    generateAudio,
   );
   const upstreamPrompt = await translateStudioGenerationPromptToEnglish(normalizedPrompt, {
     sourceLanguage: normalizedLanguage,
@@ -8377,6 +8404,7 @@ export async function createStudioSegmentPhotoAnimationJob(
     duration_extension_source_video_mime_type: normalizedDurationExtensionSourceVideoFileMimeType,
     duration_extension_source_video_original_name: normalizedDurationExtensionSourceVideoFileName,
     external_user_id: externalUserId,
+    generate_audio: generateAudio,
     ...buildStudioSegmentVisualDurationExtensionPayload({
       baseDurationSeconds: options?.durationExtensionBaseDurationSeconds,
       mode: options?.durationExtensionMode,

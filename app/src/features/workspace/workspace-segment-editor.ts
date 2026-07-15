@@ -1,12 +1,11 @@
 import {
   STUDIO_AI_PHOTO_VIDEO_GENERATION_CREDIT_COST,
   STUDIO_AI_VIDEO_GENERATION_CREDIT_COST,
+  getStudioSegmentAiVideoCreditCost,
   getStudioSegmentPhotoAnimationCreditCost,
   STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST,
   STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST,
   STUDIO_SEGMENT_AI_PHOTO_CREDIT_COST_BY_QUALITY,
-  STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST,
-  STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST_BY_QUALITY,
   getStudioSegmentSceneSoundCreditCost,
   STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST,
   STUDIO_WORKSPACE_CHARACTER_REFERENCE_CREDIT_COST,
@@ -2505,13 +2504,17 @@ export const getWorkspaceReferenceGenerationCreditCost = (
     ? STUDIO_WORKSPACE_CHARACTER_REFERENCE_CREDIT_COST
     : getSegmentAiPhotoCreditCost(quality);
 
-export const getSegmentAiVideoCreditCost = (quality: StudioSegmentVisualQuality) =>
-  STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST_BY_QUALITY[quality] ?? STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST;
+export const getSegmentAiVideoCreditCost = (
+  _quality: StudioSegmentVisualQuality,
+  durationSeconds: unknown = 5,
+  generateAudio = false,
+) => getStudioSegmentAiVideoCreditCost(durationSeconds, generateAudio);
 
 export const getSegmentPhotoAnimationCreditCost = (
   quality: StudioSegmentVisualQuality,
   durationSeconds: unknown = 5,
-) => getStudioSegmentPhotoAnimationCreditCost(quality, durationSeconds);
+  generateAudio = false,
+) => getStudioSegmentPhotoAnimationCreditCost(quality, durationSeconds, generateAudio);
 
 export const cloneStudioCustomVideoFile = (value: StudioCustomVideoFile | null) => (value ? { ...value } : null);
 

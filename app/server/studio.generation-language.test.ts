@@ -407,6 +407,7 @@ describe("studio generation language resolution", () => {
         segments: [
           {
             customVideoAssetId: 910,
+            customVideoGenerateAudio: true,
             duration: 5,
             endTime: 5,
             index: 0,
@@ -433,6 +434,7 @@ describe("studio generation language resolution", () => {
     expect(normalized?.segments[0]).toEqual(
       expect.objectContaining({
         customVideoAssetId: 910,
+        customVideoGenerateAudio: true,
         subtitleType: "none",
         text: "",
         videoAction: "custom",

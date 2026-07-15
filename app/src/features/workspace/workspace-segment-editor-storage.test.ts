@@ -113,10 +113,19 @@ describe("workspace segment editor storage fallback", () => {
 
   it("keeps a scratch draft identity across storage round trips", () => {
     const draft = createWorkspaceSegmentEditorScratchDraftSession();
+    draft.segments[0].aiVideoAsset = {
+      fileName: "seedance.mp4",
+      fileSize: 1024,
+      generateAudio: true,
+      mimeType: "video/mp4",
+      remoteUrl: "/api/studio/segment-ai-video/jobs/job-1/video",
+    };
 
     writeStoredWorkspaceSegmentEditorScratchDraft("editor@example.test", draft);
 
-    expect(readStoredWorkspaceSegmentEditorScratchDraft("EDITOR@example.test")?.draftId).toBe(draft.draftId);
+    const restoredDraft = readStoredWorkspaceSegmentEditorScratchDraft("EDITOR@example.test");
+    expect(restoredDraft?.draftId).toBe(draft.draftId);
+    expect(restoredDraft?.segments[0].aiVideoAsset?.generateAudio).toBe(true);
   });
 
   it("persists the source visual identity of a pending scene sound job", () => {

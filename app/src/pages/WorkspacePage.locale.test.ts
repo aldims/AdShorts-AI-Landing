@@ -7914,6 +7914,38 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(result.uploads).toHaveLength(0);
   });
 
+  it("preserves generated Seedance audio metadata in segment payloads", async () => {
+    const scratchDraft = createWorkspaceSegmentEditorScratchDraftSession({ language: "ru" });
+    const visualDraft = {
+      ...scratchDraft,
+      segments: scratchDraft.segments.map((segment) => ({
+        ...segment,
+        aiVideoAsset: {
+          assetId: 705,
+          fileName: "seedance.mp4",
+          fileSize: 2048,
+          generateAudio: true,
+          mimeType: "video/mp4",
+        },
+        aiVideoGeneratedMode: "ai_video" as const,
+        videoAction: "ai" as const,
+      })),
+    };
+
+    const result = await buildWorkspaceSegmentEditorPayload(visualDraft, {
+      allowStructureChange: true,
+      language: "ru",
+    });
+
+    expect(result.payload.segments[0]).toEqual(
+      expect.objectContaining({
+        customVideoAssetId: 705,
+        customVideoGenerateAudio: true,
+        videoAction: "custom",
+      }),
+    );
+  });
+
   it("exports scratch visual-only custom media with snake-case media asset ids", async () => {
     const scratchDraft = createWorkspaceSegmentEditorScratchDraftSession({
       language: "ru",

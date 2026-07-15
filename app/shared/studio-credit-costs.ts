@@ -11,7 +11,8 @@ export type StudioCreditAction =
   | "segment_voiceover";
 
 export type StudioSegmentVisualQuality = "standard" | "premium";
-export type StudioSegmentPhotoAnimationDurationSeconds = 5 | 8 | 10;
+export type StudioSegmentPhotoAnimationDurationSeconds = 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
+export type StudioSegmentSeedanceDurationMode = "voiceover" | "manual";
 
 export const STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST = 10;
 export const STUDIO_AI_PHOTO_VIDEO_GENERATION_CREDIT_COST = 10;
@@ -20,13 +21,18 @@ export const STUDIO_PREMIUM_VIDEO_GENERATION_CREDIT_COST = STUDIO_AI_PHOTO_VIDEO
 export const STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST = 5;
 export const STUDIO_PREMIUM_VOICE_CREDIT_COST = 0;
 export const STUDIO_VIDEO_GENERATION_CREDIT_COST = STUDIO_STANDARD_VIDEO_GENERATION_CREDIT_COST;
-export const STUDIO_SEGMENT_AI_VIDEO_STANDARD_CREDIT_COST = 7;
+export const STUDIO_SEGMENT_SEEDANCE_MIN_DURATION_SECONDS = 4;
+export const STUDIO_SEGMENT_SEEDANCE_MAX_DURATION_SECONDS = 12;
+export const STUDIO_SEGMENT_SEEDANCE_DEFAULT_DURATION_SECONDS = 5;
+export const STUDIO_SEGMENT_SEEDANCE_CREDITS_PER_SECOND = 3;
+export const STUDIO_SEGMENT_SEEDANCE_AUDIO_CREDITS_PER_SECOND = 1;
+export const STUDIO_SEGMENT_AI_VIDEO_STANDARD_CREDIT_COST = 15;
 export const STUDIO_SEGMENT_AI_VIDEO_PREMIUM_CREDIT_COST = 15;
 export const STUDIO_SEGMENT_AI_VIDEO_CREDIT_COST = STUDIO_SEGMENT_AI_VIDEO_STANDARD_CREDIT_COST;
-export const STUDIO_SEGMENT_PHOTO_ANIMATION_STANDARD_5S_CREDIT_COST = 5;
-export const STUDIO_SEGMENT_PHOTO_ANIMATION_STANDARD_8S_CREDIT_COST = 8;
-export const STUDIO_SEGMENT_PHOTO_ANIMATION_PREMIUM_5S_CREDIT_COST = 10;
-export const STUDIO_SEGMENT_PHOTO_ANIMATION_PREMIUM_10S_CREDIT_COST = 20;
+export const STUDIO_SEGMENT_PHOTO_ANIMATION_STANDARD_5S_CREDIT_COST = 15;
+export const STUDIO_SEGMENT_PHOTO_ANIMATION_STANDARD_8S_CREDIT_COST = 24;
+export const STUDIO_SEGMENT_PHOTO_ANIMATION_PREMIUM_5S_CREDIT_COST = 15;
+export const STUDIO_SEGMENT_PHOTO_ANIMATION_PREMIUM_10S_CREDIT_COST = 30;
 export const STUDIO_SEGMENT_PHOTO_ANIMATION_STANDARD_CREDIT_COST = STUDIO_SEGMENT_PHOTO_ANIMATION_STANDARD_5S_CREDIT_COST;
 export const STUDIO_SEGMENT_PHOTO_ANIMATION_PREMIUM_CREDIT_COST = STUDIO_SEGMENT_PHOTO_ANIMATION_PREMIUM_5S_CREDIT_COST;
 export const STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST = STUDIO_SEGMENT_PHOTO_ANIMATION_STANDARD_CREDIT_COST;
@@ -79,8 +85,8 @@ export const STUDIO_SEGMENT_PHOTO_ANIMATION_DURATION_OPTIONS_BY_QUALITY: Record<
   StudioSegmentVisualQuality,
   StudioSegmentPhotoAnimationDurationSeconds[]
 > = {
-  premium: [5, 10],
-  standard: [5, 8],
+  premium: [4, 5, 6, 7, 8, 9, 10, 11, 12],
+  standard: [4, 5, 6, 7, 8, 9, 10, 11, 12],
 };
 
 export const STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST_BY_QUALITY_AND_DURATION: Record<
@@ -104,38 +110,60 @@ export const getStudioSegmentPhotoAnimationDurationOptions = (
   STUDIO_SEGMENT_PHOTO_ANIMATION_DURATION_OPTIONS_BY_QUALITY.standard;
 
 export const normalizeStudioSegmentPhotoAnimationDurationSeconds = (
-  quality: StudioSegmentVisualQuality,
+  _quality: StudioSegmentVisualQuality,
   durationSeconds: unknown,
 ): StudioSegmentPhotoAnimationDurationSeconds => {
-  const options = getStudioSegmentPhotoAnimationDurationOptions(quality);
   const numeric = Number(durationSeconds);
   if (!Number.isFinite(numeric) || numeric <= 0) {
-    return options[0] ?? 5;
+    return STUDIO_SEGMENT_SEEDANCE_DEFAULT_DURATION_SECONDS;
   }
+  return Math.min(
+    STUDIO_SEGMENT_SEEDANCE_MAX_DURATION_SECONDS,
+    Math.max(STUDIO_SEGMENT_SEEDANCE_MIN_DURATION_SECONDS, Math.ceil(numeric)),
+  ) as StudioSegmentPhotoAnimationDurationSeconds;
+};
 
-  const rounded = Math.round(numeric);
-  if (options.includes(rounded as StudioSegmentPhotoAnimationDurationSeconds)) {
-    return rounded as StudioSegmentPhotoAnimationDurationSeconds;
-  }
+export const resolveStudioSegmentSeedanceDurationSeconds = (options: {
+  durationMode?: StudioSegmentSeedanceDurationMode | null;
+  manualDurationSeconds?: unknown;
+  voiceoverDurationSeconds?: unknown;
+}): StudioSegmentPhotoAnimationDurationSeconds => {
+  const voiceoverDuration = Number(options.voiceoverDurationSeconds);
+  const hasVoiceoverDuration = Number.isFinite(voiceoverDuration) && voiceoverDuration > 0;
+  const sourceDuration = options.durationMode !== "manual" && hasVoiceoverDuration
+    ? voiceoverDuration
+    : options.durationMode === "manual"
+      ? options.manualDurationSeconds
+      : STUDIO_SEGMENT_SEEDANCE_DEFAULT_DURATION_SECONDS;
+  return normalizeStudioSegmentPhotoAnimationDurationSeconds("premium", sourceDuration);
+};
 
-  const [shortDuration, longDuration] = options;
-  if (!shortDuration || !longDuration) {
-    return shortDuration ?? 5;
-  }
+export const getStudioSegmentSeedanceAudioCreditCost = (
+  durationSeconds: unknown,
+  generateAudio = false,
+): number =>
+  generateAudio
+    ? normalizeStudioSegmentPhotoAnimationDurationSeconds("premium", durationSeconds) *
+      STUDIO_SEGMENT_SEEDANCE_AUDIO_CREDITS_PER_SECOND
+    : 0;
 
-  return numeric > (shortDuration + longDuration) / 2 ? longDuration : shortDuration;
+export const getStudioSegmentAiVideoCreditCost = (
+  durationSeconds: unknown,
+  generateAudio = false,
+): number => {
+  const normalizedDurationSeconds = normalizeStudioSegmentPhotoAnimationDurationSeconds("premium", durationSeconds);
+  return (
+    normalizedDurationSeconds * STUDIO_SEGMENT_SEEDANCE_CREDITS_PER_SECOND +
+    getStudioSegmentSeedanceAudioCreditCost(normalizedDurationSeconds, generateAudio)
+  );
 };
 
 export const getStudioSegmentPhotoAnimationCreditCost = (
-  quality: StudioSegmentVisualQuality,
+  _quality: StudioSegmentVisualQuality,
   durationSeconds: unknown,
+  generateAudio = false,
 ): number => {
-  const normalizedDurationSeconds = normalizeStudioSegmentPhotoAnimationDurationSeconds(quality, durationSeconds);
-  return (
-    STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST_BY_QUALITY_AND_DURATION[quality]?.[normalizedDurationSeconds] ??
-    STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST_BY_QUALITY[quality] ??
-    STUDIO_SEGMENT_PHOTO_ANIMATION_CREDIT_COST
-  );
+  return getStudioSegmentAiVideoCreditCost(durationSeconds, generateAudio);
 };
 
 export const getStudioSegmentVoiceoverCreditCost = (voiceId: string | null | undefined): number => {

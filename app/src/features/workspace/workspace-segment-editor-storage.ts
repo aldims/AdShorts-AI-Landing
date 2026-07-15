@@ -616,6 +616,7 @@ const normalizePersistedStudioCustomVideoFile = (value: StudioCustomVideoFile | 
     durationSeconds: durationSeconds ?? undefined,
     fileName,
     fileSize,
+    generateAudio: value.generateAudio === true ? true : undefined,
     libraryItemKey: libraryItemKey || undefined,
     mimeType,
     posterUrl: posterUrl || undefined,

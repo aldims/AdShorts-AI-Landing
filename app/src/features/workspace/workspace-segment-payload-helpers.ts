@@ -63,6 +63,7 @@ export type WorkspaceSegmentEditorPayloadVideoAction = "ai" | "custom" | "origin
 
 export type WorkspaceSegmentEditorPayloadSegment = {
   customVideoAssetId?: number;
+  customVideoGenerateAudio?: boolean;
   customVideoFileDataUrl?: string;
   customVideoFileMimeType?: string;
   customVideoFileName?: string;
@@ -474,6 +475,9 @@ export const buildWorkspaceSegmentEditorPayload = async (
 
     segments.push({
       customVideoAssetId,
+      customVideoGenerateAudio: shouldAttachCustomVisualAsset
+        ? customVisualAsset?.generateAudio
+        : undefined,
       customVideoFileDataUrl,
       customVideoFileMimeType: shouldAttachCustomVisualAsset ? customVisualAsset?.mimeType : undefined,
       customVideoFileName: shouldAttachCustomVisualAsset ? customVisualAsset?.fileName : undefined,

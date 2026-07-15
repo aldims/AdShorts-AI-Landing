@@ -537,8 +537,8 @@ import {
   formatSegmentVisualCreditsLabel,
   renderSegmentAiPhotoModalSourceButton,
   renderSegmentPaidActionContent,
-  renderWorkspaceSegmentPhotoAnimationDurationSwitch,
-  type WorkspaceSegmentPhotoAnimationDurationSwitchOptions,
+  renderWorkspaceSegmentSeedanceSettings,
+  type WorkspaceSegmentSeedanceSettingsOptions,
 } from "../features/workspace/workspace-segment-visual-ui";
 import { renderSegmentEditorPromptToolButtonContent } from "../features/workspace/workspace-segment-prompt-tool-ui";
 import {
@@ -1023,11 +1023,13 @@ import {
   getStudioSegmentTalkingPhotoCreditCost,
   getStudioVoiceoverCreditCostForText,
   normalizeStudioSegmentPhotoAnimationDurationSeconds,
+  resolveStudioSegmentSeedanceDurationSeconds,
   STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS,
   STUDIO_SEGMENT_TALKING_PHOTO_CREDIT_COST,
   STUDIO_WORKSPACE_CHARACTER_REFERENCE_CREDIT_COST,
   type StudioCreditAction,
   type StudioSegmentPhotoAnimationDurationSeconds,
+  type StudioSegmentSeedanceDurationMode,
   type StudioSegmentVisualQuality,
 } from "../../shared/studio-credit-costs";
 import { type ExamplePrefillStudioSettings } from "../../shared/example-prefill";
@@ -1865,6 +1867,9 @@ export function WorkspacePage({
   const selectedSegmentPhotoAnimationQuality: StudioSegmentVisualQuality = "premium";
   const [selectedSegmentPhotoAnimationDurationSeconds, setSelectedSegmentPhotoAnimationDurationSeconds] =
     useState<StudioSegmentPhotoAnimationDurationSeconds>(5);
+  const [segmentSeedanceDurationMode, setSegmentSeedanceDurationMode] =
+    useState<StudioSegmentSeedanceDurationMode>("voiceover");
+  const [isSegmentSeedanceGenerateAudioEnabled, setIsSegmentSeedanceGenerateAudioEnabled] = useState(false);
   const [selectedSegmentReferenceCharacterIds, setSelectedSegmentReferenceCharacterIds] = useState<number[]>([]);
   const [selectedSegmentReferenceCharacterAssetKeys, setSelectedSegmentReferenceCharacterAssetKeys] = useState<string[]>([]);
   const [segmentTalkingCharacterTargets, setSegmentTalkingCharacterTargets] = useState<Record<number, WorkspaceTalkingCharacterTarget>>({});
@@ -5976,8 +5981,8 @@ export function WorkspacePage({
   const mediaLibraryPreviewModalTitle = mediaLibraryPreviewModal
     ? getWorkspaceMediaLibraryItemKindLabel(mediaLibraryPreviewModal.kind, mediaLibraryPreviewModal.assetKind, locale)
     : "";
-  const renderSegmentPhotoAnimationDurationSwitch = (options: WorkspaceSegmentPhotoAnimationDurationSwitchOptions) =>
-    renderWorkspaceSegmentPhotoAnimationDurationSwitch(locale, options);
+  const renderSegmentSeedanceSettings = (options: WorkspaceSegmentSeedanceSettingsOptions) =>
+    renderWorkspaceSegmentSeedanceSettings(locale, options);
   const hasPreviewModalDescription = Boolean(previewModalDescription);
   const hasPreviewModalHashtags = previewModalHashtags.length > 0;
   const selectedVoiceOptions = studioVoiceOptionsByLanguage[selectedLanguage];
@@ -17822,6 +17827,8 @@ export function WorkspacePage({
 
   const handleSegmentEditorAiVideoGenerate = async (
     options?: {
+      durationSeconds?: number;
+      generateAudio?: boolean;
       includeSceneReference?: boolean;
       prompt?: string;
       quality?: StudioSegmentVisualQuality;
@@ -17853,10 +17860,14 @@ export function WorkspacePage({
     const nextPrompt = options?.prompt ?? targetSegment?.aiVideoPrompt ?? "";
     const normalizedPrompt = normalizeWorkspaceSegmentAiVideoPrompt(nextPrompt);
     const generationQuality = options?.quality ?? selectedSegmentAiVideoQuality;
-    const durationSeconds = getWorkspaceSegmentVisualGenerationDurationSeconds(targetSegment);
+    const durationSeconds = normalizeStudioSegmentPhotoAnimationDurationSeconds(
+      generationQuality,
+      options?.durationSeconds ?? resolveSegmentSeedanceDurationSeconds(targetSegment, segmentEditorDraft),
+    );
+    const generateAudio = options?.generateAudio ?? isSegmentSeedanceGenerateAudioEnabled;
     const { characterIds, characterReferenceOptions, isPromptScoped } = resolvePromptScopedSegmentReferenceCharacters(nextPrompt);
     const billingQuality = isPromptScoped ? "premium" : generationQuality;
-    const requiredCredits = getSegmentAiVideoCreditCost(billingQuality);
+    const requiredCredits = getSegmentAiVideoCreditCost(billingQuality, durationSeconds, generateAudio);
     const sceneReferenceOption = options?.includeSceneReference === false ? null : selectedSegmentReferenceScene;
     if (!normalizedPrompt) {
       setSegmentEditorVideoError("Введите промт для ИИ видео.");
@@ -17908,6 +17919,7 @@ export function WorkspacePage({
         body: JSON.stringify({
           billingQuality,
           durationSeconds,
+          generateAudio,
           language: selectedLanguage,
           projectId: visualJobBinding.projectId,
           prompt: normalizedPrompt,
@@ -18112,6 +18124,7 @@ export function WorkspacePage({
       durationExtensionTailDurationSeconds?: number | null;
       durationExtensionTargetDurationSeconds?: number | null;
       durationSeconds?: number;
+      generateAudio?: boolean;
       prompt?: string;
       quality?: StudioSegmentVisualQuality;
       refreshSceneSoundPrompt?: string | null;
@@ -18186,11 +18199,13 @@ export function WorkspacePage({
     const generationQuality = options?.quality ?? selectedSegmentPhotoAnimationQuality;
     const durationSeconds = normalizeStudioSegmentPhotoAnimationDurationSeconds(
       generationQuality,
-      options?.durationSeconds ?? selectedSegmentPhotoAnimationDurationSeconds,
+      options?.durationSeconds ?? resolveSegmentSeedanceDurationSeconds(targetSegment, segmentEditorDraft),
     );
-    const requiredCredits = getSegmentPhotoAnimationCreditCost(generationQuality, durationSeconds);
+    const generateAudio = options?.generateAudio ?? isSegmentSeedanceGenerateAudioEnabled;
+    const requiredCredits = getSegmentPhotoAnimationCreditCost(generationQuality, durationSeconds, generateAudio);
     logSegmentEditorDiagnostics("client.segment-editor.photo-animation.resolved", {
       durationSeconds,
+      generateAudio,
       hasPhotoAnimationSourceAsset: Boolean(photoAnimationSourceAsset),
       hasTargetSegment: Boolean(targetSegment),
       promptLength: normalizedPrompt.length,
@@ -18359,6 +18374,7 @@ export function WorkspacePage({
           durationExtensionTailDurationSeconds: options?.durationExtensionTailDurationSeconds ?? undefined,
           durationExtensionTargetDurationSeconds: options?.durationExtensionTargetDurationSeconds ?? undefined,
           durationSeconds,
+          generateAudio,
           language: selectedLanguage,
           projectId: visualJobBinding.projectId,
           prompt: normalizedPrompt,
@@ -20628,7 +20644,13 @@ export function WorkspacePage({
   };
 
   const handleSegmentAiVideoModalGenerate = async (
-    options?: { includeSceneReference?: boolean; prompt?: string; segmentIndex?: number | null },
+    options?: {
+      durationSeconds?: number;
+      generateAudio?: boolean;
+      includeSceneReference?: boolean;
+      prompt?: string;
+      segmentIndex?: number | null;
+    },
   ) => {
     const targetSegmentIndex = options?.segmentIndex ?? segmentAiPhotoModalSegment?.index;
     if (typeof targetSegmentIndex !== "number") {
@@ -20638,6 +20660,8 @@ export function WorkspacePage({
     setSegmentEditorVideoError(null);
     setSegmentAiPhotoModalTab("ai_video");
     await handleSegmentEditorAiVideoGenerate({
+      durationSeconds: options?.durationSeconds,
+      generateAudio: options?.generateAudio,
       includeSceneReference: options?.includeSceneReference,
       prompt: options?.prompt ?? segmentAiVideoModalPrompt,
       segmentIndex: targetSegmentIndex,
@@ -20666,6 +20690,7 @@ export function WorkspacePage({
   const handleSegmentPhotoAnimationModalGenerate = async (
     options?: {
       durationSeconds?: number;
+      generateAudio?: boolean;
       prompt?: string;
       quality?: StudioSegmentVisualQuality;
       segmentIndex?: number | null;
@@ -20680,6 +20705,7 @@ export function WorkspacePage({
     setSegmentAiPhotoModalTab("photo_animation");
     await handleSegmentEditorPhotoAnimationGenerate({
       durationSeconds: options?.durationSeconds,
+      generateAudio: options?.generateAudio,
       prompt: options?.prompt ?? segmentAiVideoModalPrompt,
       quality: options?.quality,
       segmentIndex: targetSegmentIndex,
@@ -25138,6 +25164,7 @@ export function WorkspacePage({
     segmentArrayIndex: number,
     options?: {
       durationSeconds?: number | null;
+      generateAudio?: boolean;
       quality?: StudioSegmentVisualQuality;
       sourceDurationSeconds?: number | null;
       targetDurationSeconds?: number | null;
@@ -25176,9 +25203,15 @@ export function WorkspacePage({
     }
 
     const generationQuality = options?.quality ?? selectedSegmentPhotoAnimationQuality;
+    const voiceoverDurationSeconds = getSegmentSeedanceVoiceoverDurationSeconds(targetSegment, currentDraft);
+    const voiceoverTailDurationSeconds = voiceoverDurationSeconds !== null
+      ? Math.max(0, voiceoverDurationSeconds - extensionPlan.sourceDurationSeconds)
+      : null;
     const requestedExtensionDurationSeconds = normalizeStudioSegmentPhotoAnimationDurationSeconds(
       generationQuality,
-      options?.durationSeconds ?? selectedSegmentPhotoAnimationDurationSeconds,
+      options?.durationSeconds ?? resolveSegmentSeedanceDurationSeconds(targetSegment, currentDraft, {
+        voiceoverDurationSeconds: voiceoverTailDurationSeconds,
+      }),
     );
     const extensionTiming = resolveWorkspaceSegmentDurationExtensionRequestTiming({
       requestedExtensionDurationSeconds,
@@ -25221,6 +25254,7 @@ export function WorkspacePage({
       durationExtensionTailDurationSeconds: extensionTiming.tailDurationSeconds,
       durationExtensionTargetDurationSeconds: extensionTiming.targetDurationSeconds,
       durationSeconds: requestedExtensionDurationSeconds,
+      generateAudio: options?.generateAudio,
       prompt: nextPrompt,
       quality: generationQuality,
       refreshSceneSoundPrompt: getWorkspaceSegmentSceneSoundRefreshPrompt(targetSegment) || null,
@@ -26863,10 +26897,14 @@ export function WorkspacePage({
       normalizedTargetVoiceoverDurationSeconds !== null &&
       sourceVideoDurationSeconds > normalizedTargetVoiceoverDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS;
     const recommendedDurationSeconds = getWorkspaceSegmentRecommendedDurationSeconds(targetSegment, segmentEditorDraft);
-    const selectedExtensionDurationSeconds = normalizeStudioSegmentPhotoAnimationDurationSeconds(
-      selectedSegmentPhotoAnimationQuality,
-      selectedSegmentPhotoAnimationDurationSeconds,
-    );
+    const selectedExtensionDurationSeconds = resolveStudioSegmentSeedanceDurationSeconds({
+      durationMode: segmentSeedanceDurationMode,
+      manualDurationSeconds: selectedSegmentPhotoAnimationDurationSeconds,
+      voiceoverDurationSeconds:
+        targetVoiceoverDurationInfo?.source === "actual" && normalizedTargetVoiceoverDurationSeconds !== null
+          ? Math.max(0, normalizedTargetVoiceoverDurationSeconds - currentDurationSeconds)
+          : null,
+    });
     const aiExtensionTargetDurationSeconds =
       resolveWorkspaceSegmentAiDurationExtensionTargetSeconds(targetSegment, baselineSegment, currentDurationSeconds, {
         extensionStepSeconds: selectedExtensionDurationSeconds,
@@ -27250,6 +27288,32 @@ export function WorkspacePage({
 
     return fallbackVoiceoverDurationInfo;
   };
+  const getSegmentSeedanceVoiceoverDurationSeconds = (
+    segment: WorkspaceSegmentEditorDraftSegment | null | undefined,
+    draft: WorkspaceSegmentEditorDraftSession | null | undefined,
+  ) => {
+    if (!segment || !draft) {
+      return null;
+    }
+
+    const voiceoverInfo = getSegmentTimelineEffectiveVoiceoverDurationInfo(segment, draft);
+    return voiceoverInfo?.source === "actual" ? voiceoverInfo.durationSeconds : null;
+  };
+  const resolveSegmentSeedanceDurationSeconds = (
+    segment: WorkspaceSegmentEditorDraftSegment | null | undefined,
+    draft: WorkspaceSegmentEditorDraftSession | null | undefined,
+    options?: {
+      durationMode?: StudioSegmentSeedanceDurationMode;
+      manualDurationSeconds?: unknown;
+      voiceoverDurationSeconds?: number | null;
+    },
+  ) =>
+    resolveStudioSegmentSeedanceDurationSeconds({
+      durationMode: options?.durationMode ?? segmentSeedanceDurationMode,
+      manualDurationSeconds: options?.manualDurationSeconds ?? selectedSegmentPhotoAnimationDurationSeconds,
+      voiceoverDurationSeconds:
+        options?.voiceoverDurationSeconds ?? getSegmentSeedanceVoiceoverDurationSeconds(segment, draft),
+    });
   const writeSegmentEditorVoiceDurationDebugTrace = (event: string, payload: Record<string, unknown> = {}) => {
     if (!isSegmentEditorFullPreviewDebugEnabled() || typeof window === "undefined") {
       return;
@@ -30928,11 +30992,6 @@ export function WorkspacePage({
   const segmentTimelineDurationMenuInputSeconds =
     parseWorkspaceSegmentEditorDurationInput(segmentTimelineDurationInputValue);
   const segmentTimelineDurationSelectedExtensionQuality = selectedSegmentPhotoAnimationQuality;
-  const segmentTimelineDurationSelectedExtensionDurationSeconds =
-    normalizeStudioSegmentPhotoAnimationDurationSeconds(
-      segmentTimelineDurationSelectedExtensionQuality,
-      selectedSegmentPhotoAnimationDurationSeconds,
-    );
   const segmentTimelineDurationMenuSourceOverrideSeconds =
     segmentTimelineDurationMenuSegment &&
     segmentTimelineDurationSourceOverride?.segmentIndex === segmentTimelineDurationMenuSegment.index
@@ -30952,6 +31011,18 @@ export function WorkspacePage({
     : null;
   const segmentTimelineDurationMenuVoiceoverSeconds =
     segmentTimelineDurationMenuVoiceoverInfo?.durationSeconds ?? null;
+  const segmentTimelineDurationMenuVoiceoverTailSeconds =
+    segmentTimelineDurationMenuVoiceoverInfo?.source === "actual" &&
+    segmentTimelineDurationMenuVoiceoverSeconds !== null &&
+    segmentTimelineDurationMenuSourceSeconds !== null
+      ? Math.max(0, segmentTimelineDurationMenuVoiceoverSeconds - segmentTimelineDurationMenuSourceSeconds)
+      : null;
+  const segmentTimelineDurationSelectedExtensionDurationSeconds =
+    resolveStudioSegmentSeedanceDurationSeconds({
+      durationMode: segmentSeedanceDurationMode,
+      manualDurationSeconds: selectedSegmentPhotoAnimationDurationSeconds,
+      voiceoverDurationSeconds: segmentTimelineDurationMenuVoiceoverTailSeconds,
+    });
   const segmentTimelineDurationMenuFullVideoSeconds = segmentTimelineDurationMenuSourceSeconds;
   const segmentTimelineDurationMenuVideoLongerThanVoiceover =
     segmentTimelineDurationMenuFullVideoSeconds !== null &&
@@ -31098,7 +31169,8 @@ export function WorkspacePage({
     : null;
   const segmentTimelineDurationMenuExtensionCreditCost = getSegmentPhotoAnimationCreditCost(
     segmentTimelineDurationSelectedExtensionQuality,
-    segmentTimelineDurationMenuExtensionSeconds ?? segmentTimelineDurationSelectedExtensionDurationSeconds,
+    segmentTimelineDurationSelectedExtensionDurationSeconds,
+    isSegmentSeedanceGenerateAudioEnabled,
   );
   const segmentTimelineDurationMenuExtensionSecondsLabel =
     segmentTimelineDurationMenuExtensionSeconds !== null
@@ -31294,6 +31366,7 @@ export function WorkspacePage({
     setSegmentTimelineDurationMenuSegmentIndex(null);
     void handleSegmentTimelineDurationAiExtensionGenerate(segmentTimelineDurationMenuArrayIndex, {
       durationSeconds: segmentTimelineDurationSelectedExtensionDurationSeconds,
+      generateAudio: isSegmentSeedanceGenerateAudioEnabled,
       quality: segmentTimelineDurationSelectedExtensionQuality,
       sourceDurationSeconds: segmentTimelineDurationMenuSourceOverrideSeconds,
       targetDurationSeconds: segmentTimelineDurationMenuTargetSeconds,
@@ -31309,12 +31382,16 @@ export function WorkspacePage({
       customDurationRangeLabel={segmentTimelineDurationMenuTrimRangeLabel}
       durationSwitch={
         segmentTimelineDurationMenuExtensionPlan
-          ? renderSegmentPhotoAnimationDurationSwitch({
-              className: "studio-segment-photo-animation-duration--duration-extension",
+          ? renderSegmentSeedanceSettings({
+              className: "studio-segment-seedance-settings--duration-extension",
               disabled: isSegmentTimelineDurationAiExtensionPending,
-              onChange: setSelectedSegmentPhotoAnimationDurationSeconds,
-              quality: segmentTimelineDurationSelectedExtensionQuality,
+              durationMode: segmentSeedanceDurationMode,
+              generateAudio: isSegmentSeedanceGenerateAudioEnabled,
+              onDurationChange: setSelectedSegmentPhotoAnimationDurationSeconds,
+              onDurationModeChange: setSegmentSeedanceDurationMode,
+              onGenerateAudioChange: setIsSegmentSeedanceGenerateAudioEnabled,
               value: segmentTimelineDurationSelectedExtensionDurationSeconds,
+              voiceoverDurationSeconds: segmentTimelineDurationMenuVoiceoverTailSeconds,
             })
           : null
       }
@@ -34469,10 +34546,24 @@ export function WorkspacePage({
     selectedSegmentAiVideoQuality,
   );
   const segmentAiPhotoRequiredCredits = getSegmentAiPhotoCreditCost(segmentAiPhotoBillingQuality);
-  const segmentAiVideoRequiredCredits = getSegmentAiVideoCreditCost(segmentAiVideoBillingQuality);
+  const segmentSeedanceSettingsSegment = segmentAiPhotoModalSegment ?? activeSegment;
+  const segmentSeedanceVoiceoverDurationSeconds = getSegmentSeedanceVoiceoverDurationSeconds(
+    segmentSeedanceSettingsSegment,
+    segmentEditorDraft,
+  );
+  const segmentSeedanceDurationSeconds = resolveSegmentSeedanceDurationSeconds(
+    segmentSeedanceSettingsSegment,
+    segmentEditorDraft,
+  );
+  const segmentAiVideoRequiredCredits = getSegmentAiVideoCreditCost(
+    segmentAiVideoBillingQuality,
+    segmentSeedanceDurationSeconds,
+    isSegmentSeedanceGenerateAudioEnabled,
+  );
   const segmentPhotoAnimationRequiredCredits = getSegmentPhotoAnimationCreditCost(
     selectedSegmentPhotoAnimationQuality,
-    selectedSegmentPhotoAnimationDurationSeconds,
+    segmentSeedanceDurationSeconds,
+    isSegmentSeedanceGenerateAudioEnabled,
   );
   const promptVisualTextareaValue = isPromptImageEditMode
     ? segmentImageEditModalPrompt
@@ -34893,13 +34984,16 @@ export function WorkspacePage({
       });
     } else if (isPromptAiVideoMode) {
       void handleSegmentAiVideoModalGenerate({
+        durationSeconds: segmentSeedanceDurationSeconds,
+        generateAudio: isSegmentSeedanceGenerateAudioEnabled,
         includeSceneReference: false,
         prompt: promptVisualPromptForAction,
         segmentIndex: activeSegment.index,
       });
     } else if (isPromptPhotoAnimationMode) {
       void handleSegmentPhotoAnimationModalGenerate({
-        durationSeconds: selectedSegmentPhotoAnimationDurationSeconds,
+        durationSeconds: segmentSeedanceDurationSeconds,
+        generateAudio: isSegmentSeedanceGenerateAudioEnabled,
         prompt: promptVisualPromptForAction,
         quality: selectedSegmentPhotoAnimationQuality,
         segmentIndex: activeSegment.index,
@@ -36095,13 +36189,17 @@ export function WorkspacePage({
                         </div>
                       ) : null}
                       <div className="studio-segment-editor__prompt-action-cluster">
-                        {isPromptPhotoAnimationMode
-                          ? renderSegmentPhotoAnimationDurationSwitch({
-                              className: "studio-segment-photo-animation-duration--action-row",
+                        {isPromptPhotoAnimationMode || isPromptAiVideoMode
+                          ? renderSegmentSeedanceSettings({
+                              className: "studio-segment-seedance-settings--action-row",
                               disabled: isPromptVisualBaseDisabled,
-                              onChange: setSelectedSegmentPhotoAnimationDurationSeconds,
-                              quality: selectedSegmentPhotoAnimationQuality,
+                              durationMode: segmentSeedanceDurationMode,
+                              generateAudio: isSegmentSeedanceGenerateAudioEnabled,
+                              onDurationChange: setSelectedSegmentPhotoAnimationDurationSeconds,
+                              onDurationModeChange: setSegmentSeedanceDurationMode,
+                              onGenerateAudioChange: setIsSegmentSeedanceGenerateAudioEnabled,
                               value: selectedSegmentPhotoAnimationDurationSeconds,
+                              voiceoverDurationSeconds: segmentSeedanceVoiceoverDurationSeconds,
                             })
                           : null}
                         <button
@@ -38591,7 +38689,21 @@ export function WorkspacePage({
                             <p className="studio-ai-photo-modal__field-note is-success">{workspaceText(locale, "Описание обновлено.", "Prompt updated.")}</p>
                           ) : null}
 
-                          <div className="studio-ai-photo-modal__tab-actions">
+                          <div className="studio-ai-photo-modal__tab-actions studio-ai-photo-modal__tab-actions--with-duration">
+                            {renderSegmentSeedanceSettings({
+                              className: "studio-segment-seedance-settings--modal-action",
+                              disabled:
+                                isSegmentAiPhotoModalSegmentVisualJobBusy ||
+                                isSegmentAiPhotoModalPreparingCustomVideo ||
+                                isSegmentAiPhotoPromptImproving,
+                              durationMode: segmentSeedanceDurationMode,
+                              generateAudio: isSegmentSeedanceGenerateAudioEnabled,
+                              onDurationChange: setSelectedSegmentPhotoAnimationDurationSeconds,
+                              onDurationModeChange: setSegmentSeedanceDurationMode,
+                              onGenerateAudioChange: setIsSegmentSeedanceGenerateAudioEnabled,
+                              value: selectedSegmentPhotoAnimationDurationSeconds,
+                              voiceoverDurationSeconds: segmentSeedanceVoiceoverDurationSeconds,
+                            })}
                             <button
                               className="studio-ai-photo-modal__action studio-ai-photo-modal__action--primary studio-ai-photo-modal__action--paid"
                               type="button"
@@ -38606,6 +38718,8 @@ export function WorkspacePage({
                               onClick={() => {
                                 handleSegmentAiPhotoModalPaidAction((snapshot) =>
                                   handleSegmentAiVideoModalGenerate({
+                                    durationSeconds: segmentSeedanceDurationSeconds,
+                                    generateAudio: isSegmentSeedanceGenerateAudioEnabled,
                                     prompt: snapshot.aiVideoPrompt,
                                     segmentIndex: snapshot.segmentIndex,
                                   }),
@@ -38673,15 +38787,19 @@ export function WorkspacePage({
                           ) : null}
 
                           <div className="studio-ai-photo-modal__tab-actions studio-ai-photo-modal__tab-actions--with-duration">
-                            {renderSegmentPhotoAnimationDurationSwitch({
-                              className: "studio-segment-photo-animation-duration--modal-action",
+                            {renderSegmentSeedanceSettings({
+                              className: "studio-segment-seedance-settings--modal-action",
                               disabled:
                                 isSegmentAiPhotoModalSegmentVisualJobBusy ||
                                 isSegmentAiPhotoModalPreparingCustomVideo ||
                                 isSegmentAiPhotoPromptImproving,
-                              onChange: setSelectedSegmentPhotoAnimationDurationSeconds,
-                              quality: selectedSegmentPhotoAnimationQuality,
+                              durationMode: segmentSeedanceDurationMode,
+                              generateAudio: isSegmentSeedanceGenerateAudioEnabled,
+                              onDurationChange: setSelectedSegmentPhotoAnimationDurationSeconds,
+                              onDurationModeChange: setSegmentSeedanceDurationMode,
+                              onGenerateAudioChange: setIsSegmentSeedanceGenerateAudioEnabled,
                               value: selectedSegmentPhotoAnimationDurationSeconds,
+                              voiceoverDurationSeconds: segmentSeedanceVoiceoverDurationSeconds,
                             })}
                             <button
                               className="studio-ai-photo-modal__action studio-ai-photo-modal__action--primary studio-ai-photo-modal__action--paid"
@@ -38698,7 +38816,8 @@ export function WorkspacePage({
                               onClick={() => {
                                 handleSegmentAiPhotoModalPaidAction((snapshot) =>
                                   handleSegmentPhotoAnimationModalGenerate({
-                                    durationSeconds: selectedSegmentPhotoAnimationDurationSeconds,
+                                    durationSeconds: segmentSeedanceDurationSeconds,
+                                    generateAudio: isSegmentSeedanceGenerateAudioEnabled,
                                     prompt: snapshot.aiVideoPrompt,
                                     quality: selectedSegmentPhotoAnimationQuality,
                                     segmentIndex: snapshot.segmentIndex,

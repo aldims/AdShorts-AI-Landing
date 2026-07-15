@@ -4851,6 +4851,7 @@ app.post("/api/studio/segment-ai-video/jobs", async (req, res) => {
   const referenceAssetIds = normalizeRequestPositiveIntegerList(req.body?.referenceAssetIds);
   const sceneReferenceAssetIds = normalizeRequestPositiveIntegerList(req.body?.sceneReferenceAssetIds);
   const durationSeconds = normalizeRequestDurationSeconds(req.body?.durationSeconds ?? req.body?.duration);
+  const generateAudio = req.body?.generateAudio === true;
   const projectId = Number(req.body?.projectId ?? 0);
   const segmentIndex = normalizeRequiredJsonNonNegativeInteger(req.body?.segmentIndex);
 
@@ -4875,6 +4876,7 @@ app.post("/api/studio/segment-ai-video/jobs", async (req, res) => {
       characterContinuityMode,
       characterIds,
       durationSeconds,
+      generateAudio,
       preserveCharacters,
       quality,
       projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : undefined,
@@ -4991,6 +4993,7 @@ app.post("/api/studio/segment-photo-animation/jobs", async (req, res) => {
   const customVideoFileName =
     typeof req.body?.customVideoFileName === "string" ? req.body.customVideoFileName.trim() : "";
   const durationSeconds = normalizeRequestDurationSeconds(req.body?.durationSeconds ?? req.body?.duration);
+  const generateAudio = req.body?.generateAudio === true;
   const durationExtensionMode =
     typeof req.body?.durationExtensionMode === "string" ? req.body.durationExtensionMode.trim() : "";
   const durationExtensionBaseDurationSeconds = normalizeRequestDurationSeconds(
@@ -5056,6 +5059,7 @@ app.post("/api/studio/segment-photo-animation/jobs", async (req, res) => {
       durationExtensionTailDurationSeconds,
       durationExtensionTargetDurationSeconds,
       durationSeconds,
+      generateAudio,
       language,
       projectId: Number.isFinite(projectId) && projectId > 0 ? projectId : undefined,
       quality,

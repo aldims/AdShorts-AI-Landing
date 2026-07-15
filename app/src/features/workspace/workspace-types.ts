@@ -307,6 +307,7 @@ export type StudioCustomVideoFile = {
   file?: File;
   fileName: string;
   fileSize: number;
+  generateAudio?: boolean;
   libraryItemKey?: string;
   mimeType: string;
   objectUrl?: string;

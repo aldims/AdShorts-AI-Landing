@@ -673,6 +673,7 @@ export type WorkspaceSegmentAiVideoJobCreateRequest = {
   characterContinuityMode?: "auto" | "off" | "force";
   characterIds?: number[];
   durationSeconds?: number;
+  generateAudio?: boolean;
   imageAssetId?: number;
   imageDataUrl?: string;
   imageFileName?: string;
