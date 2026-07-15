@@ -30251,51 +30251,6 @@ button.studio-segment-editor__timeline-label:focus-visible {
   white-space: nowrap;
 }
 
-.studio-segment-editor__timeline-waveform {
-  position: absolute;
-  inset: 6px 10px 6px 264px;
-  z-index: 1;
-  display: block;
-  opacity: 0.74;
-  pointer-events: none;
-}
-
-.studio-segment-editor__timeline-waveform::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 50%;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(216, 180, 254, 0.3), rgba(45, 212, 191, 0.28), transparent);
-  transform: translateY(-50%);
-}
-
-.studio-segment-editor__timeline-waveform svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-}
-
-.studio-segment-editor__timeline-waveform svg .studio-segment-editor__timeline-waveform-fill {
-  fill: rgba(139, 92, 246, 0.32);
-  filter: drop-shadow(0 0 10px rgba(45, 212, 191, 0.14));
-}
-
-.studio-segment-editor__timeline-waveform-ridge {
-  fill: none;
-  stroke: rgba(226, 232, 240, 0.54);
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.8;
-  vector-effect: non-scaling-stroke;
-}
-
-.studio-segment-editor__timeline-waveform-ridge--low {
-  stroke: rgba(45, 212, 191, 0.38);
-}
-
 .studio-segment-editor__timeline-drop-gap {
   position: absolute;
   left: var(--studio-segment-editor-timeline-drop-left, 0);
@@ -31971,10 +31926,6 @@ button.studio-segment-editor__timeline-label:focus-visible {
 
   .studio-segment-editor__timeline-cell-shell--global-audio .studio-segment-editor__timeline-cell-copy {
     width: 98px;
-  }
-
-  .studio-segment-editor__timeline-waveform {
-    left: 236px;
   }
 
   .studio-segment-editor__timeline-history-button {

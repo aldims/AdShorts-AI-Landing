@@ -33139,24 +33139,6 @@ export function WorkspacePage({
                     onPointerDown={(event) => handleSegmentEditorTimelineGlobalControlPointerDown("music", event)}
                     onClick={(event) => handleSegmentEditorTimelineGlobalControlClick("music", event)}
                   >
-                    {!span.isEmpty ? (
-                      <span className="studio-segment-editor__timeline-waveform" aria-hidden="true">
-                        <svg viewBox="0 0 720 48" preserveAspectRatio="none" focusable="false">
-                          <path
-                            className="studio-segment-editor__timeline-waveform-fill"
-                            d="M0 24 L10 22 L18 23 L26 16 L34 21 L42 10 L50 18 L58 7 L66 20 L76 15 L86 22 L96 12 L106 20 L116 8 L126 18 L136 23 L146 14 L156 21 L166 11 L178 19 L190 9 L202 16 L214 22 L226 13 L238 20 L250 6 L262 17 L274 11 L286 21 L298 15 L310 23 L322 12 L334 19 L346 8 L358 17 L370 10 L382 22 L394 14 L406 20 L418 7 L430 18 L442 12 L454 23 L466 16 L478 21 L490 9 L502 19 L514 13 L526 22 L538 15 L550 20 L562 8 L574 17 L586 11 L598 21 L610 16 L622 23 L634 14 L646 20 L658 10 L670 18 L682 13 L694 21 L706 17 L720 24 L706 31 L694 27 L682 35 L670 30 L658 38 L646 28 L634 34 L622 25 L610 32 L598 27 L586 37 L574 31 L562 40 L550 28 L538 33 L526 26 L514 35 L502 29 L490 39 L478 27 L466 32 L454 25 L442 36 L430 30 L418 41 L406 28 L394 34 L382 26 L370 38 L358 31 L346 40 L334 29 L322 36 L310 25 L298 33 L286 27 L274 37 L262 31 L250 42 L238 28 L226 35 L214 26 L202 32 L190 39 L178 29 L166 37 L156 27 L146 34 L136 25 L126 30 L116 40 L106 28 L96 36 L86 26 L76 33 L66 28 L58 41 L50 30 L42 38 L34 27 L26 34 L18 25 L10 31 L0 24 Z"
-                          />
-                          <path
-                            className="studio-segment-editor__timeline-waveform-ridge"
-                            d="M0 24 L10 22 L18 23 L26 16 L34 21 L42 10 L50 18 L58 7 L66 20 L76 15 L86 22 L96 12 L106 20 L116 8 L126 18 L136 23 L146 14 L156 21 L166 11 L178 19 L190 9 L202 16 L214 22 L226 13 L238 20 L250 6 L262 17 L274 11 L286 21 L298 15 L310 23 L322 12 L334 19 L346 8 L358 17 L370 10 L382 22 L394 14 L406 20 L418 7 L430 18 L442 12 L454 23 L466 16 L478 21 L490 9 L502 19 L514 13 L526 22 L538 15 L550 20 L562 8 L574 17 L586 11 L598 21 L610 16 L622 23 L634 14 L646 20 L658 10 L670 18 L682 13 L694 21 L706 17 L720 24"
-                          />
-                          <path
-                            className="studio-segment-editor__timeline-waveform-ridge studio-segment-editor__timeline-waveform-ridge--low"
-                            d="M0 24 L10 31 L18 25 L26 34 L34 27 L42 38 L50 30 L58 41 L66 28 L76 33 L86 26 L96 36 L106 28 L116 40 L126 30 L136 25 L146 34 L156 27 L166 37 L178 29 L190 39 L202 32 L214 26 L226 35 L238 28 L250 42 L262 31 L274 37 L286 27 L298 33 L310 25 L322 36 L334 29 L346 40 L358 31 L370 38 L382 26 L394 34 L406 28 L418 41 L430 30 L442 36 L454 25 L466 32 L478 27 L490 39 L502 29 L514 35 L526 26 L538 33 L550 28 L562 40 L574 31 L586 37 L598 27 L610 32 L622 25 L634 34 L646 28 L658 38 L670 30 L682 35 L694 27 L706 31 L720 24"
-                          />
-                        </svg>
-                      </span>
-                    ) : null}
                     <span className="studio-segment-editor__timeline-cell-copy">
                       <strong>{segmentTimelineMusicLabel}</strong>
                       {isMusicEdited ? <small>{workspaceText(locale, "Музыка изменена", "Music changed")}</small> : null}
