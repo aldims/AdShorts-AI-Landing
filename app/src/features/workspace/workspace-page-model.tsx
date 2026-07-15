@@ -170,6 +170,11 @@ export const isStudioGenerationUserFacing = (
   generationUiSource: StudioGenerationUiSource,
 ) => isGenerating && generationUiSource !== "idle";
 
+export const shouldDisableWorkspaceScenesCreateMode = (options: {
+  isEditHidden: boolean;
+  isGenerationVisible: boolean;
+}) => options.isEditHidden || options.isGenerationVisible;
+
 export const shouldShowStudioGenerationError = (
   generateError: string | null | undefined,
   isGenerating: boolean,

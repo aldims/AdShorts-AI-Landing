@@ -623,6 +623,7 @@ import {
   isStudioGenerationUserFacing,
   resolveWorkspaceRetainedScenesDraftState,
   resolveWorkspaceScenesModeSwitchTarget,
+  shouldDisableWorkspaceScenesCreateMode,
   shouldShowStudioGenerationError,
   shouldShowWorkspaceStudioIdeaEmptyState,
   shouldShowWorkspaceStudioWelcomeCard,
@@ -5805,6 +5806,15 @@ export function WorkspacePage({
   const visibleGeneratedVideo = isGeneratedVideoDismissed ? null : generatedVideo;
   const visibleGeneratedVideoPlaybackUrl = isGeneratedVideoDismissed ? null : generatedVideoPlaybackUrl;
   const isUserFacingGeneration = isStudioGenerationUserFacing(isGenerating, generationUiSource);
+  const isScenesCreateModeDisabled = shouldDisableWorkspaceScenesCreateMode({
+    isEditHidden: isEditHideEnabled,
+    isGenerationVisible: isUserFacingGeneration,
+  });
+  const scenesCreateModeDisabledReason = isUserFacingGeneration
+    ? workspaceText(locale, "Дождитесь завершения создания Shorts", "Wait for Shorts creation to finish")
+    : isEditHideEnabled
+      ? workspaceText(locale, "Режим «По сценам» скоро будет доступен", "Scenes mode is coming soon")
+      : undefined;
   const shouldShowGenerateError = shouldShowStudioGenerationError(generateError, isGenerating, generationUiSource);
   const hasCreatedStudioVideo =
     Boolean(generatedVideoPlaybackUrl) ||
@@ -12038,6 +12048,10 @@ export function WorkspacePage({
       return;
     }
 
+    if (nextMode === "segment-editor" && isScenesCreateModeDisabled) {
+      return;
+    }
+
     if (nextMode === "default") {
       closeSegmentAiPhotoModal();
       resetSegmentEditorPreviewPlaybackState({ clearRefs: true });
@@ -12076,6 +12090,10 @@ export function WorkspacePage({
   };
 
   const handleStudioCreateScenesModeSelect = () => {
+    if (isScenesCreateModeDisabled) {
+      return;
+    }
+
     suppressScratchSegmentEditorRouteOpenRef.current = false;
     const currentScenesDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
     const target = resolveWorkspaceScenesModeSwitchTarget({
@@ -36293,8 +36311,18 @@ export function WorkspacePage({
           type="button"
           role="tab"
           aria-selected={isScenesCreateMode}
+          aria-label={
+            scenesCreateModeDisabledReason
+              ? workspaceText(
+                  locale,
+                  `По сценам. ${scenesCreateModeDisabledReason}`,
+                  `By scenes. ${scenesCreateModeDisabledReason}`,
+                )
+              : undefined
+          }
           tabIndex={isScenesCreateMode ? 0 : -1}
-          disabled={isEditHideEnabled}
+          title={scenesCreateModeDisabledReason}
+          disabled={isScenesCreateModeDisabled}
           onKeyDown={handleStudioCreateModeTabKeyDown}
           onClick={handleStudioCreateScenesModeSelect}
         >

@@ -12,6 +12,7 @@ import {
   isStudioGenerationUserFacing,
   resolveWorkspaceRetainedScenesDraftState,
   resolveWorkspaceScenesModeSwitchTarget,
+  shouldDisableWorkspaceScenesCreateMode,
   shouldShowStudioGenerationError,
   shouldShowWorkspaceStudioIdeaEmptyState,
   shouldShowWorkspaceStudioWelcomeCard,
@@ -36,6 +37,30 @@ describe("segment editor session loading", () => {
 });
 
 describe("studio creation mode switching", () => {
+  it("blocks scenes mode while Shorts creation is visible", () => {
+    expect(
+      shouldDisableWorkspaceScenesCreateMode({
+        isEditHidden: false,
+        isGenerationVisible: true,
+      }),
+    ).toBe(true);
+    expect(
+      shouldDisableWorkspaceScenesCreateMode({
+        isEditHidden: false,
+        isGenerationVisible: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("keeps scenes mode blocked when editing is disabled globally", () => {
+    expect(
+      shouldDisableWorkspaceScenesCreateMode({
+        isEditHidden: true,
+        isGenerationVisible: false,
+      }),
+    ).toBe(true);
+  });
+
   it("restores a detached scenes draft after leaving the editor", () => {
     const detachedDraft = { projectId: 4178, segments: [{ index: 0 }, { index: 1 }] };
 
