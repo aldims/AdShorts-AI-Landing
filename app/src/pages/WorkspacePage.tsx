@@ -1569,7 +1569,7 @@ export const resolveStoredStudioCreateVideoMode = (
   return fallbackVideoMode === "ai_video" ? "ai_video" : "ai_photo";
 };
 
-const resolveStudioCreateInitialSettings = (
+export const resolveStudioCreateInitialSettings = (
   storedSettings: StoredStudioCreateSettings | null,
   fallbackSettings: Omit<StudioCreateInitialSettings, "musicName" | "voiceIdsByLanguage">,
 ): StudioCreateInitialSettings => {

@@ -413,8 +413,10 @@ describe("StudioSubtitleSelectorChip", () => {
 
     expect(screen.getByRole("button", { name: /Modern\s*Current default for Shorts in Manrope\./ })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Purple" })).toBeTruthy();
-    expect(screen.getByText("Final call to action")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Subtitle example: Final call to action" })).toBeTruthy();
     expect(screen.getByText("Grab")).toBeTruthy();
+    expect(screen.queryByText("Final call to action")).toBeNull();
+    expect(screen.queryByText("Manrope")).toBeNull();
     expect(screen.queryByText("Фиолетовый")).toBeNull();
     expect(screen.queryByText("Финальный призыв")).toBeNull();
   });

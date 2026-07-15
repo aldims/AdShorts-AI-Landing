@@ -166,6 +166,7 @@ import {
   resolveWorkspaceGenerationEffectiveVideoMode,
   resolveWorkspaceRestoredStudioVideoMode,
   resolveStoredStudioCreateVideoMode,
+  resolveStudioCreateInitialSettings,
   resolveWorkspaceExamplePrefillInitialStudioState,
   resolveWorkspaceRegenerationVideoMode,
   resetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene,
@@ -884,6 +885,28 @@ describe("WorkspacePage reference creation defaults", () => {
 });
 
 describe("WorkspacePage example prefill settings", () => {
+  it("starts a fresh Studio flow with Alexander voiceover and subtitles enabled", () => {
+    const fallbackSettings = resolveWorkspaceExamplePrefillInitialStudioState({
+      routeDefaults: getWorkspaceInitialStudioDefaults("ru"),
+    });
+
+    expect(
+      resolveStudioCreateInitialSettings(
+        {
+          language: "ru",
+          subtitleEnabled: false,
+          voiceEnabled: false,
+          voiceId: "none",
+        },
+        fallbackSettings,
+      ),
+    ).toMatchObject({
+      subtitleEnabled: true,
+      voiceEnabled: true,
+      voiceId: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+  });
+
   it("restores AI video from stored Studio settings without downgrading it", () => {
     expect(resolveStoredStudioCreateVideoMode("ai_video", "ai_photo")).toBe("ai_video");
     expect(resolveStoredStudioCreateVideoMode(undefined, "ai_video")).toBe("ai_video");

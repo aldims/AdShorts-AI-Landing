@@ -35,11 +35,9 @@ import {
   buildStudioSubtitlePreviewLines,
   getStudioSubtitleColorDisplayLabel,
   getStudioSubtitleExampleDisplayOption,
-  getStudioSubtitleLogicLabel,
   getStudioSubtitlePreviewStyle,
   getStudioSubtitleStyleDisplayDescription,
   getStudioSubtitleStyleDisplayLabel,
-  getStudioSubtitleTransitionLabel,
   studioSubtitleExampleOptions,
   studioSubtitleStyleUsesAccentColor,
   type StudioSubtitleExampleOption,
@@ -287,14 +285,6 @@ export function StudioSubtitleSelectorChip({
   const selectedColor = safeColorOptions.find((color) => color.id === selectedColorId) ?? safeColorOptions[0];
   const selectedStyleLabel = getStudioSubtitleStyleDisplayLabel(locale, selectedStyle);
   const previewStyle = getStudioSubtitlePreviewStyle(selectedStyle, selectedColor);
-  const selectedColorLabel = getStudioSubtitleColorDisplayLabel(locale, selectedColor);
-  const previewColorLabel = studioSubtitleStyleUsesAccentColor(selectedStyle)
-    ? selectedColorLabel
-    : locale === "en"
-      ? "White text"
-      : "Белый текст";
-  const styleLogicLabel = getStudioSubtitleLogicLabel(selectedStyle, locale);
-  const transitionLabel = getStudioSubtitleTransitionLabel(selectedStyle, locale);
   const isSidebarVariant = variant === "sidebar";
   const resolvedDisabledReason =
     disabledReason ?? (locale === "en" ? "Turn voiceover on before using subtitles" : "Включите озвучку, чтобы использовать субтитры");
@@ -568,10 +558,9 @@ export function StudioSubtitleSelectorChip({
                         key={example.id}
                         className={`studio-subtitle-selector__example${example.id === selectedExampleId ? " is-selected" : ""}`}
                         type="button"
+                        aria-label={`${locale === "en" ? "Subtitle example" : "Пример субтитров"}: ${displayExample.note}`}
                         onClick={() => onSelectExample(example.id)}
                       >
-                        <span className="studio-subtitle-selector__example-label">{displayExample.label}</span>
-                        <small className="studio-subtitle-selector__example-note">{displayExample.note}</small>
                         <div
                           className="studio-subtitle-selector__example-stage"
                           data-style={selectedStyle.id}
@@ -579,10 +568,6 @@ export function StudioSubtitleSelectorChip({
                           style={previewStyle}
                           aria-hidden="true"
                         >
-                          <div className="studio-subtitle-selector__example-video-meta">
-                            <span>{selectedStyleLabel}</span>
-                            <span>{previewColorLabel}</span>
-                          </div>
                           <div
                             className="studio-subtitle-selector__example-caption"
                             data-logic={selectedStyle.logicMode}
@@ -601,11 +586,6 @@ export function StudioSubtitleSelectorChip({
                               </span>
                             ))}
                           </div>
-                        </div>
-                        <div className="studio-subtitle-selector__example-tags" aria-hidden="true">
-                          <span>{selectedStyle.fontFamily}</span>
-                          <span>{styleLogicLabel}</span>
-                          <span>{transitionLabel}</span>
                         </div>
                       </button>
                     );
