@@ -168,6 +168,7 @@ import {
   resolveWorkspaceRestoredStudioVideoMode,
   resolveStoredStudioCreateVideoMode,
   resolveStudioCreateInitialSettings,
+  resolveStudioCreateRestoreSettings,
   resolveWorkspaceExamplePrefillInitialStudioState,
   resolveWorkspaceRegenerationVideoMode,
   resetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene,
@@ -900,6 +901,33 @@ describe("WorkspacePage example prefill settings", () => {
           voiceId: "none",
         },
         fallbackSettings,
+      ),
+    ).toMatchObject({
+      subtitleEnabled: true,
+      voiceEnabled: true,
+      voiceId: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+  });
+
+  it("restores fresh voiceover and subtitle defaults after a silent project was opened", () => {
+    const freshDefaults = resolveWorkspaceExamplePrefillInitialStudioState({
+      routeDefaults: getWorkspaceInitialStudioDefaults("ru"),
+    });
+
+    expect(
+      resolveStudioCreateRestoreSettings(
+        {
+          language: "ru",
+          subtitleEnabled: false,
+          voiceEnabled: false,
+          voiceId: "none",
+        },
+        {
+          ...freshDefaults,
+          subtitleEnabled: false,
+          voiceEnabled: false,
+        },
+        freshDefaults,
       ),
     ).toMatchObject({
       subtitleEnabled: true,

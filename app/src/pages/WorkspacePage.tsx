@@ -1637,6 +1637,17 @@ export const resolveStudioCreateInitialSettings = (
   };
 };
 
+export const resolveStudioCreateRestoreSettings = (
+  storedSettings: StoredStudioCreateSettings | null,
+  currentSettings: Omit<StudioCreateInitialSettings, "musicName" | "voiceIdsByLanguage">,
+  freshDefaults: Pick<StudioCreateInitialSettings, "subtitleEnabled" | "voiceEnabled">,
+): StudioCreateInitialSettings =>
+  resolveStudioCreateInitialSettings(storedSettings, {
+    ...currentSettings,
+    subtitleEnabled: freshDefaults.subtitleEnabled,
+    voiceEnabled: freshDefaults.voiceEnabled,
+  });
+
 const MEDIA_LIBRARY_VIRTUAL_MIN_COLUMN_WIDTH_PX = 118;
 const MEDIA_LIBRARY_VIRTUAL_DEFAULT_GAP_PX = 10;
 const MEDIA_LIBRARY_VIRTUAL_OVERSCAN_ROWS = 1;
@@ -2045,17 +2056,21 @@ export function WorkspacePage({
     }
 
     applyStudioCreateSettingsSnapshot(
-      resolveStudioCreateInitialSettings(storedSettings, {
-        aiVideoGenerateAudioEnabled: isAiVideoGenerateAudioEnabled,
-        language: selectedLanguage,
-        musicType: selectedMusicType,
-        subtitleColorId: selectedSubtitleColorId,
-        subtitleEnabled: areSubtitlesEnabled,
-        subtitleStyleId: selectedSubtitleStyleId,
-        videoMode: selectedVideoMode,
-        voiceEnabled: isVoiceoverEnabled,
-        voiceId: selectedVoiceId,
-      }),
+      resolveStudioCreateRestoreSettings(
+        storedSettings,
+        {
+          aiVideoGenerateAudioEnabled: isAiVideoGenerateAudioEnabled,
+          language: selectedLanguage,
+          musicType: selectedMusicType,
+          subtitleColorId: selectedSubtitleColorId,
+          subtitleEnabled: areSubtitlesEnabled,
+          subtitleStyleId: selectedSubtitleStyleId,
+          videoMode: selectedVideoMode,
+          voiceEnabled: isVoiceoverEnabled,
+          voiceId: selectedVoiceId,
+        },
+        initialStudioCreateSettings,
+      ),
     );
     return true;
   };
