@@ -24,6 +24,12 @@ import {
 } from "../features/workspace/workspace-segment-editor";
 import { resolveStudioSceneVoiceIdOnSettingsOpen } from "../features/workspace/workspace-studio-defaults-helpers";
 import {
+  getWorkspaceProjectSceneReferenceOptionsForTarget,
+  pruneWorkspaceProjectSceneReferenceSelections,
+  resolveWorkspaceProjectSceneReferenceForTarget,
+} from "../features/workspace/workspace-reference-helpers";
+import type { WorkspaceReferenceVisualOption } from "../features/workspace/workspace-prompt-helpers";
+import {
   hasStoredWorkspaceSegmentSceneSoundAssetChangedSinceStart,
   readStoredWorkspaceSegmentEditorDraft,
   readStoredWorkspaceSegmentEditorDrafts,
@@ -577,6 +583,23 @@ describe("WorkspacePage segment subtitle bulk text", () => {
 });
 
 describe("WorkspacePage segment visual references payload", () => {
+  const createSceneReferenceOption = (
+    segmentIndex: number,
+    overrides: Partial<WorkspaceReferenceVisualOption> = {},
+  ): WorkspaceReferenceVisualOption => ({
+    assetId: 900 + segmentIndex,
+    displayNumber: segmentIndex + 1,
+    key: `project-scene:scene-${segmentIndex}`,
+    kind: "scene",
+    label: `Сцена ${segmentIndex + 1}`,
+    previewKind: "image",
+    source: "project-scene",
+    sourceProjectId: 77,
+    sourceSegmentIndex: segmentIndex,
+    subtitle: "Из текущего проекта",
+    ...overrides,
+  });
+
   it("uses project character ids without duplicating them as asset references", () => {
     expect(
       buildWorkspaceSegmentVisualReferenceRequest({
@@ -622,6 +645,34 @@ describe("WorkspacePage segment visual references payload", () => {
       referenceAssetIds: [501],
       sceneReferenceAssetIds: [901],
     });
+  });
+
+  it("offers only usable project scenes other than the generation target", () => {
+    const options = [
+      createSceneReferenceOption(0),
+      createSceneReferenceOption(1),
+      createSceneReferenceOption(2, { assetId: null }),
+    ];
+
+    expect(getWorkspaceProjectSceneReferenceOptionsForTarget(options, 1).map((option) => option.sourceSegmentIndex)).toEqual([0]);
+  });
+
+  it("resolves a separate selected source for each target scene", () => {
+    const options = [createSceneReferenceOption(0), createSceneReferenceOption(1), createSceneReferenceOption(2)];
+    const selections = { 1: 0, 2: 1 };
+
+    expect(resolveWorkspaceProjectSceneReferenceForTarget(options, selections, 1)?.sourceSegmentIndex).toBe(0);
+    expect(resolveWorkspaceProjectSceneReferenceForTarget(options, selections, 2)?.sourceSegmentIndex).toBe(1);
+  });
+
+  it("clears references whose source or target scene is no longer usable", () => {
+    const options = [
+      createSceneReferenceOption(0),
+      createSceneReferenceOption(1, { assetId: null }),
+      createSceneReferenceOption(2),
+    ];
+
+    expect(pruneWorkspaceProjectSceneReferenceSelections({ 1: 0, 2: 1, 4: 0 }, options, [0, 1, 2])).toEqual({ 1: 0 });
   });
 });
 

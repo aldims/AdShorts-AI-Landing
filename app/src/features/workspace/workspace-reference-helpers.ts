@@ -2,6 +2,7 @@ import type {
   WorkspaceReferenceKind,
   WorkspaceSavedReference,
 } from "../../../shared/workspace-references";
+import type { WorkspaceReferenceVisualOption } from "./workspace-prompt-helpers";
 import { getPositiveWorkspaceMediaAssetId } from "./workspace-segment-editor";
 
 export type WorkspaceReferenceCreationSource = "ai" | "upload" | "project";
@@ -218,6 +219,90 @@ export const buildWorkspaceSegmentVisualReferenceRequest = (options: {
     referenceAssetIds,
     sceneReferenceAssetIds,
   };
+};
+
+export type WorkspaceSceneReferenceSelections = Record<number, number>;
+
+export const canUseWorkspaceProjectSceneReference = (
+  option: WorkspaceReferenceVisualOption | null | undefined,
+) => Boolean(
+  option?.source === "project-scene" &&
+  typeof option.sourceSegmentIndex === "number" &&
+  option.sourceSegmentIndex >= 0 &&
+  (option.assetId || option.videoReferenceUrl?.trim()),
+);
+
+export const getWorkspaceProjectSceneReferenceOptionsForTarget = (
+  options: readonly WorkspaceReferenceVisualOption[],
+  targetSegmentIndex: number | null | undefined,
+) => {
+  const safeTargetSegmentIndex = Number.isInteger(targetSegmentIndex) ? Number(targetSegmentIndex) : null;
+
+  return options.filter(
+    (option) =>
+      canUseWorkspaceProjectSceneReference(option) &&
+      option.sourceSegmentIndex !== safeTargetSegmentIndex,
+  );
+};
+
+export const resolveWorkspaceProjectSceneReferenceForTarget = (
+  options: readonly WorkspaceReferenceVisualOption[],
+  selections: WorkspaceSceneReferenceSelections,
+  targetSegmentIndex: number | null | undefined,
+) => {
+  if (!Number.isInteger(targetSegmentIndex)) {
+    return null;
+  }
+
+  const safeTargetSegmentIndex = Number(targetSegmentIndex);
+  const sourceSegmentIndex = selections[safeTargetSegmentIndex];
+  if (!Number.isInteger(sourceSegmentIndex) || sourceSegmentIndex === safeTargetSegmentIndex) {
+    return null;
+  }
+
+  return options.find(
+    (option) =>
+      option.sourceSegmentIndex === sourceSegmentIndex &&
+      canUseWorkspaceProjectSceneReference(option),
+  ) ?? null;
+};
+
+export const pruneWorkspaceProjectSceneReferenceSelections = (
+  selections: WorkspaceSceneReferenceSelections,
+  options: readonly WorkspaceReferenceVisualOption[],
+  targetSegmentIndexes: readonly number[],
+) => {
+  const validTargetSegmentIndexes = new Set(
+    targetSegmentIndexes.filter((segmentIndex) => Number.isInteger(segmentIndex) && segmentIndex >= 0),
+  );
+  const validSourceSegmentIndexes = new Set(
+    options
+      .filter(canUseWorkspaceProjectSceneReference)
+      .map((option) => option.sourceSegmentIndex)
+      .filter((segmentIndex): segmentIndex is number => typeof segmentIndex === "number"),
+  );
+  const nextSelections: WorkspaceSceneReferenceSelections = {};
+
+  Object.entries(selections).forEach(([targetSegmentIndexValue, sourceSegmentIndex]) => {
+    const targetSegmentIndex = Number(targetSegmentIndexValue);
+    if (
+      validTargetSegmentIndexes.has(targetSegmentIndex) &&
+      validSourceSegmentIndexes.has(sourceSegmentIndex) &&
+      targetSegmentIndex !== sourceSegmentIndex
+    ) {
+      nextSelections[targetSegmentIndex] = sourceSegmentIndex;
+    }
+  });
+
+  const currentEntries = Object.entries(selections);
+  const nextEntries = Object.entries(nextSelections);
+  const isUnchanged =
+    currentEntries.length === nextEntries.length &&
+    currentEntries.every(([targetSegmentIndex, sourceSegmentIndex]) =>
+      nextSelections[Number(targetSegmentIndex)] === sourceSegmentIndex,
+    );
+
+  return isUnchanged ? selections : nextSelections;
 };
 
 export const buildWorkspaceReferenceGenerationMediaScope = (projectId: unknown): { projectId?: number } => {

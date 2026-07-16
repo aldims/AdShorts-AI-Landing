@@ -222,16 +222,24 @@ type WorkspaceSegmentVisualReferencesPanelProps = {
   canRenderModal: boolean;
   characterPickerIconUrl: string;
   isModalOpen: boolean;
+  isSceneModalOpen: boolean;
+  isScenePickerDisabled?: boolean;
   locale: Locale;
   mentionCharacterKeys: readonly string[];
   onInsertMention: (option: WorkspaceReferenceVisualOption) => void;
   onOpen: () => void;
+  onOpenScene: () => void;
   onRemoveReference: (option: WorkspaceReferenceVisualOption) => void;
+  onRemoveSceneReference: () => void;
   renderModalContent: () => ReactNode;
   renderPreview: (option: WorkspaceReferenceVisualOption, keyPrefix: string) => ReactNode;
+  renderSceneModalContent: () => ReactNode;
+  sceneReferenceSummary: string;
   segmentReferenceSummary: string;
+  showScenePicker?: boolean;
   selectedCount: number;
   selectedOptions: WorkspaceReferenceVisualOption[];
+  selectedSceneOption: WorkspaceReferenceVisualOption | null;
   variant?: "editor" | "modal";
 };
 
@@ -239,24 +247,72 @@ export function WorkspaceSegmentVisualReferencesPanel({
   canRenderModal,
   characterPickerIconUrl,
   isModalOpen,
+  isSceneModalOpen,
+  isScenePickerDisabled,
   locale,
   mentionCharacterKeys,
   onInsertMention,
   onOpen,
+  onOpenScene,
   onRemoveReference,
+  onRemoveSceneReference,
   renderModalContent,
   renderPreview,
+  renderSceneModalContent,
+  sceneReferenceSummary,
   segmentReferenceSummary,
+  showScenePicker = true,
   selectedCount,
   selectedOptions,
+  selectedSceneOption,
   variant = "editor",
 }: WorkspaceSegmentVisualReferencesPanelProps) {
+  const characterSummaryButton = (
+    <button
+      className="studio-segment-references__summary"
+      type="button"
+      aria-haspopup="dialog"
+      aria-expanded={isModalOpen}
+      onClick={onOpen}
+    >
+      <span>
+        <strong>{workspaceText(locale, "Персонажи", "Characters")}</strong>
+        <small>{segmentReferenceSummary}</small>
+      </span>
+      <em>
+        {selectedCount > 0
+          ? workspaceText(locale, `${selectedCount} выбрано`, `${selectedCount} selected`)
+          : workspaceText(locale, "С нуля", "From scratch")}
+      </em>
+    </button>
+  );
+  const sceneSummaryButton = (
+    <button
+      className={`studio-segment-references__summary studio-segment-references__summary--scene${selectedSceneOption ? " is-selected" : ""}`}
+      type="button"
+      aria-haspopup="dialog"
+      aria-expanded={isSceneModalOpen}
+      disabled={isScenePickerDisabled}
+      onClick={onOpenScene}
+    >
+      <span>
+        <strong>{workspaceText(locale, "Использовать сцену", "Use scene")}</strong>
+        <small>{sceneReferenceSummary}</small>
+      </span>
+      <em>
+        {selectedSceneOption
+          ? workspaceText(locale, "Выбрана", "Selected")
+          : workspaceText(locale, "С нуля", "From scratch")}
+      </em>
+    </button>
+  );
+
   return (
     <section className={`studio-segment-references studio-segment-references--${variant}`}>
       {variant === "editor" ? (
         <div
           className="studio-segment-references__compact-row"
-          aria-label={workspaceText(locale, "Персонажи для описания", "Characters for prompt")}
+          aria-label={workspaceText(locale, "Референсы для генерации", "Generation references")}
         >
           <button
             className="studio-segment-references__compact-trigger"
@@ -279,7 +335,28 @@ export function WorkspaceSegmentVisualReferencesPanel({
             />
             <span>{workspaceText(locale, "Персонажи", "Characters")}</span>
           </button>
-          {selectedOptions.length > 0 ? (
+          {showScenePicker ? (
+            <button
+              className={`studio-segment-references__compact-trigger studio-segment-references__compact-trigger--scene${selectedSceneOption ? " is-selected" : ""}`}
+              type="button"
+              aria-haspopup="dialog"
+              aria-expanded={isSceneModalOpen}
+              aria-label={workspaceText(locale, "Использовать сцену как референс", "Use a scene as reference")}
+              title={workspaceText(locale, "Использовать сцену как референс", "Use a scene as reference")}
+              disabled={isScenePickerDisabled}
+              onClick={onOpenScene}
+            >
+              <span className="studio-segment-references__compact-scene-icon" aria-hidden="true">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <rect x="4" y="5" width="16" height="14" rx="3" stroke="currentColor" strokeWidth="1.7" />
+                  <path d="m7.5 16 3.2-3.5 2.5 2.4 2.2-2.1 2.9 3.2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+                  <circle cx="15.8" cy="9.2" r="1.3" fill="currentColor" />
+                </svg>
+              </span>
+              <span>{workspaceText(locale, "Использовать сцену", "Use scene")}</span>
+            </button>
+          ) : null}
+          {selectedOptions.length > 0 || (showScenePicker && selectedSceneOption) ? (
             <div className="studio-segment-references__mention-icons">
               {selectedOptions.map((option) => {
                 const isInserted = mentionCharacterKeys.includes(option.key);
@@ -332,30 +409,55 @@ export function WorkspaceSegmentVisualReferencesPanel({
                   </span>
                 );
               })}
+              {showScenePicker && selectedSceneOption ? (
+                <span className="studio-segment-references__mention-chip studio-segment-references__mention-chip--scene">
+                  <button
+                    className="studio-segment-references__mention-icon studio-segment-references__mention-icon--scene"
+                    type="button"
+                    aria-label={workspaceText(
+                      locale,
+                      `Изменить референс ${selectedSceneOption.label}`,
+                      `Change ${selectedSceneOption.label} reference`,
+                    )}
+                    title={workspaceText(
+                      locale,
+                      `Референс: ${selectedSceneOption.label}`,
+                      `Reference: ${selectedSceneOption.label}`,
+                    )}
+                    onClick={onOpenScene}
+                  >
+                    <span className="studio-segment-references__mention-icon-media">
+                      {renderPreview(selectedSceneOption, `segment-scene-reference-icon:${selectedSceneOption.key}`)}
+                    </span>
+                    <span>{selectedSceneOption.label}</span>
+                  </button>
+                  <button
+                    className="studio-segment-references__mention-remove"
+                    type="button"
+                    aria-label={workspaceText(locale, "Убрать сцену-референс", "Remove scene reference")}
+                    title={workspaceText(locale, "Убрать сцену-референс", "Remove scene reference")}
+                    onClick={onRemoveSceneReference}
+                  >
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
+                    </svg>
+                  </button>
+                </span>
+              ) : null}
             </div>
           ) : null}
         </div>
       ) : (
-        <button
-          className="studio-segment-references__summary"
-          type="button"
-          aria-haspopup="dialog"
-          aria-expanded={isModalOpen}
-          onClick={onOpen}
-        >
-          <span>
-            <strong>{workspaceText(locale, "Персонажи", "Characters")}</strong>
-            <small>{segmentReferenceSummary}</small>
-          </span>
-          <em>
-            {selectedCount > 0
-              ? workspaceText(locale, `${selectedCount} выбрано`, `${selectedCount} selected`)
-              : workspaceText(locale, "С нуля", "From scratch")}
-          </em>
-        </button>
+        <div className="studio-segment-references__summary-row">
+          {characterSummaryButton}
+          {showScenePicker ? sceneSummaryButton : null}
+        </div>
       )}
       {isModalOpen && canRenderModal && typeof document !== "undefined"
         ? createPortal(renderModalContent(), document.body)
+        : null}
+      {showScenePicker && isSceneModalOpen && canRenderModal && typeof document !== "undefined"
+        ? createPortal(renderSceneModalContent(), document.body)
         : null}
     </section>
   );

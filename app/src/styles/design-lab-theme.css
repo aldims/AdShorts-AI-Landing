@@ -7285,6 +7285,42 @@ textarea {
     rgba(10, 15, 26, 0.82);
 }
 
+.studio-segment-references__compact-trigger:disabled,
+.studio-segment-references__summary:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.studio-segment-references__compact-trigger--scene.is-selected,
+.studio-segment-references__summary--scene.is-selected {
+  border-color: rgba(125, 211, 252, 0.34);
+  background:
+    linear-gradient(145deg, rgba(14, 165, 233, 0.16), rgba(59, 130, 246, 0.06)),
+    rgba(8, 14, 24, 0.78);
+}
+
+.studio-segment-references__compact-scene-icon {
+  display: inline-grid;
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid rgba(125, 211, 252, 0.2);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 28%, rgba(125, 211, 252, 0.22), transparent 56%),
+    rgba(14, 25, 42, 0.9);
+  color: rgba(186, 230, 253, 0.92);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.studio-segment-references__summary-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+
 .studio-segment-references__compact-icon {
   display: block;
   flex: 0 0 auto;
@@ -7345,6 +7381,17 @@ textarea {
     linear-gradient(145deg, rgba(139, 92, 246, 0.22), rgba(59, 130, 246, 0.12)),
     rgba(11, 16, 28, 0.82);
   color: rgba(255, 255, 255, 0.94);
+}
+
+.studio-segment-references__mention-icon--scene {
+  border-color: rgba(125, 211, 252, 0.28);
+  background:
+    linear-gradient(145deg, rgba(14, 165, 233, 0.13), rgba(59, 130, 246, 0.06)),
+    rgba(8, 14, 24, 0.76);
+}
+
+.studio-segment-references__mention-chip--scene .studio-segment-references__mention-remove {
+  border-color: rgba(125, 211, 252, 0.2);
 }
 
 .studio-segment-references__mention-icon.is-speaking {
@@ -7453,6 +7500,27 @@ textarea {
   grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
   gap: 8px;
   min-width: 0;
+}
+
+.studio-segment-references__grid--scenes {
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+}
+
+@media (max-width: 640px) {
+  .studio-segment-references__summary-row {
+    grid-template-columns: 1fr;
+  }
+
+  .studio-segment-references__compact-row {
+    align-items: flex-start;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+
+  .studio-segment-references__compact-row::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 .studio-segment-references__card {

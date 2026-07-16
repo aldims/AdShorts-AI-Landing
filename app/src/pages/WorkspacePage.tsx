@@ -71,6 +71,7 @@ import {
   buildWorkspaceReferenceGenerationMediaScope,
   buildWorkspaceReferencePromptFromVisualSource,
   buildWorkspaceSegmentVisualReferenceRequest,
+  getWorkspaceProjectSceneReferenceOptionsForTarget,
   formatWorkspaceReferenceCharacterAge,
   getNextWorkspaceReferenceDefaultName,
   getWorkspaceReferenceGenderLabel,
@@ -78,12 +79,15 @@ import {
   isValidWorkspaceReferenceCharacterAge,
   normalizeWorkspaceReferenceCharacterAgeInput,
   normalizeWorkspaceReferenceCharacterStyleValue,
+  pruneWorkspaceProjectSceneReferenceSelections,
+  resolveWorkspaceProjectSceneReferenceForTarget,
   WORKSPACE_REFERENCE_CHARACTER_DEFAULTS,
   WORKSPACE_REFERENCE_CHARACTER_MIN_AGE,
   WORKSPACE_REFERENCE_CHARACTER_STYLE_OPTIONS,
   WORKSPACE_REFERENCE_SCENE_DEFAULTS,
   type WorkspaceReferenceCharacterGender,
   type WorkspaceReferenceCreationSource,
+  type WorkspaceSceneReferenceSelections,
 } from "../features/workspace/workspace-reference-helpers";
 import {
   buildWorkspacePromptCharacterMentionTokens,
@@ -1932,8 +1936,9 @@ export function WorkspacePage({
   const [selectedSegmentReferenceCharacterAssetKeys, setSelectedSegmentReferenceCharacterAssetKeys] = useState<string[]>([]);
   const [segmentTalkingCharacterTargets, setSegmentTalkingCharacterTargets] = useState<Record<number, WorkspaceTalkingCharacterTarget>>({});
   const [segmentTalkingCharacterDraftTargets, setSegmentTalkingCharacterDraftTargets] = useState<Record<number, WorkspaceTalkingCharacterTarget>>({});
-  const [selectedSegmentReferenceSceneKey, setSelectedSegmentReferenceSceneKey] = useState<string | null>(null);
+  const [selectedSegmentReferenceScenes, setSelectedSegmentReferenceScenes] = useState<WorkspaceSceneReferenceSelections>({});
   const [isSegmentReferencesModalOpen, setIsSegmentReferencesModalOpen] = useState(false);
+  const [isSegmentSceneReferencesModalOpen, setIsSegmentSceneReferencesModalOpen] = useState(false);
   const [segmentProjectCharacters, setSegmentProjectCharacters] = useState<WorkspaceProjectCharacter[]>([]);
   const [isSegmentProjectCharactersLoading, setIsSegmentProjectCharactersLoading] = useState(false);
   const [segmentProjectCharactersError, setSegmentProjectCharactersError] = useState<string | null>(null);
@@ -4369,8 +4374,9 @@ export function WorkspacePage({
       setSelectedSegmentReferenceCharacterIds([]);
       setSelectedSegmentReferenceCharacterAssetKeys([]);
       setSegmentTalkingCharacterTargets({});
-      setSelectedSegmentReferenceSceneKey(null);
+      setSelectedSegmentReferenceScenes({});
       setIsSegmentReferencesModalOpen(false);
+      setIsSegmentSceneReferencesModalOpen(false);
       setIsWorkspaceReferenceCreatorOpen(false);
       setReferenceCreationSource("ai");
       setReferenceCreationPrompt("");
@@ -6802,6 +6808,10 @@ export function WorkspacePage({
     (segmentEditorDraft?.segments ?? []).map(getWorkspaceSegmentVisualGenerationDurationSeconds),
   );
   const activeSegment = segmentEditorDraft?.segments[activeSegmentIndex] ?? null;
+  const segmentVisualReferenceTargetIndex =
+    isSegmentAiPhotoModalOpen && typeof segmentAiPhotoModalSegmentIndex === "number"
+      ? segmentAiPhotoModalSegmentIndex
+      : activeSegment?.index ?? null;
   const activeSegmentSceneSoundCreditCost = getStudioSegmentSceneSoundCreditCost(
     getWorkspaceSegmentVisualGenerationDurationSeconds(activeSegment),
   );
@@ -6916,24 +6926,6 @@ export function WorkspacePage({
         })),
     [locale, savedWorkspaceReferences],
   );
-  const savedSceneReferenceOptions = useMemo<WorkspaceReferenceVisualOption[]>(
-    () =>
-      savedWorkspaceReferences
-        .filter((reference) => reference.kind === "scene")
-        .map((reference) => ({
-          assetId: reference.assetId,
-          key: `saved:${reference.id}`,
-          kind: "scene",
-          label: reference.name,
-          previewKind: "image",
-          savedReference: reference,
-          source: "saved",
-          sourceProjectId: reference.sourceProjectId,
-          sourceSegmentIndex: reference.sourceSegmentIndex,
-          subtitle: reference.description || workspaceText(locale, "Сохраненная сцена", "Saved scene"),
-        })),
-    [locale, savedWorkspaceReferences],
-  );
   const selectedSegmentReferenceCharacterOptions = useMemo(
     () => {
       const allCharacterOptions = [...projectCharacterReferenceOptions, ...savedCharacterReferenceOptions];
@@ -6954,15 +6946,27 @@ export function WorkspacePage({
       selectedSegmentReferenceCharacterIds,
     ],
   );
-  const selectedSegmentReferenceScene = useMemo(
-    () =>
-      selectedSegmentReferenceSceneKey
-        ? [...projectSceneReferenceOptions, ...savedSceneReferenceOptions].find(
-            (option) => option.key === selectedSegmentReferenceSceneKey || option.key === `project-scene:${selectedSegmentReferenceSceneKey}`,
-          ) ?? null
-        : null,
-    [projectSceneReferenceOptions, savedSceneReferenceOptions, selectedSegmentReferenceSceneKey],
+  const availableSegmentReferenceSceneOptions = useMemo(
+    () => getWorkspaceProjectSceneReferenceOptionsForTarget(
+      projectSceneReferenceOptions,
+      segmentVisualReferenceTargetIndex,
+    ),
+    [projectSceneReferenceOptions, segmentVisualReferenceTargetIndex],
   );
+  const selectedSegmentReferenceScene = useMemo(
+    () => resolveWorkspaceProjectSceneReferenceForTarget(
+      projectSceneReferenceOptions,
+      selectedSegmentReferenceScenes,
+      segmentVisualReferenceTargetIndex,
+    ),
+    [projectSceneReferenceOptions, segmentVisualReferenceTargetIndex, selectedSegmentReferenceScenes],
+  );
+  const resolveSelectedSegmentReferenceScene = (targetSegmentIndex: number) =>
+    resolveWorkspaceProjectSceneReferenceForTarget(
+      projectSceneReferenceOptions,
+      selectedSegmentReferenceScenes,
+      targetSegmentIndex,
+    );
   const resolveSegmentReferenceAssetId = async (
     option: WorkspaceReferenceVisualOption,
     referenceKind: "character" | "scene",
@@ -7040,6 +7044,16 @@ export function WorkspacePage({
         mimeType: WORKSPACE_SEGMENT_REFERENCE_FRAME_MIME_TYPE,
       };
     } catch (error) {
+      if (referenceKind === "scene") {
+        throw new Error(
+          workspaceText(
+            locale,
+            "Не удалось подготовить кадр видео для сцены-референса.",
+            "Could not prepare the video frame for the scene reference.",
+          ),
+        );
+      }
+
       const posterReferenceUrl = option.videoPosterReferenceUrl?.trim();
       if (!posterReferenceUrl) {
         throw error;
@@ -7207,8 +7221,9 @@ export function WorkspacePage({
     setSelectedSegmentReferenceCharacterIds([]);
     setSelectedSegmentReferenceCharacterAssetKeys([]);
     setSegmentTalkingCharacterTargets({});
-    setSelectedSegmentReferenceSceneKey(null);
+    setSelectedSegmentReferenceScenes({});
     setIsSegmentReferencesModalOpen(false);
+    setIsSegmentSceneReferencesModalOpen(false);
     setIsWorkspaceReferenceCreatorOpen(false);
     setReferenceCreationSource("ai");
     setReferenceCreationPrompt(WORKSPACE_REFERENCE_CHARACTER_DEFAULTS.description);
@@ -7345,19 +7360,14 @@ export function WorkspacePage({
     selectedSegmentReferenceCharacterIds,
   ]);
   useEffect(() => {
-    if (!selectedSegmentReferenceSceneKey) {
-      return;
-    }
-
-    const hasSelectedSceneReference = [...projectSceneReferenceOptions, ...savedSceneReferenceOptions].some(
-      (option) =>
-        option.key === selectedSegmentReferenceSceneKey ||
-        option.key === `project-scene:${selectedSegmentReferenceSceneKey}`,
+    setSelectedSegmentReferenceScenes((current) =>
+      pruneWorkspaceProjectSceneReferenceSelections(
+        current,
+        projectSceneReferenceOptions,
+        (segmentEditorDraft?.segments ?? []).map((segment) => segment.index),
+      ),
     );
-    if (!hasSelectedSceneReference) {
-      setSelectedSegmentReferenceSceneKey(null);
-    }
-  }, [projectSceneReferenceOptions, savedSceneReferenceOptions, selectedSegmentReferenceSceneKey]);
+  }, [projectSceneReferenceOptions, segmentEditorDraft?.segments]);
   useEffect(() => {
     activeSegmentPlaybackIndexRef.current = activeSegment ? activeSegmentIndex : null;
   }, [activeSegment, activeSegmentIndex]);
@@ -17371,7 +17381,9 @@ export function WorkspacePage({
     const billingQuality = isPromptScoped ? "premium" : generationQuality;
     const requiredCredits = getSegmentAiPhotoCreditCost(billingQuality);
     const includeSceneReference = options?.includeSceneReference !== false;
-    const sceneReferenceOption = includeSceneReference ? selectedSegmentReferenceScene : null;
+    const sceneReferenceOption = includeSceneReference
+      ? resolveSelectedSegmentReferenceScene(targetSegmentIndex)
+      : null;
     if (!normalizedPrompt) {
       setSegmentEditorVideoError("Введите промт для ИИ фото.");
       return;
@@ -17669,7 +17681,7 @@ export function WorkspacePage({
       return;
     }
     const { characterIds, characterReferenceOptions, isPromptScoped } = resolvePromptScopedSegmentReferenceCharacters(nextPrompt);
-    const sceneReferenceOption = options?.includeSceneReference === false ? null : selectedSegmentReferenceScene;
+    const sceneReferenceOption = null;
 
     if (workspaceBalance !== null && workspaceBalance < STUDIO_SEGMENT_IMAGE_EDIT_CREDIT_COST) {
       setSegmentEditorVideoError(null);
@@ -18026,7 +18038,9 @@ export function WorkspacePage({
     const { characterIds, characterReferenceOptions, isPromptScoped } = resolvePromptScopedSegmentReferenceCharacters(nextPrompt);
     const billingQuality = isPromptScoped ? "premium" : generationQuality;
     const requiredCredits = getSegmentAiVideoCreditCost(billingQuality, durationSeconds, generateAudio);
-    const sceneReferenceOption = options?.includeSceneReference === false ? null : selectedSegmentReferenceScene;
+    const sceneReferenceOption = options?.includeSceneReference === false
+      ? null
+      : resolveSelectedSegmentReferenceScene(targetSegmentIndex);
     if (!normalizedPrompt) {
       setSegmentEditorVideoError("Введите промт для ИИ видео.");
       return;
@@ -33686,42 +33700,75 @@ export function WorkspacePage({
           `${selectedSegmentReferenceCharacterCount > 1 ? "Characters" : "Character"}: ${selectedSegmentReferenceCharacterSummary}`,
         )
       : workspaceText(locale, "Персонажи: не выбраны", "Characters: not selected");
+  const sceneReferenceSummary = selectedSegmentReferenceScene
+    ? selectedSegmentReferenceScene.label
+    : workspaceText(locale, "Сцена не выбрана", "No scene selected");
   const selectSegmentReferenceOption = (option: WorkspaceReferenceVisualOption) => {
-    if (option.kind === "character") {
-      if (option.source === "project-character") {
-        const characterId = Number(option.key.replace(/^project-character:/, ""));
-        setSelectedSegmentReferenceCharacterIds((current) => {
-          if (current.includes(characterId)) {
-            return current.filter((id) => id !== characterId);
-          }
-          const selectedTotal = current.length + selectedSegmentReferenceCharacterAssetKeys.length;
-          if (selectedTotal >= WORKSPACE_SEGMENT_REFERENCE_CHARACTER_LIMIT) {
-            return current;
-          }
-          return [...current, characterId];
-        });
-        return;
-      }
-
-      setSelectedSegmentReferenceCharacterAssetKeys((current) => {
-        if (current.includes(option.key)) {
-          return current.filter((key) => key !== option.key);
+    if (option.kind !== "character") {
+      return;
+    }
+    if (option.source === "project-character") {
+      const characterId = Number(option.key.replace(/^project-character:/, ""));
+      setSelectedSegmentReferenceCharacterIds((current) => {
+        if (current.includes(characterId)) {
+          return current.filter((id) => id !== characterId);
         }
-        const selectedTotal = selectedSegmentReferenceCharacterIds.length + current.length;
+        const selectedTotal = current.length + selectedSegmentReferenceCharacterAssetKeys.length;
         if (selectedTotal >= WORKSPACE_SEGMENT_REFERENCE_CHARACTER_LIMIT) {
           return current;
         }
-        return [...current, option.key];
+        return [...current, characterId];
       });
       return;
     }
 
-    setSelectedSegmentReferenceSceneKey((current) => (current === option.key ? null : option.key));
+    setSelectedSegmentReferenceCharacterAssetKeys((current) => {
+      if (current.includes(option.key)) {
+        return current.filter((key) => key !== option.key);
+      }
+      const selectedTotal = selectedSegmentReferenceCharacterIds.length + current.length;
+      if (selectedTotal >= WORKSPACE_SEGMENT_REFERENCE_CHARACTER_LIMIT) {
+        return current;
+      }
+      return [...current, option.key];
+    });
   };
-  const clearSegmentVisualReferences = () => {
+  const selectSegmentReferenceSceneOption = (option: WorkspaceReferenceVisualOption) => {
+    const targetSegmentIndex = segmentVisualReferenceTargetIndex;
+    const sourceSegmentIndex = option.sourceSegmentIndex;
+    if (
+      typeof targetSegmentIndex !== "number" ||
+      typeof sourceSegmentIndex !== "number" ||
+      targetSegmentIndex === sourceSegmentIndex
+    ) {
+      return;
+    }
+
+    setSelectedSegmentReferenceScenes((current) => {
+      if (current[targetSegmentIndex] === sourceSegmentIndex) {
+        const next = { ...current };
+        delete next[targetSegmentIndex];
+        return next;
+      }
+      return { ...current, [targetSegmentIndex]: sourceSegmentIndex };
+    });
+  };
+  const clearSegmentCharacterReferences = () => {
     setSelectedSegmentReferenceCharacterIds([]);
     setSelectedSegmentReferenceCharacterAssetKeys([]);
-    setSelectedSegmentReferenceSceneKey(null);
+  };
+  const clearSelectedSegmentReferenceScene = () => {
+    if (typeof segmentVisualReferenceTargetIndex !== "number") {
+      return;
+    }
+    setSelectedSegmentReferenceScenes((current) => {
+      if (!(segmentVisualReferenceTargetIndex in current)) {
+        return current;
+      }
+      const next = { ...current };
+      delete next[segmentVisualReferenceTargetIndex];
+      return next;
+    });
   };
   const renderSegmentReferenceOptionPreview = renderWorkspaceSegmentReferenceOptionPreview;
   const getSegmentReferenceOptionPromptAvatarUrl = getWorkspaceSegmentReferenceOptionPromptAvatarUrl;
@@ -33780,16 +33827,15 @@ export function WorkspacePage({
   };
 
   const selectSavedWorkspaceReference = (reference: WorkspaceSavedReference) => {
-    if (reference.kind === "character") {
-      const referenceKey = `saved:${reference.id}`;
-      setSelectedSegmentReferenceCharacterIds([]);
-      setSelectedSegmentReferenceCharacterAssetKeys((current) =>
-        [referenceKey, ...current.filter((key) => key !== referenceKey)].slice(0, WORKSPACE_SEGMENT_REFERENCE_CHARACTER_LIMIT),
-      );
+    if (reference.kind !== "character") {
       return;
     }
 
-    setSelectedSegmentReferenceSceneKey(`saved:${reference.id}`);
+    const referenceKey = `saved:${reference.id}`;
+    setSelectedSegmentReferenceCharacterIds([]);
+    setSelectedSegmentReferenceCharacterAssetKeys((current) =>
+      [referenceKey, ...current.filter((key) => key !== referenceKey)].slice(0, WORKSPACE_SEGMENT_REFERENCE_CHARACTER_LIMIT),
+    );
   };
 
   const resetWorkspaceReferenceCreationForm = (
@@ -33829,6 +33875,9 @@ export function WorkspacePage({
     setEditingReferenceId(null);
     setEditingReferenceName("");
     closeWorkspaceReferenceCreator();
+  };
+  const closeSegmentSceneReferencesModal = () => {
+    setIsSegmentSceneReferencesModalOpen(false);
   };
 
   const openWorkspaceReferenceCreator = () => {
@@ -33871,9 +33920,6 @@ export function WorkspacePage({
       setSavedWorkspaceReferences((current) => current.filter((item) => item.id !== reference.id));
       if (reference.kind === "character") {
         setSelectedSegmentReferenceCharacterAssetKeys((current) => current.filter((key) => key !== `saved:${reference.id}`));
-      }
-      if (selectedSegmentReferenceSceneKey === `saved:${reference.id}`) {
-        setSelectedSegmentReferenceSceneKey(null);
       }
       setMediaLibraryReloadToken((current) => current + 1);
       if (editingReferenceId === reference.id) {
@@ -34652,7 +34698,7 @@ export function WorkspacePage({
         fileInputRef={referenceCreationFileInputRef}
         isCreatorOpen={isWorkspaceReferenceCreatorOpen}
         locale={locale}
-        onClear={clearSegmentVisualReferences}
+        onClear={clearSegmentCharacterReferences}
         onClose={closeSegmentReferencesModal}
         onFileChange={handleReferenceCreationUploadFileSelect}
         savedSection={savedReferenceSection}
@@ -34663,21 +34709,153 @@ export function WorkspacePage({
       />
     );
   };
+  const renderSegmentSceneReferencesModal = () => (
+    <div className="studio-reference-modal-backdrop" role="presentation" onMouseDown={closeSegmentSceneReferencesModal}>
+      <div
+        className="studio-reference-modal studio-scene-reference-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label={workspaceText(locale, "Использовать сцену", "Use scene")}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header className="studio-reference-modal__head">
+          <div>
+            <strong>{workspaceText(locale, "Использовать сцену", "Use scene")}</strong>
+            <span>
+              {workspaceText(
+                locale,
+                "Выберите визуал, который ИИ использует как референс для новой сцены.",
+                "Choose a visual for AI to use as the new scene reference.",
+              )}
+            </span>
+          </div>
+          <div className="studio-reference-modal__head-actions">
+            <button
+              className="studio-reference-modal__ghost"
+              type="button"
+              disabled={!selectedSegmentReferenceScene}
+              onClick={clearSelectedSegmentReferenceScene}
+            >
+              {workspaceText(locale, "Очистить", "Clear")}
+            </button>
+            <button
+              className="studio-reference-modal__close"
+              type="button"
+              aria-label={workspaceText(locale, "Закрыть", "Close")}
+              onClick={closeSegmentSceneReferencesModal}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            </button>
+          </div>
+        </header>
+
+        <div className="studio-reference-modal__layout studio-reference-modal__layout--library-only">
+          <div className="studio-reference-modal__catalog">
+            <section className="studio-reference-modal__saved-section">
+              <div className="studio-reference-modal__section-title">
+                <div>
+                  <strong>{workspaceText(locale, "Сцены проекта", "Project scenes")}</strong>
+                  <span>
+                    {workspaceText(
+                      locale,
+                      "Текущая сцена и сцены без визуала не показываются.",
+                      "The current scene and scenes without visuals are hidden.",
+                    )}
+                  </span>
+                </div>
+              </div>
+              {availableSegmentReferenceSceneOptions.length > 0 ? (
+                <div className="studio-segment-references__grid studio-segment-references__grid--scenes">
+                  {availableSegmentReferenceSceneOptions.map((option) =>
+                    renderSegmentReferenceOptionCard(option, {
+                      onSelect: () => selectSegmentReferenceSceneOption(option),
+                      selectedKey: selectedSegmentReferenceScene?.key ?? null,
+                    }),
+                  )}
+                </div>
+              ) : (
+                <div className="studio-segment-references__empty">
+                  {workspaceText(
+                    locale,
+                    "Сначала создайте фото или видео в другой сцене.",
+                    "Create a photo or video in another scene first.",
+                  )}
+                </div>
+              )}
+            </section>
+
+            <section className="studio-reference-modal__selected">
+              <div className="studio-reference-modal__section-title">
+                <div>
+                  <strong>{workspaceText(locale, "Выбрано", "Selected")}</strong>
+                  <span>{sceneReferenceSummary}</span>
+                </div>
+              </div>
+              <div className="studio-reference-modal__selected-grid studio-reference-modal__selected-grid--characters-only">
+                <WorkspaceReferenceSelectedCard
+                  emptyLabel={workspaceText(locale, "Сцена не выбрана", "No scene selected")}
+                  limit={1}
+                  locale={locale}
+                  options={selectedSegmentReferenceScene ? [selectedSegmentReferenceScene] : []}
+                  renderPreview={renderSegmentReferenceOptionPreview}
+                  title={workspaceText(locale, "Сцена-референс", "Scene reference")}
+                />
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <footer className="studio-reference-modal__footer">
+          <button className="studio-reference-modal__footer-cancel" type="button" onClick={closeSegmentSceneReferencesModal}>
+            {workspaceText(locale, "Закрыть", "Close")}
+          </button>
+          <button
+            className="studio-reference-modal__footer-submit"
+            type="button"
+            disabled={!selectedSegmentReferenceScene}
+            onClick={closeSegmentSceneReferencesModal}
+          >
+            {workspaceText(locale, "Использовать сцену", "Use scene")}
+          </button>
+        </footer>
+      </div>
+    </div>
+  );
   const renderSegmentVisualReferencesPanel = (variant: "editor" | "modal" = "editor") => (
     <WorkspaceSegmentVisualReferencesPanel
       canRenderModal={!isSegmentAiPhotoModalOpen || variant === "modal"}
       characterPickerIconUrl={characterPickerIconUrl}
       isModalOpen={isSegmentReferencesModalOpen}
+      isSceneModalOpen={isSegmentSceneReferencesModalOpen}
+      isScenePickerDisabled={typeof segmentVisualReferenceTargetIndex !== "number"}
       locale={locale}
       mentionCharacterKeys={segmentPromptMentionCharacterKeys}
       onInsertMention={handleInsertSegmentPromptCharacterMention}
-      onOpen={() => setIsSegmentReferencesModalOpen(true)}
+      onOpen={() => {
+        setIsSegmentSceneReferencesModalOpen(false);
+        setIsSegmentReferencesModalOpen(true);
+      }}
+      onOpenScene={() => {
+        setIsSegmentReferencesModalOpen(false);
+        setIsSegmentSceneReferencesModalOpen(true);
+      }}
       onRemoveReference={removeSelectedSegmentReferenceCharacter}
+      onRemoveSceneReference={clearSelectedSegmentReferenceScene}
       renderModalContent={renderSegmentReferencesModal}
       renderPreview={renderSegmentReferenceOptionPreview}
+      renderSceneModalContent={renderSegmentSceneReferencesModal}
+      sceneReferenceSummary={sceneReferenceSummary}
       segmentReferenceSummary={segmentReferenceSummary}
+      showScenePicker={
+        variant === "modal"
+          ? segmentAiPhotoModalTab === "ai_photo" || segmentAiPhotoModalTab === "ai_video"
+          : isPromptAiPhotoMode || isPromptAiVideoMode
+      }
       selectedCount={selectedSegmentReferenceCount}
       selectedOptions={selectedSegmentReferenceCharacterOptions}
+      selectedSceneOption={selectedSegmentReferenceScene}
       variant={variant}
     />
   );
@@ -35290,7 +35468,6 @@ export function WorkspacePage({
     }
     if (isPromptAiPhotoMode) {
       void handleSegmentAiPhotoModalGenerateScene({
-        includeSceneReference: false,
         prompt: promptVisualPromptForAction,
         segmentIndex: activeSegment.index,
       });
@@ -35298,7 +35475,6 @@ export function WorkspacePage({
       void handleSegmentAiVideoModalGenerate({
         durationSeconds: segmentSeedanceDurationSeconds,
         generateAudio: isSegmentSeedanceGenerateAudioEnabled,
-        includeSceneReference: false,
         prompt: promptVisualPromptForAction,
         segmentIndex: activeSegment.index,
       });
