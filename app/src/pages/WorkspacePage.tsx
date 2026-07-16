@@ -49,6 +49,7 @@ import {
 } from "../features/workspace/workspace-project-poster-helpers";
 import {
   appendStudioFormValue,
+  ensureStudioDurableGeneratedVisualAsset,
   ensureStudioUploadedAssetId,
   ensureStudioUploadedAssetIdWithInlineFallback,
   extractStudioUploadedVideoAudio,
@@ -1274,6 +1275,7 @@ const SEGMENT_EDITOR_CREATE_SHORTS_PREPARING_JOB_ID = "__segment_editor_create_s
 const FIRST_VIDEO_PAYMENT_PROFILE_POLL_ATTEMPTS = 6;
 const FIRST_VIDEO_PAYMENT_PROFILE_POLL_INTERVAL_MS = 2_000;
 const STUDIO_GENERATION_ERROR_TOAST_DURATION_MS = 5_000;
+const WORKSPACE_SEGMENT_GENERATED_VISUAL_PERSIST_RETRY_DELAYS_MS = [1000, 2500, 5000, 10000];
 
 export const resolveWorkspaceSegmentDurationMenuTrimLabels = (options: {
   currentVideoDurationSeconds: number | null | undefined;
@@ -15672,6 +15674,60 @@ export function WorkspacePage({
     }), WORKSPACE_SEGMENT_EDITOR_VOICE_TEXT_TIMELINE_REBUILD_OPTIONS);
   };
 
+  const ensureSegmentEditorGeneratedVisualAssetDurable = async (
+    asset: StudioCustomVideoFile,
+    options: {
+      mediaType: "photo" | "video";
+      projectId: number;
+      segmentIndex: number;
+      sourceJobId: string;
+    },
+  ) => {
+    const projectScope = buildWorkspaceReferenceGenerationMediaScope(options.projectId);
+    let lastError: unknown = null;
+
+    for (
+      let attempt = 0;
+      attempt <= WORKSPACE_SEGMENT_GENERATED_VISUAL_PERSIST_RETRY_DELAYS_MS.length;
+      attempt += 1
+    ) {
+      try {
+        return await ensureStudioDurableGeneratedVisualAsset(asset, {
+          fallbackFileName:
+            asset.fileName ||
+            `segment-${options.segmentIndex + 1}-generated.${options.mediaType === "video" ? "mp4" : "png"}`,
+          fallbackMimeType: asset.mimeType,
+          kind: "segment_generated",
+          language: selectedLanguage,
+          mediaType: options.mediaType,
+          ...projectScope,
+          role: "segment_generated",
+          segmentIndex: projectScope.projectId ? options.segmentIndex : undefined,
+        });
+      } catch (error) {
+        lastError = error;
+        const retryDelay = WORKSPACE_SEGMENT_GENERATED_VISUAL_PERSIST_RETRY_DELAYS_MS[attempt];
+        if (retryDelay === undefined) {
+          break;
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, retryDelay));
+      }
+    }
+
+    logSegmentEditorDiagnostics("client.segment-editor.generated-visual.persist-failed", {
+      error: lastError instanceof Error ? { message: lastError.message, name: lastError.name } : String(lastError),
+      mediaType: options.mediaType,
+      projectId: options.projectId,
+      segmentIndex: options.segmentIndex,
+      sourceJobId: options.sourceJobId,
+    }, { level: "error" });
+    throw new Error(workspaceText(
+      locale,
+      "Визуал создан, но не удалось надёжно сохранить его. Обновите страницу — результат генерации будет восстановлен автоматически.",
+      "The visual was created but could not be stored reliably. Refresh the page and the generated result will be restored automatically.",
+    ));
+  };
+
   const pollSegmentEditorAiPhotoJob = async (
     jobId: string,
     initialStatus = "queued",
@@ -15766,6 +15822,16 @@ export function WorkspacePage({
         const aiPhotoPayload = payload.data;
         const aiPhotoAsset = aiPhotoPayload.asset;
         if (aiPhotoAsset) {
+          const durableAiPhotoAsset = await ensureSegmentEditorGeneratedVisualAssetDurable(aiPhotoAsset, {
+            mediaType: "photo",
+            projectId: options.projectId,
+            segmentIndex: options.segmentIndex,
+            sourceJobId: safeJobId,
+          });
+          if (!isSegmentVisualRunCurrent(segmentAiPhotoRunRef, options.segmentIndex, options.runId)) {
+            removeStoredWorkspaceSegmentAiPhotoJob(session.email, safeJobId);
+            return;
+          }
           const attachment = attachSegmentEditorJobResult({
             draftId: options.draftId,
             projectId: options.projectId,
@@ -15774,7 +15840,7 @@ export function WorkspacePage({
               ...segment,
               aiVideoAsset: null,
               aiVideoGeneratedMode: null,
-              aiPhotoAsset,
+              aiPhotoAsset: durableAiPhotoAsset,
               aiPhotoGeneratedFromPrompt: options.prompt,
               aiPhotoPromptInitialized: true,
               durationExtensionSourceDurationSeconds: null,
@@ -15794,7 +15860,7 @@ export function WorkspacePage({
             return;
           }
           upsertGeneratedMediaLibraryEntry({
-            asset: aiPhotoAsset,
+            asset: durableAiPhotoAsset,
             kind: "ai_photo",
             projectId: options.projectId,
             segmentIndex: options.segmentIndex,
@@ -15931,6 +15997,16 @@ export function WorkspacePage({
         const imageEditPayload = payload.data;
         const imageEditAsset = imageEditPayload.asset;
         if (imageEditAsset) {
+          const durableImageEditAsset = await ensureSegmentEditorGeneratedVisualAssetDurable(imageEditAsset, {
+            mediaType: "photo",
+            projectId: options.projectId,
+            segmentIndex: options.segmentIndex,
+            sourceJobId: safeJobId,
+          });
+          if (!isSegmentVisualRunCurrent(segmentImageEditRunRef, options.segmentIndex, options.runId)) {
+            removeStoredWorkspaceSegmentImageEditJob(session.email, safeJobId);
+            return;
+          }
           let hasStaleSource = false;
           const attachment = attachSegmentEditorJobResult({
             draftId: options.draftId,
@@ -15948,7 +16024,7 @@ export function WorkspacePage({
                 ...segment,
                 aiVideoAsset: null,
                 aiVideoGeneratedMode: null,
-                imageEditAsset,
+                imageEditAsset: durableImageEditAsset,
                 imageEditGeneratedFromPrompt: options.prompt,
                 imageEditPromptInitialized: true,
                 durationExtensionSourceDurationSeconds: null,
@@ -15977,7 +16053,7 @@ export function WorkspacePage({
             ));
           }
           upsertGeneratedMediaLibraryEntry({
-            asset: imageEditAsset,
+            asset: durableImageEditAsset,
             kind: "image_edit",
             projectId: options.projectId,
             segmentIndex: options.segmentIndex,
@@ -16121,16 +16197,26 @@ export function WorkspacePage({
         const aiVideoPayload = payload.data;
         const aiVideoAsset = aiVideoPayload.asset;
         if (aiVideoAsset) {
-          let nextAiVideoAsset = aiVideoAsset;
+          const durableAiVideoAsset = await ensureSegmentEditorGeneratedVisualAssetDurable(aiVideoAsset, {
+            mediaType: "video",
+            projectId: options.projectId,
+            segmentIndex: options.segmentIndex,
+            sourceJobId: safeJobId,
+          });
+          if (!isSegmentVisualRunCurrent(segmentAiVideoRunRef, options.segmentIndex, options.runId)) {
+            removeStoredWorkspaceSegmentAiVideoJob(session.email, safeJobId);
+            return;
+          }
+          let nextAiVideoAsset = durableAiVideoAsset;
           const attachment = attachSegmentEditorJobResult({
             draftId: options.draftId,
             projectId: options.projectId,
             segmentIndex: options.segmentIndex,
             updater: (segment) => {
-              const preferredPosterUrl = getWorkspaceAiVideoPreferredPosterUrl(segment, aiVideoAsset);
+              const preferredPosterUrl = getWorkspaceAiVideoPreferredPosterUrl(segment, durableAiVideoAsset);
               nextAiVideoAsset = preferredPosterUrl
-                ? { ...aiVideoAsset, posterUrl: preferredPosterUrl }
-                : aiVideoAsset;
+                ? { ...durableAiVideoAsset, posterUrl: preferredPosterUrl }
+                : durableAiVideoAsset;
               const nextAiVideoDurationSeconds = getStudioCustomVideoFileDurationSeconds(nextAiVideoAsset);
               return invalidateWorkspaceSegmentSceneSoundForVisualChange({
                 ...segment,
@@ -16330,8 +16416,18 @@ export function WorkspacePage({
         const photoAnimationPayload = payload.data;
         const photoAnimationAsset = photoAnimationPayload.asset;
         if (photoAnimationAsset) {
+          const durablePhotoAnimationAsset = await ensureSegmentEditorGeneratedVisualAssetDurable(photoAnimationAsset, {
+            mediaType: "video",
+            projectId: options.projectId,
+            segmentIndex: options.segmentIndex,
+            sourceJobId: safeJobId,
+          });
+          if (!isSegmentVisualRunCurrent(segmentPhotoAnimationRunRef, options.segmentIndex, options.runId)) {
+            removeStoredWorkspaceSegmentPhotoAnimationJob(session.email, safeJobId);
+            return;
+          }
           let resolvedSourceAsset = cloneStudioCustomVideoFile(options.sourceAsset ?? null);
-          let nextPhotoAnimationAsset = photoAnimationAsset;
+          let nextPhotoAnimationAsset = durablePhotoAnimationAsset;
           let hasStaleSource = false;
           const durationExtensionTargetDurationSeconds = clampWorkspaceSegmentEditorVisualDurationSeconds(
             options.durationExtensionTargetDurationSeconds,
@@ -16339,9 +16435,9 @@ export function WorkspacePage({
           const generatedDurationSeconds = clampWorkspaceSegmentEditorVisualDurationSeconds(
             durationExtensionTargetDurationSeconds ??
               options.durationSeconds ??
-              getStudioCustomVideoFileDurationSeconds(photoAnimationAsset),
+              getStudioCustomVideoFileDurationSeconds(durablePhotoAnimationAsset),
           );
-          let nextPhotoAnimationAssetWithDuration = photoAnimationAsset;
+          let nextPhotoAnimationAssetWithDuration = durablePhotoAnimationAsset;
           const attachment = attachSegmentEditorJobResult({
             draftId: options.draftId,
             projectId: options.projectId,
@@ -16361,11 +16457,11 @@ export function WorkspacePage({
                 : segment;
               const preferredPosterUrl = getWorkspacePhotoAnimationPreferredPosterUrl(
                 posterSegment,
-                photoAnimationAsset,
+                durablePhotoAnimationAsset,
               );
               nextPhotoAnimationAsset = preferredPosterUrl
-                ? { ...photoAnimationAsset, posterUrl: preferredPosterUrl }
-                : photoAnimationAsset;
+                ? { ...durablePhotoAnimationAsset, posterUrl: preferredPosterUrl }
+                : durablePhotoAnimationAsset;
               nextPhotoAnimationAssetWithDuration = generatedDurationSeconds !== null
                 ? { ...nextPhotoAnimationAsset, durationSeconds: generatedDurationSeconds }
                 : nextPhotoAnimationAsset;
@@ -16604,9 +16700,15 @@ export function WorkspacePage({
         const talkingPhotoPayload = payload.data;
         const talkingPhotoAsset = talkingPhotoPayload.asset;
         if (talkingPhotoAsset) {
-          const rawTalkingPhotoPreviewUrl = getStudioCustomAssetPreviewUrl(talkingPhotoAsset);
-          const generatedDurationSeconds = talkingPhotoAsset.durationSeconds
-            ? normalizeWorkspaceSegmentManualDurationSeconds(talkingPhotoAsset.durationSeconds)
+          const durableTalkingPhotoAsset = await ensureSegmentEditorGeneratedVisualAssetDurable(talkingPhotoAsset, {
+            mediaType: "video",
+            projectId: options.projectId,
+            segmentIndex: options.segmentIndex,
+            sourceJobId: safeJobId,
+          });
+          const rawTalkingPhotoPreviewUrl = getStudioCustomAssetPreviewUrl(durableTalkingPhotoAsset);
+          const generatedDurationSeconds = durableTalkingPhotoAsset.durationSeconds
+            ? normalizeWorkspaceSegmentManualDurationSeconds(durableTalkingPhotoAsset.durationSeconds)
             : rawTalkingPhotoPreviewUrl
               ? normalizeWorkspaceSegmentManualDurationSeconds(await readWorkspaceVideoDurationSeconds(rawTalkingPhotoPreviewUrl))
               : null;
@@ -16614,11 +16716,12 @@ export function WorkspacePage({
             talkingPhotoPayload.speechDuration,
           );
           if (!isSegmentVisualRunCurrent(segmentTalkingPhotoRunRef, options.segmentIndex, options.runId)) {
+            removeStoredWorkspaceSegmentTalkingPhotoJob(session.email, safeJobId);
             return;
           }
 
           let resolvedSourceAsset = cloneStudioCustomVideoFile(options.sourceAsset ?? null);
-          let nextTalkingPhotoAssetWithDuration = talkingPhotoAsset;
+          let nextTalkingPhotoAssetWithDuration = durableTalkingPhotoAsset;
           let hasStaleInputs = false;
           const attachment = attachSegmentEditorJobResult({
             draftId: options.draftId,
@@ -16641,11 +16744,11 @@ export function WorkspacePage({
                 resolvedSourceAsset ?? cloneStudioCustomVideoFile(segment.photoAnimationSourceAsset ?? null);
               const preferredPosterUrl = getWorkspacePhotoAnimationPreferredPosterUrl(
                 resolvedSourceAsset ? { ...segment, photoAnimationSourceAsset: resolvedSourceAsset } : segment,
-                talkingPhotoAsset,
+                durableTalkingPhotoAsset,
               );
               const nextTalkingPhotoAsset = preferredPosterUrl
-                ? { ...talkingPhotoAsset, posterUrl: preferredPosterUrl }
-                : talkingPhotoAsset;
+                ? { ...durableTalkingPhotoAsset, posterUrl: preferredPosterUrl }
+                : durableTalkingPhotoAsset;
               nextTalkingPhotoAssetWithDuration = generatedDurationSeconds
                 ? { ...nextTalkingPhotoAsset, durationSeconds: generatedDurationSeconds }
                 : nextTalkingPhotoAsset;
@@ -16853,12 +16956,22 @@ export function WorkspacePage({
         });
 
         if (payload.data.asset) {
+          const durableUpscaledImageAsset = await ensureSegmentEditorGeneratedVisualAssetDurable(payload.data.asset, {
+            mediaType: "photo",
+            projectId: options.projectId,
+            segmentIndex: options.segmentIndex,
+            sourceJobId: safeJobId,
+          });
+          if (!isSegmentVisualRunCurrent(segmentImageUpscaleRunRef, options.segmentIndex, options.runId)) {
+            removeStoredWorkspaceSegmentImageUpscaleJob(session.email, safeJobId);
+            return;
+          }
           const attachment = attachSegmentEditorJobResult({
             draftId: options.draftId,
             projectId: options.projectId,
             segmentIndex: options.segmentIndex,
             updater: (segment) => invalidateWorkspaceSegmentSceneSoundForVisualChange(
-              applyWorkspaceSegmentUpscaledImageAsset(segment, payload.data!.asset!),
+              applyWorkspaceSegmentUpscaledImageAsset(segment, durableUpscaledImageAsset),
             ),
           });
           if (attachment.status === "draft-unavailable") {

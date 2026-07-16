@@ -40,6 +40,64 @@ describe("WorkspaceSegmentPreviewCardMedia", () => {
     const retryImage = container.querySelector("img");
     expect(retryImage?.getAttribute("src")).toBe("/api/workspace/media-assets/7396");
   });
+
+  it("retries generated video previews after a transient load failure", () => {
+    vi.useFakeTimers();
+
+    const { container } = render(
+      <WorkspaceSegmentPreviewCardMedia
+        mediaKey="segment-carousel-card:segment:2"
+        mountVideoWhenIdle
+        previewKind="video"
+        previewUrl="/api/workspace/media-assets/7397/playback"
+      />,
+    );
+
+    const initialVideo = container.querySelector("video");
+    expect(initialVideo?.getAttribute("src")).toBe("/api/workspace/media-assets/7397/playback");
+
+    fireEvent.error(initialVideo as HTMLVideoElement);
+
+    expect(container.querySelector("video")).toBeNull();
+    expect(container.querySelector(".studio-segment-preview-card-media__idle-placeholder")).toBeTruthy();
+
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+
+    const retryVideo = container.querySelector("video");
+    expect(retryVideo?.getAttribute("src")).toBe("/api/workspace/media-assets/7397/playback");
+    expect(retryVideo).not.toBe(initialVideo);
+  });
+
+  it("retries an idle video poster after a transient load failure", () => {
+    vi.useFakeTimers();
+
+    const { container } = render(
+      <WorkspaceSegmentPreviewCardMedia
+        allowVideoPlayback={false}
+        mediaKey="timeline-scene-backdrop:segment:2"
+        posterUrl="/api/workspace/media-assets/7397/poster"
+        preferPosterFrame
+        previewKind="video"
+        previewUrl="/api/workspace/media-assets/7397/playback"
+      />,
+    );
+
+    const initialPoster = container.querySelector("img");
+    expect(initialPoster?.getAttribute("src")).toBe("/api/workspace/media-assets/7397/poster");
+
+    fireEvent.error(initialPoster as HTMLImageElement);
+    expect(container.querySelector("img")).toBeNull();
+
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+
+    const retryPoster = container.querySelector("img");
+    expect(retryPoster?.getAttribute("src")).toBe("/api/workspace/media-assets/7397/poster");
+    expect(retryPoster).not.toBe(initialPoster);
+  });
 });
 
 describe("WorkspaceModalVideoPlayer", () => {

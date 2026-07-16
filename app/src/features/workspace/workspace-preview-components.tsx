@@ -44,7 +44,7 @@ import type {
 } from "./workspace-types";
 
 const workspaceText = (locale: Locale, ru: string, en: string) => (locale === "en" ? en : ru);
-const workspaceSegmentPreviewImageRetryDelaysMs = [1000, 2500, 5000, 10000];
+const workspaceSegmentPreviewMediaRetryDelaysMs = [1000, 2500, 5000, 10000];
 
 type WorkspaceSegmentPreviewCardMediaProps = {
   allowBrowserPosterCapture?: boolean;
@@ -122,6 +122,9 @@ export const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPr
   const [hasPresentedVideoFrame, setHasPresentedVideoFrame] = useState(false);
   const [isImageLoadFailed, setIsImageLoadFailed] = useState(false);
   const [imageLoadRetryAttempt, setImageLoadRetryAttempt] = useState(0);
+  const [isVideoLoadFailed, setIsVideoLoadFailed] = useState(false);
+  const [videoLoadRetryAttempt, setVideoLoadRetryAttempt] = useState(0);
+  const [posterLoadRetryAttempt, setPosterLoadRetryAttempt] = useState(0);
   const [previewCandidateIndex, setPreviewCandidateIndex] = useState(0);
   const [imageCandidateIndex, setImageCandidateIndex] = useState(0);
   const normalizedPreviewUrl = previewUrl.trim();
@@ -274,6 +277,7 @@ export const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPr
 
   useEffect(() => {
     setIsPosterFrameLoadFailed(false);
+    setPosterLoadRetryAttempt(0);
   }, [normalizedFallbackPosterUrl, normalizedPosterUrl, resolvedPreviewUrl]);
 
   useEffect(() => {
@@ -326,6 +330,8 @@ export const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPr
 
   useEffect(() => {
     setPreviewCandidateIndex(0);
+    setIsVideoLoadFailed(false);
+    setVideoLoadRetryAttempt(0);
   }, [mediaKey, normalizedPreviewUrl, previewFallbackSignature, previewKind]);
 
   useEffect(() => {
@@ -335,26 +341,60 @@ export const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPr
   }, [imageCandidateSignature, mediaKey, previewKind]);
 
   useEffect(() => {
-    if (
-      previewKind !== "image" ||
-      !isImageLoadFailed ||
-      imageLoadRetryAttempt >= workspaceSegmentPreviewImageRetryDelaysMs.length
-    ) {
+    if (previewKind !== "image" || !isImageLoadFailed) {
       return;
     }
 
+    const retryDelay = workspaceSegmentPreviewMediaRetryDelaysMs[
+      Math.min(imageLoadRetryAttempt, workspaceSegmentPreviewMediaRetryDelaysMs.length - 1)
+    ];
     const timeoutId = window.setTimeout(() => {
       setImageCandidateIndex(0);
       setIsImageLoadFailed(false);
-      setImageLoadRetryAttempt((current) =>
-        Math.min(current + 1, workspaceSegmentPreviewImageRetryDelaysMs.length),
-      );
-    }, workspaceSegmentPreviewImageRetryDelaysMs[imageLoadRetryAttempt]);
+      setImageLoadRetryAttempt((current) => current + 1);
+    }, retryDelay);
 
     return () => {
       window.clearTimeout(timeoutId);
     };
   }, [imageLoadRetryAttempt, isImageLoadFailed, previewKind]);
+
+  useEffect(() => {
+    if (previewKind !== "video" || !isVideoLoadFailed) {
+      return;
+    }
+
+    const retryDelay = workspaceSegmentPreviewMediaRetryDelaysMs[
+      Math.min(videoLoadRetryAttempt, workspaceSegmentPreviewMediaRetryDelaysMs.length - 1)
+    ];
+    const timeoutId = window.setTimeout(() => {
+      setPreviewCandidateIndex(0);
+      setIsVideoLoadFailed(false);
+      setVideoLoadRetryAttempt((current) => current + 1);
+    }, retryDelay);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [isVideoLoadFailed, previewKind, videoLoadRetryAttempt]);
+
+  useEffect(() => {
+    if (previewKind !== "video" || !isPosterFrameLoadFailed || !resolvedPosterUrl) {
+      return;
+    }
+
+    const retryDelay = workspaceSegmentPreviewMediaRetryDelaysMs[
+      Math.min(posterLoadRetryAttempt, workspaceSegmentPreviewMediaRetryDelaysMs.length - 1)
+    ];
+    const timeoutId = window.setTimeout(() => {
+      setIsPosterFrameLoadFailed(false);
+      setPosterLoadRetryAttempt((current) => current + 1);
+    }, retryDelay);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [isPosterFrameLoadFailed, posterLoadRetryAttempt, previewKind, resolvedPosterUrl]);
 
   useEffect(() => {
     if (!normalizedPosterUrl) {
@@ -532,10 +572,14 @@ export const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPr
     );
   }
 
+  if (isVideoLoadFailed) {
+    return <div className="studio-segment-preview-card-media__idle-placeholder" aria-hidden="true" />;
+  }
+
   if (shouldKeepVideoUnmountedWhileIdle && preferPosterFrame && canUseResolvedPosterFrame && resolvedPosterUrl) {
     return (
       <img
-        key={`${mediaKey}:poster`}
+        key={`${mediaKey}:poster:${posterLoadRetryAttempt}`}
         src={resolvedPosterUrl}
         alt=""
         loading={imageLoading}
@@ -553,7 +597,7 @@ export const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPr
     if (canUseResolvedPosterFrame && resolvedPosterUrl) {
       return (
         <img
-          key={`${mediaKey}:poster`}
+          key={`${mediaKey}:poster:${posterLoadRetryAttempt}`}
           src={resolvedPosterUrl}
           alt=""
           loading={imageLoading}
@@ -574,7 +618,7 @@ export const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPr
     <>
       <video
         className={shouldMaskIdleVideoUntilPoster ? "studio-segment-preview-card-media__video is-poster-pending" : undefined}
-        key={`${mediaKey}:${resolvedPreviewUrl}`}
+        key={`${mediaKey}:${resolvedPreviewUrl}:${videoLoadRetryAttempt}`}
         ref={setVideoElementRef}
         src={resolvedPreviewUrl}
         autoPlay={autoplay && shouldAllowVideoPlayback}
@@ -594,6 +638,7 @@ export const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPr
           if (advancePreviewCandidate()) {
             return;
           }
+          setIsVideoLoadFailed(true);
           onVideoError?.();
         }}
         onEnded={() => {
@@ -601,6 +646,9 @@ export const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPr
           onVideoEnded?.();
         }}
         onLoadedData={(event) => {
+          if (isVideoLoadFailed) {
+            setIsVideoLoadFailed(false);
+          }
           cacheMountedVideoPosterFrame(event.currentTarget);
         }}
         onLoadedMetadata={(event) => {
@@ -638,6 +686,7 @@ export const WorkspaceSegmentPreviewCardMedia = memo(function WorkspaceSegmentPr
       ) : null}
       {canUseResolvedPosterFrame && resolvedPosterUrl && !isVideoPlaying && !hasPresentedVideoFrame ? (
         <img
+          key={`${mediaKey}:poster-overlay:${posterLoadRetryAttempt}`}
           className="studio-segment-preview-card-media__poster"
           src={resolvedPosterUrl}
           alt=""

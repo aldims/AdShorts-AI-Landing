@@ -111,13 +111,15 @@ describe("workspace segment editor storage fallback", () => {
     expect(isStoredWorkspaceSegmentJobForDraft({ draftId: "scratch:current", projectId: 0 }, null)).toBe(false);
   });
 
-  it("keeps a scratch draft identity across storage round trips", () => {
+  it("keeps a generated scratch video on durable media routes across storage round trips", () => {
     const draft = createWorkspaceSegmentEditorScratchDraftSession();
     draft.segments[0].aiVideoAsset = {
+      assetId: 741,
       fileName: "seedance.mp4",
       fileSize: 1024,
       generateAudio: true,
       mimeType: "video/mp4",
+      posterUrl: "/api/studio/segment-ai-video/jobs/job-1/poster",
       remoteUrl: "/api/studio/segment-ai-video/jobs/job-1/video",
     };
 
@@ -125,7 +127,12 @@ describe("workspace segment editor storage fallback", () => {
 
     const restoredDraft = readStoredWorkspaceSegmentEditorScratchDraft("EDITOR@example.test");
     expect(restoredDraft?.draftId).toBe(draft.draftId);
-    expect(restoredDraft?.segments[0].aiVideoAsset?.generateAudio).toBe(true);
+    expect(restoredDraft?.segments[0].aiVideoAsset).toMatchObject({
+      assetId: 741,
+      generateAudio: true,
+      posterUrl: "/api/workspace/media-assets/741/poster",
+      remoteUrl: "/api/workspace/media-assets/741/playback",
+    });
   });
 
   it("persists the source visual identity of a pending scene sound job", () => {

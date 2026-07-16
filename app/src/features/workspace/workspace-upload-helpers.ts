@@ -470,6 +470,48 @@ export const ensureStudioUploadedAssetId = async (
   });
 };
 
+export const createStudioDurableGeneratedVisualAsset = (
+  asset: StudioCustomVideoFile,
+  assetId: number,
+  mediaType: "photo" | "video",
+): StudioCustomVideoFile => {
+  const normalizedAssetId = Number.isFinite(Number(assetId)) && Number(assetId) > 0
+    ? Math.trunc(Number(assetId))
+    : null;
+  if (!normalizedAssetId) {
+    throw new Error("Generated visual media asset id is required.");
+  }
+
+  return {
+    ...asset,
+    assetId: normalizedAssetId,
+    dataUrl: undefined,
+    file: undefined,
+    objectUrl: undefined,
+    posterUrl:
+      mediaType === "video"
+        ? `/api/workspace/media-assets/${normalizedAssetId}/poster`
+        : undefined,
+    remoteUrl:
+      mediaType === "video"
+        ? `/api/workspace/media-assets/${normalizedAssetId}/playback`
+        : `/api/workspace/media-assets/${normalizedAssetId}`,
+    source: "media-library",
+  };
+};
+
+export const ensureStudioDurableGeneratedVisualAsset = async (
+  asset: StudioCustomVideoFile,
+  options: Parameters<typeof ensureStudioUploadedAssetId>[1],
+) => {
+  const assetId = await ensureStudioUploadedAssetId(asset, options);
+  if (!assetId) {
+    throw new Error("Generated visual could not be saved as a media asset.");
+  }
+
+  return createStudioDurableGeneratedVisualAsset(asset, assetId, options.mediaType === "video" ? "video" : "photo");
+};
+
 export const ensureStudioUploadedAssetIdWithInlineFallback = async (
   asset: StudioUploadableAsset | null | undefined,
   options: Parameters<typeof ensureStudioUploadedAssetId>[1],

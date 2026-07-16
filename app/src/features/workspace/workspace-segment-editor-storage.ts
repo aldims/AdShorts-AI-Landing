@@ -583,10 +583,10 @@ const normalizePersistedStudioCustomVideoFile = (value: StudioCustomVideoFile | 
   const libraryItemKey = typeof value.libraryItemKey === "string" ? value.libraryItemKey.trim() : "";
   const mimeType = typeof value.mimeType === "string" && value.mimeType.trim() ? value.mimeType : "application/octet-stream";
   const rawPosterUrl = typeof value.posterUrl === "string" ? value.posterUrl.trim() : "";
-  const posterUrl = isWorkspaceSegmentEditorPersistableRemoteUrl(rawPosterUrl)
-    ? rawPosterUrl
-    : assetId && getWorkspaceSegmentCustomPreviewKind(value) === "video"
-      ? `/api/workspace/media-assets/${assetId}/poster`
+  const posterUrl = assetId && getWorkspaceSegmentCustomPreviewKind(value) === "video"
+    ? `/api/workspace/media-assets/${assetId}/poster`
+    : isWorkspaceSegmentEditorPersistableRemoteUrl(rawPosterUrl)
+      ? rawPosterUrl
       : "";
   const rawRemoteUrl = typeof value.remoteUrl === "string" ? value.remoteUrl.trim() : "";
   const remoteUrl = getWorkspaceMediaAssetDurablePreviewUrl({
