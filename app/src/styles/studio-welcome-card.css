@@ -584,14 +584,15 @@
   width: 100%;
   min-height: 2.84em;
   align-items: flex-start;
+  align-self: center;
   justify-content: center;
-  max-width: none;
+  max-width: 44ch;
   margin: 4px 0 0;
   color: rgba(198, 208, 232, 0.68);
   font-size: clamp(0.72rem, 0.86vw, 0.84rem);
   line-height: 1.42;
   text-align: center;
-  text-wrap: wrap;
+  text-wrap: balance;
 }
 
 .studio-welcome-card__showcase {
