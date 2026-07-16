@@ -1015,6 +1015,7 @@ import {
   resolveWorkspaceSegmentEditorFullPreviewRejectedAudioPreparationResult,
   resolveWorkspaceSegmentEditorFullPreviewAudioUnlockAction,
   resolveWorkspaceSegmentEditorFullPreviewVoiceClockHoldTime,
+  resolveWorkspaceSegmentEditorFullPreviewMediaReadyHoldTime,
   resolveWorkspaceSegmentEditorFullPreviewAudioStartGate,
   resolveWorkspaceSegmentEditorFullPreviewSegment,
   resolveWorkspaceSegmentEditorFullPreviewVoiceAlignedSegments,
@@ -9825,9 +9826,6 @@ export function WorkspacePage({
       element.muted = true;
       element.defaultMuted = true;
       element.volume = 0;
-      element.onended = null;
-      element.onerror = null;
-      element.onloadedmetadata = null;
       if (options?.resetMedia) {
         try {
           element.currentTime = 0;
@@ -9838,6 +9836,9 @@ export function WorkspacePage({
     });
     if (options?.clearRefs !== false) {
       Object.values(segmentEditorFullPreviewAudioRefs.current).forEach((element) => {
+        element.onended = null;
+        element.onerror = null;
+        element.onloadedmetadata = null;
         element.remove();
       });
       segmentEditorFullPreviewAudioRefs.current = {};
@@ -28845,6 +28846,17 @@ export function WorkspacePage({
       }
     });
   };
+  const pauseSegmentEditorFullPreviewAudioForVisualBuffering = () => {
+    Object.entries(segmentEditorFullPreviewAudioRefs.current).forEach(([key, element]) => {
+      if (!element.paused) {
+        element.pause();
+      }
+      element.muted = true;
+      element.defaultMuted = true;
+      element.volume = 0;
+      segmentEditorFullPreviewAudioPlayingKeysRef.current.delete(key);
+    });
+  };
   const isSegmentEditorFullPreviewVoiceAudioTrack = (track: WorkspaceSegmentEditorFullPreviewAudioTrack) =>
     track.kind === "voice" || track.kind === "embedded_voice";
   const isSegmentEditorFullPreviewManagedAudioElementTrack = (_track: WorkspaceSegmentEditorFullPreviewAudioTrack) =>
@@ -29378,11 +29390,7 @@ export function WorkspacePage({
         const isBrowserAudioUnlockError =
           (error instanceof DOMException && error.name === "NotAllowedError") ||
           /notallowed|not allowed|user didn't interact|autoplay/i.test(errorMessage);
-        if (
-          isSegmentEditorFullPreviewVoiceAudioTrack(track) &&
-          label !== "unlock" &&
-          isBrowserAudioUnlockError
-        ) {
+        if (label !== "unlock" && isBrowserAudioUnlockError) {
           setSegmentEditorFullPreviewAudioUnlockRequiredState(true);
         }
         writeSegmentEditorFullPreviewDebugTrace("audio.play.rejected", {
@@ -29424,9 +29432,12 @@ export function WorkspacePage({
       videoElement.playsInline = true;
     }
     element.onerror = () => {
+      const wasFullPreviewActive = segmentEditorFullPreviewActiveRef.current;
+      const failureTime = segmentEditorFullPreviewTimeRef.current;
       const isOptionalProjectMusicTrack =
         track.kind === "music" && track.url.includes("/api/workspace/project-music-audio");
       markSegmentEditorFullPreviewAudioTrackFailed(track, element, { clearRef: true });
+      element.remove();
       logSegmentEditorDiagnostics(
         isOptionalProjectMusicTrack
           ? "client.segment-editor.full-preview.music-unavailable"
@@ -29439,6 +29450,17 @@ export function WorkspacePage({
         },
         { level: isOptionalProjectMusicTrack ? "info" : "warn" },
       );
+      if (wasFullPreviewActive) {
+        stopSegmentEditorFullPreviewRef.current?.({ preservePreparedAudio: true, status: "paused" });
+        setSegmentEditorFullPreviewPlaybackTime(failureTime);
+        setSegmentEditorVideoError(
+          workspaceText(
+            locale,
+            "Одна из аудиодорожек не загрузилась. Предпросмотр поставлен на паузу — попробуйте снова.",
+            "An audio track failed to load. Preview was paused — try again.",
+          ),
+        );
+      }
     };
     element.addEventListener("playing", () => {
       segmentEditorFullPreviewAudioPlayingKeysRef.current.add(track.key);
@@ -29494,15 +29516,12 @@ export function WorkspacePage({
       seekSegmentEditorFullPreviewPreparedAudioElement(track, element, currentTime);
     });
   };
-  const waitForSegmentEditorFullPreviewPreparedAudioSources = async (token: number) => {
-    const preparedVoiceTracks = segmentEditorFullPreviewAudioTracksRef.current.filter(
-      (track) =>
-        isSegmentEditorFullPreviewVoiceAudioTrack(track) &&
-        track.mediaKind !== "video" &&
-        Boolean(segmentEditorFullPreviewPreparedAudioSourcesRef.current[track.url]),
+  const waitForSegmentEditorFullPreviewAudioTracksReady = async (token: number) => {
+    const audioTracks = segmentEditorFullPreviewAudioTracksRef.current.filter(
+      (track) => !segmentEditorFullPreviewFailedAudioKeysRef.current.has(track.key),
     );
     const readyResults = await Promise.all(
-      preparedVoiceTracks.map((track) =>
+      audioTracks.map((track) =>
         waitForSegmentEditorFullPreviewMediaElementReady(
           ensureSegmentEditorFullPreviewAudioElement(track),
           {
@@ -29976,7 +29995,7 @@ export function WorkspacePage({
   };
   const isSegmentEditorFullPreviewVisualTargetReady = (
     target: SegmentEditorFullPreviewVisualTarget,
-    minimumReadyState = HTMLMediaElement.HAVE_CURRENT_DATA,
+    minimumReadyState = HTMLMediaElement.HAVE_FUTURE_DATA,
   ) => {
     const attachedElement = getSegmentEditorAttachedPreviewVideoElement(target.arrayIndex);
     return Boolean(
@@ -30008,12 +30027,12 @@ export function WorkspacePage({
     }
 
     if (attachedElement) {
-      if (attachedElement.readyState < HTMLMediaElement.HAVE_CURRENT_DATA && attachedElement.preload !== "auto") {
+      if (attachedElement.readyState < HTMLMediaElement.HAVE_FUTURE_DATA && attachedElement.preload !== "auto") {
         attachedElement.preload = "auto";
       }
-      ensureVideoElementLoading(attachedElement, HTMLMediaElement.HAVE_CURRENT_DATA);
+      ensureVideoElementLoading(attachedElement, HTMLMediaElement.HAVE_FUTURE_DATA);
       return waitForWorkspaceVideoElementReady(attachedElement, {
-        minimumReadyState: HTMLMediaElement.HAVE_CURRENT_DATA,
+        minimumReadyState: HTMLMediaElement.HAVE_FUTURE_DATA,
         timeoutMs: options?.timeoutMs ?? WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VISUAL_START_READY_TIMEOUT_MS,
       });
     }
@@ -30110,12 +30129,7 @@ export function WorkspacePage({
     const previewSegments = getSegmentEditorFullPreviewSegments();
     const currentResolvedSegment = resolveWorkspaceSegmentEditorFullPreviewSegment(previewSegments, currentTime);
     const desiredResolvedSegment = resolveWorkspaceSegmentEditorFullPreviewSegment(previewSegments, desiredTime);
-    if (
-      !currentDraft ||
-      !currentResolvedSegment ||
-      !desiredResolvedSegment ||
-      desiredResolvedSegment.arrayIndex <= currentResolvedSegment.arrayIndex
-    ) {
+    if (!currentDraft || !desiredResolvedSegment) {
       segmentEditorFullPreviewVisualHoldRef.current = null;
       return null;
     }
@@ -30125,7 +30139,16 @@ export function WorkspacePage({
       previewSegments,
       desiredResolvedSegment.arrayIndex,
     );
-    if (!target || isSegmentEditorFullPreviewVisualTargetReady(target)) {
+    const isTargetReady = target ? isSegmentEditorFullPreviewVisualTargetReady(target) : true;
+    const holdTime = target
+      ? resolveWorkspaceSegmentEditorFullPreviewMediaReadyHoldTime({
+          currentTime,
+          desiredTime,
+          isMediaReady: isTargetReady,
+          mediaStartTime: desiredResolvedSegment.startTime,
+        })
+      : null;
+    if (!target || holdTime === null) {
       segmentEditorFullPreviewVisualHoldRef.current = null;
       return null;
     }
@@ -30145,13 +30168,13 @@ export function WorkspacePage({
         timeoutMs: WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VISUAL_TRANSITION_READY_TIMEOUT_MS,
       });
       writeSegmentEditorFullPreviewDebugTrace("visual.transition-prepare", {
-        fromArrayIndex: currentResolvedSegment.arrayIndex,
+        fromArrayIndex: currentResolvedSegment?.arrayIndex ?? null,
         targetArrayIndex: target.arrayIndex,
         targetSegmentIndex: target.previewSegment.index,
       });
     }
 
-    return null;
+    return holdTime;
   };
   const resolveSegmentEditorFullPreviewAudioHoldTime = (
     currentTime: number,
@@ -30496,7 +30519,6 @@ export function WorkspacePage({
   const prepareSegmentEditorFullPreviewAudioAtTime = async (
     currentTime: number,
     token: number,
-    options?: { allowActivePlayBeforeReady?: boolean },
   ): Promise<WorkspaceSegmentEditorFullPreviewAudioPreparationResult> => {
     if (typeof document === "undefined" || typeof window === "undefined") {
       return "not-ready";
@@ -30519,17 +30541,11 @@ export function WorkspacePage({
         currentTime,
       },
     );
-    const allowActivePlayBeforeReady = options?.allowActivePlayBeforeReady === true;
-    const activeTrackKeys = new Set(activeTracks.map((track) => track.key));
     const startMinimumReadyState = HTMLMediaElement.HAVE_FUTURE_DATA;
     const requiredReadyTracks = selectWorkspaceSegmentEditorFullPreviewRequiredAudioTracksForStart(
       managedTracks,
       activeTracks,
       currentTime,
-    ).filter(
-      (track) =>
-        track.kind === "voice" &&
-        (!allowActivePlayBeforeReady || !activeTrackKeys.has(track.key)),
     );
     writeSegmentEditorFullPreviewDebugTrace("audio.prepare.start", {
       activeTrackCount: activeTracks.length,
@@ -30627,9 +30643,7 @@ export function WorkspacePage({
     }
 
     const playableActiveTracks = activeTracks.filter(
-      (track) =>
-        track.kind === "voice" &&
-        !segmentEditorFullPreviewFailedAudioKeysRef.current.has(track.key),
+      (track) => !segmentEditorFullPreviewFailedAudioKeysRef.current.has(track.key),
     );
     if (playableActiveTracks.length === 0) {
       return "ready";
@@ -30652,18 +30666,14 @@ export function WorkspacePage({
 
       return { element, sourceTime, track };
     });
-    const activeReadyResults = allowActivePlayBeforeReady
-      ? activeElements.map(({ element }) =>
-          isWorkspaceSegmentEditorFullPreviewAudioReadyState(element.readyState, startMinimumReadyState),
-        )
-      : await Promise.all(
-          activeElements.map(({ element }) =>
-            waitForSegmentEditorFullPreviewMediaElementReady(element, {
-              minimumReadyState: startMinimumReadyState,
-              timeoutMs: WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_START_READY_TIMEOUT_MS,
-            }),
-          ),
-        );
+    const activeReadyResults = await Promise.all(
+      activeElements.map(({ element }) =>
+        waitForSegmentEditorFullPreviewMediaElementReady(element, {
+          minimumReadyState: startMinimumReadyState,
+          timeoutMs: WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_START_READY_TIMEOUT_MS,
+        }),
+      ),
+    );
     if (segmentEditorFullPreviewTokenRef.current !== token || !segmentEditorFullPreviewActiveRef.current) {
       activeElements.forEach(({ element }) => {
         element.pause();
@@ -30674,7 +30684,6 @@ export function WorkspacePage({
     const unreadyActiveElements = activeElements.filter(
       ({ element, track }, index) =>
         shouldFailWorkspaceSegmentEditorFullPreviewActiveAudioPreparation({
-          allowPlayBeforeReady: allowActivePlayBeforeReady,
           hasFailedTrack: segmentEditorFullPreviewFailedAudioKeysRef.current.has(track.key),
           hasMediaError: Boolean(element.error),
           isReady: Boolean(activeReadyResults[index]),
@@ -30692,32 +30701,9 @@ export function WorkspacePage({
         ),
       });
     }
-    const pendingActiveElements = allowActivePlayBeforeReady
-      ? activeElements.filter(
-          ({ element, track }, index) =>
-            !Boolean(activeReadyResults[index]) &&
-            shouldStartWorkspaceSegmentEditorFullPreviewActiveAudio({
-              allowPlayBeforeReady: allowActivePlayBeforeReady,
-              hasFailedTrack: segmentEditorFullPreviewFailedAudioKeysRef.current.has(track.key),
-              hasMediaError: Boolean(element.error),
-              isReady: Boolean(activeReadyResults[index]),
-            }),
-        )
-      : [];
-    if (pendingActiveElements.length > 0) {
-      writeSegmentEditorFullPreviewDebugTrace("audio.prepare.active-pending-play", {
-        currentTime: roundWorkspaceSegmentTimelineSeconds(currentTime),
-        minimumReadyState: startMinimumReadyState,
-        tracks: pendingActiveElements.map(({ element, track }) =>
-          getSegmentEditorFullPreviewAudioDebugPayload(track, element, currentTime),
-        ),
-      });
-    }
-
     const startableActiveElements = activeElements.filter(
       ({ element, track }, index) =>
         shouldStartWorkspaceSegmentEditorFullPreviewActiveAudio({
-          allowPlayBeforeReady: allowActivePlayBeforeReady,
           hasFailedTrack: segmentEditorFullPreviewFailedAudioKeysRef.current.has(track.key),
           hasMediaError: Boolean(element.error),
           isReady: Boolean(activeReadyResults[index]),
@@ -30745,7 +30731,7 @@ export function WorkspacePage({
               resolve(result);
             };
             timeoutId = window.setTimeout(
-              () => settle(allowActivePlayBeforeReady && !element.error),
+              () => settle(false),
               WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_START_READY_TIMEOUT_MS,
             );
             void playSegmentEditorFullPreviewAudioElement(track, element, "prepare-active").then(
@@ -30769,16 +30755,10 @@ export function WorkspacePage({
           getSegmentEditorFullPreviewAudioDebugPayload(track, element, currentTime),
         ),
       });
-      const activeVoiceTrackCount = startableActiveElements.filter(({ track }) =>
-        isSegmentEditorFullPreviewVoiceAudioTrack(track),
-      ).length;
-      const rejectedVoiceTrackCount = rejectedPlayElements.filter(({ track }) =>
-        isSegmentEditorFullPreviewVoiceAudioTrack(track),
-      ).length;
       const rejectedAudioPreparationResult = resolveWorkspaceSegmentEditorFullPreviewRejectedAudioPreparationResult({
-        activeTrackCount: activeVoiceTrackCount,
+        activeTrackCount: startableActiveElements.length,
         isAudioUnlockRequired: segmentEditorFullPreviewAudioUnlockRequiredRef.current,
-        rejectedPlayTrackCount: rejectedVoiceTrackCount,
+        rejectedPlayTrackCount: rejectedPlayElements.length,
       });
       if (rejectedAudioPreparationResult !== "ready") {
         return rejectedAudioPreparationResult;
@@ -31152,6 +31132,13 @@ export function WorkspacePage({
         ? 0
         : Math.max(0, (frameNow - previousFrameAt) / 1000);
     const currentTime = segmentEditorFullPreviewTimeRef.current;
+    if (isAudioUnlockRequired) {
+      segmentEditorFullPreviewLastFrameAtRef.current = null;
+      syncSegmentEditorFullPreviewVisual(currentTime, { playVideo: false });
+      pauseSegmentEditorFullPreviewAudioForVisualBuffering();
+      segmentEditorFullPreviewFrameRef.current = null;
+      return;
+    }
     const rawNextTime = currentTime + elapsedSeconds;
     const desiredPlaybackTime = clampWorkspaceSegmentEditorFullPreviewTime(
       rawNextTime,
@@ -31160,12 +31147,12 @@ export function WorkspacePage({
 
     const visualHoldTime = resolveSegmentEditorFullPreviewVisualHoldTime(currentTime, desiredPlaybackTime, token);
     const visualReadyPlaybackTime = visualHoldTime ?? desiredPlaybackTime;
-    const audioHoldTime = !isAudioUnlockRequired
-      ? resolveSegmentEditorFullPreviewAudioHoldTime(currentTime, visualReadyPlaybackTime, token)
-      : null;
-    const voiceClockHold = !isAudioUnlockRequired
-      ? resolveSegmentEditorFullPreviewVoiceClockHold(currentTime, visualReadyPlaybackTime)
-      : null;
+    const audioHoldTime = resolveSegmentEditorFullPreviewAudioHoldTime(
+      currentTime,
+      visualReadyPlaybackTime,
+      token,
+    );
+    const voiceClockHold = resolveSegmentEditorFullPreviewVoiceClockHold(currentTime, visualReadyPlaybackTime);
     if (voiceClockHold?.timedOut) {
       writeSegmentEditorFullPreviewDebugTrace("audio.clock.timeout", {
         stalledForMs: Math.round(voiceClockHold.stalledForMs),
@@ -31194,7 +31181,9 @@ export function WorkspacePage({
       );
       return;
     }
-    if (voiceClockHold?.isBuffering) {
+    const hasVisualHold = visualHoldTime !== null;
+    const hasAudioStartHold = audioHoldTime !== null;
+    if (hasVisualHold || hasAudioStartHold || voiceClockHold?.isBuffering) {
       if (segmentEditorFullPreviewStatusRef.current !== "loading") {
         setSegmentEditorFullPreviewPlaybackStatus("loading");
       }
@@ -31206,16 +31195,18 @@ export function WorkspacePage({
     const nextPlaybackTime = holdTimes.length > 0
       ? Math.min(visualReadyPlaybackTime, ...holdTimes)
       : visualReadyPlaybackTime;
-    if (!isAudioUnlockRequired) {
-      prepareSegmentEditorFullPreviewUpcomingAudioTracks(nextPlaybackTime);
-    }
+    prepareSegmentEditorFullPreviewUpcomingAudioTracks(nextPlaybackTime);
     prepareSegmentEditorFullPreviewUpcomingVisual(nextPlaybackTime);
     const nextVisualTime = Math.min(nextPlaybackTime, totalDuration);
 
     setSegmentEditorFullPreviewPlaybackTime(nextPlaybackTime);
     const hasVoiceClockHold = voiceClockHold !== null;
-    syncSegmentEditorFullPreviewVisual(nextVisualTime, { playVideo: !hasVoiceClockHold });
-    if (!isAudioUnlockRequired) {
+    syncSegmentEditorFullPreviewVisual(nextVisualTime, {
+      playVideo: !hasVisualHold && !hasAudioStartHold && !hasVoiceClockHold,
+    });
+    if (hasVisualHold) {
+      pauseSegmentEditorFullPreviewAudioForVisualBuffering();
+    } else {
       syncSegmentEditorFullPreviewAudio(nextPlaybackTime, {
         pauseCompanionTracks: hasVoiceClockHold,
       });
@@ -31269,6 +31260,7 @@ export function WorkspacePage({
     if (!options?.fromUserGesture) {
       segmentEditorFullPreviewUnlockedAudioKeysRef.current.clear();
     }
+    segmentEditorFullPreviewFailedAudioKeysRef.current.clear();
     ensureSegmentEditorFullPreviewPreparedAudioTracks({ currentTime: startTime });
     segmentEditorFullPreviewLastFrameAtRef.current = null;
     segmentEditorFullPreviewRunStartTimeRef.current = startTime;
@@ -31279,7 +31271,7 @@ export function WorkspacePage({
     syncSegmentEditorFullPreviewVisual(startTime, { playVideo: false });
     prepareSegmentEditorFullPreviewUpcomingVisual(startTime);
     const visualPreparation = prepareSegmentEditorFullPreviewVisualTargetsAtTime(startTime, token, {
-      aheadSegments: 1,
+      aheadSegments: WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VISUAL_AHEAD_SEGMENTS,
       timeoutMs: WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VISUAL_START_READY_TIMEOUT_MS,
     });
     primeSegmentEditorFullPreviewAudioTracks(startTime, {
@@ -31291,11 +31283,28 @@ export function WorkspacePage({
     const audioSourcePreflight = prepareSegmentEditorFullPreviewAudioSources(
       segmentEditorFullPreviewAudioTracksRef.current,
     );
-    const [audioSourcePreflightResult] = await Promise.all([
+    const [audioSourcePreflightResult, areInitialVisualsReady] = await Promise.all([
       audioSourcePreflight,
       visualPreparation,
     ]);
     if (segmentEditorFullPreviewTokenRef.current !== token || !segmentEditorFullPreviewActiveRef.current) {
+      return;
+    }
+    if (!areInitialVisualsReady) {
+      stopSegmentEditorFullPreview({ preservePreparedAudio: true, status: "paused" });
+      setSegmentEditorFullPreviewPlaybackTime(startTime);
+      setSegmentEditorVideoError(
+        workspaceText(
+          locale,
+          "Не удалось подготовить видео предпросмотра. Проверьте соединение и попробуйте снова.",
+          "Could not prepare the preview video. Check your connection and try again.",
+        ),
+      );
+      logSegmentEditorDiagnostics(
+        "client.segment-editor.full-preview.visual-preparation-failed",
+        { startTime, totalDuration },
+        { level: "warn" },
+      );
       return;
     }
     if (
@@ -31308,8 +31317,8 @@ export function WorkspacePage({
       setSegmentEditorVideoError(
         workspaceText(
           locale,
-          "Не удалось полностью загрузить озвучку предпросмотра. Проверьте соединение и попробуйте снова.",
-          "Could not fully preload the preview voiceover. Check your connection and try again.",
+          "Не удалось полностью загрузить аудио предпросмотра. Проверьте соединение и попробуйте снова.",
+          "Could not fully preload the preview audio. Check your connection and try again.",
         ),
       );
       logSegmentEditorDiagnostics(
@@ -31327,24 +31336,22 @@ export function WorkspacePage({
     applySegmentEditorFullPreviewPreparedAudioSources(startTime, {
       preservePrimedSource: options?.fromUserGesture === true,
     });
-    const arePreparedAudioSourcesReady = await waitForSegmentEditorFullPreviewPreparedAudioSources(token);
-    if (!arePreparedAudioSourcesReady) {
+    const areAudioTracksReady = await waitForSegmentEditorFullPreviewAudioTracksReady(token);
+    if (!areAudioTracksReady) {
       stopSegmentEditorFullPreview({ preservePreparedAudio: true, status: "paused" });
       setSegmentEditorFullPreviewPlaybackTime(startTime);
       setSegmentEditorVideoError(
         workspaceText(
           locale,
-          "Не удалось декодировать озвучку предпросмотра. Попробуйте запустить предпросмотр ещё раз.",
-          "Could not decode the preview voiceover. Try starting the preview again.",
+          "Не удалось декодировать все аудиодорожки предпросмотра. Попробуйте запустить предпросмотр ещё раз.",
+          "Could not decode every preview audio track. Try starting the preview again.",
         ),
       );
       return;
     }
     setSegmentEditorFullPreviewAudioPreparationProgress(null);
 
-    const audioPreparationResult = await prepareSegmentEditorFullPreviewAudioAtTime(startTime, token, {
-      allowActivePlayBeforeReady: options?.fromUserGesture === true,
-    });
+    const audioPreparationResult = await prepareSegmentEditorFullPreviewAudioAtTime(startTime, token);
     if (segmentEditorFullPreviewTokenRef.current !== token || !segmentEditorFullPreviewActiveRef.current) {
       return;
     }
@@ -31353,7 +31360,8 @@ export function WorkspacePage({
       setSegmentEditorFullPreviewAudioUnlockRequiredState(true);
       setSegmentEditorFullPreviewPlaybackTime(startTime);
       segmentEditorFullPreviewLastFrameAtRef.current = null;
-      syncSegmentEditorFullPreviewVisual(startTime);
+      syncSegmentEditorFullPreviewVisual(startTime, { playVideo: false });
+      pauseSegmentEditorFullPreviewAudioForVisualBuffering();
       prepareSegmentEditorFullPreviewUpcomingVisual(startTime);
       writeSegmentEditorFullPreviewDebugTrace("start.audio-unlock-required", {
         audioTrackCount: segmentEditorFullPreviewAudioTracksRef.current.length,
@@ -31363,9 +31371,6 @@ export function WorkspacePage({
         audioTrackCount: segmentEditorFullPreviewAudioTracksRef.current.length,
         startTime,
         totalDuration,
-      });
-      segmentEditorFullPreviewFrameRef.current = window.requestAnimationFrame((frameNow) => {
-        tickSegmentEditorFullPreview(token, frameNow);
       });
       return;
     }
@@ -31386,13 +31391,13 @@ export function WorkspacePage({
       return;
     }
 
-    setSegmentEditorFullPreviewPlaybackStatus("playing");
     seekSegmentEditorFullPreviewActiveAudioTracks(startTime);
     segmentEditorFullPreviewLastFrameAtRef.current = null;
     syncSegmentEditorFullPreviewVisual(startTime);
     prepareSegmentEditorFullPreviewUpcomingVisual(startTime);
     prepareSegmentEditorFullPreviewUpcomingAudioTracks(startTime);
     syncSegmentEditorFullPreviewAudio(startTime);
+    setSegmentEditorFullPreviewPlaybackStatus("playing");
     writeSegmentEditorFullPreviewDebugTrace("start.playing", {
       audioTrackCount: segmentEditorFullPreviewAudioTracksRef.current.length,
       startTime: roundWorkspaceSegmentTimelineSeconds(startTime),
@@ -31423,13 +31428,23 @@ export function WorkspacePage({
     primeSegmentEditorFullPreviewAudioTracks(safeStartTime, { fromUserGesture: true });
     primeSegmentEditorFullPreviewEmbeddedVisualAudio(safeStartTime, { fromUserGesture: true });
 
-    const [audioPreparationResult] = await Promise.all([
-      prepareSegmentEditorFullPreviewAudioAtTime(safeStartTime, token, {
-        allowActivePlayBeforeReady: true,
-      }),
+    const [audioPreparationResult, isVisualReady] = await Promise.all([
+      prepareSegmentEditorFullPreviewAudioAtTime(safeStartTime, token),
       visualPreparation,
     ]);
     if (segmentEditorFullPreviewTokenRef.current !== token || !segmentEditorFullPreviewActiveRef.current) {
+      return;
+    }
+    if (!isVisualReady) {
+      stopSegmentEditorFullPreview({ preservePreparedAudio: true, status: "paused" });
+      setSegmentEditorFullPreviewPlaybackTime(safeStartTime);
+      setSegmentEditorVideoError(
+        workspaceText(
+          locale,
+          "Не удалось подготовить видео предпросмотра. Проверьте соединение и попробуйте снова.",
+          "Could not prepare the preview video. Check your connection and try again.",
+        ),
+      );
       return;
     }
 
@@ -31438,17 +31453,13 @@ export function WorkspacePage({
       setSegmentEditorFullPreviewAudioUnlockRequiredState(true);
       setSegmentEditorFullPreviewPlaybackTime(safeStartTime);
       segmentEditorFullPreviewLastFrameAtRef.current = null;
-      syncSegmentEditorFullPreviewVisual(safeStartTime);
+      syncSegmentEditorFullPreviewVisual(safeStartTime, { playVideo: false });
+      pauseSegmentEditorFullPreviewAudioForVisualBuffering();
       prepareSegmentEditorFullPreviewUpcomingVisual(safeStartTime);
       writeSegmentEditorFullPreviewDebugTrace("audio-unlock.retry-required", {
         audioTrackCount: segmentEditorFullPreviewAudioTracksRef.current.length,
         startTime: roundWorkspaceSegmentTimelineSeconds(safeStartTime),
       });
-      if (segmentEditorFullPreviewFrameRef.current === null) {
-        segmentEditorFullPreviewFrameRef.current = window.requestAnimationFrame((frameNow) => {
-          tickSegmentEditorFullPreview(token, frameNow);
-        });
-      }
       return;
     }
 
@@ -31465,13 +31476,13 @@ export function WorkspacePage({
       return;
     }
 
-    setSegmentEditorFullPreviewPlaybackStatus("playing");
     seekSegmentEditorFullPreviewActiveAudioTracks(safeStartTime);
     segmentEditorFullPreviewLastFrameAtRef.current = null;
     syncSegmentEditorFullPreviewVisual(safeStartTime);
     prepareSegmentEditorFullPreviewUpcomingVisual(safeStartTime);
     prepareSegmentEditorFullPreviewUpcomingAudioTracks(safeStartTime);
     syncSegmentEditorFullPreviewAudio(safeStartTime);
+    setSegmentEditorFullPreviewPlaybackStatus("playing");
     writeSegmentEditorFullPreviewDebugTrace("audio-unlock.resumed", {
       audioTrackCount: segmentEditorFullPreviewAudioTracksRef.current.length,
       startTime: roundWorkspaceSegmentTimelineSeconds(safeStartTime),
@@ -36236,7 +36247,7 @@ export function WorkspacePage({
             `Готовим аудио ${segmentEditorFullPreviewAudioPreparationProgress.ready}/${segmentEditorFullPreviewAudioPreparationProgress.total}`,
             `Preparing audio ${segmentEditorFullPreviewAudioPreparationProgress.ready}/${segmentEditorFullPreviewAudioPreparationProgress.total}`,
           )
-        : workspaceText(locale, "Готовим аудио предпросмотра", "Preparing preview audio")
+        : workspaceText(locale, "Готовим предпросмотр", "Preparing preview")
       : isSegmentEditorFullPreviewAudioUnlockAction
         ? workspaceText(locale, "Включить звук предпросмотра", "Enable preview sound")
       : isSegmentEditorFullPreviewPlaying

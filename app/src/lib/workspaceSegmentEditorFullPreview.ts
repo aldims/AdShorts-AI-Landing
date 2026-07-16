@@ -103,7 +103,6 @@ export type WorkspaceSegmentEditorFullPreviewRejectedAudioPreparationOptions = {
 };
 
 export type WorkspaceSegmentEditorFullPreviewActiveAudioPreparationOptions = {
-  allowPlayBeforeReady: boolean;
   hasFailedTrack: boolean;
   hasMediaError: boolean;
   isReady: boolean;
@@ -1091,10 +1090,6 @@ export const resolveWorkspaceSegmentEditorFullPreviewAudioStartGate = (
 
   const candidateTracks = tracks
     .filter((track) => {
-      if (track.kind !== "voice" && track.kind !== "embedded_voice") {
-        return false;
-      }
-
       const trackStartTime = normalizePreviewTime(track.timelineStartTime);
       const trackEndTime = normalizePreviewTime(track.timelineEndTime);
       if (trackStartTime === null || trackEndTime === null || trackEndTime <= trackStartTime) {
@@ -1204,7 +1199,7 @@ export const shouldHoldWorkspaceSegmentEditorFullPreviewAudioStartGate = (
   }
 
   const toleranceSeconds = normalizePreviewTime(options.toleranceSeconds) ?? 0;
-  return Math.abs(gateHoldTime - runStartTime) <= toleranceSeconds;
+  return gateHoldTime >= runStartTime - toleranceSeconds;
 };
 
 export const isWorkspaceSegmentEditorFullPreviewAudioPlaybackStartConfirmed = (
@@ -1266,20 +1261,18 @@ export const shouldLoadWorkspaceSegmentEditorFullPreviewMediaElement = ({
 };
 
 export const shouldFailWorkspaceSegmentEditorFullPreviewActiveAudioPreparation = ({
-  allowPlayBeforeReady,
   hasFailedTrack,
   hasMediaError,
   isReady,
 }: WorkspaceSegmentEditorFullPreviewActiveAudioPreparationOptions) =>
-  hasFailedTrack || hasMediaError || (!allowPlayBeforeReady && !isReady);
+  hasFailedTrack || hasMediaError || !isReady;
 
 export const shouldStartWorkspaceSegmentEditorFullPreviewActiveAudio = ({
-  allowPlayBeforeReady,
   hasFailedTrack,
   hasMediaError,
   isReady,
 }: WorkspaceSegmentEditorFullPreviewActiveAudioPreparationOptions) =>
-  !hasFailedTrack && !hasMediaError && (allowPlayBeforeReady || isReady);
+  !hasFailedTrack && !hasMediaError && isReady;
 
 export const resolveWorkspaceSegmentEditorFullPreviewAudioUnlockAction = ({
   hasFailedTrack,
@@ -1324,11 +1317,11 @@ export const resolveWorkspaceSegmentEditorFullPreviewRejectedAudioPreparationRes
   isAudioUnlockRequired,
   rejectedPlayTrackCount,
 }: WorkspaceSegmentEditorFullPreviewRejectedAudioPreparationOptions): WorkspaceSegmentEditorFullPreviewAudioPreparationResult => {
-  if (activeTrackCount > 0 && rejectedPlayTrackCount > 0 && isAudioUnlockRequired) {
-    return "unlock-required";
+  if (activeTrackCount <= 0 || rejectedPlayTrackCount <= 0) {
+    return "ready";
   }
 
-  return "ready";
+  return isAudioUnlockRequired ? "unlock-required" : "not-ready";
 };
 
 export const getWorkspaceSegmentEditorFullPreviewTimelineTimeFromAudioSourceTime = (
@@ -1492,15 +1485,30 @@ export const shouldShowWorkspaceSegmentEditorFullPreviewBuffering = (options: {
   return options.isHolding && stalledForMs >= delayMs;
 };
 
+export const resolveWorkspaceSegmentEditorFullPreviewMediaReadyHoldTime = (options: {
+  currentTime: number;
+  desiredTime: number;
+  isMediaReady: boolean;
+  mediaStartTime: number;
+}) => {
+  const currentTime = normalizePreviewTime(options.currentTime) ?? 0;
+  const desiredTime = normalizePreviewTime(options.desiredTime) ?? currentTime;
+  const mediaStartTime = normalizePreviewTime(options.mediaStartTime);
+  if (options.isMediaReady || mediaStartTime === null || desiredTime <= currentTime || desiredTime < mediaStartTime) {
+    return null;
+  }
+
+  return roundPreviewTime(Math.max(currentTime, mediaStartTime));
+};
+
 export const getWorkspaceSegmentEditorFullPreviewAudioPreloadUrls = (
   tracks: WorkspaceSegmentEditorFullPreviewPreloadTrack[],
 ) => Array.from(
   new Set(
     tracks.flatMap((track) => {
       const url = track.url.trim();
-      const isVoiceTrack = track.kind === "voice" || track.kind === "embedded_voice";
       const isFetchableUrl = Boolean(url) && !url.startsWith("blob:") && !url.startsWith("data:");
-      return isVoiceTrack && track.mediaKind !== "video" && track.loop !== true && isFetchableUrl
+      return track.mediaKind !== "video" && isFetchableUrl
         ? [url]
         : [];
     }),

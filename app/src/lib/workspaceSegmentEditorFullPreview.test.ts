@@ -34,6 +34,7 @@ import {
   resolveWorkspaceSegmentEditorFullPreviewVoiceAlignedSegments,
   resolveWorkspaceSegmentEditorFullPreviewVoiceTrackQueue,
   resolveWorkspaceSegmentEditorFullPreviewRejectedAudioPreparationResult,
+  resolveWorkspaceSegmentEditorFullPreviewMediaReadyHoldTime,
   resolveWorkspaceSegmentEditorFullPreviewVoiceClockHoldTime,
   serializeWorkspaceSegmentEditorFullPreviewAudioTimelineRanges,
   shouldPauseWorkspaceSegmentEditorFullPreviewCompanionTrack,
@@ -935,9 +936,10 @@ describe("workspace segment editor full preview", () => {
     ]);
   });
 
-  it("holds the playhead at a voice segment boundary until audio starts", () => {
+  it("holds the playhead at a segment boundary until every new audio track starts", () => {
     const tracks = [
       { key: "voice-1", kind: "voice", timelineEndTime: 4, timelineStartTime: 0 },
+      { key: "sound-2", kind: "sound", timelineEndTime: 8, timelineStartTime: 4 },
       { key: "voice-2", kind: "voice", timelineEndTime: 8, timelineStartTime: 4 },
     ];
 
@@ -950,7 +952,7 @@ describe("workspace segment editor full preview", () => {
       ),
     ).toEqual({
       holdTime: 4,
-      trackKey: "voice-2",
+      trackKey: "sound-2",
     });
   });
 
@@ -1029,14 +1031,14 @@ describe("workspace segment editor full preview", () => {
     expect(selectWorkspaceSegmentEditorFullPreviewAudibleTracksForVoiceStart(activeTracks, false)).toEqual(activeTracks);
   });
 
-  it("holds the audio start gate only for the preview run start, not later scene boundaries", () => {
+  it("holds the audio start gate at the initial position and later scene boundaries", () => {
     expect(
       shouldHoldWorkspaceSegmentEditorFullPreviewAudioStartGate({
         gateHoldTime: 10.6,
         runStartTime: 0,
         toleranceSeconds: 0.04,
       }),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       shouldHoldWorkspaceSegmentEditorFullPreviewAudioStartGate({
         gateHoldTime: 10.6,
@@ -1044,6 +1046,33 @@ describe("workspace segment editor full preview", () => {
         toleranceSeconds: 0.04,
       }),
     ).toBe(true);
+  });
+
+  it("holds the shared preview clock while a video at the next boundary is not ready", () => {
+    expect(
+      resolveWorkspaceSegmentEditorFullPreviewMediaReadyHoldTime({
+        currentTime: 3.98,
+        desiredTime: 4.04,
+        isMediaReady: false,
+        mediaStartTime: 4,
+      }),
+    ).toBe(4);
+    expect(
+      resolveWorkspaceSegmentEditorFullPreviewMediaReadyHoldTime({
+        currentTime: 4,
+        desiredTime: 4.02,
+        isMediaReady: false,
+        mediaStartTime: 4,
+      }),
+    ).toBe(4);
+    expect(
+      resolveWorkspaceSegmentEditorFullPreviewMediaReadyHoldTime({
+        currentTime: 4,
+        desiredTime: 4.02,
+        isMediaReady: true,
+        mediaStartTime: 4,
+      }),
+    ).toBeNull();
   });
 
   it("requires only active audio before starting full preview", () => {
@@ -1110,38 +1139,34 @@ describe("workspace segment editor full preview", () => {
     expect(isWorkspaceSegmentEditorFullPreviewAudioReadyState(Number.NaN, 3)).toBe(false);
   });
 
-  it("allows active preview audio to start before media readiness after a user gesture", () => {
+  it("requires active preview audio to be ready before playback starts", () => {
     expect(
       shouldStartWorkspaceSegmentEditorFullPreviewActiveAudio({
-        allowPlayBeforeReady: true,
+        hasFailedTrack: false,
+        hasMediaError: false,
+        isReady: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldFailWorkspaceSegmentEditorFullPreviewActiveAudioPreparation({
         hasFailedTrack: false,
         hasMediaError: false,
         isReady: false,
       }),
     ).toBe(true);
-    expect(
-      shouldFailWorkspaceSegmentEditorFullPreviewActiveAudioPreparation({
-        allowPlayBeforeReady: true,
-        hasFailedTrack: false,
-        hasMediaError: false,
-        isReady: false,
-      }),
-    ).toBe(false);
 
     expect(
       shouldStartWorkspaceSegmentEditorFullPreviewActiveAudio({
-        allowPlayBeforeReady: true,
         hasFailedTrack: false,
-        hasMediaError: true,
-        isReady: false,
+        hasMediaError: false,
+        isReady: true,
       }),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       shouldFailWorkspaceSegmentEditorFullPreviewActiveAudioPreparation({
-        allowPlayBeforeReady: true,
         hasFailedTrack: false,
         hasMediaError: true,
-        isReady: false,
+        isReady: true,
       }),
     ).toBe(true);
   });
@@ -1212,7 +1237,7 @@ describe("workspace segment editor full preview", () => {
     ).toBe(false);
   });
 
-  it("does not treat a browser audio-unlock rejection as a ready full preview", () => {
+  it("does not treat any rejected active audio track as a ready full preview", () => {
     expect(
       resolveWorkspaceSegmentEditorFullPreviewRejectedAudioPreparationResult({
         activeTrackCount: 2,
@@ -1226,6 +1251,14 @@ describe("workspace segment editor full preview", () => {
         activeTrackCount: 2,
         isAudioUnlockRequired: false,
         rejectedPlayTrackCount: 1,
+      }),
+    ).toBe("not-ready");
+
+    expect(
+      resolveWorkspaceSegmentEditorFullPreviewRejectedAudioPreparationResult({
+        activeTrackCount: 2,
+        isAudioUnlockRequired: false,
+        rejectedPlayTrackCount: 0,
       }),
     ).toBe("ready");
   });
@@ -1569,17 +1602,19 @@ describe("workspace segment editor full preview", () => {
     ).toBe(false);
   });
 
-  it("selects unique fetchable voice sources for preview preloading", () => {
+  it("selects every unique audio source for preview preloading", () => {
     expect(
       getWorkspaceSegmentEditorFullPreviewAudioPreloadUrls([
         { kind: "voice", url: "/voice/1" },
         { kind: "voice", url: "/voice/1" },
         { kind: "voice", url: "/voice/2" },
+        { kind: "sound", url: "/sound/1" },
+        { kind: "music", url: "/music-once" },
         { kind: "embedded_voice", mediaKind: "video", url: "/video/voice" },
         { kind: "music", loop: true, url: "/music" },
         { kind: "voice", url: "blob:already-local" },
       ]),
-    ).toEqual(["/voice/1", "/voice/2"]);
+    ).toEqual(["/voice/1", "/voice/2", "/sound/1", "/music-once", "/music"]);
   });
 
   it("does not expose one-frame voice start holds as UI buffering", () => {
