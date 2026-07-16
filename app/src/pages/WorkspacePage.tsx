@@ -551,6 +551,7 @@ import {
   getStudioGenerationUnavailableMessage,
   isAbortLikeError,
   buildWorkspaceBootstrapRequestUrl,
+  buildWorkspaceSessionIdentityKey,
   mergeWorkspaceMediaLibraryPageItems,
   WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_MUSIC_VOLUME,
   WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_MUSIC_DUCKED_VOLUME,
@@ -2555,7 +2556,8 @@ export function WorkspacePage({
   const segmentEditorAddSegmentInFlightRef = useRef(false);
   const suppressScratchSegmentEditorRouteOpenRef = useRef(false);
   const hasProcessedInitialSegmentEditorEditRouteRef = useRef(false);
-  const workspaceSessionResetEmailRef = useRef(session.email);
+  const workspaceSessionIdentityKey = buildWorkspaceSessionIdentityKey(session, workspaceProfile?.userId);
+  const workspaceSessionResetIdentityRef = useRef(workspaceSessionIdentityKey);
   const previousWorkspaceSessionWasGuestRef = useRef(isGuest);
   const pendingGuestGenerationRef = useRef<{ options?: WorkspaceGenerateOptions; topic: string } | null>(null);
   const segmentEditorDraftRef = useRef<WorkspaceSegmentEditorDraftSession | null>(null);
@@ -4276,12 +4278,12 @@ export function WorkspacePage({
   }, [insufficientCreditsContext, workspaceProfile]);
 
   useEffect(() => {
-    const isSessionEmailChange = workspaceSessionResetEmailRef.current !== session.email;
-    workspaceSessionResetEmailRef.current = session.email;
+    const isSessionIdentityChange = workspaceSessionResetIdentityRef.current !== workspaceSessionIdentityKey;
+    workspaceSessionResetIdentityRef.current = workspaceSessionIdentityKey;
     const wasGuestSession = previousWorkspaceSessionWasGuestRef.current;
     previousWorkspaceSessionWasGuestRef.current = isGuest;
     const isGuestAuthHandoff = wasGuestSession && !isGuest;
-    const shouldPreserveSegmentEditorRoute = !isSessionEmailChange && hasExplicitSegmentEditorRouteRef.current;
+    const shouldPreserveSegmentEditorRoute = !isSessionIdentityChange && hasExplicitSegmentEditorRouteRef.current;
 
     setProjects([]);
     setProjectsError(null);
@@ -4294,7 +4296,7 @@ export function WorkspacePage({
     setIsProjectDeleteSubmitting(false);
     pendingProjectDeleteIdsRef.current.clear();
     locallyDeletedProjectsRef.current = [];
-    if (isSessionEmailChange) {
+    if (isSessionIdentityChange) {
       segmentEditorConsumedSourceResetProjectIdsRef.current.clear();
     }
     setHasLoadedProjects(false);
@@ -4384,7 +4386,7 @@ export function WorkspacePage({
       setSegmentEditorPanelHeightLock(null);
       setActiveSegmentIndex(0);
     }
-  }, [isGuest, session.email]);
+  }, [isGuest, session.email, workspaceSessionIdentityKey]);
 
   useEffect(() => {
     if (activeTab !== "studio" || studioView !== "create" || createMode === "segment-editor") {

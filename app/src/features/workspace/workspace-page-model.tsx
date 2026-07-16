@@ -63,9 +63,22 @@ export const getStudioGenerationUnavailableMessage = (locale: Locale) =>
 
 export type Session = {
   displayEmail?: string;
+  id?: string;
   name: string;
   email: string;
   plan: string;
+};
+
+export const buildWorkspaceSessionIdentityKey = (
+  session: Pick<Session, "email" | "id">,
+  adsflowUserId?: string | null,
+) => {
+  const authUserId = String(session.id ?? "").trim();
+  const email = String(session.email ?? "").trim().toLowerCase();
+  const principal = authUserId ? `user:${authUserId}` : `email:${email}`;
+  const normalizedAdsflowUserId = String(adsflowUserId ?? "").trim();
+
+  return normalizedAdsflowUserId ? `${principal}|adsflow:${normalizedAdsflowUserId}` : principal;
 };
 
 export const isAbortLikeError = (error: unknown) =>

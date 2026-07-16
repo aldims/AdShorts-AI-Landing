@@ -3,6 +3,7 @@ export type WorkspaceProfile = {
   expiresAt: string | null;
   plan: string;
   startPlanUsed: boolean;
+  userId?: string | null;
 };
 
 export const normalizeWorkspacePlan = (value: unknown) => {
@@ -30,6 +31,11 @@ export const normalizeWorkspaceStartPlanUsed = (value: unknown, plan: unknown) =
   return normalizeWorkspacePlan(plan) === "START";
 };
 
+export const normalizeWorkspaceUserId = (value: unknown) => {
+  const normalized = String(value ?? "").trim();
+  return normalized || null;
+};
+
 export const areWorkspaceProfilesEqual = (
   left: WorkspaceProfile | null | undefined,
   right: WorkspaceProfile | null | undefined,
@@ -38,4 +44,5 @@ export const areWorkspaceProfilesEqual = (
   normalizeWorkspaceBalance(left?.balance) === normalizeWorkspaceBalance(right?.balance) &&
   normalizeWorkspaceExpiry(left?.expiresAt) === normalizeWorkspaceExpiry(right?.expiresAt) &&
   normalizeWorkspaceStartPlanUsed(left?.startPlanUsed, left?.plan) ===
-    normalizeWorkspaceStartPlanUsed(right?.startPlanUsed, right?.plan);
+    normalizeWorkspaceStartPlanUsed(right?.startPlanUsed, right?.plan) &&
+  normalizeWorkspaceUserId(left?.userId) === normalizeWorkspaceUserId(right?.userId);

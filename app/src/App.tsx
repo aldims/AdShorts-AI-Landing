@@ -51,6 +51,7 @@ type Session = {
   displayEmail?: string;
   email: string;
   emailVerified: boolean;
+  id: string;
   name: string;
   plan: string;
 };
@@ -518,6 +519,7 @@ export function App() {
       displayEmail: accountDisplay?.displayEmail,
       email: authSession.user.email,
       emailVerified: authSession.user.emailVerified,
+      id: authSession.user.id,
       name: authSession.user.name,
       plan: "FREE",
     };
@@ -527,6 +529,7 @@ export function App() {
     () => ({
       email: "guest@adshorts.local",
       emailVerified: false,
+      id: "guest",
       name: locale === "en" ? "Guest" : "Гость",
       plan: "FREE",
     }),

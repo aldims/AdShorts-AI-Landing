@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { areWorkspaceProfilesEqual } from "./workspace-profile-helpers";
 
 import {
+  buildWorkspaceSessionIdentityKey,
   getWorkspaceStudioIdeaSuggestionRotation,
   getWorkspaceStudioIdeaSuggestions,
   getWorkspaceSegmentEditorSessionUrl,
@@ -23,6 +25,43 @@ import {
   shouldShowWorkspaceSegmentEditorFullPreviewBusyIndicator,
   type WorkspacePublishBootstrapPayload,
 } from "./workspace-page-model";
+
+describe("workspace session identity", () => {
+  it("changes when an account is recreated with the same email", () => {
+    const session = {
+      email: "user@example.com",
+      id: "auth-user",
+    };
+
+    expect(buildWorkspaceSessionIdentityKey(session, "old-adsflow-user")).not.toBe(
+      buildWorkspaceSessionIdentityKey(session, "new-adsflow-user"),
+    );
+  });
+
+  it("changes when Better Auth creates a new principal for the same email", () => {
+    expect(
+      buildWorkspaceSessionIdentityKey({ email: "user@example.com", id: "old-auth-user" }),
+    ).not.toBe(
+      buildWorkspaceSessionIdentityKey({ email: "user@example.com", id: "new-auth-user" }),
+    );
+  });
+
+  it("does not treat profiles from recreated AdsFlow users as equal", () => {
+    const profile = {
+      balance: 10,
+      expiresAt: null,
+      plan: "FREE",
+      startPlanUsed: false,
+    };
+
+    expect(
+      areWorkspaceProfilesEqual(
+        { ...profile, userId: "old-adsflow-user" },
+        { ...profile, userId: "new-adsflow-user" },
+      ),
+    ).toBe(false);
+  });
+});
 
 describe("segment editor session loading", () => {
   it("uses the cached endpoint unless a fresh session was explicitly requested", () => {
