@@ -12252,6 +12252,11 @@ export function WorkspacePage({
       return;
     }
 
+    if (isGuest) {
+      onAuthRequired?.();
+      return;
+    }
+
     suppressScratchSegmentEditorRouteOpenRef.current = false;
     const currentScenesDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
     const target = resolveWorkspaceScenesModeSwitchTarget({
@@ -38455,8 +38460,10 @@ export function WorkspacePage({
                         className="studio-welcome-card__primary-action"
                         type="button"
                         onClick={() => {
-                          closeStudioWelcomeCard();
                           handleStudioCreateScenesModeSelect();
+                          if (!isGuest) {
+                            closeStudioWelcomeCard();
+                          }
                         }}
                       >
                         <svg viewBox="0 0 24 24" aria-hidden="true">
