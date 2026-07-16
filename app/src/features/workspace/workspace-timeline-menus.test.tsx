@@ -234,6 +234,20 @@ describe("WorkspaceSegmentTimelineDurationMenu", () => {
     expect(screen.queryByRole("button", { name: /Сохранить/ })).toBeNull();
   });
 
+  it("does not visually highlight the video-length option", () => {
+    render(
+      <WorkspaceSegmentTimelineDurationMenu
+        {...baseDurationProps}
+        hasExtensionPlan={false}
+        trimToVoiceover={false}
+      />,
+    );
+
+    const videoLengthOption = screen.getByRole("radio", { name: /По длине видео/ });
+    expect(videoLengthOption.getAttribute("aria-checked")).toBe("true");
+    expect(videoLengthOption.classList.contains("is-selected")).toBe(false);
+  });
+
   it("keeps extension settings and the primary action in one concise row", () => {
     render(
       <WorkspaceSegmentTimelineDurationMenu

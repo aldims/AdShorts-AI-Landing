@@ -279,9 +279,7 @@ export function WorkspaceSegmentTimelineDurationMenu({
             aria-label={workspaceText(locale, "Как синхронизировать видео и озвучку", "How to sync video and voiceover")}
           >
             <button
-              className={`studio-segment-editor__timeline-duration-menu-mode${
-                !trimToVoiceover && !isCustomDurationSelected ? " is-selected" : ""
-              }`}
+              className="studio-segment-editor__timeline-duration-menu-mode"
               type="button"
               role="radio"
               aria-checked={!trimToVoiceover && !isCustomDurationSelected}
