@@ -3,6 +3,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import {
+  findOldestStoredWorkspaceSegmentJobForDraft,
   isStoredWorkspaceSegmentJobForDraft,
   readStoredWorkspaceSegmentEditorScratchDraft,
   readStoredWorkspaceSegmentEditorExplicitReset,
@@ -111,6 +112,50 @@ describe("workspace segment editor storage fallback", () => {
     expect(isStoredWorkspaceSegmentJobForDraft({ draftId: "scratch:current", projectId: 0 }, null)).toBe(false);
   });
 
+  it("restores and clears pending jobs only within their originating scratch draft", () => {
+    const email = "editor@example.test";
+    const currentDraft = {
+      ...createWorkspaceSegmentEditorScratchDraftSession(),
+      draftId: "scratch:current",
+    };
+    const now = Date.now();
+
+    upsertStoredWorkspaceSegmentAiPhotoJob(email, {
+      createdAt: now,
+      draftId: "scratch:current",
+      jobId: "current-job",
+      projectId: 0,
+      prompt: "current draft prompt",
+      segmentIndex: 0,
+      status: "processing",
+    });
+    upsertStoredWorkspaceSegmentAiPhotoJob(email, {
+      createdAt: now - 1_000,
+      draftId: "scratch:other",
+      jobId: "other-job",
+      projectId: 0,
+      prompt: "other draft prompt",
+      segmentIndex: 0,
+      status: "queued",
+    });
+
+    const storedJobs = readStoredWorkspaceSegmentAiPhotoJobs(email);
+    expect(storedJobs).toHaveLength(2);
+    expect(findOldestStoredWorkspaceSegmentJobForDraft(storedJobs, currentDraft)).toMatchObject({
+      draftId: "scratch:current",
+      jobId: "current-job",
+    });
+
+    removeStoredWorkspaceSegmentAiPhotoJobsForSegment(email, 0, 0, "scratch:current");
+
+    expect(readStoredWorkspaceSegmentAiPhotoJobs(email)).toEqual([
+      expect.objectContaining({
+        draftId: "scratch:other",
+        jobId: "other-job",
+      }),
+    ]);
+  });
+
   it("keeps a generated scratch video on durable media routes across storage round trips", () => {
     const draft = createWorkspaceSegmentEditorScratchDraftSession();
     draft.segments[0].aiVideoAsset = {
@@ -202,7 +247,7 @@ describe("workspace segment editor storage fallback", () => {
       status: "queued",
     });
 
-    removeStoredWorkspaceSegmentAiPhotoJobsForSegment("editor@example.test", 0, 0);
+    removeStoredWorkspaceSegmentAiPhotoJobsForSegment("editor@example.test", 0, 0, "scratch:ai-photo");
 
     expect(readStoredWorkspaceSegmentAiPhotoJobs("editor@example.test")).toEqual([]);
   });

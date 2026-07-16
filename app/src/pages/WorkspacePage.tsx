@@ -776,6 +776,7 @@ import {
   readStoredWorkspaceSegmentVoiceoverJobs,
   hasStoredWorkspaceSegmentSceneSoundAssetChangedSinceStart,
   hasStoredWorkspaceSegmentSceneSoundVisualChangedSinceStart,
+  findOldestStoredWorkspaceSegmentJobForDraft,
   isStoredWorkspaceSegmentJobForDraft,
   readWorkspaceSegmentVisualDurationCache,
   removeStoredWorkspaceSegmentAiPhotoJob,
@@ -13333,11 +13334,13 @@ export function WorkspacePage({
       session.email,
       segmentEditorDraft.projectId,
       targetSegment.index,
+      getWorkspaceSegmentEditorDraftId(segmentEditorDraft),
     );
     removeStoredWorkspaceSegmentVoiceoverJobsForSegment(
       session.email,
       segmentEditorDraft.projectId,
       targetSegment.index,
+      getWorkspaceSegmentEditorDraftId(segmentEditorDraft),
     );
 
     const resolvedNextSegments = resolveWorkspaceSegmentEditorSegmentsAfterDelete(segmentEditorDraft, targetSegment.index, {
@@ -14147,7 +14150,12 @@ export function WorkspacePage({
   ) => {
     const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
     if (!options?.preserveStoredJob) {
-      removeStoredWorkspaceSegmentAiPhotoJobsForSegment(session.email, currentDraft?.projectId, targetSegmentIndex);
+      removeStoredWorkspaceSegmentAiPhotoJobsForSegment(
+        session.email,
+        currentDraft?.projectId,
+        targetSegmentIndex,
+        getWorkspaceSegmentEditorDraftId(currentDraft),
+      );
     }
 
     if (!hasWorkspaceSegmentVisualRun(segmentEditorGeneratingAiPhotoRunIds, targetSegmentIndex)) {
@@ -14163,7 +14171,12 @@ export function WorkspacePage({
   ) => {
     const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
     if (!options?.preserveStoredJob) {
-      removeStoredWorkspaceSegmentAiVideoJobsForSegment(session.email, currentDraft?.projectId, targetSegmentIndex);
+      removeStoredWorkspaceSegmentAiVideoJobsForSegment(
+        session.email,
+        currentDraft?.projectId,
+        targetSegmentIndex,
+        getWorkspaceSegmentEditorDraftId(currentDraft),
+      );
     }
 
     if (!hasWorkspaceSegmentVisualRun(segmentEditorGeneratingAiVideoRunIds, targetSegmentIndex)) {
@@ -14179,7 +14192,12 @@ export function WorkspacePage({
   ) => {
     const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
     if (!options?.preserveStoredJob) {
-      removeStoredWorkspaceSegmentImageEditJobsForSegment(session.email, currentDraft?.projectId, targetSegmentIndex);
+      removeStoredWorkspaceSegmentImageEditJobsForSegment(
+        session.email,
+        currentDraft?.projectId,
+        targetSegmentIndex,
+        getWorkspaceSegmentEditorDraftId(currentDraft),
+      );
     }
 
     if (!hasWorkspaceSegmentVisualRun(segmentEditorGeneratingImageEditRunIds, targetSegmentIndex)) {
@@ -14199,6 +14217,7 @@ export function WorkspacePage({
         session.email,
         currentDraft?.projectId,
         targetSegmentIndex,
+        getWorkspaceSegmentEditorDraftId(currentDraft),
       );
     }
 
@@ -14215,7 +14234,12 @@ export function WorkspacePage({
   ) => {
     const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
     if (!options?.preserveStoredJob) {
-      removeStoredWorkspaceSegmentTalkingPhotoJobsForSegment(session.email, currentDraft?.projectId, targetSegmentIndex);
+      removeStoredWorkspaceSegmentTalkingPhotoJobsForSegment(
+        session.email,
+        currentDraft?.projectId,
+        targetSegmentIndex,
+        getWorkspaceSegmentEditorDraftId(currentDraft),
+      );
     }
 
     if (!hasWorkspaceSegmentVisualRun(segmentEditorGeneratingTalkingPhotoRunIds, targetSegmentIndex)) {
@@ -14231,7 +14255,12 @@ export function WorkspacePage({
   ) => {
     const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
     if (!options?.preserveStoredJob) {
-      removeStoredWorkspaceSegmentImageUpscaleJobsForSegment(session.email, currentDraft?.projectId, targetSegmentIndex);
+      removeStoredWorkspaceSegmentImageUpscaleJobsForSegment(
+        session.email,
+        currentDraft?.projectId,
+        targetSegmentIndex,
+        getWorkspaceSegmentEditorDraftId(currentDraft),
+      );
     }
 
     if (!hasWorkspaceSegmentVisualRun(segmentEditorUpscalingImageRunIds, targetSegmentIndex)) {
@@ -14251,6 +14280,7 @@ export function WorkspacePage({
         session.email,
         currentDraft?.projectId,
         targetSegmentIndex,
+        getWorkspaceSegmentEditorDraftId(currentDraft),
       );
     }
     if (hasWorkspaceSegmentVisualRun(segmentEditorGeneratingInfographicRunIds, targetSegmentIndex)) {
@@ -14268,7 +14298,12 @@ export function WorkspacePage({
   ) => {
     const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
     if (!options?.preserveStoredJob) {
-      removeStoredWorkspaceSegmentSceneSoundJobsForSegment(session.email, currentDraft?.projectId, targetSegmentIndex);
+      removeStoredWorkspaceSegmentSceneSoundJobsForSegment(
+        session.email,
+        currentDraft?.projectId,
+        targetSegmentIndex,
+        getWorkspaceSegmentEditorDraftId(currentDraft),
+      );
     }
 
     if (!hasWorkspaceSegmentVisualRun(segmentEditorGeneratingSceneSoundRunIds, targetSegmentIndex)) {
@@ -17155,9 +17190,6 @@ export function WorkspacePage({
 
     const currentDraft = segmentEditorDraftRef.current;
     if (!currentDraft || !isStoredWorkspaceSegmentJobForDraft(job, currentDraft)) {
-      if (currentDraft?.projectId === job.projectId && job.draftId) {
-        removeStoredWorkspaceSegmentSceneSoundJob(session.email, job.jobId);
-      }
       return false;
     }
 
@@ -17240,9 +17272,10 @@ export function WorkspacePage({
         return;
       }
 
-      const pendingJob = readStoredWorkspaceSegmentSceneSoundJobs(session.email)
-        .filter((job) => job.projectId === currentDraft.projectId)
-        .sort((left, right) => left.createdAt - right.createdAt)[0] ?? null;
+      const pendingJob = findOldestStoredWorkspaceSegmentJobForDraft(
+        readStoredWorkspaceSegmentSceneSoundJobs(session.email),
+        currentDraft,
+      );
       if (!pendingJob) {
         return;
       }
@@ -17441,9 +17474,6 @@ export function WorkspacePage({
   const resumePendingSegmentVoiceoverJob = (job: StoredWorkspaceSegmentVoiceoverJob) => {
     const currentDraft = segmentEditorDraftRef.current;
     if (!currentDraft || !isStoredWorkspaceSegmentJobForDraft(job, currentDraft)) {
-      if (currentDraft?.projectId === job.projectId && job.draftId) {
-        removeStoredWorkspaceSegmentVoiceoverJob(session.email, job.jobId);
-      }
       return false;
     }
 
@@ -17499,9 +17529,10 @@ export function WorkspacePage({
         return;
       }
 
-      const pendingJob = readStoredWorkspaceSegmentVoiceoverJobs(session.email)
-        .filter((job) => isStoredWorkspaceSegmentJobForDraft(job, currentDraft))
-        .sort((left, right) => left.createdAt - right.createdAt)[0] ?? null;
+      const pendingJob = findOldestStoredWorkspaceSegmentJobForDraft(
+        readStoredWorkspaceSegmentVoiceoverJobs(session.email),
+        currentDraft,
+      );
       if (pendingJob) {
         resumePendingSegmentVoiceoverJob(pendingJob);
       }
@@ -17697,9 +17728,6 @@ export function WorkspacePage({
 
     const currentDraft = segmentEditorDraftRef.current;
     if (!currentDraft || !isStoredWorkspaceSegmentJobForDraft(job, currentDraft)) {
-      if (currentDraft?.projectId === job.projectId && job.draftId) {
-        removeStoredWorkspaceSegmentAiPhotoJob(session.email, job.jobId);
-      }
       return false;
     }
 
@@ -17772,9 +17800,10 @@ export function WorkspacePage({
         return;
       }
 
-      const pendingJob = readStoredWorkspaceSegmentAiPhotoJobs(session.email)
-        .filter((job) => job.projectId === currentDraft.projectId)
-        .sort((left, right) => left.createdAt - right.createdAt)[0] ?? null;
+      const pendingJob = findOldestStoredWorkspaceSegmentJobForDraft(
+        readStoredWorkspaceSegmentAiPhotoJobs(session.email),
+        currentDraft,
+      );
       if (!pendingJob) {
         return;
       }
@@ -18048,9 +18077,6 @@ export function WorkspacePage({
 
     const currentDraft = segmentEditorDraftRef.current;
     if (!currentDraft || !isStoredWorkspaceSegmentJobForDraft(job, currentDraft)) {
-      if (currentDraft?.projectId === job.projectId && job.draftId) {
-        removeStoredWorkspaceSegmentImageEditJob(session.email, job.jobId);
-      }
       return false;
     }
 
@@ -18137,9 +18163,10 @@ export function WorkspacePage({
         return;
       }
 
-      const pendingJob = readStoredWorkspaceSegmentImageEditJobs(session.email)
-        .filter((job) => job.projectId === currentDraft.projectId)
-        .sort((left, right) => left.createdAt - right.createdAt)[0] ?? null;
+      const pendingJob = findOldestStoredWorkspaceSegmentJobForDraft(
+        readStoredWorkspaceSegmentImageEditJobs(session.email),
+        currentDraft,
+      );
       if (!pendingJob) {
         return;
       }
@@ -18338,9 +18365,6 @@ export function WorkspacePage({
 
     const currentDraft = segmentEditorDraftRef.current;
     if (!currentDraft || !isStoredWorkspaceSegmentJobForDraft(job, currentDraft)) {
-      if (currentDraft?.projectId === job.projectId && job.draftId) {
-        removeStoredWorkspaceSegmentAiVideoJob(session.email, job.jobId);
-      }
       return false;
     }
 
@@ -18414,9 +18438,10 @@ export function WorkspacePage({
         return;
       }
 
-      const pendingJob = readStoredWorkspaceSegmentAiVideoJobs(session.email)
-        .filter((job) => job.projectId === currentDraft.projectId)
-        .sort((left, right) => left.createdAt - right.createdAt)[0] ?? null;
+      const pendingJob = findOldestStoredWorkspaceSegmentJobForDraft(
+        readStoredWorkspaceSegmentAiVideoJobs(session.email),
+        currentDraft,
+      );
       if (!pendingJob) {
         return;
       }
@@ -19210,9 +19235,6 @@ export function WorkspacePage({
 
     const currentDraft = segmentEditorDraftRef.current;
     if (!currentDraft || !isStoredWorkspaceSegmentJobForDraft(job, currentDraft)) {
-      if (currentDraft?.projectId === job.projectId && job.draftId) {
-        removeStoredWorkspaceSegmentTalkingPhotoJob(session.email, job.jobId);
-      }
       return false;
     }
 
@@ -19311,9 +19333,10 @@ export function WorkspacePage({
         return;
       }
 
-      const pendingJob = readStoredWorkspaceSegmentTalkingPhotoJobs(session.email)
-        .filter((job) => job.projectId === currentDraft.projectId)
-        .sort((left, right) => left.createdAt - right.createdAt)[0] ?? null;
+      const pendingJob = findOldestStoredWorkspaceSegmentJobForDraft(
+        readStoredWorkspaceSegmentTalkingPhotoJobs(session.email),
+        currentDraft,
+      );
       if (!pendingJob) {
         return;
       }
@@ -19352,9 +19375,6 @@ export function WorkspacePage({
 
     const currentDraft = segmentEditorDraftRef.current;
     if (!currentDraft || !isStoredWorkspaceSegmentJobForDraft(job, currentDraft)) {
-      if (currentDraft?.projectId === job.projectId && job.draftId) {
-        removeStoredWorkspaceSegmentPhotoAnimationJob(session.email, job.jobId);
-      }
       return false;
     }
 
@@ -19438,9 +19458,10 @@ export function WorkspacePage({
         return;
       }
 
-      const pendingJob = readStoredWorkspaceSegmentPhotoAnimationJobs(session.email)
-        .filter((job) => job.projectId === currentDraft.projectId)
-        .sort((left, right) => left.createdAt - right.createdAt)[0] ?? null;
+      const pendingJob = findOldestStoredWorkspaceSegmentJobForDraft(
+        readStoredWorkspaceSegmentPhotoAnimationJobs(session.email),
+        currentDraft,
+      );
       if (!pendingJob) {
         return;
       }
@@ -19479,9 +19500,6 @@ export function WorkspacePage({
 
     const currentDraft = segmentEditorDraftRef.current;
     if (!currentDraft || !isStoredWorkspaceSegmentJobForDraft(job, currentDraft)) {
-      if (currentDraft?.projectId === job.projectId && job.draftId) {
-        removeStoredWorkspaceSegmentImageUpscaleJob(session.email, job.jobId);
-      }
       return false;
     }
 
@@ -19534,9 +19552,10 @@ export function WorkspacePage({
         return;
       }
 
-      const pendingJob = readStoredWorkspaceSegmentImageUpscaleJobs(session.email)
-        .filter((job) => job.projectId === currentDraft.projectId)
-        .sort((left, right) => left.createdAt - right.createdAt)[0] ?? null;
+      const pendingJob = findOldestStoredWorkspaceSegmentJobForDraft(
+        readStoredWorkspaceSegmentImageUpscaleJobs(session.email),
+        currentDraft,
+      );
       if (!pendingJob) {
         return;
       }
@@ -20019,9 +20038,10 @@ export function WorkspacePage({
       if (!currentDraft) {
         return;
       }
-      const pendingJob = readStoredWorkspaceSegmentInfographicJobs(session.email)
-        .filter((job) => isStoredWorkspaceSegmentJobForDraft(job, currentDraft))
-        .sort((left, right) => left.createdAt - right.createdAt)[0] ?? null;
+      const pendingJob = findOldestStoredWorkspaceSegmentJobForDraft(
+        readStoredWorkspaceSegmentInfographicJobs(session.email),
+        currentDraft,
+      );
       if (pendingJob) {
         resumePendingSegmentInfographicJob(pendingJob);
       }
@@ -20821,9 +20841,6 @@ export function WorkspacePage({
 
     const currentDraft = segmentEditorDraftRef.current;
     if (!currentDraft || !isStoredWorkspaceSegmentJobForDraft(job, currentDraft)) {
-      if (currentDraft?.projectId === job.projectId && job.draftId) {
-        removeStoredWorkspaceSegmentBatchVoiceoverJob(session.email, job.jobId);
-      }
       return false;
     }
 
@@ -20928,9 +20945,10 @@ export function WorkspacePage({
         return;
       }
 
-      const pendingJob = readStoredWorkspaceSegmentBatchVoiceoverJobs(session.email)
-        .filter((job) => job.projectId === currentDraft.projectId)
-        .sort((left, right) => left.createdAt - right.createdAt)[0] ?? null;
+      const pendingJob = findOldestStoredWorkspaceSegmentJobForDraft(
+        readStoredWorkspaceSegmentBatchVoiceoverJobs(session.email),
+        currentDraft,
+      );
       if (!pendingJob) {
         return;
       }

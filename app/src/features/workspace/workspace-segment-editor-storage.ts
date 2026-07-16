@@ -182,6 +182,72 @@ export const isStoredWorkspaceSegmentJobForDraft = (
   return getWorkspaceSegmentEditorDraftId(draft) === jobDraftId;
 };
 
+type StoredWorkspaceSegmentJobDraftIdentity = Pick<StoredWorkspaceSegmentAiPhotoJob, "draftId" | "projectId">;
+type StoredWorkspaceSegmentJobTargetIdentity = StoredWorkspaceSegmentJobDraftIdentity & {
+  segmentIndex: number;
+};
+
+const isSameStoredWorkspaceSegmentJobDraft = (
+  left: StoredWorkspaceSegmentJobDraftIdentity,
+  right: StoredWorkspaceSegmentJobDraftIdentity,
+) => {
+  if (left.projectId !== right.projectId) {
+    return false;
+  }
+  if (left.projectId > 0) {
+    return true;
+  }
+
+  const leftDraftId = String(left.draftId ?? "").trim();
+  const rightDraftId = String(right.draftId ?? "").trim();
+  return Boolean(leftDraftId && rightDraftId && leftDraftId === rightDraftId);
+};
+
+const isSameStoredWorkspaceSegmentJobTarget = (
+  left: StoredWorkspaceSegmentJobTargetIdentity,
+  right: StoredWorkspaceSegmentJobTargetIdentity,
+) => left.segmentIndex === right.segmentIndex && isSameStoredWorkspaceSegmentJobDraft(left, right);
+
+export const findOldestStoredWorkspaceSegmentJobForDraft = <
+  T extends StoredWorkspaceSegmentJobDraftIdentity & { createdAt: number },
+>(
+  jobs: readonly T[],
+  draft: Pick<WorkspaceSegmentEditorDraftSession, "draftId" | "projectId"> | null | undefined,
+): T | null => {
+  let oldestJob: T | null = null;
+  jobs.forEach((job) => {
+    if (
+      isStoredWorkspaceSegmentJobForDraft(job, draft) &&
+      (!oldestJob || job.createdAt < oldestJob.createdAt)
+    ) {
+      oldestJob = job;
+    }
+  });
+  return oldestJob;
+};
+
+const buildStoredWorkspaceSegmentJobTarget = (
+  projectId: number | null | undefined,
+  segmentIndex: number | null | undefined,
+  draftId?: string | null,
+): StoredWorkspaceSegmentJobTargetIdentity | null => {
+  const normalizedProjectId = Number(projectId);
+  const normalizedSegmentIndex = Number(segmentIndex);
+  if (
+    !Number.isInteger(normalizedProjectId) ||
+    normalizedProjectId < 0 ||
+    !Number.isInteger(normalizedSegmentIndex) ||
+    normalizedSegmentIndex < 0
+  ) {
+    return null;
+  }
+  return {
+    draftId: normalizeStoredWorkspaceSegmentJobDraftId(draftId),
+    projectId: normalizedProjectId,
+    segmentIndex: normalizedSegmentIndex,
+  };
+};
+
 const WORKSPACE_SEGMENT_EDITOR_SESSION_STORAGE_KEY_PREFIX = "adshorts.segment-editor-session:";
 
 export const normalizeWorkspaceSegmentEditorStorageEmail = (value: string | null | undefined) => String(value ?? "").trim().toLowerCase();
@@ -834,7 +900,7 @@ export const upsertStoredWorkspaceSegmentAiPhotoJob = (
   const jobs = readStoredWorkspaceSegmentAiPhotoJobs(email).filter(
     (item) =>
       item.jobId !== normalizedJob.jobId &&
-      !(item.projectId === normalizedJob.projectId && item.segmentIndex === normalizedJob.segmentIndex),
+      !isSameStoredWorkspaceSegmentJobTarget(item, normalizedJob),
   );
   writeStoredWorkspaceSegmentAiPhotoJobs(email, [normalizedJob, ...jobs]);
 };
@@ -856,20 +922,15 @@ export const removeStoredWorkspaceSegmentAiPhotoJobsForSegment = (
   email: string | null | undefined,
   projectId: number | null | undefined,
   segmentIndex: number | null | undefined,
+  draftId?: string | null,
 ) => {
-  const normalizedProjectId = Number(projectId);
-  const normalizedSegmentIndex = Number(segmentIndex);
-  if (
-    !Number.isInteger(normalizedProjectId) ||
-    normalizedProjectId < 0 ||
-    !Number.isInteger(normalizedSegmentIndex) ||
-    normalizedSegmentIndex < 0
-  ) {
+  const target = buildStoredWorkspaceSegmentJobTarget(projectId, segmentIndex, draftId);
+  if (!target) {
     return;
   }
 
   const jobs = readStoredWorkspaceSegmentAiPhotoJobs(email).filter(
-    (job) => !(job.projectId === normalizedProjectId && job.segmentIndex === normalizedSegmentIndex),
+    (job) => !isSameStoredWorkspaceSegmentJobTarget(job, target),
   );
   writeStoredWorkspaceSegmentAiPhotoJobs(email, jobs);
 };
@@ -975,7 +1036,7 @@ export const upsertStoredWorkspaceSegmentAiVideoJob = (
   const jobs = readStoredWorkspaceSegmentAiVideoJobs(email).filter(
     (item) =>
       item.jobId !== normalizedJob.jobId &&
-      !(item.projectId === normalizedJob.projectId && item.segmentIndex === normalizedJob.segmentIndex),
+      !isSameStoredWorkspaceSegmentJobTarget(item, normalizedJob),
   );
   writeStoredWorkspaceSegmentAiVideoJobs(email, [normalizedJob, ...jobs]);
 };
@@ -997,20 +1058,15 @@ export const removeStoredWorkspaceSegmentAiVideoJobsForSegment = (
   email: string | null | undefined,
   projectId: number | null | undefined,
   segmentIndex: number | null | undefined,
+  draftId?: string | null,
 ) => {
-  const normalizedProjectId = Number(projectId);
-  const normalizedSegmentIndex = Number(segmentIndex);
-  if (
-    !Number.isInteger(normalizedProjectId) ||
-    normalizedProjectId < 0 ||
-    !Number.isInteger(normalizedSegmentIndex) ||
-    normalizedSegmentIndex < 0
-  ) {
+  const target = buildStoredWorkspaceSegmentJobTarget(projectId, segmentIndex, draftId);
+  if (!target) {
     return;
   }
 
   const jobs = readStoredWorkspaceSegmentAiVideoJobs(email).filter(
-    (job) => !(job.projectId === normalizedProjectId && job.segmentIndex === normalizedSegmentIndex),
+    (job) => !isSameStoredWorkspaceSegmentJobTarget(job, target),
   );
   writeStoredWorkspaceSegmentAiVideoJobs(email, jobs);
 };
@@ -1117,7 +1173,7 @@ export const upsertStoredWorkspaceSegmentImageEditJob = (
   const jobs = readStoredWorkspaceSegmentImageEditJobs(email).filter(
     (item) =>
       item.jobId !== normalizedJob.jobId &&
-      !(item.projectId === normalizedJob.projectId && item.segmentIndex === normalizedJob.segmentIndex),
+      !isSameStoredWorkspaceSegmentJobTarget(item, normalizedJob),
   );
   writeStoredWorkspaceSegmentImageEditJobs(email, [normalizedJob, ...jobs]);
 };
@@ -1139,20 +1195,15 @@ export const removeStoredWorkspaceSegmentImageEditJobsForSegment = (
   email: string | null | undefined,
   projectId: number | null | undefined,
   segmentIndex: number | null | undefined,
+  draftId?: string | null,
 ) => {
-  const normalizedProjectId = Number(projectId);
-  const normalizedSegmentIndex = Number(segmentIndex);
-  if (
-    !Number.isInteger(normalizedProjectId) ||
-    normalizedProjectId < 0 ||
-    !Number.isInteger(normalizedSegmentIndex) ||
-    normalizedSegmentIndex < 0
-  ) {
+  const target = buildStoredWorkspaceSegmentJobTarget(projectId, segmentIndex, draftId);
+  if (!target) {
     return;
   }
 
   const jobs = readStoredWorkspaceSegmentImageEditJobs(email).filter(
-    (job) => !(job.projectId === normalizedProjectId && job.segmentIndex === normalizedSegmentIndex),
+    (job) => !isSameStoredWorkspaceSegmentJobTarget(job, target),
   );
   writeStoredWorkspaceSegmentImageEditJobs(email, jobs);
 };
@@ -1257,7 +1308,7 @@ export const upsertStoredWorkspaceSegmentImageUpscaleJob = (
   const jobs = readStoredWorkspaceSegmentImageUpscaleJobs(email).filter(
     (item) =>
       item.jobId !== normalizedJob.jobId &&
-      !(item.projectId === normalizedJob.projectId && item.segmentIndex === normalizedJob.segmentIndex),
+      !isSameStoredWorkspaceSegmentJobTarget(item, normalizedJob),
   );
   writeStoredWorkspaceSegmentImageUpscaleJobs(email, [normalizedJob, ...jobs]);
 };
@@ -1279,20 +1330,15 @@ export const removeStoredWorkspaceSegmentImageUpscaleJobsForSegment = (
   email: string | null | undefined,
   projectId: number | null | undefined,
   segmentIndex: number | null | undefined,
+  draftId?: string | null,
 ) => {
-  const normalizedProjectId = Number(projectId);
-  const normalizedSegmentIndex = Number(segmentIndex);
-  if (
-    !Number.isInteger(normalizedProjectId) ||
-    normalizedProjectId < 0 ||
-    !Number.isInteger(normalizedSegmentIndex) ||
-    normalizedSegmentIndex < 0
-  ) {
+  const target = buildStoredWorkspaceSegmentJobTarget(projectId, segmentIndex, draftId);
+  if (!target) {
     return;
   }
 
   const jobs = readStoredWorkspaceSegmentImageUpscaleJobs(email).filter(
-    (job) => !(job.projectId === normalizedProjectId && job.segmentIndex === normalizedSegmentIndex),
+    (job) => !isSameStoredWorkspaceSegmentJobTarget(job, target),
   );
   writeStoredWorkspaceSegmentImageUpscaleJobs(email, jobs);
 };
@@ -1400,7 +1446,7 @@ export const upsertStoredWorkspaceSegmentInfographicJob = (
   const jobs = readStoredWorkspaceSegmentInfographicJobs(email).filter(
     (item) =>
       item.jobId !== normalizedJob.jobId &&
-      !(item.projectId === normalizedJob.projectId && item.segmentIndex === normalizedJob.segmentIndex),
+      !isSameStoredWorkspaceSegmentJobTarget(item, normalizedJob),
   );
   writeStoredWorkspaceSegmentInfographicJobs(email, [normalizedJob, ...jobs]);
 };
@@ -1432,16 +1478,16 @@ export const removeStoredWorkspaceSegmentInfographicJobsForSegment = (
   email: string | null | undefined,
   projectId: number | null | undefined,
   segmentIndex: number | null | undefined,
+  draftId?: string | null,
 ) => {
-  const normalizedProjectId = Number(projectId);
-  const normalizedSegmentIndex = Number(segmentIndex);
-  if (!Number.isInteger(normalizedProjectId) || normalizedProjectId < 0 || !Number.isInteger(normalizedSegmentIndex)) {
+  const target = buildStoredWorkspaceSegmentJobTarget(projectId, segmentIndex, draftId);
+  if (!target) {
     return;
   }
   writeStoredWorkspaceSegmentInfographicJobs(
     email,
     readStoredWorkspaceSegmentInfographicJobs(email).filter(
-      (job) => !(job.projectId === normalizedProjectId && job.segmentIndex === normalizedSegmentIndex),
+      (job) => !isSameStoredWorkspaceSegmentJobTarget(job, target),
     ),
   );
 };
@@ -1575,7 +1621,7 @@ export const upsertStoredWorkspaceSegmentSceneSoundJob = (
   const jobs = readStoredWorkspaceSegmentSceneSoundJobs(email).filter(
     (item) =>
       item.jobId !== normalizedJob.jobId &&
-      !(item.projectId === normalizedJob.projectId && item.segmentIndex === normalizedJob.segmentIndex),
+      !isSameStoredWorkspaceSegmentJobTarget(item, normalizedJob),
   );
   writeStoredWorkspaceSegmentSceneSoundJobs(email, [normalizedJob, ...jobs]);
 };
@@ -1597,20 +1643,15 @@ export const removeStoredWorkspaceSegmentSceneSoundJobsForSegment = (
   email: string | null | undefined,
   projectId: number | null | undefined,
   segmentIndex: number | null | undefined,
+  draftId?: string | null,
 ) => {
-  const normalizedProjectId = Number(projectId);
-  const normalizedSegmentIndex = Number(segmentIndex);
-  if (
-    !Number.isInteger(normalizedProjectId) ||
-    normalizedProjectId < 0 ||
-    !Number.isInteger(normalizedSegmentIndex) ||
-    normalizedSegmentIndex < 0
-  ) {
+  const target = buildStoredWorkspaceSegmentJobTarget(projectId, segmentIndex, draftId);
+  if (!target) {
     return;
   }
 
   const jobs = readStoredWorkspaceSegmentSceneSoundJobs(email).filter(
-    (job) => !(job.projectId === normalizedProjectId && job.segmentIndex === normalizedSegmentIndex),
+    (job) => !isSameStoredWorkspaceSegmentJobTarget(job, target),
   );
   writeStoredWorkspaceSegmentSceneSoundJobs(email, jobs);
 };
@@ -1726,7 +1767,7 @@ export const upsertStoredWorkspaceSegmentPhotoAnimationJob = (
   const jobs = readStoredWorkspaceSegmentPhotoAnimationJobs(email).filter(
     (item) =>
       item.jobId !== normalizedJob.jobId &&
-      !(item.projectId === normalizedJob.projectId && item.segmentIndex === normalizedJob.segmentIndex),
+      !isSameStoredWorkspaceSegmentJobTarget(item, normalizedJob),
   );
   writeStoredWorkspaceSegmentPhotoAnimationJobs(email, [normalizedJob, ...jobs]);
 };
@@ -1748,22 +1789,17 @@ export const removeStoredWorkspaceSegmentPhotoAnimationJobsForSegment = (
   email: string | null | undefined,
   projectId: number | null | undefined,
   segmentIndex: number | null | undefined,
+  draftId?: string | null,
 ) => {
-  const normalizedProjectId = Number(projectId);
-  const normalizedSegmentIndex = Number(segmentIndex);
-  if (
-    !Number.isInteger(normalizedProjectId) ||
-    normalizedProjectId < 0 ||
-    !Number.isInteger(normalizedSegmentIndex) ||
-    normalizedSegmentIndex < 0
-  ) {
+  const target = buildStoredWorkspaceSegmentJobTarget(projectId, segmentIndex, draftId);
+  if (!target) {
     return;
   }
 
   writeStoredWorkspaceSegmentPhotoAnimationJobs(
     email,
     readStoredWorkspaceSegmentPhotoAnimationJobs(email).filter(
-      (job) => !(job.projectId === normalizedProjectId && job.segmentIndex === normalizedSegmentIndex),
+      (job) => !isSameStoredWorkspaceSegmentJobTarget(job, target),
     ),
   );
 };
@@ -1873,7 +1909,7 @@ export const upsertStoredWorkspaceSegmentTalkingPhotoJob = (
   const jobs = readStoredWorkspaceSegmentTalkingPhotoJobs(email).filter(
     (item) =>
       item.jobId !== normalizedJob.jobId &&
-      !(item.projectId === normalizedJob.projectId && item.segmentIndex === normalizedJob.segmentIndex),
+      !isSameStoredWorkspaceSegmentJobTarget(item, normalizedJob),
   );
   writeStoredWorkspaceSegmentTalkingPhotoJobs(email, [normalizedJob, ...jobs]);
 };
@@ -1895,20 +1931,15 @@ export const removeStoredWorkspaceSegmentTalkingPhotoJobsForSegment = (
   email: string | null | undefined,
   projectId: number | null | undefined,
   segmentIndex: number | null | undefined,
+  draftId?: string | null,
 ) => {
-  const normalizedProjectId = Number(projectId);
-  const normalizedSegmentIndex = Number(segmentIndex);
-  if (
-    !Number.isInteger(normalizedProjectId) ||
-    normalizedProjectId < 0 ||
-    !Number.isInteger(normalizedSegmentIndex) ||
-    normalizedSegmentIndex < 0
-  ) {
+  const target = buildStoredWorkspaceSegmentJobTarget(projectId, segmentIndex, draftId);
+  if (!target) {
     return;
   }
 
   const jobs = readStoredWorkspaceSegmentTalkingPhotoJobs(email).filter(
-    (job) => !(job.projectId === normalizedProjectId && job.segmentIndex === normalizedSegmentIndex),
+    (job) => !isSameStoredWorkspaceSegmentJobTarget(job, target),
   );
   writeStoredWorkspaceSegmentTalkingPhotoJobs(email, jobs);
 };
@@ -2025,7 +2056,7 @@ export const upsertStoredWorkspaceSegmentVoiceoverJob = (
   const jobs = readStoredWorkspaceSegmentVoiceoverJobs(email).filter(
     (item) =>
       item.jobId !== normalizedJob.jobId &&
-      !(item.projectId === normalizedJob.projectId && item.segmentIndex === normalizedJob.segmentIndex),
+      !isSameStoredWorkspaceSegmentJobTarget(item, normalizedJob),
   );
   writeStoredWorkspaceSegmentVoiceoverJobs(email, [normalizedJob, ...jobs]);
 };
@@ -2048,21 +2079,16 @@ export const removeStoredWorkspaceSegmentVoiceoverJobsForSegment = (
   email: string | null | undefined,
   projectId: number | null | undefined,
   segmentIndex: number | null | undefined,
+  draftId?: string | null,
 ) => {
-  const normalizedProjectId = Number(projectId);
-  const normalizedSegmentIndex = Number(segmentIndex);
-  if (
-    !Number.isInteger(normalizedProjectId) ||
-    normalizedProjectId < 0 ||
-    !Number.isInteger(normalizedSegmentIndex) ||
-    normalizedSegmentIndex < 0
-  ) {
+  const target = buildStoredWorkspaceSegmentJobTarget(projectId, segmentIndex, draftId);
+  if (!target) {
     return;
   }
   writeStoredWorkspaceSegmentVoiceoverJobs(
     email,
     readStoredWorkspaceSegmentVoiceoverJobs(email).filter(
-      (job) => !(job.projectId === normalizedProjectId && job.segmentIndex === normalizedSegmentIndex),
+      (job) => !isSameStoredWorkspaceSegmentJobTarget(job, target),
     ),
   );
 };
@@ -2197,7 +2223,7 @@ export const upsertStoredWorkspaceSegmentBatchVoiceoverJob = (
   const jobs = readStoredWorkspaceSegmentBatchVoiceoverJobs(email).filter(
     (item) =>
       item.jobId !== normalizedJob.jobId &&
-      !(item.projectId === normalizedJob.projectId && item.source === normalizedJob.source),
+      !(item.source === normalizedJob.source && isSameStoredWorkspaceSegmentJobDraft(item, normalizedJob)),
   );
   writeStoredWorkspaceSegmentBatchVoiceoverJobs(email, [normalizedJob, ...jobs]);
 };
