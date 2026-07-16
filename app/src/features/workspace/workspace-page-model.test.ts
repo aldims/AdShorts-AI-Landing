@@ -10,6 +10,7 @@ import {
   getPublishChannelsForPlatform,
   isWorkspaceSegmentCustomVisualUploadBusy,
   isWorkspaceSegmentEditorProjectUnavailableError,
+  isWorkspaceSegmentLibraryLoadMoreSentinelNearViewport,
   isWorkspaceSegmentSceneSoundRunBusy,
   isStudioGenerationUserFacing,
   resolveWorkspaceStudioCreateModeDuringGeneration,
@@ -18,6 +19,7 @@ import {
   shouldDisableWorkspaceScenesCreateMode,
   shouldNotifyStudioGenerationError,
   shouldRedirectWorkspaceScenesModeDuringGeneration,
+  shouldResetWorkspaceSegmentLibraryRenderCount,
   shouldShowWorkspaceStudioIdeaEmptyState,
   shouldShowWorkspaceStudioWelcomeCard,
   shouldUseWorkspaceStudioExpandedPromptLayout,
@@ -74,6 +76,44 @@ describe("segment editor session loading", () => {
     expect(getWorkspaceSegmentEditorSessionUrl(4213, { forceRefresh: true })).toBe(
       "/api/workspace/projects/4213/segment-editor/reload",
     );
+  });
+});
+
+describe("segment editor media library pagination", () => {
+  it("does not let the closed modal reset the visible inline scene library", () => {
+    expect(
+      shouldResetWorkspaceSegmentLibraryRenderCount({
+        hasModalSegment: true,
+        isInlineLibraryVisible: true,
+        isModalOpen: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldResetWorkspaceSegmentLibraryRenderCount({
+        hasModalSegment: true,
+        isInlineLibraryVisible: false,
+        isModalOpen: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("loads the next card batch while the sentinel is inside the compact panel preload margin", () => {
+    expect(
+      isWorkspaceSegmentLibraryLoadMoreSentinelNearViewport({
+        rootBottom: 635,
+        rootTop: 302,
+        sentinelBottom: 702,
+        sentinelTop: 701,
+      }),
+    ).toBe(true);
+    expect(
+      isWorkspaceSegmentLibraryLoadMoreSentinelNearViewport({
+        rootBottom: 635,
+        rootTop: 302,
+        sentinelBottom: 902,
+        sentinelTop: 901,
+      }),
+    ).toBe(false);
   });
 });
 

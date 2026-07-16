@@ -1096,8 +1096,31 @@ export const WORKSPACE_SEGMENT_PHOTO_ANIMATION_JOB_TIMEOUT_MS = 25 * 60 * 1000;
 export const WORKSPACE_SEGMENT_SCENE_SOUND_JOB_TIMEOUT_MS = 10 * 60 * 1000;
 export const SEGMENT_AI_PHOTO_MODAL_LIBRARY_INITIAL_RENDER_COUNT = 12;
 export const SEGMENT_AI_PHOTO_MODAL_LIBRARY_RENDER_STEP = 12;
+export const SEGMENT_AI_PHOTO_MODAL_LIBRARY_LOAD_MORE_ROOT_MARGIN_PX = 180;
 export const SEGMENT_AI_PHOTO_MODAL_EXIT_DURATION_MS = 280;
 export const MEDIA_LIBRARY_LOAD_MORE_SCROLL_THRESHOLD_PX = 320;
+
+export const isWorkspaceSegmentLibraryLoadMoreSentinelNearViewport = (options: {
+  rootBottom: number;
+  rootTop: number;
+  sentinelBottom: number;
+  sentinelTop: number;
+  rootMargin?: number;
+}) => {
+  const rootMargin = Number.isFinite(options.rootMargin)
+    ? Math.max(0, Number(options.rootMargin))
+    : SEGMENT_AI_PHOTO_MODAL_LIBRARY_LOAD_MORE_ROOT_MARGIN_PX;
+  return (
+    options.sentinelTop <= options.rootBottom + rootMargin &&
+    options.sentinelBottom >= options.rootTop - rootMargin
+  );
+};
+
+export const shouldResetWorkspaceSegmentLibraryRenderCount = (options: {
+  hasModalSegment: boolean;
+  isInlineLibraryVisible: boolean;
+  isModalOpen: boolean;
+}) => (!options.isModalOpen || !options.hasModalSegment) && !options.isInlineLibraryVisible;
 
 export const normalizeWorkspaceSegmentGenerationJobStatus = (value: unknown) => String(value ?? "").trim().toLowerCase();
 

@@ -616,7 +616,10 @@ import {
   WORKSPACE_SEGMENT_SCENE_SOUND_JOB_TIMEOUT_MS,
   SEGMENT_AI_PHOTO_MODAL_LIBRARY_INITIAL_RENDER_COUNT,
   SEGMENT_AI_PHOTO_MODAL_LIBRARY_RENDER_STEP,
+  SEGMENT_AI_PHOTO_MODAL_LIBRARY_LOAD_MORE_ROOT_MARGIN_PX,
   SEGMENT_AI_PHOTO_MODAL_EXIT_DURATION_MS,
+  isWorkspaceSegmentLibraryLoadMoreSentinelNearViewport,
+  shouldResetWorkspaceSegmentLibraryRenderCount,
   normalizeWorkspaceSegmentGenerationJobStatus,
   isWorkspaceSegmentGenerationJobDoneStatus,
   isWorkspaceSegmentGenerationJobFailedStatus,
@@ -7746,7 +7749,6 @@ export function WorkspacePage({
     setSegmentAiPhotoModalLibraryRenderCount(SEGMENT_AI_PHOTO_MODAL_LIBRARY_INITIAL_RENDER_COUNT);
   }, [
     segmentAiPhotoModalLibraryFilter,
-    segmentAiPhotoModalSegment?.index,
     shouldRenderSegmentAiPhotoModalLibraryGrid,
   ]);
   const revealNextSegmentAiPhotoModalLibraryItems = useCallback(() => {
@@ -7781,30 +7783,52 @@ export function WorkspacePage({
       return;
     }
 
-    if (typeof IntersectionObserver === "undefined") {
-      const timeoutId = window.setTimeout(handleSegmentAiPhotoModalLibraryViewportEnd, 80);
-      return () => {
-        window.clearTimeout(timeoutId);
-      };
+    const root = segmentAiPhotoModalLibraryBodyRef.current;
+    if (!root) {
+      return;
     }
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          handleSegmentAiPhotoModalLibraryViewportEnd();
-        }
-      },
-      {
-        root: segmentAiPhotoModalLibraryBodyRef.current,
-        rootMargin: "180px 0px",
-        threshold: 0,
-      },
-    );
+    let didRequestNextItems = false;
+    const checkSentinelPosition = () => {
+      if (didRequestNextItems) {
+        return;
+      }
 
-    observer.observe(sentinel);
+      const rootRect = root.getBoundingClientRect();
+      const sentinelRect = sentinel.getBoundingClientRect();
+      if (
+        !isWorkspaceSegmentLibraryLoadMoreSentinelNearViewport({
+          rootBottom: rootRect.bottom,
+          rootTop: rootRect.top,
+          sentinelBottom: sentinelRect.bottom,
+          sentinelTop: sentinelRect.top,
+        })
+      ) {
+        return;
+      }
+
+      didRequestNextItems = true;
+      handleSegmentAiPhotoModalLibraryViewportEnd();
+    };
+
+    checkSentinelPosition();
+    root.addEventListener("scroll", checkSentinelPosition, { passive: true });
+    window.addEventListener("resize", checkSentinelPosition);
+
+    const observer =
+      typeof IntersectionObserver === "undefined"
+        ? null
+        : new IntersectionObserver(checkSentinelPosition, {
+            root,
+            rootMargin: `${SEGMENT_AI_PHOTO_MODAL_LIBRARY_LOAD_MORE_ROOT_MARGIN_PX}px 0px`,
+            threshold: 0,
+          });
+    observer?.observe(sentinel);
 
     return () => {
-      observer.disconnect();
+      root.removeEventListener("scroll", checkSentinelPosition);
+      window.removeEventListener("resize", checkSentinelPosition);
+      observer?.disconnect();
     };
   }, [
     handleSegmentAiPhotoModalLibraryViewportEnd,
@@ -10544,7 +10568,14 @@ export function WorkspacePage({
       if (isSegmentAiPhotoModalVisible) {
         setIsSegmentAiPhotoModalVisible(false);
       }
-      if (segmentAiPhotoModalLibraryRenderCount !== SEGMENT_AI_PHOTO_MODAL_LIBRARY_INITIAL_RENDER_COUNT) {
+      if (
+        segmentAiPhotoModalLibraryRenderCount !== SEGMENT_AI_PHOTO_MODAL_LIBRARY_INITIAL_RENDER_COUNT &&
+        shouldResetWorkspaceSegmentLibraryRenderCount({
+          hasModalSegment: Boolean(segmentAiPhotoModalSegment),
+          isInlineLibraryVisible: isSegmentEditorPageActive && segmentEditorPromptToolTab === "library",
+          isModalOpen: isSegmentAiPhotoModalOpen,
+        })
+      ) {
         setSegmentAiPhotoModalLibraryRenderCount(SEGMENT_AI_PHOTO_MODAL_LIBRARY_INITIAL_RENDER_COUNT);
       }
       return;
@@ -10564,8 +10595,10 @@ export function WorkspacePage({
   }, [
     isSegmentAiPhotoModalOpen,
     isSegmentAiPhotoModalVisible,
+    isSegmentEditorPageActive,
     segmentAiPhotoModalLibraryRenderCount,
     segmentAiPhotoModalSegment,
+    segmentEditorPromptToolTab,
   ]);
 
   useEffect(() => {
