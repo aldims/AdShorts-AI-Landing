@@ -7,6 +7,7 @@ import {
   applyWorkspaceSegmentEditorGlobalSubtitleSelection,
   applyWorkspaceSegmentPendingInfographicTransforms,
   applyWorkspaceSegmentSceneSoundAsset,
+  buildWorkspaceSegmentKnownVideoDurationPatch,
   applyWorkspaceSegmentEditorGlobalVoiceToSegments,
   applyWorkspaceSegmentEditorSceneVoiceOverride,
   applyWorkspaceSegmentEditorSceneVoiceSelection,
@@ -16,6 +17,7 @@ import {
   getWorkspaceSegmentEffectiveSubtitleSettings,
   getWorkspaceSegmentKnownVisualDurationSeconds,
   getWorkspaceSegmentLatestVisualAction,
+  getWorkspaceSegmentDurationExtensionPlan,
   getWorkspaceSegmentEditorProjectVoiceType,
   getWorkspaceSegmentEditorGenerationRequiredCredits,
   getWorkspaceSegmentEditorBulkSceneSoundCreditCost,
@@ -3361,6 +3363,154 @@ describe("workspace segment editor project voiceover timeline", () => {
     });
 
     expect(getWorkspaceSegmentKnownVisualDurationSeconds(segment)).toBe(5);
+  });
+
+  it("replaces a stale five-second slot with the measured AI video duration", () => {
+    const segment = createProjectVoiceoverSegment({
+      aiVideoAsset: {
+        durationSeconds: 4.042,
+        fileName: "segment-ai-video.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/9642/playback",
+      },
+      duration: 5,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      durationSyncModeUserSelected: true,
+      endTime: 14.084,
+      index: 2,
+      manualDurationSeconds: 5,
+      mediaType: "video",
+      startTime: 9.084,
+      videoAction: "ai",
+    });
+
+    expect(buildWorkspaceSegmentKnownVideoDurationPatch(segment, 4.042)).toEqual({
+      duration: 4.042,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      durationSyncModeUserSelected: false,
+      endTime: 13.126,
+      manualDurationSeconds: 4.042,
+      startTime: 9.084,
+    });
+  });
+
+  it("uses measured AI video duration when deciding that a stale slot needs extension", () => {
+    const segment = createProjectVoiceoverSegment({
+      aiVideoAsset: {
+        durationSeconds: 4.042,
+        fileName: "segment-ai-video.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/9642/playback",
+      },
+      duration: 5,
+      durationExtensionSourceDurationSeconds: 5,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      endTime: 5,
+      manualDurationSeconds: 5,
+      mediaType: "video",
+      videoAction: "ai",
+    });
+
+    expect(getWorkspaceSegmentDurationExtensionPlan(segment)).toEqual(expect.objectContaining({
+      extraDurationSeconds: 0.958,
+      mode: "cinematic_hold",
+      slotDurationSeconds: 5,
+      sourceDurationSeconds: 4.042,
+    }));
+  });
+
+  it("repairs a persisted AI video slot that silently held a stale final frame", () => {
+    const segment = createProjectVoiceoverSegment({
+      aiVideoAsset: {
+        fileName: "segment-ai-video.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/9642/playback",
+      },
+      duration: 5,
+      durationExtensionSourceDurationSeconds: 5,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      durationSyncModeUserSelected: true,
+      endTime: 14.084,
+      index: 2,
+      manualDurationSeconds: 5,
+      mediaType: "video",
+      startTime: 9.084,
+      videoAction: "ai",
+    });
+
+    expect(syncWorkspaceSegmentMeasuredVideoVisualDuration(segment, 4.042, {
+      voiceoverDurationSeconds: 3.786,
+    })).toEqual(expect.objectContaining({
+      duration: 4.042,
+      durationExtensionSourceDurationSeconds: null,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      durationSyncModeUserSelected: false,
+      endTime: 13.126,
+      manualDurationSeconds: 4.042,
+      startTime: 9.084,
+    }));
+  });
+
+  it("preserves an explicitly extended AI video slot after measuring its source", () => {
+    const segment = createProjectVoiceoverSegment({
+      aiVideoAsset: {
+        fileName: "segment-ai-video.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/9642/playback",
+      },
+      duration: 5,
+      durationExtensionSourceDurationSeconds: 4.042,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      durationSyncModeUserSelected: true,
+      endTime: 5,
+      manualDurationSeconds: 5,
+      mediaType: "video",
+      videoAction: "ai",
+    });
+
+    expect(syncWorkspaceSegmentMeasuredVideoVisualDuration(segment, 4.042)).toBe(segment);
+  });
+
+  it("records the measured source when a stale AI video slot must keep a longer voiceover", () => {
+    const segment = createProjectVoiceoverSegment({
+      aiVideoAsset: {
+        fileName: "segment-ai-video.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/9642/playback",
+      },
+      duration: 5,
+      durationExtensionSourceDurationSeconds: 5,
+      durationMode: "manual",
+      durationSyncMode: "voiceover",
+      durationSyncModeUserSelected: true,
+      endTime: 5,
+      manualDurationSeconds: 5,
+      mediaType: "video",
+      videoAction: "ai",
+    });
+
+    expect(syncWorkspaceSegmentMeasuredVideoVisualDuration(segment, 4.042, {
+      voiceoverDurationSeconds: 5,
+    })).toEqual(expect.objectContaining({
+      duration: 5,
+      durationExtensionSourceDurationSeconds: 4.042,
+      durationMode: "auto",
+      durationSyncMode: "voiceover",
+      durationSyncModeUserSelected: false,
+      endTime: 5,
+      manualDurationSeconds: null,
+    }));
   });
 
   it("uses a persisted media asset duration as the source visual duration", () => {

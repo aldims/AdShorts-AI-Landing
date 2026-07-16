@@ -183,6 +183,7 @@ describe("WorkspaceSegmentTimelineDurationMenu", () => {
       text: "Текст сцены",
     } as any,
     segmentArrayIndex: 0,
+    shortVideoFillMode: "loop" as const,
     shouldShowManualDurationInput: false,
     subtitle: "0с -> 5с",
     title: "Продлить видео на 5 секунд",
@@ -377,6 +378,29 @@ describe("WorkspaceSegmentTimelineDurationMenu", () => {
       screen.getByText("Без ИИ-продления видео повторится с начала до конца озвучки. Чтобы убрать повтор, продлите видео с ИИ."),
     ).toBeTruthy();
     expect(screen.getByRole("button", { name: "Оставить с повтором" })).toBeTruthy();
+  });
+
+  it("describes the held final frame used for a short generated video", () => {
+    render(
+      <WorkspaceSegmentTimelineDurationMenu
+        {...baseDurationProps}
+        shortVideoFillMode="hold"
+        trimToVoiceover={false}
+        trimToVoiceoverLabels={{
+          fullDurationLabel: "4с",
+          fullResultDurationLabel: "5с",
+          fullResultLoopsToVoiceover: true,
+          voiceoverDurationLabel: "5с",
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        "Без ИИ-продления последний кадр будет удерживаться до конца озвучки. Чтобы сохранить движение, продлите видео с ИИ.",
+      ),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Оставить с удержанием кадра" })).toBeTruthy();
   });
 });
 

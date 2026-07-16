@@ -178,6 +178,7 @@ import {
   applyWorkspaceSegmentEditorSceneVoiceOverride,
   buildWorkspaceMediaAssetProxyUrl,
   buildWorkspaceSegmentSceneSoundPayloadFromAsset,
+  buildWorkspaceSegmentKnownVideoDurationPatch,
   buildWorkspaceProjectMusicAudioProxyUrl,
   buildWorkspaceSegmentOriginalProxyUrl,
   canWorkspaceSegmentUseVideoExtensionTool,
@@ -12934,33 +12935,15 @@ export function WorkspacePage({
     segment: WorkspaceSegmentEditorDraftSegment,
     durationSeconds: number | null | undefined,
   ): Partial<WorkspaceSegmentEditorDraftSegment> => {
-    const visualDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(durationSeconds);
-    if (visualDurationSeconds === null) {
-      return {};
-    }
-
-    const startTime = getWorkspaceSegmentEditorDisplayStartTime(segment);
     const voiceoverDurationSeconds =
       getWorkspaceSegmentTimelineVoiceoverDurationInfo(
         segment,
         segmentEditorDraftRef.current ?? segmentEditorDraft,
         { allowEstimated: false },
       )?.durationSeconds ?? null;
-    const shouldLoopVideoToVoiceover =
-      voiceoverDurationSeconds !== null &&
-      voiceoverDurationSeconds > visualDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS;
-    const duration = roundWorkspaceSegmentTimelineSeconds(
-      shouldLoopVideoToVoiceover ? voiceoverDurationSeconds : visualDurationSeconds,
-    );
-    return {
-      duration,
-      durationMode: shouldLoopVideoToVoiceover ? "auto" : "manual",
-      durationSyncMode: shouldLoopVideoToVoiceover ? "voiceover" : "visual",
-      durationSyncModeUserSelected: false,
-      endTime: roundWorkspaceSegmentTimelineSeconds(startTime + duration),
-      manualDurationSeconds: shouldLoopVideoToVoiceover ? null : duration,
-      startTime,
-    };
+    return buildWorkspaceSegmentKnownVideoDurationPatch(segment, durationSeconds, {
+      voiceoverDurationSeconds,
+    });
   };
 
   const restoreProjectTtsForCurrentSegmentEditorDraft = (
@@ -15805,6 +15788,51 @@ export function WorkspacePage({
     ));
   };
 
+  const ensureSegmentEditorGeneratedVideoAssetDuration = async (
+    asset: StudioCustomVideoFile,
+    options?: { fallbackDurationSeconds?: number | null; sourceJobId?: string },
+  ): Promise<StudioCustomVideoFile> => {
+    const knownDurationSeconds = getStudioCustomVideoFileDurationSeconds(asset);
+    if (knownDurationSeconds !== null) {
+      return asset;
+    }
+
+    const previewUrl = getStudioCustomAssetPreviewUrl(asset);
+    let measuredDurationSeconds: number | null = null;
+    if (previewUrl) {
+      try {
+        measuredDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(
+          await readWorkspaceVideoDurationSeconds(previewUrl),
+        );
+      } catch (error) {
+        logSegmentEditorDiagnostics(
+          "client.segment-editor.generated-video.duration-probe-failed",
+          {
+            error: error instanceof Error ? { message: error.message, name: error.name } : String(error),
+            sourceJobId: options?.sourceJobId ?? null,
+          },
+          { level: "warn" },
+        );
+      }
+    }
+
+    const durationSeconds =
+      measuredDurationSeconds ??
+      normalizeWorkspaceSegmentManualDurationSeconds(options?.fallbackDurationSeconds);
+    if (durationSeconds === null) {
+      throw new Error(workspaceText(
+        locale,
+        "Видео готово, но не удалось определить его длительность. Обновите страницу и повторите применение результата.",
+        "The video is ready, but its duration could not be determined. Refresh the page and apply the result again.",
+      ));
+    }
+
+    return {
+      ...asset,
+      durationSeconds,
+    };
+  };
+
   const pollSegmentEditorAiPhotoJob = async (
     jobId: string,
     initialStatus = "queued",
@@ -16181,6 +16209,7 @@ export function WorkspacePage({
     options: {
       createdAt?: number;
       draftId?: string;
+      durationSeconds?: number;
       prompt: string;
       projectId: number;
       runId: number;
@@ -16272,6 +16301,7 @@ export function WorkspacePage({
         upsertStoredWorkspaceSegmentAiVideoJob(session.email, {
           createdAt: startedAt,
           draftId: options.draftId,
+          durationSeconds: options.durationSeconds,
           jobId: safeJobId,
           projectId: options.projectId,
           prompt: options.prompt,
@@ -16288,19 +16318,26 @@ export function WorkspacePage({
             segmentIndex: options.segmentIndex,
             sourceJobId: safeJobId,
           });
+          const durableAiVideoAssetWithDuration = await ensureSegmentEditorGeneratedVideoAssetDuration(
+            durableAiVideoAsset,
+            {
+              fallbackDurationSeconds: options.durationSeconds,
+              sourceJobId: safeJobId,
+            },
+          );
           if (!isSegmentVisualRunCurrent(segmentAiVideoRunRef, options.segmentIndex, options.runId)) {
             return;
           }
-          let nextAiVideoAsset = durableAiVideoAsset;
+          let nextAiVideoAsset = durableAiVideoAssetWithDuration;
           const attachment = attachSegmentEditorJobResult({
             draftId: options.draftId,
             projectId: options.projectId,
             segmentIndex: options.segmentIndex,
             updater: (segment) => {
-              const preferredPosterUrl = getWorkspaceAiVideoPreferredPosterUrl(segment, durableAiVideoAsset);
+              const preferredPosterUrl = getWorkspaceAiVideoPreferredPosterUrl(segment, durableAiVideoAssetWithDuration);
               nextAiVideoAsset = preferredPosterUrl
-                ? { ...durableAiVideoAsset, posterUrl: preferredPosterUrl }
-                : durableAiVideoAsset;
+                ? { ...durableAiVideoAssetWithDuration, posterUrl: preferredPosterUrl }
+                : durableAiVideoAssetWithDuration;
               const nextAiVideoDurationSeconds = getStudioCustomVideoFileDurationSeconds(nextAiVideoAsset);
               return invalidateWorkspaceSegmentSceneSoundForVisualChange({
                 ...segment,
@@ -16383,12 +16420,19 @@ export function WorkspacePage({
               });
               const refreshedSegment =
                 refreshedDraft?.segments.find((segment) => segment.index === options.segmentIndex) ?? null;
-              const recoveredAiVideoAsset = refreshedSegment?.aiVideoAsset ?? null;
+              const recoveredAiVideoAssetWithoutDuration = refreshedSegment?.aiVideoAsset ?? null;
               if (
                 refreshedSegment &&
-                recoveredAiVideoAsset &&
+                recoveredAiVideoAssetWithoutDuration &&
                 getWorkspaceSegmentLatestVisualAction(refreshedSegment) === "ai"
               ) {
+                const recoveredAiVideoAsset = await ensureSegmentEditorGeneratedVideoAssetDuration(
+                  recoveredAiVideoAssetWithoutDuration,
+                  {
+                    fallbackDurationSeconds: options.durationSeconds,
+                    sourceJobId: safeJobId,
+                  },
+                );
                 let nextAiVideoAsset = recoveredAiVideoAsset;
                 const attachment = attachSegmentEditorJobResult({
                   draftId: options.draftId,
@@ -18438,6 +18482,7 @@ export function WorkspacePage({
       upsertStoredWorkspaceSegmentAiVideoJob(session.email, {
         createdAt: pendingJobCreatedAt,
         draftId: jobDraftId,
+        durationSeconds,
         jobId: requestedJobId,
         projectId: jobProjectId,
         prompt: normalizedPrompt,
@@ -18473,6 +18518,7 @@ export function WorkspacePage({
         await pollSegmentEditorAiVideoJob(requestedJobId, "submitting", {
           createdAt: pendingJobCreatedAt,
           draftId: jobDraftId,
+          durationSeconds,
           prompt: normalizedPrompt,
           projectId: jobProjectId,
           runId,
@@ -18497,6 +18543,7 @@ export function WorkspacePage({
           await pollSegmentEditorAiVideoJob(requestedJobId, "submitting", {
             createdAt: pendingJobCreatedAt,
             draftId: jobDraftId,
+            durationSeconds,
             prompt: normalizedPrompt,
             projectId: jobProjectId,
             runId,
@@ -18515,6 +18562,7 @@ export function WorkspacePage({
       upsertStoredWorkspaceSegmentAiVideoJob(session.email, {
         createdAt: pendingJobCreatedAt,
         draftId: jobDraftId,
+        durationSeconds,
         jobId: serverJobId,
         projectId: jobProjectId,
         prompt: normalizedPrompt,
@@ -18531,6 +18579,7 @@ export function WorkspacePage({
       await pollSegmentEditorAiVideoJob(serverJobId, payload?.data?.status ?? "queued", {
         createdAt: pendingJobCreatedAt,
         draftId: jobDraftId,
+        durationSeconds,
         prompt: normalizedPrompt,
         projectId: jobProjectId,
         runId,
@@ -18599,6 +18648,7 @@ export function WorkspacePage({
     void pollSegmentEditorAiVideoJob(job.jobId, job.status || "queued", {
       createdAt: job.createdAt,
       draftId: job.draftId,
+      durationSeconds: job.durationSeconds,
       projectId: job.projectId,
       prompt: job.prompt,
       runId,
@@ -32171,6 +32221,11 @@ export function WorkspacePage({
       qualitySwitch={null}
       segment={segmentTimelineDurationMenuSegment}
       segmentArrayIndex={segmentTimelineDurationMenuArrayIndex}
+      shortVideoFillMode={
+        segmentTimelineDurationMenuSegment && isWorkspaceSegmentGeneratedVideoVisual(segmentTimelineDurationMenuSegment)
+          ? "hold"
+          : "loop"
+      }
       shouldShowManualDurationInput={shouldShowSegmentTimelineManualDurationInput}
       subtitle={segmentTimelineDurationMenuSubtitle}
       title={segmentTimelineDurationMenuTitle}

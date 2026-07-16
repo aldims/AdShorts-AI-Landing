@@ -370,6 +370,8 @@ type AdsflowProjectCharactersResponse = {
 
 type AdsflowSegmentAiVideoAssetPayload = {
   download_url?: string | null;
+  duration?: number | string | null;
+  duration_seconds?: number | string | null;
   file_name?: string | null;
   file_size?: number | null;
   generate_audio?: boolean | null;
@@ -592,6 +594,7 @@ export type StudioGeneratedImageAsset = {
 
 export type StudioGeneratedVideoAsset = {
   assetId?: number | null;
+  durationSeconds?: number;
   fileName: string;
   fileSize: number;
   generateAudio?: boolean;
@@ -4602,6 +4605,8 @@ const normalizeAdsflowSegmentAiVideoAsset = (
 
   return {
     assetId: normalizePositiveInteger(payload?.media_asset_id) ?? null,
+    durationSeconds:
+      normalizeStudioSegmentManualDurationSeconds(payload?.duration_seconds ?? payload?.duration) ?? undefined,
     fileName: normalizeGenerationText(payload?.file_name) || `segment-ai-video-${jobId}.mp4`,
     fileSize: Math.max(0, Number(payload?.file_size ?? 0)),
     generateAudio: payload?.generate_audio === true,
@@ -4670,6 +4675,8 @@ const normalizeAdsflowSegmentPhotoAnimationAsset = (
 
   return {
     assetId: normalizePositiveInteger(payload?.media_asset_id) ?? null,
+    durationSeconds:
+      normalizeStudioSegmentManualDurationSeconds(payload?.duration_seconds ?? payload?.duration) ?? undefined,
     fileName: normalizeGenerationText(payload?.file_name) || `segment-photo-animation-${jobId}.mp4`,
     fileSize: Math.max(0, Number(payload?.file_size ?? 0)),
     generateAudio: payload?.generate_audio === true,
@@ -4690,6 +4697,8 @@ const normalizeAdsflowSegmentTalkingPhotoAsset = (
 
   return {
     assetId: normalizePositiveInteger(payload?.media_asset_id) ?? null,
+    durationSeconds:
+      normalizeStudioSegmentManualDurationSeconds(payload?.duration_seconds ?? payload?.duration) ?? undefined,
     fileName: normalizeGenerationText(payload?.file_name) || `segment-talking-photo-${jobId}.mp4`,
     fileSize: Math.max(0, Number(payload?.file_size ?? 0)),
     mimeType: normalizeGenerationText(payload?.mime_type) || "video/mp4",

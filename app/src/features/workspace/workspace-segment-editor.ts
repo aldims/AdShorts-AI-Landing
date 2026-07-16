@@ -4382,6 +4382,36 @@ export const isWorkspaceSegmentVoiceoverAssetFresh = (
 export const getStudioCustomVideoFileDurationSeconds = (asset: StudioCustomVideoFile | null | undefined) =>
   normalizeWorkspaceSegmentManualDurationSeconds(asset?.durationSeconds);
 
+export const buildWorkspaceSegmentKnownVideoDurationPatch = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  durationSeconds: number | null | undefined,
+  options?: { voiceoverDurationSeconds?: number | null },
+): Partial<WorkspaceSegmentEditorDraftSegment> => {
+  const visualDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(durationSeconds);
+  if (visualDurationSeconds === null) {
+    return {};
+  }
+
+  const voiceoverDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(options?.voiceoverDurationSeconds);
+  const shouldLoopVideoToVoiceover =
+    voiceoverDurationSeconds !== null &&
+    voiceoverDurationSeconds > visualDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS;
+  const duration = roundWorkspaceSegmentTimelineSeconds(
+    shouldLoopVideoToVoiceover ? voiceoverDurationSeconds : visualDurationSeconds,
+  );
+  const startTime = getWorkspaceSegmentEditorDisplayStartTime(segment);
+
+  return {
+    duration,
+    durationMode: shouldLoopVideoToVoiceover ? "auto" : "manual",
+    durationSyncMode: shouldLoopVideoToVoiceover ? "voiceover" : "visual",
+    durationSyncModeUserSelected: false,
+    endTime: roundWorkspaceSegmentTimelineSeconds(startTime + duration),
+    manualDurationSeconds: shouldLoopVideoToVoiceover ? null : duration,
+    startTime,
+  };
+};
+
 export const getWorkspaceMediaAssetDurationSeconds = (asset: WorkspaceMediaAssetRef | null | undefined) =>
   normalizeWorkspaceSegmentManualDurationSeconds(
     asset?.durationSeconds ??
@@ -5201,6 +5231,46 @@ export const syncWorkspaceSegmentMeasuredVideoVisualDuration = (
     storedDurationExtensionSourceDurationSeconds === null &&
     voiceoverDurationSeconds !== null &&
     voiceoverDurationSeconds > measuredVisualDuration + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS;
+  const durationMode = normalizeWorkspaceSegmentDurationMode(segment.durationMode);
+  const manualDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds);
+  const currentSlotDurationSeconds = getWorkspaceSegmentCanonicalSlotDurationSeconds(segment);
+  const hasManualTimelineOverride =
+    durationMode === "manual" ||
+    manualDurationSeconds !== null ||
+    storedDurationExtensionSourceDurationSeconds !== null;
+  const hasExplicitVideoExtension =
+    currentSlotDurationSeconds !== null &&
+    storedDurationExtensionSourceDurationSeconds !== null &&
+    storedDurationExtensionSourceDurationSeconds <
+      currentSlotDurationSeconds - WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS;
+  const shouldRepairStaleGeneratedVideoSlot =
+    hasManualTimelineOverride &&
+    isWorkspaceSegmentGeneratedVideoVisual(segment) &&
+    !doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio(segment) &&
+    !hasExplicitVideoExtension &&
+    currentSlotDurationSeconds !== null &&
+    currentSlotDurationSeconds > measuredVisualDuration + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS;
+  if (shouldRepairStaleGeneratedVideoSlot) {
+    const shouldPreserveVoiceoverDuration =
+      voiceoverDurationSeconds !== null &&
+      voiceoverDurationSeconds > measuredVisualDuration + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS;
+    const duration = roundWorkspaceSegmentTimelineSeconds(
+      shouldPreserveVoiceoverDuration ? voiceoverDurationSeconds : measuredVisualDuration,
+    );
+    const startTime = getWorkspaceSegmentEditorDisplayStartTime(segment);
+    return {
+      ...segment,
+      duration,
+      durationExtensionSourceDurationSeconds: shouldPreserveVoiceoverDuration ? measuredVisualDuration : null,
+      durationMode: shouldPreserveVoiceoverDuration ? "auto" : "manual",
+      durationSyncMode: shouldPreserveVoiceoverDuration ? "voiceover" : "visual",
+      durationSyncModeUserSelected: false,
+      endTime: roundWorkspaceSegmentTimelineSeconds(startTime + duration),
+      manualDurationSeconds: shouldPreserveVoiceoverDuration ? null : duration,
+      startTime,
+    };
+  }
+
   if (
     normalizeWorkspaceSegmentDurationSyncMode(segment.durationSyncMode) === "voiceover" &&
     !shouldLoopMeasuredVideoToVoiceover &&
@@ -5219,12 +5289,6 @@ export const syncWorkspaceSegmentMeasuredVideoVisualDuration = (
     return segment;
   }
 
-  const durationMode = normalizeWorkspaceSegmentDurationMode(segment.durationMode);
-  const manualDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds);
-  const hasManualTimelineOverride =
-    durationMode === "manual" ||
-    manualDurationSeconds !== null ||
-    storedDurationExtensionSourceDurationSeconds !== null;
   if (hasManualTimelineOverride && !shouldLoopMeasuredVideoToVoiceover) {
     return segment;
   }

@@ -103,6 +103,7 @@ export type StoredWorkspaceSegmentAiPhotoJob = {
 export type StoredWorkspaceSegmentAiVideoJob = {
   createdAt: number;
   draftId?: string;
+  durationSeconds?: number;
   jobId: string;
   projectId: number;
   prompt: string;
@@ -956,6 +957,7 @@ const normalizeStoredWorkspaceSegmentAiVideoJob = (
 ): StoredWorkspaceSegmentAiVideoJob => ({
   createdAt: Number.isFinite(Number(value.createdAt)) ? Number(value.createdAt) : Date.now(),
   draftId: normalizeStoredWorkspaceSegmentJobDraftId(value.draftId),
+  durationSeconds: normalizeWorkspaceSegmentManualDurationSeconds(value.durationSeconds) ?? undefined,
   jobId: String(value.jobId ?? "").trim(),
   projectId: Math.max(0, Math.trunc(Number(value.projectId))),
   prompt: normalizeWorkspaceSegmentAiVideoPrompt(value.prompt),

@@ -76,4 +76,51 @@ describe("studio AI video source image", () => {
     }));
     expect(job.jobId).toBe("8d2c30ec-e96f-49e7-8fcb-81f44971748e");
   });
+
+  it("preserves the measured AI video duration returned by AdsFlow", async () => {
+    const { getStudioSegmentAiVideoJobStatus } = await loadStudioModule();
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(String(input));
+
+        if (url.pathname.startsWith("/api/admin/users")) {
+          return jsonResponse({ items: [] });
+        }
+
+        if (url.pathname === "/api/web/segment-ai-video/jobs/job-duration") {
+          return jsonResponse({
+            asset: {
+              duration_seconds: 4.042,
+              file_name: "segment-ai-video.mp4",
+              file_size: 1024,
+              media_asset_id: 9642,
+              mime_type: "video/mp4",
+            },
+            job_id: "job-duration",
+            status: "done",
+            user: {
+              balance: 30,
+              plan: "FREE",
+              user_id: "8160048802147561000",
+            },
+          });
+        }
+
+        return jsonResponse({ detail: `unexpected ${url.pathname}` }, 500);
+      }),
+    );
+
+    const status = await getStudioSegmentAiVideoJobStatus("job-duration", {
+      email: "alex@example.test",
+      name: "Alex",
+    });
+
+    expect(status.asset).toMatchObject({
+      assetId: 9642,
+      durationSeconds: 4.042,
+      fileName: "segment-ai-video.mp4",
+    });
+  });
 });

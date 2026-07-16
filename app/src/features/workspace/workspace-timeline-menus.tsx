@@ -58,6 +58,7 @@ type WorkspaceSegmentTimelineDurationMenuProps = {
   qualitySwitch: ReactNode;
   segment: WorkspaceSegmentEditorDraftSegment | null;
   segmentArrayIndex: number;
+  shortVideoFillMode: "hold" | "loop";
   shouldShowManualDurationInput: boolean;
   subtitle: string | null;
   title: string;
@@ -101,6 +102,7 @@ export function WorkspaceSegmentTimelineDurationMenu({
   qualitySwitch,
   segment,
   segmentArrayIndex,
+  shortVideoFillMode,
   shouldShowManualDurationInput,
   subtitle,
   title,
@@ -254,11 +256,17 @@ export function WorkspaceSegmentTimelineDurationMenu({
               </div>
             </div>
             <p className="studio-segment-editor__timeline-duration-loop-note" role="status">
-              {workspaceText(
-                locale,
-                "Без ИИ-продления видео повторится с начала до конца озвучки. Чтобы убрать повтор, продлите видео с ИИ.",
-                "Without AI extension, the video will replay from the beginning until the voiceover ends. Extend with AI to remove the repeat.",
-              )}
+              {shortVideoFillMode === "hold"
+                ? workspaceText(
+                    locale,
+                    "Без ИИ-продления последний кадр будет удерживаться до конца озвучки. Чтобы сохранить движение, продлите видео с ИИ.",
+                    "Without AI extension, the last frame will be held until the voiceover ends. Extend with AI to keep the motion.",
+                  )
+                : workspaceText(
+                    locale,
+                    "Без ИИ-продления видео повторится с начала до конца озвучки. Чтобы убрать повтор, продлите видео с ИИ.",
+                    "Without AI extension, the video will replay from the beginning until the voiceover ends. Extend with AI to remove the repeat.",
+                  )}
             </p>
           </>
         ) : null}
@@ -370,7 +378,9 @@ export function WorkspaceSegmentTimelineDurationMenu({
                     type="button"
                     onClick={onClose}
                   >
-                    {workspaceText(locale, "Оставить с повтором", "Keep replaying")}
+                    {shortVideoFillMode === "hold"
+                      ? workspaceText(locale, "Оставить с удержанием кадра", "Keep held frame")
+                      : workspaceText(locale, "Оставить с повтором", "Keep replaying")}
                   </button>
                 ) : null}
                 <button

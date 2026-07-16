@@ -166,6 +166,7 @@ describe("workspace segment editor storage fallback", () => {
     upsertStoredWorkspaceSegmentAiVideoJob(email, {
       createdAt,
       draftId: "project:42",
+      durationSeconds: 4,
       jobId,
       projectId: 42,
       prompt: "Camera pulls back",
@@ -177,6 +178,7 @@ describe("workspace segment editor storage fallback", () => {
       {
         createdAt,
         draftId: "project:42",
+        durationSeconds: 4,
         jobId,
         projectId: 42,
         prompt: "Camera pulls back",
