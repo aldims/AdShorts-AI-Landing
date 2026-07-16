@@ -944,6 +944,11 @@ import {
 } from "../lib/payment-return";
 import { writePricingEntryIntent } from "../lib/pricing-entry-intent";
 import { clearStudioEntryIntent, readStudioEntryIntent, type StudioEntryIntentSection } from "../lib/studio-entry-intent";
+import {
+  clearPendingStudioPrompt,
+  readPendingStudioPrompt,
+  writePendingStudioPrompt,
+} from "../lib/pending-studio-prompt";
 import { openYooKassaPaymentWidget } from "../lib/yookassa-widget";
 import {
   dedupeWorkspaceMediaLibraryPageItems,
@@ -1850,11 +1855,20 @@ export function WorkspacePage({
   });
   const [createMode, setCreateMode] = useState<StudioCreateMode>("default");
   const lastStudioCreateModeRef = useRef<StudioCreateMode>(initialStudioCreateMode);
-  const [topicInput, setTopicInput] = useState("");
+  const [topicInput, setTopicInput] = useState(() => readPendingStudioPrompt()?.prompt ?? "");
   const [studioIdeaSuggestionRotation, setStudioIdeaSuggestionRotation] = useState(
     getWorkspaceStudioIdeaSuggestionRotation,
   );
   const [isStudioIdeaPromptImproving, setIsStudioIdeaPromptImproving] = useState(false);
+
+  useEffect(() => {
+    if (isGuest) {
+      writePendingStudioPrompt(topicInput);
+      return;
+    }
+
+    clearPendingStudioPrompt();
+  }, [isGuest, topicInput]);
   const [adaptingVoiceTextSegmentIndex, setAdaptingVoiceTextSegmentIndex] = useState<number | null>(null);
   const [adaptedVoiceTextOriginal, setAdaptedVoiceTextOriginal] = useState<{
     segmentIndex: number;
