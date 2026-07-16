@@ -24,6 +24,7 @@ import {
 } from "../features/workspace/workspace-segment-editor";
 import { resolveStudioSceneVoiceIdOnSettingsOpen } from "../features/workspace/workspace-studio-defaults-helpers";
 import {
+  buildWorkspaceSegmentReferenceFrameUploadScope,
   getWorkspaceProjectSceneReferenceOptionsForTarget,
   pruneWorkspaceProjectSceneReferenceSelections,
   resolveWorkspaceProjectSceneReferenceForTarget,
@@ -673,6 +674,29 @@ describe("WorkspacePage segment visual references payload", () => {
     ];
 
     expect(pruneWorkspaceProjectSceneReferenceSelections({ 1: 0, 2: 1, 4: 0 }, options, [0, 1, 2])).toEqual({ 1: 0 });
+  });
+
+  it("uploads a scratch scene video frame without a project or segment binding", () => {
+    expect(buildWorkspaceSegmentReferenceFrameUploadScope({
+      projectId: 0,
+      referenceKind: "scene",
+      sourceSegmentIndex: 0,
+    })).toEqual({
+      kind: "workspace_reference_source",
+      role: "scene_reference_source",
+    });
+  });
+
+  it("keeps a persisted scene reference at project scope", () => {
+    expect(buildWorkspaceSegmentReferenceFrameUploadScope({
+      projectId: 77,
+      referenceKind: "scene",
+      sourceSegmentIndex: 0,
+    })).toEqual({
+      kind: "workspace_reference_source",
+      projectId: 77,
+      role: "scene_reference_source",
+    });
   });
 });
 

@@ -71,6 +71,7 @@ import {
 import {
   buildWorkspaceReferenceAiPrompt,
   buildWorkspaceReferenceGenerationMediaScope,
+  buildWorkspaceSegmentReferenceFrameUploadScope,
   buildWorkspaceReferencePromptFromVisualSource,
   buildWorkspaceSegmentVisualReferenceRequest,
   getWorkspaceProjectSceneReferenceOptionsForTarget,
@@ -7027,11 +7028,20 @@ export function WorkspacePage({
       return option.assetId;
     }
 
-    if (!shouldUseVideoFrame || !videoReferenceUrl || !segmentEditorDraft?.projectId || !option.segment) {
+    if (!shouldUseVideoFrame || !videoReferenceUrl || !segmentEditorDraft || !option.segment) {
       return null;
     }
 
-    const cacheKey = `project:${segmentEditorDraft.projectId}:segment:${option.segment.index}:${option.key}`;
+    const defaultFrameUploadScope = buildWorkspaceSegmentReferenceFrameUploadScope({
+      projectId: segmentEditorDraft.projectId,
+      referenceKind,
+      sourceSegmentIndex: option.segment.index,
+    });
+    const normalizedDraftId = String(segmentEditorDraft.draftId ?? "").trim();
+    const cacheOwnerKey = normalizedDraftId
+      ? `draft:${normalizedDraftId}`
+      : `project:${segmentEditorDraft.projectId}`;
+    const cacheKey = `${cacheOwnerKey}:segment:${option.segment.index}:${option.key}`;
     const cachedAssetId = segmentReferenceFrameAssetIdsRef.current.get(cacheKey);
     if (cachedAssetId) {
       return cachedAssetId;
@@ -7084,16 +7094,22 @@ export function WorkspacePage({
       }
     }
 
+    const hasUploadProjectIdOverride = Object.prototype.hasOwnProperty.call(options ?? {}, "uploadProjectId");
     const hasUploadSegmentIndexOverride = Object.prototype.hasOwnProperty.call(options ?? {}, "uploadSegmentIndex");
+    const uploadProjectId = hasUploadProjectIdOverride
+      ? buildWorkspaceReferenceGenerationMediaScope(options?.uploadProjectId).projectId
+      : defaultFrameUploadScope.projectId;
     const assetId = await ensureStudioUploadedAssetId(frameAsset, {
       fallbackFileName: frameAsset.fileName,
       fallbackMimeType: frameAsset.mimeType,
-      kind: options?.uploadKind ?? "segment_source",
+      kind: options?.uploadKind ?? defaultFrameUploadScope.kind,
       language: selectedLanguage,
       mediaType: "photo",
-      projectId: options?.uploadProjectId ?? segmentEditorDraft.projectId,
-      role: options?.uploadRole ?? "segment_source",
-      segmentIndex: hasUploadSegmentIndexOverride ? options?.uploadSegmentIndex : option.segment.index,
+      projectId: uploadProjectId,
+      role: options?.uploadRole ?? defaultFrameUploadScope.role,
+      segmentIndex: hasUploadSegmentIndexOverride
+        ? options?.uploadSegmentIndex
+        : defaultFrameUploadScope.segmentIndex,
     });
     if (!assetId) {
       throw new Error(

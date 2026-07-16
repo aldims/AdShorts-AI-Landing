@@ -313,3 +313,35 @@ export const buildWorkspaceReferenceGenerationMediaScope = (projectId: unknown):
 
   return { projectId: Math.trunc(numericProjectId) };
 };
+
+export const buildWorkspaceSegmentReferenceFrameUploadScope = (options: {
+  projectId: unknown;
+  referenceKind: "character" | "scene";
+  sourceSegmentIndex: unknown;
+}): {
+  kind: string;
+  projectId?: number;
+  role: string;
+  segmentIndex?: number;
+} => {
+  const projectScope = buildWorkspaceReferenceGenerationMediaScope(options.projectId);
+  if (options.referenceKind === "scene") {
+    return {
+      ...projectScope,
+      kind: "workspace_reference_source",
+      role: "scene_reference_source",
+    };
+  }
+
+  const numericSegmentIndex = Number(options.sourceSegmentIndex);
+  const segmentIndex = Number.isInteger(numericSegmentIndex) && numericSegmentIndex >= 0
+    ? numericSegmentIndex
+    : undefined;
+
+  return {
+    ...projectScope,
+    kind: "segment_source",
+    role: "segment_source",
+    ...(segmentIndex === undefined ? {} : { segmentIndex }),
+  };
+};
