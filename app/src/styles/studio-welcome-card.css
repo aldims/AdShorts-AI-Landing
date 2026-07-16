@@ -581,6 +581,7 @@
 
 .studio-welcome-card__mode > p {
   display: flex;
+  width: 100%;
   min-height: 2.84em;
   align-items: flex-start;
   justify-content: center;
@@ -590,7 +591,7 @@
   font-size: clamp(0.72rem, 0.86vw, 0.84rem);
   line-height: 1.42;
   text-align: center;
-  text-wrap: balance;
+  text-wrap: wrap;
 }
 
 .studio-welcome-card__showcase {

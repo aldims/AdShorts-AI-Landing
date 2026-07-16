@@ -38333,7 +38333,7 @@ export function WorkspacePage({
                       <p>
                         {workspaceText(
                           locale,
-                          "Напишите, о чём ролик. AI сам создаст сценарий, визуалы, озвучку, субтитры и музыку.",
+                          "Напишите, о чём ролик и AI сам создаст сценарий, визуалы, озвучку, субтитры и музыку.",
                           "Describe your video. AI creates the script, visuals, voiceover, captions, and music.",
                         )}
                       </p>
@@ -38381,7 +38381,7 @@ export function WorkspacePage({
                       <p>
                         {workspaceText(
                           locale,
-                          "Создавайте с нуля или дорабатывайте готовый ролик. Точная настройка каждой сцены и полный набор AI-инструментов.",
+                          "Создавайте с нуля или дорабатывайте готовый ролик по сценам с полным набором AI-инструментов.",
                           "Create from scratch or refine a finished video. Fine-tune every scene with a complete suite of AI tools.",
                         )}
                       </p>
