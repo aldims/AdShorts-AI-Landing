@@ -221,6 +221,21 @@ export const buildWorkspaceSegmentVisualReferenceRequest = (options: {
   };
 };
 
+export const buildWorkspaceSegmentAiVideoSceneSourceRequest = (options: {
+  previewKind?: WorkspaceReferenceVisualOption["previewKind"] | null;
+  sceneReferenceAssetIds?: readonly unknown[] | null;
+}) => {
+  const sceneReferenceAssetIds = normalizeWorkspaceReferenceIdList(options.sceneReferenceAssetIds);
+  const imageAssetId = options.previewKind === "video"
+    ? sceneReferenceAssetIds[0]
+    : undefined;
+
+  return {
+    ...(imageAssetId ? { imageAssetId } : {}),
+    sceneReferenceAssetIds,
+  };
+};
+
 export type WorkspaceSceneReferenceSelections = Record<number, number>;
 
 export const canUseWorkspaceProjectSceneReference = (
@@ -229,7 +244,11 @@ export const canUseWorkspaceProjectSceneReference = (
   option?.source === "project-scene" &&
   typeof option.sourceSegmentIndex === "number" &&
   option.sourceSegmentIndex >= 0 &&
-  (option.assetId || option.videoReferenceUrl?.trim()),
+  (
+    option.previewKind === "video"
+      ? option.videoReferenceUrl?.trim()
+      : option.assetId
+  ),
 );
 
 export const getWorkspaceProjectSceneReferenceOptionsForTarget = (

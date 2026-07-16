@@ -68,6 +68,7 @@ import {
   buildWorkspaceSegmentEditorPayload,
   buildStudioRouteUrl,
   buildWorkspaceSegmentEditorChangeChecklist,
+  buildWorkspaceSegmentAiVideoSceneSourceRequest,
   buildWorkspaceSegmentVisualReferenceRequest,
   canWorkspaceSegmentUseVideoExtensionTool,
   clearWorkspaceSegmentSceneSoundState,
@@ -648,14 +649,43 @@ describe("WorkspacePage segment visual references payload", () => {
     });
   });
 
+  it("uses an extracted video scene frame as the direct AI video i2v source", () => {
+    expect(
+      buildWorkspaceSegmentAiVideoSceneSourceRequest({
+        previewKind: "video",
+        sceneReferenceAssetIds: [9548],
+      }),
+    ).toEqual({
+      imageAssetId: 9548,
+      sceneReferenceAssetIds: [9548],
+    });
+  });
+
+  it("keeps a photo scene as an image-edit reference for AI video", () => {
+    expect(
+      buildWorkspaceSegmentAiVideoSceneSourceRequest({
+        previewKind: "image",
+        sceneReferenceAssetIds: [901],
+      }),
+    ).toEqual({
+      sceneReferenceAssetIds: [901],
+    });
+  });
+
   it("offers only usable project scenes other than the generation target", () => {
     const options = [
       createSceneReferenceOption(0),
       createSceneReferenceOption(1),
       createSceneReferenceOption(2, { assetId: null }),
+      createSceneReferenceOption(3, { previewKind: "video" }),
+      createSceneReferenceOption(4, {
+        assetId: null,
+        previewKind: "video",
+        videoReferenceUrl: "/api/media/904/download",
+      }),
     ];
 
-    expect(getWorkspaceProjectSceneReferenceOptionsForTarget(options, 1).map((option) => option.sourceSegmentIndex)).toEqual([0]);
+    expect(getWorkspaceProjectSceneReferenceOptionsForTarget(options, 1).map((option) => option.sourceSegmentIndex)).toEqual([0, 4]);
   });
 
   it("resolves a separate selected source for each target scene", () => {

@@ -8306,6 +8306,10 @@ export async function createStudioSegmentAiVideoJob(
   const characterIds = normalizePositiveIntegerList(options?.characterIds);
   const referenceAssetIds = normalizePositiveIntegerList(options?.referenceAssetIds);
   const sceneReferenceAssetIds = normalizePositiveIntegerList(options?.sceneReferenceAssetIds);
+  const imageAssetId = normalizePositiveInteger(options?.imageAssetId);
+  const imageDataUrl = String(options?.imageDataUrl ?? "").trim();
+  const imageFileName = String(options?.imageFileName ?? "").trim();
+  const imageMimeType = String(options?.imageMimeType ?? "").trim();
   const externalUserId = await resolveStudioExternalUserId(user);
   const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
   const payload = await postAdsflowJson<AdsflowSegmentAiVideoJobCreateResponse>(
@@ -8320,6 +8324,10 @@ export async function createStudioSegmentAiVideoJob(
       character_ids: characterIds,
       character_reference_mode: characterReferenceMode,
       character_prompt: normalizedPrompt,
+      image_asset_id: imageAssetId,
+      image_data_url: imageDataUrl || undefined,
+      image_mime_type: imageMimeType || undefined,
+      image_original_name: imageFileName || undefined,
       language: normalizedLanguage,
       preserve_characters: preserveCharacters,
       project_id: normalizedProjectId,

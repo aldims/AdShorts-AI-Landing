@@ -74,6 +74,7 @@ import {
   buildWorkspaceReferenceGenerationMediaScope,
   buildWorkspaceSegmentReferenceFrameUploadScope,
   buildWorkspaceReferencePromptFromVisualSource,
+  buildWorkspaceSegmentAiVideoSceneSourceRequest,
   buildWorkspaceSegmentVisualReferenceRequest,
   getWorkspaceProjectSceneReferenceOptionsForTarget,
   formatWorkspaceReferenceCharacterAge,
@@ -1202,6 +1203,7 @@ export {
 export {
   buildWorkspaceReferenceAiPrompt,
   buildWorkspaceReferenceGenerationMediaScope,
+  buildWorkspaceSegmentAiVideoSceneSourceRequest,
   buildWorkspaceSegmentVisualReferenceRequest,
   getNextWorkspaceReferenceDefaultName,
 } from "../features/workspace/workspace-reference-helpers";
@@ -7026,6 +7028,9 @@ export function WorkspacePage({
 
     const videoReferenceUrl = option.videoReferenceUrl?.trim();
     const shouldUseVideoFrame = option.previewKind === "video" && Boolean(videoReferenceUrl);
+    if (option.previewKind === "video" && !videoReferenceUrl) {
+      return null;
+    }
     if (option.assetId && !shouldUseVideoFrame) {
       return option.assetId;
     }
@@ -7065,22 +7070,13 @@ export function WorkspacePage({
       };
     } catch (error) {
       if (referenceKind === "scene") {
-        try {
-          frameAsset = {
-            dataUrl: await extractWorkspaceVideoFrameDataUrl(videoReferenceUrl),
-            fileName: frameFileName,
-            fileSize: 0,
-            mimeType: WORKSPACE_SEGMENT_REFERENCE_FRAME_MIME_TYPE,
-          };
-        } catch {
-          throw new Error(
-            workspaceText(
-              locale,
-              "Не удалось подготовить кадр видео для сцены-референса.",
-              "Could not prepare the video frame for the scene reference.",
-            ),
-          );
-        }
+        throw new Error(
+          workspaceText(
+            locale,
+            "Не удалось подготовить финальный кадр видео для сцены-референса.",
+            "Could not prepare the final video frame for the scene reference.",
+          ),
+        );
       } else {
         const posterReferenceUrl = option.videoPosterReferenceUrl?.trim();
         if (!posterReferenceUrl) {
@@ -18253,10 +18249,14 @@ export function WorkspacePage({
         allowMissing: isPromptScoped,
       });
       const sceneReferenceAssetIds = await resolveSegmentReferenceSceneAssetIds(sceneReferenceOption);
+      const sceneSourceRequest = buildWorkspaceSegmentAiVideoSceneSourceRequest({
+        previewKind: sceneReferenceOption?.previewKind,
+        sceneReferenceAssetIds,
+      });
       const referenceRequest = buildWorkspaceSegmentVisualReferenceRequest({
         characterIds,
         referenceAssetIds,
-        sceneReferenceAssetIds,
+        sceneReferenceAssetIds: sceneSourceRequest.sceneReferenceAssetIds,
       });
 
       if (options?.shouldCloseModal) {
@@ -18277,6 +18277,7 @@ export function WorkspacePage({
           prompt: normalizedPrompt,
           quality: generationQuality,
           ...referenceRequest,
+          ...sceneSourceRequest,
           segmentIndex: visualJobBinding.segmentIndex,
         } satisfies WorkspaceSegmentAiVideoJobCreateRequest),
       });
