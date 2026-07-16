@@ -280,6 +280,7 @@ describe("studio welcome card", () => {
     isClosed: false,
     isCreateView: true,
     isDismissed: false,
+    isGuest: false,
     isGenerationVisible: false,
     isManuallyOpened: false,
   };
@@ -299,6 +300,26 @@ describe("studio welcome card", () => {
         isManuallyOpened: true,
       }),
     ).toBe(true);
+  });
+
+  it("shows onboarding on every guest Studio visit regardless of previous dismissals or videos", () => {
+    expect(
+      shouldShowWorkspaceStudioWelcomeCard({
+        ...newUserStudio,
+        hasCreatedVideo: true,
+        isDismissed: true,
+        isGuest: true,
+      }),
+    ).toBe(true);
+    expect(
+      shouldShowWorkspaceStudioWelcomeCard({
+        ...newUserStudio,
+        hasCreatedVideo: true,
+        isClosed: true,
+        isDismissed: true,
+        isGuest: true,
+      }),
+    ).toBe(false);
   });
 
   it("does not cover loading, generation, or another creation mode", () => {

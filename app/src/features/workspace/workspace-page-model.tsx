@@ -1408,6 +1408,7 @@ export const shouldShowWorkspaceStudioWelcomeCard = (options: {
   isClosed: boolean;
   isCreateView: boolean;
   isDismissed: boolean;
+  isGuest: boolean;
   isGenerationVisible: boolean;
   isManuallyOpened: boolean;
 }) =>
@@ -1415,7 +1416,8 @@ export const shouldShowWorkspaceStudioWelcomeCard = (options: {
   options.createMode === "default" &&
   !options.isBootstrapPending &&
   !options.isGenerationVisible &&
-  (options.isManuallyOpened || (!options.hasCreatedVideo && !options.isClosed && !options.isDismissed));
+  (options.isManuallyOpened ||
+    (!options.isClosed && (options.isGuest || (!options.hasCreatedVideo && !options.isDismissed))));
 
 export const shouldShowWorkspaceStudioIdeaEmptyState = (options: {
   createMode: StudioCreateMode;

@@ -2093,7 +2093,7 @@ export function WorkspacePage({
   );
   const [isStudioWelcomeCardClosed, setIsStudioWelcomeCardClosed] = useState(false);
   const [isStudioWelcomeCardDismissed, setIsStudioWelcomeCardDismissed] = useState(() =>
-    readDismissedStudioWelcomeCard(session.email),
+    isGuest ? false : readDismissedStudioWelcomeCard(session.email),
   );
   const [isStudioWelcomeCardManuallyOpened, setIsStudioWelcomeCardManuallyOpened] = useState(false);
   const [hiddenMediaLibraryItemKeys, setHiddenMediaLibraryItemKeys] = useState<string[]>(() =>
@@ -2976,11 +2976,13 @@ export function WorkspacePage({
     setIsStudioWelcomeCardManuallyOpened(false);
   }, []);
   const dismissStudioWelcomeCard = useCallback(() => {
-    persistDismissedStudioWelcomeCard(session.email, true);
-    setIsStudioWelcomeCardDismissed(true);
+    if (!isGuest) {
+      persistDismissedStudioWelcomeCard(session.email, true);
+      setIsStudioWelcomeCardDismissed(true);
+    }
     setIsStudioWelcomeCardClosed(true);
     setIsStudioWelcomeCardManuallyOpened(false);
-  }, [session.email]);
+  }, [isGuest, session.email]);
   const openStudioWelcomeCard = useCallback(() => {
     setIsStudioWelcomeCardClosed(false);
     setIsStudioWelcomeCardManuallyOpened(true);
@@ -4313,7 +4315,7 @@ export function WorkspacePage({
     setDismissedFirstVideoOfferKey(readDismissedFirstVideoOfferKey(session.email));
     setFirstVideoCheckoutError(null);
     setIsStudioWelcomeCardClosed(false);
-    setIsStudioWelcomeCardDismissed(readDismissedStudioWelcomeCard(session.email));
+    setIsStudioWelcomeCardDismissed(isGuest ? false : readDismissedStudioWelcomeCard(session.email));
     setIsStudioWelcomeCardManuallyOpened(false);
     setHiddenMediaLibraryItemKeys(readHiddenMediaLibraryItemKeys(session.email));
     setIsWorkspaceBootstrapPending(true);
@@ -5911,16 +5913,17 @@ export function WorkspacePage({
     isClosed: isStudioWelcomeCardClosed,
     isCreateView: studioView === "create",
     isDismissed: isStudioWelcomeCardDismissed,
+    isGuest,
     isGenerationVisible: isUserFacingGeneration,
     isManuallyOpened: isStudioWelcomeCardManuallyOpened,
   });
   useEffect(() => {
-    if (!hasCreatedStudioVideo) {
+    if (isGuest || !hasCreatedStudioVideo) {
       return;
     }
 
     dismissStudioWelcomeCard();
-  }, [dismissStudioWelcomeCard, hasCreatedStudioVideo]);
+  }, [dismissStudioWelcomeCard, hasCreatedStudioVideo, isGuest]);
   const isSegmentEditorShortsGeneration = isGenerating && generationUiSource === "segment-editor";
   const shouldShowStudioPreviewGenerationOverlay = isUserFacingGeneration && !visibleGeneratedVideo;
   const isGeneratedVideoPrimaryActionExpanded = generatedVideoActionMode === "expanded";
