@@ -33,10 +33,10 @@ describe("renderWorkspaceSegmentSeedanceSettings", () => {
 
   it("offers every manual duration from 4 to 12 seconds in a dropdown", () => {
     const { onDurationChange, onDurationModeChange } = renderSettings();
-    const durationSelect = screen.getByRole("combobox", { name: "Ручная длительность видео" });
+    const durationSelect = screen.getByRole("combobox", { name: "Длительность видео" });
 
-    expect(screen.getByRole("radio", { name: /По озвучке/ })).toBeTruthy();
-    expect(screen.getByText("Вручную")).toBeTruthy();
+    expect(screen.queryByRole("radio", { name: /По озвучке/ })).toBeNull();
+    expect(screen.getByText("Длительность")).toBeTruthy();
     expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual([
       "4 сек",
       "5 сек",
@@ -67,7 +67,7 @@ describe("renderWorkspaceSegmentSeedanceSettings", () => {
     renderSettings({ voiceoverDurationSeconds: 7 });
 
     const soundCopy = screen.getByRole("switch").querySelector(".studio-segment-seedance-settings__audio-copy");
-    expect(soundCopy?.textContent).toBe("Звук+5 ⚡");
+    expect(soundCopy?.textContent).toBe("Звуки+5 ⚡");
   });
 
 });
