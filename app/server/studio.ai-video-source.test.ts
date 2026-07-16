@@ -42,7 +42,7 @@ describe("studio AI video source image", () => {
 
         if (url.pathname === "/api/web/segment-ai-video/jobs") {
           return jsonResponse({
-            job_id: "ai-video-direct-i2v-1",
+            job_id: "8d2c30ec-e96f-49e7-8fcb-81f44971748e",
             status: "queued",
             user: {
               balance: 30,
@@ -56,11 +56,12 @@ describe("studio AI video source image", () => {
       }),
     );
 
-    await createStudioSegmentAiVideoJob("Camera pulls back", {
+    const job = await createStudioSegmentAiVideoJob("Camera pulls back", {
       email: "alex@example.test",
       name: "Alex",
     }, {
       imageAssetId: 9548,
+      jobId: "8d2c30ec-e96f-49e7-8fcb-81f44971748e",
       language: "en",
       sceneReferenceAssetIds: [9548],
       segmentIndex: 1,
@@ -69,8 +70,10 @@ describe("studio AI video source image", () => {
     const request = calls.find((call) => call.pathname === "/api/web/segment-ai-video/jobs");
     expect(request?.body).toEqual(expect.objectContaining({
       image_asset_id: 9548,
+      job_id: "8d2c30ec-e96f-49e7-8fcb-81f44971748e",
       scene_reference_asset_ids: [9548],
       segment_index: 1,
     }));
+    expect(job.jobId).toBe("8d2c30ec-e96f-49e7-8fcb-81f44971748e");
   });
 });

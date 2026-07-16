@@ -1,12 +1,21 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  createWorkspaceClientJobId,
   resolveWorkspaceSegmentVoiceTimelineState,
   shouldDisplayWorkspaceSegmentGeneratedVoiceoverEdited,
   shouldDisplayWorkspaceSegmentSubtitleCellEdited,
   shouldDisplayWorkspaceSegmentVoiceCellEdited,
 } from "./workspace-utils";
 import { isWorkspaceSegmentEffectiveVoiceEdited } from "./workspace-segment-editor-checklist";
+
+describe("workspace client job ids", () => {
+  it("creates an RFC 4122 version 4 id without browser crypto support", () => {
+    expect(createWorkspaceClientJobId({ crypto: null })).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
+  });
+});
 
 describe("workspace voice timeline edit display", () => {
   it("detects an inherited global voice change against a disabled baseline", () => {

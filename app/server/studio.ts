@@ -6294,6 +6294,8 @@ const fetchAdsflowSegmentAiVideoJobStatus = async (jobId: string, user: StudioUs
       admin_token: env.adsflowAdminToken ?? "",
       external_user_id: externalUserId,
     }),
+    undefined,
+    { silentStatuses: [404] },
   );
 };
 
@@ -8264,6 +8266,7 @@ export async function createStudioSegmentAiVideoJob(
     imageDataUrl?: string;
     imageFileName?: string;
     imageMimeType?: string;
+    jobId?: string;
     quality?: string;
     language?: string;
     characterContinuityMode?: string;
@@ -8310,6 +8313,7 @@ export async function createStudioSegmentAiVideoJob(
   const imageDataUrl = String(options?.imageDataUrl ?? "").trim();
   const imageFileName = String(options?.imageFileName ?? "").trim();
   const imageMimeType = String(options?.imageMimeType ?? "").trim();
+  const requestedJobId = String(options?.jobId ?? "").trim() || randomUUID();
   const externalUserId = await resolveStudioExternalUserId(user);
   const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
   const payload = await postAdsflowJson<AdsflowSegmentAiVideoJobCreateResponse>(
@@ -8328,6 +8332,7 @@ export async function createStudioSegmentAiVideoJob(
       image_data_url: imageDataUrl || undefined,
       image_mime_type: imageMimeType || undefined,
       image_original_name: imageFileName || undefined,
+      job_id: requestedJobId,
       language: normalizedLanguage,
       preserve_characters: preserveCharacters,
       project_id: normalizedProjectId,

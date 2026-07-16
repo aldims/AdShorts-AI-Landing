@@ -79,6 +79,41 @@ export const buildWorkspaceSessionIdentityKey = (
   return normalizedAdsflowUserId ? `${principal}|adsflow:${normalizedAdsflowUserId}` : principal;
 };
 
+const parseWorkspaceSessionIdentityKey = (value: string) => {
+  const [principal = "", adsflowUserId = ""] = String(value ?? "").split("|adsflow:", 2);
+  return { adsflowUserId, principal };
+};
+
+export const hasWorkspaceSessionIdentityChanged = (previousIdentityKey: string, nextIdentityKey: string) => {
+  if (previousIdentityKey === nextIdentityKey) {
+    return false;
+  }
+
+  const previous = parseWorkspaceSessionIdentityKey(previousIdentityKey);
+  const next = parseWorkspaceSessionIdentityKey(nextIdentityKey);
+  if (previous.principal !== next.principal) {
+    return true;
+  }
+
+  // AdsFlow profile data arrives after the Better Auth session. Adding or
+  // temporarily losing that secondary id is hydration, not an account switch.
+  return Boolean(
+    previous.adsflowUserId &&
+      next.adsflowUserId &&
+      previous.adsflowUserId !== next.adsflowUserId,
+  );
+};
+
+export const isWorkspaceExplicitSegmentEditorRoute = (options: {
+  isStudioPathname: boolean;
+  mode?: string | null;
+  projectId?: number | null;
+  section?: string | null;
+}) =>
+  options.isStudioPathname &&
+  ((options.section === "edit" && options.projectId !== null && options.projectId !== undefined) ||
+    (options.section === "create" && options.mode === "scenes"));
+
 export const isAbortLikeError = (error: unknown) =>
   error instanceof DOMException
     ? error.name === "AbortError"
@@ -692,6 +727,7 @@ export type WorkspaceSegmentAiVideoJobCreateRequest = {
   imageDataUrl?: string;
   imageFileName?: string;
   imageMimeType?: string;
+  jobId?: string;
   language: StudioLanguage;
   preserveCharacters?: boolean;
   prompt: string;
@@ -1089,6 +1125,8 @@ export const WORKSPACE_SEGMENT_STILL_GENERATION_JOB_TIMEOUT_MS = 4 * 60 * 1000;
 export const WORKSPACE_SEGMENT_INFOGRAPHIC_JOB_TIMEOUT_MS = 35 * 60 * 1000;
 export const WORKSPACE_SEGMENT_AI_PHOTO_JOB_TIMEOUT_MS = 10 * 60 * 1000;
 export const WORKSPACE_SEGMENT_AI_PHOTO_SERVER_BUSY_MESSAGE = "Сервер генерации изображений сейчас загружен. Попробуйте позже.";
+export const WORKSPACE_SEGMENT_AI_VIDEO_CREATION_VISIBILITY_TIMEOUT_MS = 90 * 1000;
+export const WORKSPACE_SEGMENT_AI_VIDEO_ASSET_PROPAGATION_TIMEOUT_MS = 30 * 1000;
 export const WORKSPACE_SEGMENT_VIDEO_GENERATION_JOB_TIMEOUT_MS = 10 * 60 * 1000;
 export const WORKSPACE_SEGMENT_PHOTO_ANIMATION_JOB_TIMEOUT_MS = 25 * 60 * 1000;
 export const WORKSPACE_SEGMENT_SCENE_SOUND_JOB_TIMEOUT_MS = 10 * 60 * 1000;
@@ -1097,6 +1135,16 @@ export const SEGMENT_AI_PHOTO_MODAL_LIBRARY_RENDER_STEP = 12;
 export const SEGMENT_AI_PHOTO_MODAL_LIBRARY_LOAD_MORE_ROOT_MARGIN_PX = 180;
 export const SEGMENT_AI_PHOTO_MODAL_EXIT_DURATION_MS = 280;
 export const MEDIA_LIBRARY_LOAD_MORE_SCROLL_THRESHOLD_PX = 320;
+
+export const shouldRetryWorkspaceSegmentAiVideoStatusFailure = (options: {
+  createdAt: number;
+  now?: number;
+  statusCode: number;
+}) =>
+  options.statusCode >= 500 ||
+  (options.statusCode === 404 &&
+    (options.now ?? Date.now()) - options.createdAt <
+      WORKSPACE_SEGMENT_AI_VIDEO_CREATION_VISIBILITY_TIMEOUT_MS);
 
 export const isWorkspaceSegmentLibraryLoadMoreSentinelNearViewport = (options: {
   rootBottom: number;

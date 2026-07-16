@@ -3,12 +3,14 @@ import { areWorkspaceProfilesEqual } from "./workspace-profile-helpers";
 
 import {
   buildWorkspaceSessionIdentityKey,
+  hasWorkspaceSessionIdentityChanged,
   getWorkspaceStudioIdeaSuggestionRotation,
   getWorkspaceStudioIdeaSuggestions,
   getWorkspaceSegmentEditorSessionUrl,
   getPublishBootstrapForPlatform,
   getPublishChannelsForPlatform,
   isWorkspaceSegmentCustomVisualUploadBusy,
+  isWorkspaceExplicitSegmentEditorRoute,
   isWorkspaceSegmentEditorProjectUnavailableError,
   isWorkspaceSegmentLibraryLoadMoreSentinelNearViewport,
   isWorkspaceSegmentSceneSoundRunBusy,
@@ -19,6 +21,7 @@ import {
   shouldDisableWorkspaceScenesCreateMode,
   shouldNotifyStudioGenerationError,
   shouldRedirectWorkspaceScenesModeDuringGeneration,
+  shouldRetryWorkspaceSegmentAiVideoStatusFailure,
   shouldResetWorkspaceSegmentLibraryRenderCount,
   shouldShowWorkspaceStudioIdeaEmptyState,
   shouldShowWorkspaceStudioWelcomeCard,
@@ -63,9 +66,81 @@ describe("workspace session identity", () => {
       ),
     ).toBe(false);
   });
+
+  it("does not reset the editor when the AdsFlow id is hydrated for the same auth principal", () => {
+    const principalOnly = buildWorkspaceSessionIdentityKey({ email: "user@example.com", id: "auth-user" });
+    const hydrated = buildWorkspaceSessionIdentityKey(
+      { email: "user@example.com", id: "auth-user" },
+      "adsflow-user",
+    );
+
+    expect(hasWorkspaceSessionIdentityChanged(principalOnly, hydrated)).toBe(false);
+    expect(hasWorkspaceSessionIdentityChanged(hydrated, principalOnly)).toBe(false);
+    expect(
+      hasWorkspaceSessionIdentityChanged(
+        hydrated,
+        buildWorkspaceSessionIdentityKey(
+          { email: "user@example.com", id: "auth-user" },
+          "recreated-adsflow-user",
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  it("keeps both persisted edit and scratch scenes routes attached to the editor", () => {
+    expect(
+      isWorkspaceExplicitSegmentEditorRoute({
+        isStudioPathname: true,
+        projectId: 42,
+        section: "edit",
+      }),
+    ).toBe(true);
+    expect(
+      isWorkspaceExplicitSegmentEditorRoute({
+        isStudioPathname: true,
+        mode: "scenes",
+        projectId: null,
+        section: "create",
+      }),
+    ).toBe(true);
+    expect(
+      isWorkspaceExplicitSegmentEditorRoute({
+        isStudioPathname: true,
+        mode: null,
+        projectId: null,
+        section: "create",
+      }),
+    ).toBe(false);
+  });
 });
 
 describe("segment editor session loading", () => {
+  it("retries a not-found status while a client-assigned AI video job is becoming visible", () => {
+    const createdAt = 10_000;
+
+    expect(
+      shouldRetryWorkspaceSegmentAiVideoStatusFailure({
+        createdAt,
+        now: createdAt + 89_999,
+        statusCode: 404,
+      }),
+    ).toBe(true);
+    expect(
+      shouldRetryWorkspaceSegmentAiVideoStatusFailure({
+        createdAt,
+        now: createdAt + 90_000,
+        statusCode: 404,
+      }),
+    ).toBe(false);
+    expect(
+      shouldRetryWorkspaceSegmentAiVideoStatusFailure({
+        createdAt,
+        now: createdAt + 120_000,
+        statusCode: 503,
+      }),
+    ).toBe(true);
+  });
+
   it("uses the cached endpoint unless a fresh session was explicitly requested", () => {
     expect(getWorkspaceSegmentEditorSessionUrl(4213)).toBe(
       "/api/workspace/projects/4213/segment-editor",

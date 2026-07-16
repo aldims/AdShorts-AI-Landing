@@ -8,6 +8,7 @@ import {
   readStoredWorkspaceSegmentEditorScratchDraft,
   readStoredWorkspaceSegmentEditorExplicitReset,
   readStoredWorkspaceSegmentAiPhotoJobs,
+  readStoredWorkspaceSegmentAiVideoJobs,
   readStoredWorkspaceSegmentPhotoAnimationJobs,
   readStoredWorkspaceSegmentSceneSoundJobs,
   readStoredWorkspaceSegmentVoiceoverJobs,
@@ -19,6 +20,7 @@ import {
   WORKSPACE_SEGMENT_EDITOR_SCRATCH_DRAFT_STORAGE_KEY_PREFIX,
   upsertStoredWorkspaceSegmentSceneSoundJob,
   upsertStoredWorkspaceSegmentAiPhotoJob,
+  upsertStoredWorkspaceSegmentAiVideoJob,
   upsertStoredWorkspaceSegmentPhotoAnimationJob,
   upsertStoredWorkspaceSegmentVoiceoverJob,
   writeStoredWorkspaceSegmentEditorExplicitReset,
@@ -153,6 +155,34 @@ describe("workspace segment editor storage fallback", () => {
         draftId: "scratch:other",
         jobId: "other-job",
       }),
+    ]);
+  });
+
+  it("round-trips a client-assigned AI video job before the create response arrives", () => {
+    const email = "editor@example.test";
+    const jobId = "8d2c30ec-e96f-49e7-8fcb-81f44971748e";
+    const createdAt = Date.now();
+
+    upsertStoredWorkspaceSegmentAiVideoJob(email, {
+      createdAt,
+      draftId: "project:42",
+      jobId,
+      projectId: 42,
+      prompt: "Camera pulls back",
+      segmentIndex: 3,
+      status: "submitting",
+    });
+
+    expect(readStoredWorkspaceSegmentAiVideoJobs("EDITOR@example.test")).toEqual([
+      {
+        createdAt,
+        draftId: "project:42",
+        jobId,
+        projectId: 42,
+        prompt: "Camera pulls back",
+        segmentIndex: 3,
+        status: "submitting",
+      },
     ]);
   });
 

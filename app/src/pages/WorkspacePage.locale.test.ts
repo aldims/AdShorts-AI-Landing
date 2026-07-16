@@ -10347,17 +10347,17 @@ describe("WorkspacePage studio locale defaults", () => {
     const segment = createDraftSegment({
       aiVideoAsset: {
         assetId: 1692,
-        fileName: "talking-photo.mp4",
+        fileName: "ai-video.mp4",
         fileSize: 0,
         mimeType: "video/mp4",
         posterUrl: "/api/workspace/media-assets/1692/poster?v=current",
         remoteUrl: "/api/workspace/project-segment-video?projectId=3203&segmentIndex=1&source=current&delivery=preview&v=ready",
       },
-      aiVideoGeneratedMode: "talking_photo",
+      aiVideoGeneratedMode: "ai_video",
       currentPlaybackUrl: "/api/workspace/project-segment-video?projectId=3203&segmentIndex=1&source=current&delivery=playback&v=ready",
       currentPreviewUrl: "/api/workspace/project-segment-video?projectId=3203&segmentIndex=1&source=current&delivery=preview&v=ready",
       mediaType: "video",
-      videoAction: "talking_photo",
+      videoAction: "ai",
     });
 
     const idleSurface = getWorkspaceSegmentResolvedMediaSurface(segment, "segment-carousel-card", {

@@ -561,6 +561,8 @@ import {
   isAbortLikeError,
   buildWorkspaceBootstrapRequestUrl,
   buildWorkspaceSessionIdentityKey,
+  hasWorkspaceSessionIdentityChanged,
+  isWorkspaceExplicitSegmentEditorRoute,
   mergeWorkspaceMediaLibraryPageItems,
   WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_MUSIC_VOLUME,
   WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_MUSIC_DUCKED_VOLUME,
@@ -608,6 +610,7 @@ import {
   WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS,
   WORKSPACE_SEGMENT_AI_PHOTO_JOB_TIMEOUT_MS,
   WORKSPACE_SEGMENT_AI_PHOTO_SERVER_BUSY_MESSAGE,
+  WORKSPACE_SEGMENT_AI_VIDEO_ASSET_PROPAGATION_TIMEOUT_MS,
   WORKSPACE_SEGMENT_STILL_GENERATION_JOB_TIMEOUT_MS,
   WORKSPACE_SEGMENT_INFOGRAPHIC_JOB_TIMEOUT_MS,
   WORKSPACE_SEGMENT_VIDEO_GENERATION_JOB_TIMEOUT_MS,
@@ -643,6 +646,7 @@ import {
   shouldDisableWorkspaceScenesCreateMode,
   shouldNotifyStudioGenerationError,
   shouldRedirectWorkspaceScenesModeDuringGeneration,
+  shouldRetryWorkspaceSegmentAiVideoStatusFailure,
   shouldShowWorkspaceStudioIdeaEmptyState,
   shouldShowWorkspaceStudioWelcomeCard,
   shouldUseWorkspaceStudioExpandedPromptLayout,
@@ -873,6 +877,7 @@ import {
 import { WorkspaceSegmentTalkingTargetOverlay } from "../features/workspace/workspace-talking-character-ui";
 import {
   buildWorkspaceSegmentBulkSubtitleText,
+  createWorkspaceClientJobId,
   distributeWorkspaceSegmentBulkSubtitleText,
   formatWorkspaceSegmentDurationInputValue,
   getWorkspaceSegmentVoiceoverTextHash,
@@ -2558,7 +2563,7 @@ export function WorkspacePage({
   const segmentAiPhotoRunRef = useRef<WorkspaceSegmentVisualRunState>({});
   const segmentAiPhotoActiveJobIdsRef = useRef<Set<string>>(new Set());
   const segmentAiVideoRunRef = useRef<WorkspaceSegmentVisualRunState>({});
-  const segmentAiVideoActiveJobIdsRef = useRef<Set<string>>(new Set());
+  const segmentAiVideoActiveJobIdsRef = useRef<Map<string, number>>(new Map());
   const segmentPhotoAnimationRunRef = useRef<WorkspaceSegmentVisualRunState>({});
   const segmentTalkingPhotoRunRef = useRef<WorkspaceSegmentVisualRunState>({});
   const segmentTalkingPhotoActiveJobIdsRef = useRef<Set<string>>(new Set());
@@ -3519,10 +3524,12 @@ export function WorkspacePage({
       routeStudioState.mode === "scenes" ||
       routeStudioState.projectId !== null ||
       routeStudioState.segmentIndex !== null);
-  const hasExplicitSegmentEditorRoute =
-    isStudioPathname &&
-    routeStudioState.section === "edit" &&
-    routeStudioState.projectId !== null;
+  const hasExplicitSegmentEditorRoute = isWorkspaceExplicitSegmentEditorRoute({
+    isStudioPathname,
+    mode: routeStudioState.mode,
+    projectId: routeStudioState.projectId,
+    section: routeStudioState.section,
+  });
   const hasExplicitSegmentEditorRouteRef = useRef(hasExplicitSegmentEditorRoute);
 
   useEffect(() => {
@@ -4309,7 +4316,10 @@ export function WorkspacePage({
   }, [insufficientCreditsContext, workspaceProfile]);
 
   useEffect(() => {
-    const isSessionIdentityChange = workspaceSessionResetIdentityRef.current !== workspaceSessionIdentityKey;
+    const isSessionIdentityChange = hasWorkspaceSessionIdentityChanged(
+      workspaceSessionResetIdentityRef.current,
+      workspaceSessionIdentityKey,
+    );
     workspaceSessionResetIdentityRef.current = workspaceSessionIdentityKey;
     const wasGuestSession = previousWorkspaceSessionWasGuestRef.current;
     previousWorkspaceSessionWasGuestRef.current = isGuest;
@@ -11380,9 +11390,11 @@ export function WorkspacePage({
     nextDraft: WorkspaceSegmentEditorDraftSession,
     options?: { initialSegmentIndex?: number; initialSegmentMode?: "array" | "route" },
   ) => {
+    const previousDraftId = getWorkspaceSegmentEditorDraftId(segmentEditorDraftRef.current);
     const nextDraftSnapshot = rebuildWorkspaceSegmentEditorDraftSessionTimeline(
       normalizeLegacyWorkspaceSegmentEditorDraftSession(cloneWorkspaceSegmentEditorDraftSession(nextDraft)),
     );
+    const nextDraftId = getWorkspaceSegmentEditorDraftId(nextDraftSnapshot);
     logSegmentEditorDiagnostics(
       "client.segment-editor.open-draft",
       {
@@ -11403,7 +11415,9 @@ export function WorkspacePage({
     segmentEditorDraftRef.current = nextDraftSnapshot;
     setSegmentEditorDraft(nextDraftSnapshot);
     setSegmentEditorVideoError(null);
-    clearAllSegmentVisualRuns();
+    if (!previousDraftId || previousDraftId !== nextDraftId) {
+      clearAllSegmentVisualRuns();
+    }
     const boundedSegmentIndex =
       options?.initialSegmentMode === "route"
         ? resolveSegmentEditorArrayIndexFromRouteSegment(nextDraftSnapshot, options?.initialSegmentIndex ?? 0)
@@ -16182,7 +16196,9 @@ export function WorkspacePage({
     let latestStatus = initialStatus;
     const startedAt = options.createdAt ?? Date.now();
     let transientStatusFailures = 0;
-    segmentAiVideoActiveJobIdsRef.current.add(safeJobId);
+    let doneWithoutAssetObservedAt: number | null = null;
+    let lastDoneProjectRefreshAt = 0;
+    segmentAiVideoActiveJobIdsRef.current.set(safeJobId, options.runId);
 
     try {
       while (isSegmentVisualRunCurrent(segmentAiVideoRunRef, options.segmentIndex, options.runId)) {
@@ -16220,12 +16236,18 @@ export function WorkspacePage({
 
         if (!response.ok || !payload?.data) {
           const statusError = payload?.error ?? "Не удалось получить статус ИИ видео.";
-          if (response.status >= 500) {
+          const shouldRetryStatusFailure = shouldRetryWorkspaceSegmentAiVideoStatusFailure({
+            createdAt: startedAt,
+            statusCode: response.status,
+          });
+          const isCreationVisibilityRace = response.status === 404 && shouldRetryStatusFailure;
+          if (shouldRetryStatusFailure) {
             transientStatusFailures += 1;
             logSegmentEditorDiagnostics(
               "client.segment-editor.ai-video.status.transient-server-failed",
               {
                 failures: transientStatusFailures,
+                isCreationVisibilityRace,
                 jobId: safeJobId,
                 statusCode: response.status,
                 targetSegmentIndex: options.segmentIndex,
@@ -16267,7 +16289,6 @@ export function WorkspacePage({
             sourceJobId: safeJobId,
           });
           if (!isSegmentVisualRunCurrent(segmentAiVideoRunRef, options.segmentIndex, options.runId)) {
-            removeStoredWorkspaceSegmentAiVideoJob(session.email, safeJobId);
             return;
           }
           let nextAiVideoAsset = durableAiVideoAsset;
@@ -16347,6 +16368,94 @@ export function WorkspacePage({
         }
 
         if (isWorkspaceSegmentGenerationJobDoneStatus(latestStatus)) {
+          const now = Date.now();
+          doneWithoutAssetObservedAt ??= now;
+
+          if (options.projectId > 0 && now - lastDoneProjectRefreshAt >= 5_000) {
+            lastDoneProjectRefreshAt = now;
+            try {
+              const refreshedDraft = await ensureSegmentEditorDraftForProject(options.projectId, {
+                bypassCache: true,
+                initialSegmentIndex: options.segmentIndex,
+                initialSegmentMode: "route",
+                openDraft: false,
+                syncRoute: false,
+              });
+              const refreshedSegment =
+                refreshedDraft?.segments.find((segment) => segment.index === options.segmentIndex) ?? null;
+              const recoveredAiVideoAsset = refreshedSegment?.aiVideoAsset ?? null;
+              if (
+                refreshedSegment &&
+                recoveredAiVideoAsset &&
+                getWorkspaceSegmentLatestVisualAction(refreshedSegment) === "ai"
+              ) {
+                let nextAiVideoAsset = recoveredAiVideoAsset;
+                const attachment = attachSegmentEditorJobResult({
+                  draftId: options.draftId,
+                  projectId: options.projectId,
+                  segmentIndex: options.segmentIndex,
+                  updater: (segment) => {
+                    const preferredPosterUrl = getWorkspaceAiVideoPreferredPosterUrl(segment, recoveredAiVideoAsset);
+                    nextAiVideoAsset = preferredPosterUrl
+                      ? { ...recoveredAiVideoAsset, posterUrl: preferredPosterUrl }
+                      : recoveredAiVideoAsset;
+                    return invalidateWorkspaceSegmentSceneSoundForVisualChange({
+                      ...segment,
+                      aiVideoAsset: nextAiVideoAsset,
+                      aiVideoGeneratedMode: "ai_video",
+                      aiVideoGeneratedFromPrompt: options.prompt,
+                      aiVideoPromptInitialized: true,
+                      ...buildSegmentEditorKnownVideoDurationPatch(
+                        segment,
+                        getStudioCustomVideoFileDurationSeconds(nextAiVideoAsset),
+                      ),
+                      durationExtensionSourceDurationSeconds: null,
+                      visualReset: false,
+                      videoAction: "ai",
+                    });
+                  },
+                });
+                if (attachment.status === "attached") {
+                  upsertGeneratedMediaLibraryEntry({
+                    asset: nextAiVideoAsset,
+                    kind: "ai_video",
+                    projectId: options.projectId,
+                    segmentIndex: options.segmentIndex,
+                    sourceJobId: safeJobId,
+                  });
+                  removeStoredWorkspaceSegmentAiVideoJob(session.email, safeJobId);
+                  return;
+                }
+                if (attachment.status === "segment-missing") {
+                  removeStoredWorkspaceSegmentAiVideoJob(session.email, safeJobId);
+                  return;
+                }
+                if (attachment.status === "draft-unavailable") {
+                  return;
+                }
+              }
+            } catch (error) {
+              logSegmentEditorDiagnostics(
+                "client.segment-editor.ai-video.done-project-refresh-failed",
+                {
+                  error: error instanceof Error ? error.message : String(error),
+                  jobId: safeJobId,
+                  projectId: options.projectId,
+                  targetSegmentIndex: options.segmentIndex,
+                },
+                { level: "warn" },
+              );
+            }
+          }
+
+          if (
+            now - doneWithoutAssetObservedAt <
+            WORKSPACE_SEGMENT_AI_VIDEO_ASSET_PROPAGATION_TIMEOUT_MS
+          ) {
+            await new Promise((resolve) => window.setTimeout(resolve, 2200));
+            continue;
+          }
+
           removeStoredWorkspaceSegmentAiVideoJob(session.email, safeJobId);
           throw new Error(payload.data.error ?? "Сгенерированное ИИ видео недоступно.");
         }
@@ -16354,7 +16463,9 @@ export function WorkspacePage({
         await new Promise((resolve) => window.setTimeout(resolve, latestStatus === "queued" ? 1500 : 2200));
       }
     } finally {
-      segmentAiVideoActiveJobIdsRef.current.delete(safeJobId);
+      if (segmentAiVideoActiveJobIdsRef.current.get(safeJobId) === options.runId) {
+        segmentAiVideoActiveJobIdsRef.current.delete(safeJobId);
+      }
       if (isSegmentVisualRunCurrent(segmentAiVideoRunRef, options.segmentIndex, options.runId)) {
         clearSegmentVisualRun(segmentAiVideoRunRef, setSegmentEditorGeneratingAiVideoRunIds, options.segmentIndex, options.runId);
       }
@@ -18322,27 +18433,57 @@ export function WorkspacePage({
         closeSegmentAiPhotoModal();
       }
 
-      const response = await fetch("/api/studio/segment-ai-video/jobs", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          billingQuality,
-          durationSeconds,
-          generateAudio,
-          language: selectedLanguage,
-          projectId: visualJobBinding.projectId,
-          prompt: normalizedPrompt,
-          quality: generationQuality,
-          ...referenceRequest,
-          ...sceneSourceRequest,
-          segmentIndex: visualJobBinding.segmentIndex,
-        } satisfies WorkspaceSegmentAiVideoJobCreateRequest),
+      const requestedJobId = createWorkspaceClientJobId();
+      const pendingJobCreatedAt = Date.now();
+      upsertStoredWorkspaceSegmentAiVideoJob(session.email, {
+        createdAt: pendingJobCreatedAt,
+        draftId: jobDraftId,
+        jobId: requestedJobId,
+        projectId: jobProjectId,
+        prompt: normalizedPrompt,
+        segmentIndex: targetSegmentIndex,
+        status: "submitting",
       });
+
+      let response: Response;
+      try {
+        response = await fetch("/api/studio/segment-ai-video/jobs", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            billingQuality,
+            durationSeconds,
+            generateAudio,
+            jobId: requestedJobId,
+            language: selectedLanguage,
+            projectId: visualJobBinding.projectId,
+            prompt: normalizedPrompt,
+            quality: generationQuality,
+            ...referenceRequest,
+            ...sceneSourceRequest,
+            segmentIndex: visualJobBinding.segmentIndex,
+          } satisfies WorkspaceSegmentAiVideoJobCreateRequest),
+        });
+      } catch {
+        // The POST may have reached the server even when its response was lost.
+        // Polling the preassigned id is the only safe way to recover that job.
+        pollStarted = true;
+        await pollSegmentEditorAiVideoJob(requestedJobId, "submitting", {
+          createdAt: pendingJobCreatedAt,
+          draftId: jobDraftId,
+          prompt: normalizedPrompt,
+          projectId: jobProjectId,
+          runId,
+          segmentIndex: targetSegmentIndex,
+        });
+        return;
+      }
       const payload = (await response.json().catch(() => null)) as WorkspaceSegmentAiVideoJobCreateResponse | null;
 
       if (response.status === 402) {
+        removeStoredWorkspaceSegmentAiVideoJob(session.email, requestedJobId);
         if (isSegmentVisualRunCurrent(segmentAiVideoRunRef, targetSegmentIndex, runId)) {
           clearSegmentVisualRun(segmentAiVideoRunRef, setSegmentEditorGeneratingAiVideoRunIds, targetSegmentIndex, runId);
         }
@@ -18350,27 +18491,44 @@ export function WorkspacePage({
         return;
       }
 
-      if (!response.ok || !payload?.data?.jobId) {
+      if (!response.ok) {
+        if (response.status >= 500) {
+          pollStarted = true;
+          await pollSegmentEditorAiVideoJob(requestedJobId, "submitting", {
+            createdAt: pendingJobCreatedAt,
+            draftId: jobDraftId,
+            prompt: normalizedPrompt,
+            projectId: jobProjectId,
+            runId,
+            segmentIndex: targetSegmentIndex,
+          });
+          return;
+        }
+        removeStoredWorkspaceSegmentAiVideoJob(session.email, requestedJobId);
         throw new Error(payload?.error ?? "Не удалось запустить генерацию ИИ видео.");
       }
+
+      const serverJobId = String(payload?.data?.jobId ?? requestedJobId).trim() || requestedJobId;
+      if (serverJobId !== requestedJobId) {
+        removeStoredWorkspaceSegmentAiVideoJob(session.email, requestedJobId);
+      }
+      upsertStoredWorkspaceSegmentAiVideoJob(session.email, {
+        createdAt: pendingJobCreatedAt,
+        draftId: jobDraftId,
+        jobId: serverJobId,
+        projectId: jobProjectId,
+        prompt: normalizedPrompt,
+        segmentIndex: targetSegmentIndex,
+        status: payload?.data?.status ?? "queued",
+      });
 
       if (!isSegmentVisualRunCurrent(segmentAiVideoRunRef, targetSegmentIndex, runId)) {
         return;
       }
 
-      applyWorkspaceProfile(payload.data.profile);
-      const pendingJobCreatedAt = Date.now();
-      upsertStoredWorkspaceSegmentAiVideoJob(session.email, {
-        createdAt: pendingJobCreatedAt,
-        draftId: jobDraftId,
-        jobId: payload.data.jobId,
-        projectId: jobProjectId,
-        prompt: normalizedPrompt,
-        segmentIndex: targetSegmentIndex,
-        status: payload.data.status,
-      });
+      applyWorkspaceProfile(payload?.data?.profile ?? null);
       pollStarted = true;
-      await pollSegmentEditorAiVideoJob(payload.data.jobId, payload.data.status, {
+      await pollSegmentEditorAiVideoJob(serverJobId, payload?.data?.status ?? "queued", {
         createdAt: pendingJobCreatedAt,
         draftId: jobDraftId,
         prompt: normalizedPrompt,
@@ -18502,6 +18660,7 @@ export function WorkspacePage({
     segmentEditorDraft?.draftId,
     segmentEditorDraft?.projectId,
     segmentEditorDraft?.segments.length,
+    segmentEditorGeneratingAiVideoRunIds,
     session.email,
   ]);
 

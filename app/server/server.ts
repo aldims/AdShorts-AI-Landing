@@ -4917,6 +4917,7 @@ app.post("/api/studio/segment-ai-video/jobs", async (req, res) => {
   const imageDataUrl = typeof req.body?.imageDataUrl === "string" ? req.body.imageDataUrl.trim() : "";
   const imageFileName = typeof req.body?.imageFileName === "string" ? req.body.imageFileName.trim() : "";
   const imageMimeType = typeof req.body?.imageMimeType === "string" ? req.body.imageMimeType.trim() : "";
+  const jobId = typeof req.body?.jobId === "string" ? req.body.jobId.trim() : "";
   const imageAssetId = Number(req.body?.imageAssetId ?? 0);
   const preserveCharacters = req.body?.preserveCharacters === true;
   const characterContinuityMode = typeof req.body?.characterContinuityMode === "string" ? req.body.characterContinuityMode.trim() : "";
@@ -4937,6 +4938,10 @@ app.post("/api/studio/segment-ai-video/jobs", async (req, res) => {
     res.status(400).json({ error: "Segment index is required." });
     return;
   }
+  if (jobId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(jobId)) {
+    res.status(400).json({ error: "A valid AI video job id is required." });
+    return;
+  }
 
   try {
     const job = await createStudioSegmentAiVideoJob(prompt, session.user, {
@@ -4944,6 +4949,7 @@ app.post("/api/studio/segment-ai-video/jobs", async (req, res) => {
       imageDataUrl: imageDataUrl || undefined,
       imageFileName: imageFileName || undefined,
       imageMimeType: imageMimeType || undefined,
+      jobId: jobId || undefined,
       language,
       billingQuality,
       characterContinuityMode,
@@ -4960,7 +4966,14 @@ app.post("/api/studio/segment-ai-video/jobs", async (req, res) => {
     res.json({ data: job });
   } catch (error) {
     console.error("[studio] Failed to create segment AI video job", error);
-    const statusCode = error instanceof WorkspaceCreditLimitError ? 402 : 500;
+    const upstreamStatus = Number((error as { statusCode?: unknown })?.statusCode);
+    const statusCode = error instanceof WorkspaceCreditLimitError
+      ? 402
+      : Number.isInteger(upstreamStatus) && upstreamStatus >= 400 && upstreamStatus < 500
+        ? upstreamStatus
+        : upstreamStatus === 503
+          ? 503
+          : 500;
 
     res.status(statusCode).json({
       error: error instanceof Error ? error.message : "Failed to create segment AI video job.",
@@ -4985,8 +4998,16 @@ app.get("/api/studio/segment-ai-video/jobs/:jobId", async (req, res) => {
     }
     res.json({ data: status });
   } catch (error) {
-    console.error("[studio] Failed to fetch segment AI video job status", error);
-    res.status(500).json({
+    const upstreamStatus = Number((error as { statusCode?: unknown })?.statusCode);
+    if (upstreamStatus !== 404) {
+      console.error("[studio] Failed to fetch segment AI video job status", error);
+    }
+    const statusCode = Number.isInteger(upstreamStatus) && upstreamStatus >= 400 && upstreamStatus < 500
+      ? upstreamStatus
+      : upstreamStatus === 503
+        ? 503
+        : 500;
+    res.status(statusCode).json({
       error: error instanceof Error ? error.message : "Failed to fetch segment AI video job status.",
     });
   }

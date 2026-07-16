@@ -4,6 +4,7 @@ import type {
   WorkspaceSegmentInfographicPart,
   WorkspaceSegmentInfographicTransform,
 } from "./workspace-types";
+import { createWorkspaceClientJobId } from "./workspace-utils";
 
 export const WORKSPACE_SEGMENT_INFOGRAPHIC_TEXT_MAX_CHARS = 160;
 export const WORKSPACE_SEGMENT_INFOGRAPHIC_STYLE_MAX_CHARS = 300;
@@ -26,28 +27,7 @@ export const truncateWorkspaceSegmentInfographicText = (
   maxCharacters: number,
 ) => Array.from(String(value ?? "")).slice(0, Math.max(0, Math.trunc(maxCharacters))).join("");
 
-export const createWorkspaceSegmentInfographicIdempotencyKey = (options?: { crypto?: Crypto | null }) => {
-  const cryptoSource = options && Object.prototype.hasOwnProperty.call(options, "crypto")
-    ? options.crypto ?? null
-    : typeof crypto !== "undefined"
-      ? crypto
-      : null;
-  if (cryptoSource && typeof cryptoSource.randomUUID === "function") {
-    return cryptoSource.randomUUID();
-  }
-  const bytes = new Uint8Array(16);
-  if (cryptoSource && typeof cryptoSource.getRandomValues === "function") {
-    cryptoSource.getRandomValues(bytes);
-  } else {
-    for (let index = 0; index < bytes.length; index += 1) {
-      bytes[index] = Math.floor(Math.random() * 256);
-    }
-  }
-  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40;
-  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
-  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-};
+export const createWorkspaceSegmentInfographicIdempotencyKey = createWorkspaceClientJobId;
 
 const finiteNumber = (value: unknown, fallback: number) => {
   const numeric = Number(value);
