@@ -641,6 +641,7 @@ import {
   isWorkspaceSegmentEditorProjectUnavailableError,
   isWorkspaceSegmentEditorPreparingError,
   isStudioGenerationUserFacing,
+  resolveWorkspaceLatestStoredScenesDraft,
   resolveWorkspaceStudioCreateModeDuringGeneration,
   resolveWorkspaceRetainedScenesDraftState,
   resolveWorkspaceScenesModeSwitchTarget,
@@ -11402,6 +11403,25 @@ export function WorkspacePage({
     detachedSegmentEditorDraftRef.current = null;
   };
 
+  const getRetainedSegmentEditorDraftState = () => {
+    const storedDraft = resolveWorkspaceLatestStoredScenesDraft([
+      readStoredWorkspaceSegmentEditorScratchDraft(session.email),
+      ...readStoredWorkspaceSegmentEditorDrafts(session.email),
+    ]);
+
+    return resolveWorkspaceRetainedScenesDraftState(
+      segmentEditorDraftRef.current ?? segmentEditorDraft,
+      activeSegmentIndex,
+      detachedSegmentEditorDraftRef.current,
+      storedDraft
+        ? {
+            activeSegmentIndex: 0,
+            draft: storedDraft,
+          }
+        : null,
+    );
+  };
+
   const cancelPendingSegmentEditorLoad = (reason = "segment-editor-hidden") => {
     const controller = segmentEditorRequestAbortRef.current;
     if (!controller) {
@@ -12391,11 +12411,7 @@ export function WorkspacePage({
 
     suppressScratchSegmentEditorRouteOpenRef.current = false;
     const currentScenesDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
-    const retainedScenesDraftState = resolveWorkspaceRetainedScenesDraftState(
-      currentScenesDraft,
-      activeSegmentIndex,
-      detachedSegmentEditorDraftRef.current,
-    );
+    const retainedScenesDraftState = getRetainedSegmentEditorDraftState();
     const retainedScenesDraft = retainedScenesDraftState?.draft ?? null;
     const target = resolveWorkspaceScenesModeSwitchTarget({
       hasDisplayedGeneratedProject: Boolean(studioInlinePreview?.video.adId),
@@ -12521,11 +12537,7 @@ export function WorkspacePage({
 
     if (lastStudioCreateModeRef.current === "segment-editor") {
       const currentScenesDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
-      const retainedScenesDraftState = resolveWorkspaceRetainedScenesDraftState(
-        currentScenesDraft,
-        activeSegmentIndex,
-        detachedSegmentEditorDraftRef.current,
-      );
+      const retainedScenesDraftState = getRetainedSegmentEditorDraftState();
       const retainedScenesDraft = retainedScenesDraftState?.draft ?? null;
       const target = resolveWorkspaceScenesModeSwitchTarget({
         hasDisplayedGeneratedProject: Boolean(studioInlinePreview?.video.adId),

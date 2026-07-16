@@ -1446,10 +1446,41 @@ export type WorkspaceRetainedScenesDraftState<TDraft> = {
   draft: TDraft;
 };
 
+const normalizeWorkspaceScenesTimestamp = (value: number | string | null | undefined) => {
+  if (typeof value === "number") {
+    return Number.isFinite(value) && value > 0 ? value : null;
+  }
+
+  const parsedValue = Date.parse(String(value ?? ""));
+  return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : null;
+};
+
+export const resolveWorkspaceLatestStoredScenesDraft = <
+  TDraft extends { clientUpdatedAt?: number | string | null },
+>(drafts: readonly (TDraft | null | undefined)[]): TDraft | null => {
+  let latestDraft: TDraft | null = null;
+  let latestUpdatedAt: number | null = null;
+
+  drafts.forEach((draft) => {
+    if (!draft) {
+      return;
+    }
+
+    const updatedAt = normalizeWorkspaceScenesTimestamp(draft.clientUpdatedAt);
+    if (!latestDraft || (updatedAt !== null && (latestUpdatedAt === null || updatedAt > latestUpdatedAt))) {
+      latestDraft = draft;
+      latestUpdatedAt = updatedAt;
+    }
+  });
+
+  return latestDraft;
+};
+
 export const resolveWorkspaceRetainedScenesDraftState = <TDraft,>(
   activeDraft: TDraft | null | undefined,
   activeSegmentIndex: number,
   detachedDraftState: WorkspaceRetainedScenesDraftState<TDraft> | null | undefined,
+  storedDraftState?: WorkspaceRetainedScenesDraftState<TDraft> | null,
 ): WorkspaceRetainedScenesDraftState<TDraft> | null => {
   if (activeDraft) {
     return {
@@ -1458,7 +1489,7 @@ export const resolveWorkspaceRetainedScenesDraftState = <TDraft,>(
     };
   }
 
-  return detachedDraftState ?? null;
+  return detachedDraftState ?? storedDraftState ?? null;
 };
 
 export const resolveWorkspaceScenesModeSwitchTarget = (options: {
@@ -1484,15 +1515,8 @@ export const resolveWorkspaceScenesModeSwitchTarget = (options: {
         return "current";
       }
 
-      const normalizeTimestamp = (value: number | string | null | undefined) => {
-        if (typeof value === "number") {
-          return Number.isFinite(value) && value > 0 ? value : null;
-        }
-        const parsedValue = Date.parse(String(value ?? ""));
-        return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : null;
-      };
-      const retainedDraftUpdatedAt = normalizeTimestamp(options.retainedDraftUpdatedAt);
-      const latestProjectUpdatedAt = normalizeTimestamp(options.latestProjectUpdatedAt);
+      const retainedDraftUpdatedAt = normalizeWorkspaceScenesTimestamp(options.retainedDraftUpdatedAt);
+      const latestProjectUpdatedAt = normalizeWorkspaceScenesTimestamp(options.latestProjectUpdatedAt);
       if (latestProjectUpdatedAt !== null && retainedDraftUpdatedAt === null) {
         return "project";
       }

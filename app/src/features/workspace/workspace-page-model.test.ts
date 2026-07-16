@@ -15,6 +15,7 @@ import {
   isWorkspaceSegmentLibraryLoadMoreSentinelNearViewport,
   isWorkspaceSegmentSceneSoundRunBusy,
   isStudioGenerationUserFacing,
+  resolveWorkspaceLatestStoredScenesDraft,
   resolveWorkspaceStudioCreateModeDuringGeneration,
   resolveWorkspaceRetainedScenesDraftState,
   resolveWorkspaceScenesModeSwitchTarget,
@@ -275,6 +276,56 @@ describe("studio creation mode switching", () => {
       activeSegmentIndex: 0,
       draft: activeDraft,
     });
+  });
+
+  it("restores a stored scenes draft after the Studio page was unmounted", () => {
+    const storedDraft = {
+      clientUpdatedAt: Date.parse("2026-07-17T12:05:00.000Z"),
+      projectId: 4178,
+      segments: [{ index: 0 }],
+    };
+
+    expect(
+      resolveWorkspaceRetainedScenesDraftState(null, 0, null, {
+        activeSegmentIndex: 0,
+        draft: storedDraft,
+      }),
+    ).toEqual({
+      activeSegmentIndex: 0,
+      draft: storedDraft,
+    });
+  });
+
+  it("prefers the in-memory detached snapshot over its stored fallback", () => {
+    const detachedDraft = { projectId: 4178, segments: [{ index: 0 }, { index: 1 }] };
+    const storedDraft = { projectId: 4178, segments: [{ index: 0 }] };
+
+    expect(
+      resolveWorkspaceRetainedScenesDraftState(
+        null,
+        0,
+        { activeSegmentIndex: 1, draft: detachedDraft },
+        { activeSegmentIndex: 0, draft: storedDraft },
+      ),
+    ).toEqual({
+      activeSegmentIndex: 1,
+      draft: detachedDraft,
+    });
+  });
+
+  it("selects the most recently refined stored project or scratch draft", () => {
+    const olderProjectDraft = {
+      clientUpdatedAt: Date.parse("2026-07-17T12:00:00.000Z"),
+      projectId: 4178,
+    };
+    const newerScratchDraft = {
+      clientUpdatedAt: Date.parse("2026-07-17T12:05:00.000Z"),
+      projectId: 0,
+    };
+
+    expect(resolveWorkspaceLatestStoredScenesDraft([olderProjectDraft, newerScratchDraft])).toBe(
+      newerScratchDraft,
+    );
   });
 
   it("opens the displayed video project before creating a scratch draft", () => {
