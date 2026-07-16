@@ -9566,6 +9566,11 @@ textarea {
   white-space: nowrap;
 }
 
+.studio-segment-seedance-settings__audio strong {
+  overflow: visible;
+  text-overflow: clip;
+}
+
 .studio-segment-seedance-settings__voice strong {
   flex: 0 0 auto;
   color: rgba(225, 233, 248, 0.86);
@@ -9644,7 +9649,7 @@ textarea {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  min-width: 94px;
+  min-width: 118px;
   min-height: 38px;
   padding: 0 9px 0 11px;
   border: 1px solid rgba(181, 198, 230, 0.1);
@@ -47007,7 +47012,8 @@ html, body {
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-seedance-settings--action-row {
-  flex: 0 1 326px;
+  flex: 0 1 auto;
+  margin-right: auto;
 }
 
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-action-cluster {

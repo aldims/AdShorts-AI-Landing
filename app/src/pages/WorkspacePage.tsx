@@ -1926,7 +1926,7 @@ export function WorkspacePage({
   const [selectedSegmentPhotoAnimationDurationSeconds, setSelectedSegmentPhotoAnimationDurationSeconds] =
     useState<StudioSegmentPhotoAnimationDurationSeconds>(5);
   const [segmentSeedanceDurationMode, setSegmentSeedanceDurationMode] =
-    useState<StudioSegmentSeedanceDurationMode>("voiceover");
+    useState<StudioSegmentSeedanceDurationMode>("manual");
   const [isSegmentSeedanceGenerateAudioEnabled, setIsSegmentSeedanceGenerateAudioEnabled] = useState(false);
   const [selectedSegmentReferenceCharacterIds, setSelectedSegmentReferenceCharacterIds] = useState<number[]>([]);
   const [selectedSegmentReferenceCharacterAssetKeys, setSelectedSegmentReferenceCharacterAssetKeys] = useState<string[]>([]);
@@ -36461,20 +36461,20 @@ export function WorkspacePage({
                           />
                         </div>
                       ) : null}
+                      {isPromptPhotoAnimationMode || isPromptAiVideoMode
+                        ? renderSegmentSeedanceSettings({
+                            className: "studio-segment-seedance-settings--action-row",
+                            disabled: isPromptVisualBaseDisabled,
+                            durationMode: segmentSeedanceDurationMode,
+                            generateAudio: isSegmentSeedanceGenerateAudioEnabled,
+                            onDurationChange: setSelectedSegmentPhotoAnimationDurationSeconds,
+                            onDurationModeChange: setSegmentSeedanceDurationMode,
+                            onGenerateAudioChange: setIsSegmentSeedanceGenerateAudioEnabled,
+                            value: selectedSegmentPhotoAnimationDurationSeconds,
+                            voiceoverDurationSeconds: segmentSeedanceVoiceoverDurationSeconds,
+                          })
+                        : null}
                       <div className="studio-segment-editor__prompt-action-cluster">
-                        {isPromptPhotoAnimationMode || isPromptAiVideoMode
-                          ? renderSegmentSeedanceSettings({
-                              className: "studio-segment-seedance-settings--action-row",
-                              disabled: isPromptVisualBaseDisabled,
-                              durationMode: segmentSeedanceDurationMode,
-                              generateAudio: isSegmentSeedanceGenerateAudioEnabled,
-                              onDurationChange: setSelectedSegmentPhotoAnimationDurationSeconds,
-                              onDurationModeChange: setSegmentSeedanceDurationMode,
-                              onGenerateAudioChange: setIsSegmentSeedanceGenerateAudioEnabled,
-                              value: selectedSegmentPhotoAnimationDurationSeconds,
-                              voiceoverDurationSeconds: segmentSeedanceVoiceoverDurationSeconds,
-                            })
-                          : null}
                         <button
                           className="studio-segment-editor__prompt-action"
                           type="button"
