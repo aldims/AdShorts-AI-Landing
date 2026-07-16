@@ -20032,21 +20032,12 @@ export function WorkspacePage({
         if (isWorkspaceSegmentGenerationJobFailedStatus(latestStatus)) {
           removeStoredWorkspaceSegmentInfographicJob(session.email, safeJobId);
           const rawError = String(payload.data.error ?? "").trim();
-          const isContentValidationFailure =
-            rawError.includes("Generated infographic did not pass content validation") ||
-            rawError.includes("Infographic validation failed after the technical retry");
           throw new Error(
-            isContentValidationFailure
-              ? workspaceText(
-                  locale,
-                  "Инфографика не прошла проверку качества. 2 кредита возвращены — попробуйте ещё раз.",
-                  "The infographic did not pass quality checks. 2 credits were refunded — please try again.",
-                )
-              : rawError || workspaceText(
-                  locale,
-                  "Не удалось создать инфографику. 2 кредита возвращены.",
-                  "Failed to create the infographic. 2 credits were refunded.",
-                ),
+            rawError || workspaceText(
+              locale,
+              "Не удалось создать инфографику. 2 кредита возвращены.",
+              "Failed to create the infographic. 2 credits were refunded.",
+            ),
           );
         }
         if (isWorkspaceSegmentGenerationJobDoneStatus(latestStatus)) {
