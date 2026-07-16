@@ -23,7 +23,6 @@ const renderPanel = (overrides: Partial<Parameters<typeof WorkspaceSegmentVisual
   render(
     <WorkspaceSegmentVisualReferencesPanel
       canRenderModal
-      characterPickerIconUrl="/character.png"
       isModalOpen={false}
       isSceneModalOpen={false}
       locale="ru"
@@ -47,12 +46,14 @@ const renderPanel = (overrides: Partial<Parameters<typeof WorkspaceSegmentVisual
 
 describe("WorkspaceSegmentVisualReferencesPanel", () => {
   it("places the scene picker next to Characters and shows the selected scene chip", () => {
-    renderPanel();
+    const { container } = renderPanel();
 
     expect(screen.getByRole("button", { name: "Выбрать персонажей" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Использовать сцену как референс" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Изменить референс Сцена 1" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Убрать сцену-референс" })).toBeTruthy();
+    expect(container.querySelectorAll(".studio-segment-references__compact-tool-icon")).toHaveLength(2);
+    expect(container.querySelector(".studio-segment-references__compact-icon")).toBeNull();
   });
 
   it("renders separate character and scene summaries in the generation modal", () => {

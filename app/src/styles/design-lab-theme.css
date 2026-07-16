@@ -7299,7 +7299,7 @@ textarea {
     rgba(8, 14, 24, 0.78);
 }
 
-.studio-segment-references__compact-scene-icon {
+.studio-segment-references__compact-tool-icon {
   display: inline-grid;
   flex: 0 0 auto;
   width: 30px;
@@ -7319,18 +7319,6 @@ textarea {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   min-width: 0;
-}
-
-.studio-segment-references__compact-icon {
-  display: block;
-  flex: 0 0 auto;
-  width: 34px;
-  height: 34px;
-  object-fit: contain;
-  object-position: center;
-  pointer-events: none;
-  user-select: none;
-  filter: drop-shadow(0 7px 12px rgba(0, 0, 0, 0.35));
 }
 
 .studio-segment-references__mention-icons {

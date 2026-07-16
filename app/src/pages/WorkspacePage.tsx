@@ -555,7 +555,6 @@ import {
 } from "../features/workspace/workspace-segment-visual-ui";
 import { renderSegmentEditorPromptToolButtonContent } from "../features/workspace/workspace-segment-prompt-tool-ui";
 import {
-  characterPickerIconUrl,
   workspaceText,
   STUDIO_GENERATION_UNAVAILABLE_ERROR_CODE,
   getStudioGenerationUnavailableMessage,
@@ -35058,7 +35057,6 @@ export function WorkspacePage({
   const renderSegmentVisualReferencesPanel = (variant: "editor" | "modal" = "editor") => (
     <WorkspaceSegmentVisualReferencesPanel
       canRenderModal={!isSegmentAiPhotoModalOpen || variant === "modal"}
-      characterPickerIconUrl={characterPickerIconUrl}
       isModalOpen={isSegmentReferencesModalOpen}
       isSceneModalOpen={isSegmentSceneReferencesModalOpen}
       isScenePickerDisabled={typeof segmentVisualReferenceTargetIndex !== "number"}

@@ -220,7 +220,6 @@ export function WorkspaceReferenceOptionCard({
 
 type WorkspaceSegmentVisualReferencesPanelProps = {
   canRenderModal: boolean;
-  characterPickerIconUrl: string;
   isModalOpen: boolean;
   isSceneModalOpen: boolean;
   isScenePickerDisabled?: boolean;
@@ -245,7 +244,6 @@ type WorkspaceSegmentVisualReferencesPanelProps = {
 
 export function WorkspaceSegmentVisualReferencesPanel({
   canRenderModal,
-  characterPickerIconUrl,
   isModalOpen,
   isSceneModalOpen,
   isScenePickerDisabled,
@@ -323,16 +321,23 @@ export function WorkspaceSegmentVisualReferencesPanel({
             title={workspaceText(locale, "Выбрать персонажей", "Choose characters")}
             onClick={onOpen}
           >
-            <img
-              className="studio-segment-references__compact-icon"
-              src={characterPickerIconUrl}
-              alt=""
-              width="34"
-              height="34"
-              decoding="async"
-              draggable={false}
-              aria-hidden="true"
-            />
+            <span className="studio-segment-references__compact-tool-icon" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <circle cx="9" cy="8.5" r="3" stroke="currentColor" strokeWidth="1.7" />
+                <path
+                  d="M3.8 18.5c.45-3.3 2.25-5.1 5.2-5.1s4.75 1.8 5.2 5.1"
+                  stroke="currentColor"
+                  strokeWidth="1.7"
+                  strokeLinecap="round"
+                />
+                <path
+                  d="M14.6 6.2a2.8 2.8 0 0 1 0 5.2M15.6 13.8c2.55.45 4.05 2.05 4.4 4.7"
+                  stroke="currentColor"
+                  strokeWidth="1.7"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </span>
             <span>{workspaceText(locale, "Персонажи", "Characters")}</span>
           </button>
           {showScenePicker ? (
@@ -346,7 +351,7 @@ export function WorkspaceSegmentVisualReferencesPanel({
               disabled={isScenePickerDisabled}
               onClick={onOpenScene}
             >
-              <span className="studio-segment-references__compact-scene-icon" aria-hidden="true">
+              <span className="studio-segment-references__compact-tool-icon" aria-hidden="true">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
                   <rect x="4" y="5" width="16" height="14" rx="3" stroke="currentColor" strokeWidth="1.7" />
                   <path d="m7.5 16 3.2-3.5 2.5 2.4 2.2-2.1 2.9 3.2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />

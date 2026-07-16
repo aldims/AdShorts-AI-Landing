@@ -37,8 +37,6 @@ import type {
   WorkspaceSegmentTimelineHistoryKind,
 } from "./workspace-types";
 
-export const characterPickerIconUrl = "/character.png";
-
 export type WorkspaceTab = "overview" | "studio" | "generations" | "billing" | "settings";
 export type WorkspaceMediaLibraryFilter =
   | "all"
