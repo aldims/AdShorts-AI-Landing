@@ -38368,7 +38368,7 @@ export function WorkspacePage({
                           <path d="m12 3 1.7 4.3L18 9l-4.3 1.7L12 15l-1.7-4.3L6 9l4.3-1.7L12 3Z" />
                           <path d="m18.5 14 .9 2.2 2.1.8-2.1.9-.9 2.1-.8-2.1-2.2-.9 2.2-.8.8-2.2Z" />
                         </svg>
-                        {workspaceText(locale, "Создать готовый Shorts", "Create a finished Short")}
+                        {workspaceText(locale, "Создать из идеи", "Create a finished Short")}
                       </button>
                     </article>
 
@@ -38463,7 +38463,7 @@ export function WorkspacePage({
                           <rect x="4" y="5" width="16" height="14" rx="3" />
                           <path d="M9 5v14M15 5v14" />
                         </svg>
-                        {workspaceText(locale, "Создать с нуля по сценам", "Create from scratch by scenes")}
+                        {workspaceText(locale, "Создать по сценам", "Create from scratch by scenes")}
                       </button>
                     </article>
                   </div>
