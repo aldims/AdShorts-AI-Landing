@@ -196,17 +196,6 @@ export const WorkspaceSegmentInfographicOverlay = ({
     ? { aspectRatio: `${infographic.intrinsicWidth} / ${infographic.intrinsicHeight}` }
     : undefined;
   const isEditing = editable && isSelected;
-  const defaultTransform = clampWorkspaceSegmentInfographicTransform(
-    null,
-    infographic.intrinsicWidth,
-    infographic.intrinsicHeight,
-  );
-  const isDefaultTransform = (
-    transientTransform.centerX === defaultTransform.centerX &&
-    transientTransform.centerY === defaultTransform.centerY &&
-    transientTransform.width === defaultTransform.width
-  );
-
   return (
     <div
       ref={rootRef}
@@ -327,9 +316,9 @@ export const WorkspaceSegmentInfographicOverlay = ({
             <button
               className="studio-segment-infographic__reset"
               type="button"
-              aria-label="Сбросить положение и размер инфографики"
-              title="Сбросить положение и размер"
-              disabled={isDefaultTransform}
+              aria-label="Удалить инфографику"
+              title="Удалить инфографику"
+              disabled={!onDelete}
               onPointerDown={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
@@ -337,14 +326,7 @@ export const WorkspaceSegmentInfographicOverlay = ({
               onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
-                if (isDefaultTransform) {
-                  return;
-                }
-                pendingTransformRef.current = null;
-                setTransientTransform(defaultTransform);
-                onInteractionStart?.();
-                onTransformPreview?.(defaultTransform);
-                onTransformCommit?.(defaultTransform);
+                onDelete?.();
               }}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
