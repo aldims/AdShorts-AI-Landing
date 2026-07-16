@@ -263,6 +263,7 @@ export type WorkspaceSegmentEditorDraftSegment = WorkspaceSegmentEditorSegment &
 };
 
 export type WorkspaceSegmentEditorDraftSession = Omit<WorkspaceSegmentEditorSession, "segments"> & {
+  clientUpdatedAt?: number;
   draftId?: string;
   segments: WorkspaceSegmentEditorDraftSegment[];
 };

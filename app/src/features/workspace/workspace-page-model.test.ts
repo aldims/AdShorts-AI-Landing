@@ -296,6 +296,48 @@ describe("studio creation mode switching", () => {
     ).toBe("current");
   });
 
+  it("opens a newer generated video instead of an older retained scenes draft", () => {
+    expect(
+      resolveWorkspaceScenesModeSwitchTarget({
+        hasDisplayedGeneratedProject: true,
+        hasRetainedScenesDraft: true,
+        isSegmentEditorActive: false,
+        latestProjectId: 4202,
+        latestProjectUpdatedAt: "2026-07-17T12:05:00.000Z",
+        retainedDraftProjectId: 4178,
+        retainedDraftUpdatedAt: Date.parse("2026-07-17T12:00:00.000Z"),
+      }),
+    ).toBe("project");
+  });
+
+  it("restores newer scene refinements instead of an older generated video", () => {
+    expect(
+      resolveWorkspaceScenesModeSwitchTarget({
+        hasDisplayedGeneratedProject: true,
+        hasRetainedScenesDraft: true,
+        isSegmentEditorActive: false,
+        latestProjectId: 4202,
+        latestProjectUpdatedAt: "2026-07-17T12:00:00.000Z",
+        retainedDraftProjectId: 4178,
+        retainedDraftUpdatedAt: Date.parse("2026-07-17T12:05:00.000Z"),
+      }),
+    ).toBe("current");
+  });
+
+  it("keeps retained scene settings when they belong to the latest video", () => {
+    expect(
+      resolveWorkspaceScenesModeSwitchTarget({
+        hasDisplayedGeneratedProject: true,
+        hasRetainedScenesDraft: true,
+        isSegmentEditorActive: false,
+        latestProjectId: 4202,
+        latestProjectUpdatedAt: "2026-07-17T12:05:00.000Z",
+        retainedDraftProjectId: 4202,
+        retainedDraftUpdatedAt: null,
+      }),
+    ).toBe("current");
+  });
+
   it("creates a fresh scenes project when Idea mode has no editable project", () => {
     expect(
       resolveWorkspaceScenesModeSwitchTarget({

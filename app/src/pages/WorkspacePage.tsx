@@ -1722,6 +1722,17 @@ const areSegmentEditorDraftSessionsEqual = (
   return JSON.stringify(left) === JSON.stringify(right);
 };
 
+const markWorkspaceSegmentEditorDraftModified = (
+  sourceDraft: WorkspaceSegmentEditorDraftSession,
+  nextDraft: WorkspaceSegmentEditorDraftSession,
+) =>
+  areSegmentEditorDraftSessionsEqual(sourceDraft, nextDraft)
+    ? nextDraft
+    : {
+        ...nextDraft,
+        clientUpdatedAt: Date.now(),
+      };
+
 const areStoredSegmentEditorDraftListsEqual = (
   left: WorkspaceSegmentEditorDraftSession[],
   right: WorkspaceSegmentEditorDraftSession[],
@@ -10094,14 +10105,10 @@ export function WorkspacePage({
     markSegmentEditorExplicitStructureChange(segmentEditorDraft.projectId);
     resetSegmentEditorPreviewPlaybackState();
     setSegmentEditorVideoError(null);
-    setSegmentEditorDraft((currentDraft) =>
-      currentDraft
-        ? rebuildWorkspaceSegmentEditorDraftSessionTimeline({
-            ...currentDraft,
-            segments: moveArrayItemToInsertIndex(currentDraft.segments, fromIndex, insertIndex),
-          })
-        : currentDraft,
-    );
+    updateSegmentEditorDraft((currentDraft) => ({
+      ...currentDraft,
+      segments: moveArrayItemToInsertIndex(currentDraft.segments, fromIndex, insertIndex),
+    }));
     syncSegmentEditorRouteForArrayIndex(
       { projectId: segmentEditorDraft.projectId, segments: nextSegments },
       nextActiveSegmentIndex >= 0 ? nextActiveSegmentIndex : 0,
@@ -11092,6 +11099,24 @@ export function WorkspacePage({
     }
   };
 
+  const touchCurrentSegmentEditorDraft = () => {
+    const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+    if (!currentDraft) {
+      return;
+    }
+
+    const nextDraft = {
+      ...currentDraft,
+      clientUpdatedAt: Date.now(),
+    };
+    segmentEditorDraftRef.current = nextDraft;
+    setSegmentEditorDraft((draft) =>
+      draft && draft.draftId === currentDraft.draftId && draft.projectId === currentDraft.projectId
+        ? nextDraft
+        : draft,
+    );
+  };
+
   const handleRemoveBrandLogo = () => {
     setSelectedBrandLogo(null);
     setBrandSelectionError(null);
@@ -11152,6 +11177,7 @@ export function WorkspacePage({
         baseline: baselineState,
       });
     }
+    touchCurrentSegmentEditorDraft();
     setBrandSelectionError(null);
     setSegmentEditorVideoError(null);
     showStudioToast(
@@ -11178,6 +11204,7 @@ export function WorkspacePage({
         baseline: baselineState,
       });
     }
+    touchCurrentSegmentEditorDraft();
     setBrandSelectionError(null);
     setSegmentEditorVideoError(null);
   };
@@ -12364,15 +12391,38 @@ export function WorkspacePage({
 
     suppressScratchSegmentEditorRouteOpenRef.current = false;
     const currentScenesDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+    const retainedScenesDraftState = resolveWorkspaceRetainedScenesDraftState(
+      currentScenesDraft,
+      activeSegmentIndex,
+      detachedSegmentEditorDraftRef.current,
+    );
+    const retainedScenesDraft = retainedScenesDraftState?.draft ?? null;
     const target = resolveWorkspaceScenesModeSwitchTarget({
       hasDisplayedGeneratedProject: Boolean(studioInlinePreview?.video.adId),
-      hasRetainedScenesDraft: Boolean(currentScenesDraft),
+      hasRetainedScenesDraft: Boolean(retainedScenesDraft),
       isSegmentEditorActive: createMode === "segment-editor",
+      latestProjectId: studioInlinePreview?.video.adId,
+      latestProjectUpdatedAt: studioInlinePreview?.video.generatedAt,
+      retainedDraftProjectId: retainedScenesDraft?.projectId,
+      retainedDraftUpdatedAt: retainedScenesDraft?.clientUpdatedAt,
     });
 
     rememberStudioCreateMode("segment-editor");
     if (target === "current") {
-      if (createMode !== "segment-editor") {
+      if (!currentScenesDraft && retainedScenesDraftState) {
+        const restoredArrayIndex = Math.max(
+          0,
+          Math.min(
+            retainedScenesDraftState.activeSegmentIndex,
+            Math.max(0, retainedScenesDraftState.draft.segments.length - 1),
+          ),
+        );
+        openSegmentEditorWithDraft(retainedScenesDraftState.draft, {
+          initialSegmentIndex: restoredArrayIndex,
+          initialSegmentMode: "array",
+        });
+        syncSegmentEditorRouteForArrayIndex(retainedScenesDraftState.draft, restoredArrayIndex, { replace: true });
+      } else if (createMode !== "segment-editor") {
         void handleStudioCreateModeSwitch("segment-editor");
       }
       return;
@@ -12476,7 +12526,17 @@ export function WorkspacePage({
         activeSegmentIndex,
         detachedSegmentEditorDraftRef.current,
       );
-      if (retainedScenesDraftState) {
+      const retainedScenesDraft = retainedScenesDraftState?.draft ?? null;
+      const target = resolveWorkspaceScenesModeSwitchTarget({
+        hasDisplayedGeneratedProject: Boolean(studioInlinePreview?.video.adId),
+        hasRetainedScenesDraft: Boolean(retainedScenesDraft),
+        isSegmentEditorActive: createMode === "segment-editor",
+        latestProjectId: studioInlinePreview?.video.adId,
+        latestProjectUpdatedAt: studioInlinePreview?.video.generatedAt,
+        retainedDraftProjectId: retainedScenesDraft?.projectId,
+        retainedDraftUpdatedAt: retainedScenesDraft?.clientUpdatedAt,
+      });
+      if (target === "current" && retainedScenesDraftState) {
         const retainedScenesDraft = retainedScenesDraftState.draft;
         const restoredArrayIndex = Math.max(
           0,
@@ -12495,6 +12555,12 @@ export function WorkspacePage({
           });
         }
         syncSegmentEditorRouteForArrayIndex(retainedScenesDraft, restoredArrayIndex, { replace: true });
+        return;
+      }
+
+      if (target === "project") {
+        setStudioView("create");
+        void handleOpenSegmentEditor();
         return;
       }
 
@@ -12980,7 +13046,10 @@ export function WorkspacePage({
     }
 
     const rebuiltDraft = rebuildWorkspaceSegmentEditorDraftSessionTimeline(updater(sourceDraft), options);
-    const nextDraft = restoreProjectTtsForCurrentSegmentEditorDraft(rebuiltDraft);
+    const nextDraft = markWorkspaceSegmentEditorDraftModified(
+      sourceDraft,
+      restoreProjectTtsForCurrentSegmentEditorDraft(rebuiltDraft),
+    );
     // Keep the ref ahead of React state: navigation can stash or reopen the editor
     // before a batched state update has rendered.
     segmentEditorDraftRef.current = nextDraft;
@@ -13054,7 +13123,10 @@ export function WorkspacePage({
       return { draft: null, status: "draft-unavailable" };
     }
 
-    const nextDraft = restoreProjectTtsForCurrentSegmentEditorDraft(appliedResult.draft);
+    const nextDraft = markWorkspaceSegmentEditorDraftModified(
+      sourceDraft,
+      restoreProjectTtsForCurrentSegmentEditorDraft(appliedResult.draft),
+    );
     if (matchesJobDraft(activeDraft)) {
       segmentEditorDraftRef.current = nextDraft;
       setSegmentEditorDraft((currentDraft) =>
@@ -13304,7 +13376,7 @@ export function WorkspacePage({
       reservedSegmentIndexes: segmentEditorReservedSegmentIndexes,
       sourceSegment: currentDraft.segments[currentDraft.segments.length - 1] ?? null,
     });
-    const nextDraft = rebuildWorkspaceSegmentEditorDraftSessionTimeline({
+    const nextDraft = markWorkspaceSegmentEditorDraftModified(currentDraft, rebuildWorkspaceSegmentEditorDraftSessionTimeline({
       ...currentDraft,
       segments: [
         ...currentDraft.segments,
@@ -13315,7 +13387,7 @@ export function WorkspacePage({
             selectedLanguage,
         ),
       ],
-    });
+    }));
     segmentEditorDraftRef.current = nextDraft;
     setSegmentEditorDraft(nextDraft);
     syncSegmentEditorRouteForArrayIndex(nextDraft, insertAt);
@@ -14067,20 +14139,16 @@ export function WorkspacePage({
     ) {
       closeSegmentAiPhotoModal();
     }
-    setSegmentEditorDraft((currentDraft) =>
-      currentDraft
-        ? rebuildWorkspaceSegmentEditorDraftSessionTimeline({
-            ...currentDraft,
-            segments:
-              currentDraft.segments.length !== baselineSession.segments.length
-                ? cloneWorkspaceSegmentEditorDraftSession(baselineSession).segments
-                : reorderWorkspaceSegmentEditorSegmentsByIndex(
-                    currentDraft.segments,
-                    baselineSession.segments.map((segment) => segment.index),
-                  ),
-          })
-        : currentDraft,
-    );
+    updateSegmentEditorDraft((currentDraft) => ({
+      ...currentDraft,
+      segments:
+        currentDraft.segments.length !== baselineSession.segments.length
+          ? cloneWorkspaceSegmentEditorDraftSession(baselineSession).segments
+          : reorderWorkspaceSegmentEditorSegmentsByIndex(
+              currentDraft.segments,
+              baselineSession.segments.map((segment) => segment.index),
+            ),
+    }));
     syncSegmentEditorRouteForArrayIndex(
       { projectId: segmentEditorDraft.projectId, segments: nextSegments },
       nextActiveSegmentIndex >= 0 ? nextActiveSegmentIndex : 0,

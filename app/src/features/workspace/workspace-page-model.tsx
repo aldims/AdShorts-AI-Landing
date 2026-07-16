@@ -1465,8 +1465,45 @@ export const resolveWorkspaceScenesModeSwitchTarget = (options: {
   hasDisplayedGeneratedProject: boolean;
   hasRetainedScenesDraft?: boolean;
   isSegmentEditorActive: boolean;
+  latestProjectId?: number | null;
+  latestProjectUpdatedAt?: number | string | null;
+  retainedDraftProjectId?: number | null;
+  retainedDraftUpdatedAt?: number | string | null;
 }): WorkspaceScenesModeSwitchTarget => {
   if (options.isSegmentEditorActive || options.hasRetainedScenesDraft) {
+    if (!options.isSegmentEditorActive && options.hasDisplayedGeneratedProject) {
+      const latestProjectId = Number(options.latestProjectId);
+      const retainedDraftProjectId = Number(options.retainedDraftProjectId);
+      if (
+        Number.isInteger(latestProjectId) &&
+        latestProjectId > 0 &&
+        Number.isInteger(retainedDraftProjectId) &&
+        retainedDraftProjectId > 0 &&
+        latestProjectId === retainedDraftProjectId
+      ) {
+        return "current";
+      }
+
+      const normalizeTimestamp = (value: number | string | null | undefined) => {
+        if (typeof value === "number") {
+          return Number.isFinite(value) && value > 0 ? value : null;
+        }
+        const parsedValue = Date.parse(String(value ?? ""));
+        return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : null;
+      };
+      const retainedDraftUpdatedAt = normalizeTimestamp(options.retainedDraftUpdatedAt);
+      const latestProjectUpdatedAt = normalizeTimestamp(options.latestProjectUpdatedAt);
+      if (latestProjectUpdatedAt !== null && retainedDraftUpdatedAt === null) {
+        return "project";
+      }
+      if (
+        latestProjectUpdatedAt !== null &&
+        retainedDraftUpdatedAt !== null &&
+        latestProjectUpdatedAt > retainedDraftUpdatedAt
+      ) {
+        return "project";
+      }
+    }
     return "current";
   }
   if (options.hasDisplayedGeneratedProject) {

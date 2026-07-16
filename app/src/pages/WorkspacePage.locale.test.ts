@@ -1516,6 +1516,7 @@ describe("WorkspacePage segment editor draft persistence", () => {
     };
     const draftSession = {
       ...createDraftSession(draftSegment),
+      clientUpdatedAt: Date.parse("2026-07-17T12:05:00.000Z"),
       projectId,
       segments: [draftSegment],
     };
@@ -1534,7 +1535,9 @@ describe("WorkspacePage segment editor draft persistence", () => {
           manualDurationSeconds: 3.6,
         }),
       );
-      expect(readStoredWorkspaceSegmentEditorDraft(email.toLowerCase(), projectId)?.segments[0]).toEqual(
+      const restoredDraft = readStoredWorkspaceSegmentEditorDraft(email.toLowerCase(), projectId);
+      expect(restoredDraft?.clientUpdatedAt).toBe(draftSession.clientUpdatedAt);
+      expect(restoredDraft?.segments[0]).toEqual(
         expect.objectContaining({
           duration: 4,
           durationMode: "manual",

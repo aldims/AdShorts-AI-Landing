@@ -777,13 +777,14 @@ const normalizeStoredWorkspaceSegmentLegacyEstimatedDuration = (
 export const normalizeStoredWorkspaceSegmentEditorDraftSession = (
   session: WorkspaceSegmentEditorDraftSession,
 ): WorkspaceSegmentEditorDraftSession => {
+  const clientUpdatedAt = Number(session.clientUpdatedAt);
   const fallbackLanguage = getWorkspaceSegmentEditorSessionLanguage(session);
   const clonedSession = ensureWorkspaceSegmentEditorDraftId(
     sanitizeWorkspaceSegmentEditorCustomMusicState(
       cloneWorkspaceSegmentEditorDraftSession(session),
     ),
   );
-  return normalizeLegacyWorkspaceSegmentEditorDraftSession(rebuildWorkspaceSegmentEditorDraftSessionTimeline({
+  const normalizedSession = normalizeLegacyWorkspaceSegmentEditorDraftSession(rebuildWorkspaceSegmentEditorDraftSessionTimeline({
     ...clonedSession,
     segments: clonedSession.segments.map((segment) =>
       normalizeStoredWorkspaceSegmentLegacyEstimatedDuration({
@@ -798,6 +799,11 @@ export const normalizeStoredWorkspaceSegmentEditorDraftSession = (
       }),
     ),
   }));
+
+  return {
+    ...normalizedSession,
+    clientUpdatedAt: Number.isFinite(clientUpdatedAt) && clientUpdatedAt > 0 ? clientUpdatedAt : undefined,
+  };
 };
 
 const isStoredWorkspaceSegmentAiPhotoJob = (value: unknown): value is StoredWorkspaceSegmentAiPhotoJob => {
