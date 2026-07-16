@@ -32187,10 +32187,6 @@ export function WorkspacePage({
       subtitleMenuType={segmentTimelineSubtitleMenuType}
     />
   );
-  const activeSegmentDisplayNumber =
-    segmentEditorDraft && activeSegment
-      ? getWorkspaceSegmentEditorDisplayNumber(segmentEditorDraft.segments, activeSegment.index)
-      : activeSegmentIndex + 1;
   const getSegmentTimelineDisplayRange = (
     segment: WorkspaceSegmentEditorDraftSegment,
     segmentArrayIndex?: number | null,
@@ -32216,16 +32212,6 @@ export function WorkspacePage({
     const range = getSegmentTimelineDisplayRange(segment, segmentArrayIndex);
     return getWorkspaceSegmentEditorVisibleTimelineDisplayRange(segment, range);
   };
-  const activeSegmentTimeRange = activeSegment
-    ? getSegmentTimelineVisibleDisplayRange(activeSegment, activeSegmentIndex)
-    : null;
-  const activeSegmentTimeRangeLabel = activeSegment
-    ? formatWorkspaceSegmentEditorSegmentTimeRange(
-        activeSegmentTimeRange?.startTime ?? 0,
-        activeSegmentTimeRange?.endTime ?? 0,
-        { isFirstSegment: activeSegmentIndex === 0 },
-      )
-    : "";
   const segmentEditorFullPreviewDuration = getSegmentEditorFullPreviewDurationSeconds();
   const segmentEditorFullPreviewSegmentsForRender = getSegmentEditorFullPreviewSegments();
   const segmentEditorFullPreviewResolvedSegmentForRender = resolveWorkspaceSegmentEditorFullPreviewSegment(
@@ -35793,43 +35779,6 @@ export function WorkspacePage({
         <div className="studio-canvas-prompt__editor-layout">
           <div className="studio-canvas-prompt__editor-pane">
             <div className="studio-segment-editor__prompt-topbar" aria-label={workspaceText(locale, "Режим панели", "Panel mode")}>
-              <div className="studio-segment-editor__prompt-heading">
-                <div className="studio-segment-editor__prompt-heading-title">
-                  <span className="studio-segment-editor__prompt-heading-kicker">
-                    {workspaceText(locale, "Редактор визуала", "Visual editor")}
-                  </span>
-                  <span className="studio-segment-editor__prompt-heading-line">
-                    <strong>{workspaceText(locale, `Сцена ${activeSegmentDisplayNumber}`, `Scene ${activeSegmentDisplayNumber}`)}</strong>
-                    {activeSegmentTimeRangeLabel ? (
-                      <span className="studio-segment-editor__prompt-heading-time">{activeSegmentTimeRangeLabel}</span>
-                    ) : null}
-                  </span>
-                </div>
-                <div className="studio-segment-editor__scene-nav" aria-label={workspaceText(locale, "Навигация по сценам", "Scene navigation")}>
-                  <button
-                    className="studio-segment-editor__scene-nav-button"
-                    type="button"
-                    aria-label={workspaceText(locale, "Предыдущая сцена", "Previous scene")}
-                    disabled={!segmentEditorCarouselNavigation.canNavigatePrevious}
-                    onClick={() => activateSegmentEditorSegmentByArrayIndex(segmentEditorCarouselActiveIndexForRender - 1)}
-                  >
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                      <path d="m15 6-6 6 6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </button>
-                  <button
-                    className="studio-segment-editor__scene-nav-button"
-                    type="button"
-                    aria-label={workspaceText(locale, "Следующая сцена", "Next scene")}
-                    disabled={!segmentEditorCarouselNavigation.canNavigateNext}
-                    onClick={() => activateSegmentEditorSegmentByArrayIndex(segmentEditorCarouselActiveIndexForRender + 1)}
-                  >
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                      <path d="m9 6 6 6-6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
               <div className="studio-segment-editor__prompt-tool-block studio-segment-editor__prompt-tool-block--create">
                 <span className="studio-segment-editor__prompt-section-label">
                   <strong>{workspaceText(locale, "Создать", "Create")}</strong>

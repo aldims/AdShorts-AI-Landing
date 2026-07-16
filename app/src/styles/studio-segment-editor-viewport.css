@@ -472,66 +472,6 @@
     gap: 8px !important;
   }
 
-  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-heading {
-    display: grid !important;
-    grid-template-columns: minmax(0, 1fr) auto !important;
-    align-items: center !important;
-    min-height: 42px !important;
-    gap: 8px !important;
-  }
-
-  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-heading-title {
-    display: grid !important;
-    grid-template-columns: minmax(0, 1fr) !important;
-    grid-template-rows: auto auto !important;
-    align-items: center !important;
-    column-gap: 6px !important;
-    row-gap: 2px !important;
-  }
-
-  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-heading-kicker {
-    grid-column: 1 !important;
-    grid-row: 1 !important;
-    font-size: 0.55rem !important;
-  }
-
-  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-heading-line {
-    grid-column: 1 !important;
-    grid-row: 2 !important;
-    gap: 7px !important;
-  }
-
-  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-heading-line strong {
-    overflow: hidden !important;
-    font-size: 0.96rem !important;
-    line-height: 1.08 !important;
-    text-overflow: ellipsis !important;
-    white-space: nowrap !important;
-  }
-
-  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-heading-time {
-    min-height: 18px !important;
-    padding-inline: 6px !important;
-    font-size: 0.56rem !important;
-  }
-
-  #app .studio-canvas-main.is-segment-editor
-    .studio-segment-editor__prompt-heading
-    .studio-segment-editor__scene-nav {
-    align-self: center !important;
-    gap: 6px !important;
-  }
-
-  #app .studio-canvas-main.is-segment-editor
-    .studio-segment-editor__prompt-heading
-    .studio-segment-editor__scene-nav-button {
-    width: 36px !important;
-    min-width: 36px !important;
-    height: 36px !important;
-    min-height: 36px !important;
-    border-radius: 11px !important;
-  }
-
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-block {
     gap: 5px !important;
   }

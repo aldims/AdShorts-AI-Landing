@@ -42870,7 +42870,6 @@ html, body {
   white-space: nowrap;
 }
 
-.studio-canvas-main.is-segment-editor .studio-segment-editor__scene-nav,
 .studio-canvas-main.is-segment-editor .studio-segment-editor__scene-status-list {
   display: none;
 }
@@ -46492,106 +46491,6 @@ html, body {
   gap: 12px !important;
 }
 
-.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-heading {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: space-between !important;
-  gap: 14px !important;
-  min-height: 46px !important;
-  padding: 4px 4px 5px !important;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.12) !important;
-}
-
-.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-heading-title {
-  display: grid !important;
-  gap: 3px !important;
-  min-width: 0 !important;
-}
-
-.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-heading-kicker {
-  color: rgba(167, 139, 250, 0.9) !important;
-  font-size: 0.58rem !important;
-  font-weight: 900 !important;
-  letter-spacing: 0.13em !important;
-  line-height: 1 !important;
-  text-transform: uppercase !important;
-}
-
-.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-heading-line {
-  display: flex !important;
-  align-items: baseline !important;
-  gap: 9px !important;
-  min-width: 0 !important;
-}
-
-.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-heading-line strong {
-  overflow: hidden !important;
-  color: rgba(248, 250, 252, 0.97) !important;
-  font-size: clamp(1rem, 1.28vw, 1.16rem) !important;
-  font-weight: 850 !important;
-  letter-spacing: -0.025em !important;
-  line-height: 1.12 !important;
-  text-overflow: ellipsis !important;
-  white-space: nowrap !important;
-}
-
-.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-heading-time {
-  display: inline-flex !important;
-  align-items: center !important;
-  flex: 0 0 auto !important;
-  min-height: 20px !important;
-  padding: 0 7px !important;
-  border: 1px solid rgba(148, 163, 184, 0.13) !important;
-  border-radius: 999px !important;
-  background: rgba(15, 23, 42, 0.56) !important;
-  color: rgba(148, 163, 184, 0.78) !important;
-  font-size: 0.62rem !important;
-  font-variant-numeric: tabular-nums !important;
-  font-weight: 760 !important;
-  white-space: nowrap !important;
-}
-
-.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-heading-info {
-  display: inline-grid !important;
-  place-items: center !important;
-  flex: 0 0 auto !important;
-  width: 16px !important;
-  height: 16px !important;
-  border: 1px solid rgba(148, 163, 184, 0.45) !important;
-  border-radius: 999px !important;
-  color: rgba(203, 213, 225, 0.86) !important;
-  font-size: 0.62rem !important;
-  font-weight: 900 !important;
-  line-height: 1 !important;
-}
-
-.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-heading .studio-segment-editor__scene-nav {
-  display: inline-flex !important;
-  align-items: center !important;
-  gap: 5px !important;
-  padding: 3px !important;
-  border: 1px solid rgba(148, 163, 184, 0.11) !important;
-  border-radius: 11px !important;
-  background: rgba(7, 12, 23, 0.72) !important;
-}
-
-.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-heading .studio-segment-editor__scene-nav-button {
-  width: 28px !important;
-  height: 28px !important;
-  border-radius: 8px !important;
-  border-color: transparent !important;
-  background: transparent !important;
-  color: rgba(203, 213, 225, 0.78) !important;
-  transition: background 0.16s ease, color 0.16s ease, transform 0.16s ease !important;
-}
-
-.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-heading .studio-segment-editor__scene-nav-button:hover:not(:disabled),
-.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-heading .studio-segment-editor__scene-nav-button:focus-visible {
-  background: rgba(139, 92, 246, 0.16) !important;
-  color: rgba(237, 233, 254, 0.98) !important;
-  transform: translateY(-1px) !important;
-}
-
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-block {
   --studio-visual-tool-accent: 167, 139, 250;
   display: grid !important;
@@ -46984,10 +46883,6 @@ html, body {
   box-shadow: none !important;
 }
 
-.studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-heading {
-  grid-column: 1 / -1 !important;
-}
-
 .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-block--create {
   grid-column: 1 !important;
 }
@@ -47261,19 +47156,6 @@ html, body {
 }
 
 @media (max-width: 640px) {
-  .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-heading {
-    align-items: flex-start !important;
-  }
-
-  .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-heading-title {
-    display: grid !important;
-    gap: 5px !important;
-  }
-
-  .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-heading-title strong {
-    white-space: normal !important;
-  }
-
   .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu {
     grid-template-columns: 1fr !important;
   }
