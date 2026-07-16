@@ -2,7 +2,10 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ensureStudioUploadedAssetIdWithInlineFallback } from "./workspace-upload-helpers";
+import {
+  ensureStudioUploadedAssetIdWithInlineFallback,
+  extractStudioUploadedVideoAudio,
+} from "./workspace-upload-helpers";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -152,5 +155,68 @@ describe("ensureStudioUploadedAssetIdWithInlineFallback", () => {
       "/api/studio/media-upload/abort",
       objectUrl,
     ]);
+  });
+});
+
+describe("extractStudioUploadedVideoAudio", () => {
+  it("returns a durable scene sound asset when the uploaded video contains audio", async () => {
+    const fetchMock = vi.fn(async () => Response.json({
+      data: {
+        asset: {
+          assetId: 981,
+          fileName: "camera-audio.m4a",
+          fileSize: 4096,
+          mimeType: "audio/mp4",
+          remoteUrl: "/api/workspace/media-assets/981/playback",
+        },
+        hasAudio: true,
+      },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(extractStudioUploadedVideoAudio({
+      fileName: "camera.mp4",
+      language: "ru",
+      projectId: 72,
+      segmentIndex: 3,
+      sourceAssetId: 980,
+    })).resolves.toEqual({
+      assetId: 981,
+      fileName: "camera-audio.m4a",
+      fileSize: 4096,
+      mimeType: "audio/mp4",
+      remoteUrl: "/api/workspace/media-assets/981/playback",
+      source: "media-library",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/studio/media-upload/extract-audio",
+      expect.objectContaining({
+        body: JSON.stringify({
+          fileName: "camera.mp4",
+          language: "ru",
+          projectId: 72,
+          segmentIndex: 3,
+          sourceAssetId: 980,
+        }),
+        method: "POST",
+      }),
+    );
+  });
+
+  it("does not create a scene sound asset for a silent video", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({
+      data: {
+        asset: null,
+        hasAudio: false,
+      },
+    })));
+
+    await expect(extractStudioUploadedVideoAudio({
+      fileName: "silent.mp4",
+      language: "en",
+      segmentIndex: 0,
+      sourceAssetId: 982,
+    })).resolves.toBeNull();
   });
 });

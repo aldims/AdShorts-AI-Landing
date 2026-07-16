@@ -161,6 +161,7 @@ import {
   STUDIO_GENERATION_UNAVAILABLE_MESSAGE,
   StudioGenerationUnavailableError,
   WorkspaceCreditLimitError,
+  uploadStudioExtractedSceneSound,
 } from "./studio.js";
 import { normalizeStudioGenerateMultipartSegmentState } from "./studio-generate-multipart.js";
 import { getStudioVoicePreview, StudioVoicePreviewNotFoundError } from "./voice-preview.js";
@@ -221,6 +222,7 @@ import {
   setAdsflowWebDeviceCookie,
 } from "./web-device.js";
 import { verifyVideoProxyToken } from "./video-proxy-token.js";
+import { extractUploadedVideoAudio } from "./uploaded-video-audio.js";
 
 initServerLogging();
 
@@ -3695,6 +3697,77 @@ app.post("/api/studio/media-upload/complete", async (req, res) => {
     console.error("[studio] Failed to complete media upload", error);
     res.status(502).json({
       error: error instanceof Error ? error.message : "Failed to complete media upload.",
+    });
+  }
+});
+
+app.post("/api/studio/media-upload/extract-audio", async (req, res) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+
+  if (!session?.user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const sourceAssetId = normalizeRequestPositiveInteger(req.body?.sourceAssetId ?? req.body?.source_asset_id);
+  const projectId = normalizeRequestPositiveInteger(req.body?.projectId ?? req.body?.project_id);
+  const segmentIndex = normalizeRequestNonNegativeInteger(req.body?.segmentIndex ?? req.body?.segment_index);
+  const language = req.body?.language === "en" ? "en" : "ru";
+  const rawFileName = typeof req.body?.fileName === "string" ? req.body.fileName.trim() : "";
+
+  if (!sourceAssetId || segmentIndex === undefined) {
+    res.status(400).json({ error: "sourceAssetId and segmentIndex are required." });
+    return;
+  }
+
+  try {
+    const externalUserId = await resolvePreferredExternalUserId(session.user);
+    const upstreamUrl = buildAdsflowUrl(`/api/media/${sourceAssetId}/download`, {
+      admin_token: env.adsflowAdminToken,
+      external_user_id: externalUserId,
+    });
+    const sourceAsset = await ensureWorkspaceMediaAssetPlayback({
+      assetId: sourceAssetId,
+      cacheKey: getWorkspaceMediaAssetPlaybackCacheKey({
+        assetId: sourceAssetId,
+        externalUserId,
+        targetUrl: upstreamUrl,
+      }),
+      upstreamUrl,
+    });
+    const extractedAudio = await extractUploadedVideoAudio(sourceAsset.absolutePath);
+    if (!extractedAudio) {
+      res.json({ data: { asset: null, hasAudio: false } });
+      return;
+    }
+
+    const sourceBaseName = basename(rawFileName || `segment-${segmentIndex + 1}-video`)
+      .replace(/\.[^.]+$/u, "")
+      .replace(/[^\p{L}\p{N}._ -]+/gu, "-")
+      .trim()
+      .slice(0, 120) || `segment-${segmentIndex + 1}-video`;
+    const asset = await uploadStudioExtractedSceneSound(session.user, {
+      bytes: extractedAudio.bytes,
+      externalUserId,
+      fileName: `${sourceBaseName}-audio.m4a`,
+      language,
+      mimeType: extractedAudio.mimeType,
+      projectId,
+      segmentIndex,
+    });
+
+    res.json({ data: { asset, hasAudio: true } });
+  } catch (error) {
+    console.error("[studio] Failed to extract uploaded video audio", {
+      error: getServerErrorMessage(error, "Failed to extract uploaded video audio."),
+      projectId: projectId ?? null,
+      segmentIndex,
+      sourceAssetId,
+    });
+    res.status(502).json({
+      error: error instanceof Error ? error.message : "Failed to extract uploaded video audio.",
     });
   }
 });

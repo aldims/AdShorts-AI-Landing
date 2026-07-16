@@ -44,6 +44,72 @@ describe("studio scene sound jobs", () => {
     await Promise.all(testDirectories.splice(0).map((directory) => rm(directory, { force: true, recursive: true })));
   });
 
+  it("uploads extracted video audio as the segment scene sound asset", async () => {
+    const { uploadStudioExtractedSceneSound } = await loadStudioModule();
+    const calls: Array<{ body: Record<string, unknown> | Blob | null; pathname: string }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(String(input));
+        const body = init?.body instanceof Blob
+          ? init.body
+          : init?.body
+            ? JSON.parse(String(init.body)) as Record<string, unknown>
+            : null;
+        calls.push({ body, pathname: url.pathname });
+
+        if (url.pathname === "/api/media/uploads/init") {
+          return jsonResponse({
+            asset: { id: 9401 },
+            upload: {
+              headers: {},
+              method: "PUT",
+              url: "https://storage.example.test/extracted-audio",
+            },
+          });
+        }
+
+        if (url.pathname === "/extracted-audio") {
+          return new Response(null, { status: 200 });
+        }
+
+        if (url.pathname === "/api/media/uploads/complete") {
+          return jsonResponse({ asset: { id: 9401 } });
+        }
+
+        return jsonResponse({ detail: `unexpected ${url.pathname}` }, 500);
+      }),
+    );
+
+    await expect(uploadStudioExtractedSceneSound({ email: "alex@example.test", name: "Alex" }, {
+      bytes: Buffer.from("m4a-audio"),
+      externalUserId: "external-alex",
+      fileName: "camera-audio.m4a",
+      language: "ru",
+      mimeType: "audio/mp4",
+      projectId: 4178,
+      segmentIndex: 2,
+    })).resolves.toEqual({
+      assetId: 9401,
+      fileName: "camera-audio.m4a",
+      fileSize: 9,
+      mimeType: "audio/mp4",
+      remoteUrl: "/api/workspace/media-assets/9401/playback",
+    });
+
+    expect(calls.find((call) => call.pathname === "/api/media/uploads/init")?.body).toEqual(expect.objectContaining({
+      external_user_id: "external-alex",
+      kind: "segment_scene_sound",
+      media_type: "audio",
+      mime_type: "audio/mp4",
+      project_id: 4178,
+      role: "segment_scene_sound",
+      segment_index: 2,
+      size_bytes: 9,
+    }));
+    expect(calls.find((call) => call.pathname === "/extracted-audio")?.body).toBeInstanceOf(Blob);
+  });
+
   it("requires a project id or explicit visual source before contacting AdsFlow", async () => {
     const { createStudioSegmentSceneSoundJob } = await loadStudioModule();
     const fetchMock = vi.fn();

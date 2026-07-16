@@ -169,6 +169,20 @@ type StudioDirectMediaUploadResponse = {
   error?: string;
 };
 
+type StudioExtractedVideoAudioResponse = {
+  data?: {
+    asset?: {
+      assetId?: number | string | null;
+      fileName?: string | null;
+      fileSize?: number | string | null;
+      mimeType?: string | null;
+      remoteUrl?: string | null;
+    } | null;
+    hasAudio?: boolean;
+  } | null;
+  error?: string;
+};
+
 type StudioDirectMediaUploadSession = {
   assetId: number;
   method: string;
@@ -338,6 +352,53 @@ export const completeStudioMediaFileUpload = async (
   }
 
   return getStudioDirectUploadAssetId(completePayload.data) ?? assetId;
+};
+
+export const extractStudioUploadedVideoAudio = async (options: {
+  fileName: string;
+  language: StudioLanguage;
+  projectId?: number | null;
+  segmentIndex: number;
+  sourceAssetId: number;
+}): Promise<StudioCustomVideoFile | null> => {
+  const response = await fetch("/api/studio/media-upload/extract-audio", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      fileName: options.fileName,
+      language: options.language,
+      projectId: options.projectId ?? undefined,
+      segmentIndex: options.segmentIndex,
+      sourceAssetId: options.sourceAssetId,
+    }),
+  });
+  const payload = (await response.json().catch(() => null)) as StudioExtractedVideoAudioResponse | null;
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.error ?? "Не удалось отделить звук от загруженного видео.");
+  }
+
+  if (!payload.data.hasAudio) {
+    return null;
+  }
+
+  const assetId = Number(payload.data.asset?.assetId);
+  if (!Number.isFinite(assetId) || assetId <= 0) {
+    throw new Error("Сервер не вернул аудиофайл загруженного видео.");
+  }
+
+  const normalizedAssetId = Math.trunc(assetId);
+  return {
+    assetId: normalizedAssetId,
+    fileName: String(payload.data.asset?.fileName ?? "").trim() || `${options.fileName}-audio.m4a`,
+    fileSize: Math.max(0, Number(payload.data.asset?.fileSize ?? 0) || 0),
+    mimeType: String(payload.data.asset?.mimeType ?? "").trim() || "audio/mp4",
+    remoteUrl:
+      String(payload.data.asset?.remoteUrl ?? "").trim() ||
+      `/api/workspace/media-assets/${normalizedAssetId}/playback`,
+    source: "media-library",
+  };
 };
 
 const uploadStudioMediaFileToStorage = async (

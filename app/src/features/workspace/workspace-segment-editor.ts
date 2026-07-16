@@ -2677,6 +2677,36 @@ export const buildWorkspaceSegmentSceneSoundPayloadFromAsset = (
   };
 };
 
+export const applyWorkspaceSegmentSceneSoundAsset = <T extends WorkspaceSegmentEditorDraftSegment>(
+  segment: T,
+  asset: StudioCustomVideoFile,
+  options?: {
+    generatedFromPrompt?: string | null;
+    prompt?: string;
+  },
+): T => {
+  const sceneSoundAsset = cloneStudioCustomVideoFile(asset);
+  const sceneSoundAssetId = getPositiveWorkspaceMediaAssetId(sceneSoundAsset?.assetId);
+  const sceneSoundPayload = buildWorkspaceSegmentSceneSoundPayloadFromAsset(sceneSoundAsset, sceneSoundAssetId);
+  const hasGeneratedPromptOverride = Object.prototype.hasOwnProperty.call(options ?? {}, "generatedFromPrompt");
+  const hasPromptOverride = Object.prototype.hasOwnProperty.call(options ?? {}, "prompt");
+
+  return {
+    ...segment,
+    sceneSound: cloneStudioCustomVideoFile(sceneSoundAsset),
+    sceneSoundAsset,
+    sceneSoundAssetId,
+    scene_sound: sceneSoundPayload,
+    scene_sound_asset_id: sceneSoundAssetId ?? sceneSoundPayload?.media_asset_id ?? null,
+    sceneSoundGeneratedFromPrompt: hasGeneratedPromptOverride
+      ? String(options?.generatedFromPrompt ?? "").trim() || null
+      : segment.sceneSoundGeneratedFromPrompt,
+    sceneSoundPrompt: hasPromptOverride ? String(options?.prompt ?? "") : segment.sceneSoundPrompt,
+    sceneSoundPromptInitialized: true,
+    sceneSoundReset: false,
+  } as T;
+};
+
 export const getWorkspaceSegmentSceneSoundStateAssetId = (
   segment: Partial<WorkspaceSegmentEditorDraftSegment> | null | undefined,
 ) =>

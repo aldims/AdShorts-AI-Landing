@@ -51,6 +51,7 @@ import {
   appendStudioFormValue,
   ensureStudioUploadedAssetId,
   ensureStudioUploadedAssetIdWithInlineFallback,
+  extractStudioUploadedVideoAudio,
   extractWorkspaceVideoFrameDataUrl,
   readFileAsDataUrl,
   resolveStudioCustomAssetDataUrl,
@@ -167,6 +168,7 @@ import {
 } from "../features/workspace/workspace-brand-helpers";
 import {
   areWorkspaceSegmentDurationValuesEqual,
+  applyWorkspaceSegmentSceneSoundAsset,
   applyWorkspaceSegmentEditorGlobalVoiceToSegments,
   applyWorkspaceSegmentEditorJobResult,
   applyWorkspaceSegmentEditorSceneVoiceOverride,
@@ -14432,6 +14434,40 @@ export function WorkspacePage({
           },
         };
       });
+
+      if (mimeType.startsWith("video/")) {
+        try {
+          const extractedAudioAsset = await extractStudioUploadedVideoAudio({
+            fileName: file.name,
+            language: selectedLanguage,
+            projectId,
+            segmentIndex: targetSegmentIndex,
+            sourceAssetId: uploadedAssetId,
+          });
+          if (!isCurrentCustomVideoUpload()) {
+            return false;
+          }
+
+          if (extractedAudioAsset) {
+            updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) =>
+              segment.customVideo?.objectUrl === objectUrl
+                ? applyWorkspaceSegmentSceneSoundAsset(segment, extractedAudioAsset, {
+                    generatedFromPrompt: null,
+                    prompt: "",
+                  })
+                : segment,
+            );
+          }
+        } catch (error) {
+          if (isCurrentCustomVideoUpload()) {
+            setSegmentEditorVideoError(workspaceText(
+              locale,
+              `Видео загружено, но не удалось отделить звук: ${error instanceof Error ? error.message : "неизвестная ошибка"}`,
+              `The video was uploaded, but its audio could not be separated: ${error instanceof Error ? error.message : "unknown error"}`,
+            ));
+          }
+        }
+      }
 
       if (!mimeType.startsWith("image/") && canCapturePosterInBrowser(objectUrl)) {
         void captureProjectPosterOnce(objectUrl, {

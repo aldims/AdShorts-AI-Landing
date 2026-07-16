@@ -5851,7 +5851,8 @@ export async function createStudioProjectCharacter(
 const uploadStudioMediaAsset = async (
   user: StudioUser,
   options: {
-    dataUrl: string;
+    bytes?: Buffer;
+    dataUrl?: string;
     externalUserId: string;
     fileName: string;
     kind: string;
@@ -5863,17 +5864,23 @@ const uploadStudioMediaAsset = async (
     segmentIndex?: number | null;
   },
 ): Promise<number> => {
-  const normalizedDataUrl = String(options.dataUrl ?? "").trim();
-  if (!normalizedDataUrl) {
-    throw new Error("Uploaded media data URL is required.");
-  }
-
   const normalizedFileName = String(options.fileName ?? "").trim();
   if (!normalizedFileName) {
     throw new Error("Uploaded media file name is required.");
   }
 
-  const decoded = decodeBinaryDataUrl(normalizedDataUrl);
+  const normalizedDataUrl = String(options.dataUrl ?? "").trim();
+  const sourceBytes = Buffer.isBuffer(options.bytes) ? options.bytes : null;
+  if (!sourceBytes?.length && !normalizedDataUrl) {
+    throw new Error("Uploaded media bytes or data URL are required.");
+  }
+
+  const decoded = sourceBytes
+    ? {
+        bytes: sourceBytes,
+        mimeType: normalizeGenerationText(options.mimeType) || "application/octet-stream",
+      }
+    : decodeBinaryDataUrl(normalizedDataUrl);
   if (!decoded.bytes.length) {
     throw new Error("Uploaded media file is empty.");
   }
@@ -5926,7 +5933,7 @@ const uploadStudioMediaAsset = async (
   }
 
   const uploadResponse = await fetch(uploadUrl, {
-    body: new Blob([decoded.bytes], { type: normalizedMimeType }),
+    body: new Blob([new Uint8Array(decoded.bytes)], { type: normalizedMimeType }),
     headers: uploadHeaders,
     method: normalizeGenerationText(initPayload.upload?.method) || "PUT",
     signal: AbortSignal.timeout(ADSFLOW_MUTATION_TIMEOUT_MS),
@@ -5951,6 +5958,40 @@ const uploadStudioMediaAsset = async (
   });
 
   return assetId;
+};
+
+export const uploadStudioExtractedSceneSound = async (
+  user: StudioUser,
+  options: {
+    bytes: Buffer;
+    externalUserId: string;
+    fileName: string;
+    language: "en" | "ru";
+    mimeType: string;
+    projectId?: number | null;
+    segmentIndex: number;
+  },
+) => {
+  const assetId = await uploadStudioMediaAsset(user, {
+    bytes: options.bytes,
+    externalUserId: options.externalUserId,
+    fileName: options.fileName,
+    kind: "segment_scene_sound",
+    language: options.language,
+    mediaType: "audio",
+    mimeType: options.mimeType,
+    projectId: options.projectId,
+    role: "segment_scene_sound",
+    segmentIndex: options.segmentIndex,
+  });
+
+  return {
+    assetId,
+    fileName: options.fileName,
+    fileSize: options.bytes.length,
+    mimeType: options.mimeType,
+    remoteUrl: `/api/workspace/media-assets/${assetId}/playback`,
+  };
 };
 
 const createDirectWorkspaceReferenceAiPhotoJob = async (

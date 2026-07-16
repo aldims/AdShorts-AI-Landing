@@ -6,6 +6,7 @@ import {
   applyWorkspaceSegmentEditorJobResult,
   applyWorkspaceSegmentEditorGlobalSubtitleSelection,
   applyWorkspaceSegmentPendingInfographicTransforms,
+  applyWorkspaceSegmentSceneSoundAsset,
   applyWorkspaceSegmentEditorGlobalVoiceToSegments,
   applyWorkspaceSegmentEditorSceneVoiceOverride,
   applyWorkspaceSegmentEditorSceneVoiceSelection,
@@ -955,6 +956,44 @@ it("repairs repeated speech words that leaked into the next project voiceover sc
 });
 
 describe("workspace segment editor scene sound preview", () => {
+  it("attaches extracted video audio to every persisted scene sound field", () => {
+    const segment = createProjectVoiceoverSegment({
+      sceneSoundGeneratedFromPrompt: "old generated ambience",
+      sceneSoundPrompt: "old prompt",
+      sceneSoundPromptInitialized: true,
+      sceneSoundReset: true,
+    });
+    const asset = {
+      assetId: 818,
+      fileName: "uploaded-video-audio.m4a",
+      fileSize: 4096,
+      mimeType: "audio/mp4",
+      remoteUrl: "/api/workspace/media-assets/818/playback",
+      source: "media-library" as const,
+    };
+
+    const updated = applyWorkspaceSegmentSceneSoundAsset(segment, asset, {
+      generatedFromPrompt: null,
+      prompt: "",
+    });
+
+    expect(updated).toMatchObject({
+      sceneSound: asset,
+      sceneSoundAsset: asset,
+      sceneSoundAssetId: 818,
+      sceneSoundGeneratedFromPrompt: null,
+      sceneSoundPrompt: "",
+      sceneSoundPromptInitialized: true,
+      sceneSoundReset: false,
+      scene_sound: {
+        file_name: "uploaded-video-audio.m4a",
+        media_asset_id: 818,
+        mime_type: "audio/mp4",
+      },
+      scene_sound_asset_id: 818,
+    });
+  });
+
   it("invalidates a generated scene sound when the scene visual changes and keeps its prompt", () => {
     const segment = createProjectVoiceoverSegment({
       sceneSoundAsset: {
