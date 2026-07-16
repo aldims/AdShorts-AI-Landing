@@ -3462,6 +3462,27 @@ export const isWorkspaceSegmentPersistedForVisualJobBinding = (
   return targetSegment ? hasWorkspaceSegmentPersistedMediaReference(targetSegment) : false;
 };
 
+export const resolveWorkspaceSegmentVisualJobBinding = (
+  currentDraft: Pick<WorkspaceSegmentEditorDraftSession, "projectId" | "segments"> | null | undefined,
+  targetSegmentIndex: number,
+  baselineSession?: Pick<WorkspaceSegmentEditorDraftSession, "projectId" | "segments"> | null,
+): { isPersisted: boolean; projectId?: number; segmentIndex: number } => {
+  const isPersisted = isWorkspaceSegmentPersistedForVisualJobBinding(
+    currentDraft,
+    targetSegmentIndex,
+    baselineSession,
+  );
+
+  return {
+    isPersisted,
+    projectId: isPersisted ? currentDraft?.projectId : undefined,
+    // Generation APIs require a scene index even when the scene has not been
+    // persisted yet. Omitting projectId keeps that local scene unbound from an
+    // existing server-side project segment.
+    segmentIndex: targetSegmentIndex,
+  };
+};
+
 const isWorkspaceSegmentEditorDraftSegmentVisualEmpty = (
   segment: WorkspaceSegmentEditorDraftSegment | null | undefined,
 ) =>

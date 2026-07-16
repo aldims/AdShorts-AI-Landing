@@ -260,7 +260,6 @@ import {
   hasStudioBranding,
   hasWorkspaceSegmentExplicitDraftVisual,
   hasWorkspaceSegmentPersistedMediaReference,
-  isWorkspaceSegmentPersistedForVisualJobBinding,
   isWorkspaceSegmentCachedLanguageTextUsable,
   isWorkspaceSegmentDraftTextEdited,
   isWorkspaceSegmentEditorCleanEmptyDraft,
@@ -310,6 +309,7 @@ import {
   restoreWorkspaceSegmentVoiceTextDraftSessionSnapshot,
   restoreWorkspaceSegmentVoiceTextDraftSnapshot,
   rewriteWorkspaceSegmentProjectProxyUrl,
+  resolveWorkspaceSegmentVisualJobBinding,
   shouldConfirmWorkspaceSegmentEditorSegmentDelete,
   shouldRepairWorkspaceSegmentAutoVisualDurationToVoiceover,
   shouldResetWorkspaceSegmentEditorDraftTrackSettingsForBlankScene,
@@ -14237,27 +14237,15 @@ export function WorkspacePage({
     clearSegmentVisualRun(segmentSceneSoundRunRef, setSegmentEditorGeneratingSceneSoundRunIds, targetSegmentIndex);
   };
 
-  const isSegmentEditorSegmentPersistedForVisualJob = (targetSegmentIndex: number) => {
-    const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
-    const baselineSession = segmentEditorChecklistBaseSession;
-
-    return isWorkspaceSegmentPersistedForVisualJobBinding(currentDraft, targetSegmentIndex, baselineSession);
-  };
-
   const getSegmentEditorVisualJobBinding = (
     targetSegmentIndex: number,
-  ): { isPersisted: boolean; projectId?: number; segmentIndex?: number } => {
+  ): { isPersisted: boolean; projectId?: number; segmentIndex: number } => {
     const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
-    if (!currentDraft) {
-      return { isPersisted: false };
-    }
-
-    const isPersisted = isSegmentEditorSegmentPersistedForVisualJob(targetSegmentIndex);
-    return {
-      isPersisted,
-      projectId: isPersisted ? currentDraft.projectId : undefined,
-      segmentIndex: isPersisted ? targetSegmentIndex : undefined,
-    };
+    return resolveWorkspaceSegmentVisualJobBinding(
+      currentDraft,
+      targetSegmentIndex,
+      segmentEditorChecklistBaseSession,
+    );
   };
 
   const handleSegmentEditorCustomVideoSelect = async (

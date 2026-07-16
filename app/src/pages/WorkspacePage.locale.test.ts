@@ -20,6 +20,7 @@ import {
   hasWorkspaceSegmentEditorUnreflectedLiveGeneratedVoiceover,
   isWorkspaceSegmentVoiceoverPlaybackFresh,
   isWorkspaceSegmentPersistedForVisualJobBinding,
+  resolveWorkspaceSegmentVisualJobBinding,
 } from "../features/workspace/workspace-segment-editor";
 import { resolveStudioSceneVoiceIdOnSettingsOpen } from "../features/workspace/workspace-studio-defaults-helpers";
 import {
@@ -715,6 +716,16 @@ describe("WorkspacePage segment visual job binding", () => {
 
     expect(isWorkspaceSegmentPersistedForVisualJobBinding(currentDraft, 7, baseline)).toBe(false);
     expect(isWorkspaceSegmentPersistedForVisualJobBinding(currentDraft, 0, baseline)).toBe(true);
+    expect(resolveWorkspaceSegmentVisualJobBinding(currentDraft, 7, baseline)).toEqual({
+      isPersisted: false,
+      projectId: undefined,
+      segmentIndex: 7,
+    });
+    expect(resolveWorkspaceSegmentVisualJobBinding(currentDraft, 0, baseline)).toEqual({
+      isPersisted: true,
+      projectId: currentDraft.projectId,
+      segmentIndex: 0,
+    });
   });
 
   it("falls back to media references when no matching baseline is available", () => {
