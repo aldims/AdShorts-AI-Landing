@@ -13452,7 +13452,7 @@ export function WorkspacePage({
     closeSegmentAiPhotoModal({ immediate: true });
     const resetDraft = updateSegmentEditorDraft(() => nextDraft) ?? nextDraft;
     // Reset is an explicit replacement of the working copy. Persist it immediately
-    // so that a mode switch or reopening through "Улучшить" cannot restore an
+    // so that a mode switch or reopening through "Редактировать" cannot restore an
     // earlier detached/local snapshot while React is committing the state update.
     persistSegmentEditorDraftSnapshot(resetDraft);
     if (!isWorkspaceSegmentEditorScratchDraft(resetDraft)) {

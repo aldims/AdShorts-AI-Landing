@@ -3,7 +3,10 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { renderWorkspaceStudioShortsGenerationStatus } from "./workspace-studio-preview-ui";
+import {
+  renderWorkspaceStudioInlinePreviewActions,
+  renderWorkspaceStudioShortsGenerationStatus,
+} from "./workspace-studio-preview-ui";
 
 afterEach(cleanup);
 
@@ -34,5 +37,36 @@ describe("renderWorkspaceStudioShortsGenerationStatus", () => {
     expect(screen.getByText("AI render in progress")).toBeTruthy();
     expect(screen.getByText("Creating your Short")).toBeTruthy();
     expect(screen.getByText("Assembling scenes, voiceover and subtitles")).toBeTruthy();
+  });
+});
+
+describe("renderWorkspaceStudioInlinePreviewActions", () => {
+  const renderActions = (locale: "ru" | "en") =>
+    render(
+      renderWorkspaceStudioInlinePreviewActions({
+        downloadName: "short.mp4",
+        isExpanded: true,
+        isProjectReadyForActions: true,
+        locale,
+        onDismiss: () => undefined,
+        onOpenSegmentEditor: () => undefined,
+        onPublish: () => undefined,
+        playbackUrl: "/short.mp4",
+        projectPreparingTitle: "Preparing",
+      }),
+    );
+
+  it("labels the Russian scene editor action as Edit", () => {
+    renderActions("ru");
+
+    expect(screen.getByRole("button", { name: "Редактировать" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Улучшить" })).toBeNull();
+  });
+
+  it("labels the English scene editor action as Edit", () => {
+    renderActions("en");
+
+    expect(screen.getByRole("button", { name: "Edit" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Improve" })).toBeNull();
   });
 });
