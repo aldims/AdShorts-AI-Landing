@@ -56,6 +56,7 @@ import {
   readFileAsDataUrl,
   resolveStudioCustomAssetDataUrl,
   WORKSPACE_SEGMENT_REFERENCE_CHARACTER_LIMIT,
+  WORKSPACE_SEGMENT_REFERENCE_FRAME_END_OFFSET_SECONDS,
   WORKSPACE_SEGMENT_REFERENCE_FRAME_MIME_TYPE,
 } from "../features/workspace/workspace-upload-helpers";
 import {
@@ -7040,33 +7041,47 @@ export function WorkspacePage({
     let frameAsset: StudioCustomVideoFile;
     try {
       frameAsset = {
-        dataUrl: await extractWorkspaceVideoFrameDataUrl(videoReferenceUrl),
+        dataUrl: await extractWorkspaceVideoFrameDataUrl(
+          videoReferenceUrl,
+          referenceKind === "scene"
+            ? { seekFromEndSeconds: WORKSPACE_SEGMENT_REFERENCE_FRAME_END_OFFSET_SECONDS }
+            : undefined,
+        ),
         fileName: frameFileName,
         fileSize: 0,
         mimeType: WORKSPACE_SEGMENT_REFERENCE_FRAME_MIME_TYPE,
       };
     } catch (error) {
       if (referenceKind === "scene") {
-        throw new Error(
-          workspaceText(
-            locale,
-            "Не удалось подготовить кадр видео для сцены-референса.",
-            "Could not prepare the video frame for the scene reference.",
-          ),
-        );
-      }
+        try {
+          frameAsset = {
+            dataUrl: await extractWorkspaceVideoFrameDataUrl(videoReferenceUrl),
+            fileName: frameFileName,
+            fileSize: 0,
+            mimeType: WORKSPACE_SEGMENT_REFERENCE_FRAME_MIME_TYPE,
+          };
+        } catch {
+          throw new Error(
+            workspaceText(
+              locale,
+              "Не удалось подготовить кадр видео для сцены-референса.",
+              "Could not prepare the video frame for the scene reference.",
+            ),
+          );
+        }
+      } else {
+        const posterReferenceUrl = option.videoPosterReferenceUrl?.trim();
+        if (!posterReferenceUrl) {
+          throw error;
+        }
 
-      const posterReferenceUrl = option.videoPosterReferenceUrl?.trim();
-      if (!posterReferenceUrl) {
-        throw error;
+        frameAsset = {
+          fileName: frameFileName,
+          fileSize: 0,
+          mimeType: WORKSPACE_SEGMENT_REFERENCE_FRAME_MIME_TYPE,
+          remoteUrl: posterReferenceUrl,
+        };
       }
-
-      frameAsset = {
-        fileName: frameFileName,
-        fileSize: 0,
-        mimeType: WORKSPACE_SEGMENT_REFERENCE_FRAME_MIME_TYPE,
-        remoteUrl: posterReferenceUrl,
-      };
     }
 
     const hasUploadSegmentIndexOverride = Object.prototype.hasOwnProperty.call(options ?? {}, "uploadSegmentIndex");

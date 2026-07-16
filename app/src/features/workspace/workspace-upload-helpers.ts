@@ -501,11 +501,33 @@ const WORKSPACE_SEGMENT_REFERENCE_FRAME_QUALITY = 0.92;
 export const WORKSPACE_SEGMENT_REFERENCE_CHARACTER_LIMIT = 3;
 const WORKSPACE_SEGMENT_REFERENCE_FRAME_MAX_SIDE = 1280;
 const WORKSPACE_SEGMENT_REFERENCE_FRAME_SEEK_SECONDS = 0.25;
+export const WORKSPACE_SEGMENT_REFERENCE_FRAME_END_OFFSET_SECONDS = 0.25;
+
+export const resolveWorkspaceVideoReferenceFrameTime = (
+  durationSeconds: number,
+  options: {
+    seekFromEndSeconds?: number;
+    seekSeconds?: number;
+  } = {},
+) => {
+  const duration = Number.isFinite(durationSeconds) && durationSeconds > 0 ? durationSeconds : 0;
+  if (duration <= 0) {
+    return 0;
+  }
+
+  const latestDecodableTime = Math.max(0, duration - 0.05);
+  const requestedTime = options.seekFromEndSeconds === undefined
+    ? Math.max(0, options.seekSeconds ?? WORKSPACE_SEGMENT_REFERENCE_FRAME_SEEK_SECONDS)
+    : Math.max(0, duration - Math.max(0, options.seekFromEndSeconds));
+
+  return Math.min(requestedTime, latestDecodableTime);
+};
 
 export const extractWorkspaceVideoFrameDataUrl = async (
   videoUrl: string,
   options: {
     maxSide?: number;
+    seekFromEndSeconds?: number;
     seekSeconds?: number;
   } = {},
 ) => {
@@ -517,7 +539,6 @@ export const extractWorkspaceVideoFrameDataUrl = async (
   return new Promise<string>((resolve, reject) => {
     const video = document.createElement("video");
     const maxSide = Math.max(64, options.maxSide ?? WORKSPACE_SEGMENT_REFERENCE_FRAME_MAX_SIDE);
-    const seekSeconds = Math.max(0, options.seekSeconds ?? WORKSPACE_SEGMENT_REFERENCE_FRAME_SEEK_SECONDS);
     let isDone = false;
     let metadataTimeoutId: number | null = null;
     let seekTimeoutId: number | null = null;
@@ -625,7 +646,7 @@ export const extractWorkspaceVideoFrameDataUrl = async (
       }
 
       const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
-      const targetTime = duration > 0 ? Math.min(seekSeconds, Math.max(0, duration - 0.05)) : 0;
+      const targetTime = resolveWorkspaceVideoReferenceFrameTime(duration, options);
       if (targetTime <= 0.02) {
         if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
           captureFrame();

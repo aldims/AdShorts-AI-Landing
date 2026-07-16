@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   ensureStudioUploadedAssetIdWithInlineFallback,
   extractStudioUploadedVideoAudio,
+  resolveWorkspaceVideoReferenceFrameTime,
 } from "./workspace-upload-helpers";
 
 afterEach(() => {
@@ -218,5 +219,19 @@ describe("extractStudioUploadedVideoAudio", () => {
       segmentIndex: 0,
       sourceAssetId: 982,
     })).resolves.toBeNull();
+  });
+});
+
+describe("resolveWorkspaceVideoReferenceFrameTime", () => {
+  it("uses a frame 0.25 seconds before the end for scene continuity", () => {
+    expect(resolveWorkspaceVideoReferenceFrameTime(8, { seekFromEndSeconds: 0.25 })).toBe(7.75);
+  });
+
+  it("keeps the existing frame near the start for other video references", () => {
+    expect(resolveWorkspaceVideoReferenceFrameTime(8)).toBe(0.25);
+  });
+
+  it("does not seek past the latest decodable point", () => {
+    expect(resolveWorkspaceVideoReferenceFrameTime(0.2, { seekSeconds: 1 })).toBeCloseTo(0.15);
   });
 });
