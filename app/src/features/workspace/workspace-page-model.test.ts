@@ -388,7 +388,10 @@ describe("studio idea empty state", () => {
   it("stays hidden while another primary studio state is visible", () => {
     expect(shouldShowWorkspaceStudioIdeaEmptyState({ ...emptyStudio, isWelcomeVisible: true })).toBe(false);
     expect(shouldShowWorkspaceStudioIdeaEmptyState({ ...emptyStudio, isPreviewStageVisible: true })).toBe(false);
-    expect(shouldShowWorkspaceStudioIdeaEmptyState({ ...emptyStudio, isContentPlanVisible: true })).toBe(false);
+  });
+
+  it("remains visible while the content plan is open", () => {
+    expect(shouldShowWorkspaceStudioIdeaEmptyState({ ...emptyStudio, isContentPlanVisible: true })).toBe(true);
   });
 
   it("remains visible while the user types an idea", () => {

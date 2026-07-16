@@ -1510,11 +1510,12 @@ export const shouldShowWorkspaceStudioIdeaEmptyState = (options: {
   isPreviewStageVisible: boolean;
   isWelcomeVisible: boolean;
 }) =>
+  // The content plan is a complementary floating rail, not a replacement for
+  // the idea empty state beneath it.
   options.isCreateView &&
   options.createMode === "default" &&
   !options.isPreviewStageVisible &&
   !options.isWelcomeVisible &&
-  !options.isContentPlanVisible &&
   !options.hasComposerSourceIdea;
 
 export type WorkspaceStudioIdeaSuggestion = {
