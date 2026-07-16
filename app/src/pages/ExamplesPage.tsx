@@ -38,6 +38,7 @@ type ExampleGoal = "ads" | "growth" | "expert";
 type ExampleFilter = "all" | ExampleGoal;
 
 type ExampleItem = {
+  catalogOrder?: number;
   goal: ExampleGoal;
   id: string;
   isLocal?: boolean;
@@ -175,6 +176,17 @@ const getExampleCatalogVideoPriority = (example: Pick<ExampleItem, "goal" | "id"
 
 export const sortExamplesForCatalog = (items: ExampleItem[]) =>
   [...items].sort((left, right) => {
+    const leftCatalogOrder = Number.isSafeInteger(left.catalogOrder) && Number(left.catalogOrder) > 0
+      ? Number(left.catalogOrder)
+      : Number.POSITIVE_INFINITY;
+    const rightCatalogOrder = Number.isSafeInteger(right.catalogOrder) && Number(right.catalogOrder) > 0
+      ? Number(right.catalogOrder)
+      : Number.POSITIVE_INFINITY;
+
+    if (leftCatalogOrder !== rightCatalogOrder) {
+      return leftCatalogOrder - rightCatalogOrder;
+    }
+
     const leftVideoPriority = getExampleCatalogVideoPriority(left);
     const rightVideoPriority = getExampleCatalogVideoPriority(right);
 

@@ -44,6 +44,7 @@ type LegacyLocalExampleGoal =
 export type LocalExampleGoal = "ads" | "growth" | "expert";
 
 export type LocalExampleClientItem = {
+  catalogOrder?: number;
   goal: LocalExampleGoal;
   id: string;
   isLocal: true;
@@ -60,6 +61,7 @@ export type LocalExampleClientItem = {
 };
 
 type StoredLocalExampleItem = {
+  catalogOrder?: number | null;
   createdAt: string;
   goal: LocalExampleGoal | LegacyLocalExampleGoal;
   id: string;
@@ -97,6 +99,11 @@ const execFileAsync = promisify(execFile);
 
 const normalizeText = (value: unknown) => String(value ?? "").replace(/\s+/g, " ").trim();
 const hasCyrillic = (value: string) => /[А-Яа-яЁё]/.test(value);
+
+const normalizeLocalExampleCatalogOrder = (value: unknown) => {
+  const order = Number(value);
+  return Number.isSafeInteger(order) && order > 0 ? order : null;
+};
 
 const normalizeLocalExamplesAdminEmail = (value: unknown) => normalizeText(value).toLowerCase();
 
@@ -553,6 +560,7 @@ const buildLocalExamplePosterUrl = (exampleId: string) => {
 };
 
 const toLocalExampleClientItem = (item: StoredLocalExampleItem): LocalExampleClientItem => ({
+  catalogOrder: normalizeLocalExampleCatalogOrder(item.catalogOrder) ?? undefined,
   goal: normalizeLocalExampleGoal(item.goal) ?? "growth",
   id: item.id,
   isLocal: true,

@@ -77,7 +77,7 @@ describe("ExamplesPage copy", () => {
     expect(adsFilter.compareDocumentPosition(educationFilter) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it("orders local examples as dragon, lava, dinosaur, ads", async () => {
+  it("honors curated catalog positions before inferred video priorities", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => ({
@@ -98,6 +98,7 @@ describe("ExamplesPage copy", () => {
                 videoSrc: "/api/examples/local-video/local-ad",
               },
               {
+                catalogOrder: 2,
                 goal: "growth",
                 id: "local-dino",
                 isLocal: true,
@@ -120,6 +121,7 @@ describe("ExamplesPage copy", () => {
                 videoSrc: "/api/examples/local-video/local-lava",
               },
               {
+                catalogOrder: 1,
                 goal: "growth",
                 id: "local-dragon",
                 isLocal: true,
@@ -154,8 +156,8 @@ describe("ExamplesPage copy", () => {
     expect(await screen.findByRole("heading", { name: "Про дракона" })).toBeTruthy();
     expect(screen.getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent)).toEqual([
       "Про дракона",
-      "Про лаву",
       "Про динозавра",
+      "Про лаву",
       "Про рекламу",
     ]);
   });

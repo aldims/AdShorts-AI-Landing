@@ -37,6 +37,10 @@ const FFMPEG_BINARY = process.env.FFMPEG_PATH?.trim() || "ffmpeg";
 const execFileAsync = promisify(execFile);
 const normalizeText = (value) => String(value ?? "").replace(/\s+/g, " ").trim();
 const hasCyrillic = (value) => /[А-Яа-яЁё]/.test(value);
+const normalizeLocalExampleCatalogOrder = (value) => {
+    const order = Number(value);
+    return Number.isSafeInteger(order) && order > 0 ? order : null;
+};
 const normalizeLocalExamplesAdminEmail = (value) => normalizeText(value).toLowerCase();
 const normalizeLocalExampleGoal = (value) => {
     const normalized = normalizeText(value);
@@ -391,6 +395,7 @@ const buildLocalExamplePosterUrl = (exampleId) => {
     return `${url.pathname}${url.search}`;
 };
 const toLocalExampleClientItem = (item) => ({
+    catalogOrder: normalizeLocalExampleCatalogOrder(item.catalogOrder) ?? undefined,
     goal: normalizeLocalExampleGoal(item.goal) ?? "growth",
     id: item.id,
     isLocal: true,
