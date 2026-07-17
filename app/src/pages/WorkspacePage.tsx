@@ -1045,6 +1045,7 @@ import {
   getWorkspaceSegmentEditorPlaybackDuration,
   getWorkspaceSegmentTimelineSpeechRange,
   normalizeWorkspaceSegmentManualDurationSeconds,
+  resolveWorkspaceSegmentAssetLocalSpeechTiming,
   roundWorkspaceSegmentTimelineSeconds,
 } from "../lib/workspaceSegmentEditorTimeline";
 import {
@@ -17051,6 +17052,44 @@ export function WorkspacePage({
               nextTalkingPhotoAssetWithDuration = generatedDurationSeconds
                 ? { ...nextTalkingPhotoAsset, durationSeconds: generatedDurationSeconds }
                 : nextTalkingPhotoAsset;
+              const talkingPhotoSpeechStartTime = normalizeWorkspaceSegmentVoicePreviewTime(
+                talkingPhotoPayload.speechStartTime,
+              );
+              const talkingPhotoSpeechEndTime = normalizeWorkspaceSegmentVoicePreviewTime(
+                talkingPhotoPayload.speechEndTime,
+              );
+              const talkingPhotoVoiceSourceStartTime = normalizeWorkspaceSegmentVoicePreviewTime(
+                talkingPhotoPayload.voiceSourceStartTime,
+              );
+              const talkingPhotoVoiceSourceEndTime = normalizeWorkspaceSegmentVoicePreviewTime(
+                talkingPhotoPayload.voiceSourceEndTime,
+              );
+              const talkingPhotoVoiceSourceBoundaryDuration =
+                talkingPhotoVoiceSourceStartTime !== null &&
+                talkingPhotoVoiceSourceEndTime !== null &&
+                talkingPhotoVoiceSourceEndTime > talkingPhotoVoiceSourceStartTime
+                  ? roundWorkspaceSegmentTimelineSeconds(
+                      talkingPhotoVoiceSourceEndTime - talkingPhotoVoiceSourceStartTime,
+                    )
+                  : null;
+              const talkingPhotoVoiceSourceDuration =
+                normalizeWorkspaceSegmentVoicePreviewTime(talkingPhotoPayload.voiceSourceDuration) ??
+                talkingPhotoVoiceSourceBoundaryDuration ??
+                generatedSpeechDurationSeconds;
+              const hasTalkingPhotoSpeechTiming =
+                generatedSpeechDurationSeconds !== null ||
+                talkingPhotoSpeechStartTime !== null ||
+                talkingPhotoSpeechEndTime !== null ||
+                Array.isArray(talkingPhotoPayload.speechWords) && talkingPhotoPayload.speechWords.length > 0;
+              const talkingPhotoTimelineTiming = hasTalkingPhotoSpeechTiming
+                ? resolveWorkspaceSegmentAssetLocalSpeechTiming(segment, {
+                    speechDuration: generatedSpeechDurationSeconds,
+                    speechEndTime: talkingPhotoSpeechEndTime,
+                    speechStartTime: talkingPhotoSpeechStartTime,
+                    speechWords: talkingPhotoPayload.speechWords ?? [],
+                    voiceSourceDuration: talkingPhotoVoiceSourceDuration,
+                  })
+                : null;
               return invalidateWorkspaceSegmentSceneSoundForVisualChange({
                 ...segment,
                 aiVideoAsset: nextTalkingPhotoAssetWithDuration,
@@ -17061,16 +17100,10 @@ export function WorkspacePage({
                   resolvedSourceAsset ?? cloneStudioCustomVideoFile(segment.photoAnimationSourceAsset),
                 ...buildSegmentEditorKnownVideoDurationPatch(segment, generatedDurationSeconds),
                 durationExtensionSourceDurationSeconds: null,
-                speechDuration: generatedSpeechDurationSeconds ?? segment.speechDuration,
+                ...(talkingPhotoTimelineTiming ?? {}),
                 speechDurationSource:
                   talkingPhotoPayload.speechDurationSource ??
                   (generatedSpeechDurationSeconds !== null ? "audio" : segment.speechDurationSource ?? null),
-                speechEndTime: talkingPhotoPayload.speechEndTime ?? segment.speechEndTime,
-                speechStartTime: talkingPhotoPayload.speechStartTime ?? segment.speechStartTime,
-                speechWords: talkingPhotoPayload.speechWords ?? segment.speechWords,
-                voiceSourceDuration: generatedSpeechDurationSeconds ?? segment.voiceSourceDuration,
-                voiceSourceEndTime: talkingPhotoPayload.speechEndTime ?? segment.voiceSourceEndTime,
-                voiceSourceStartTime: talkingPhotoPayload.speechStartTime ?? segment.voiceSourceStartTime,
                 visualReset: false,
                 videoAction: "talking_photo",
               });
@@ -17657,8 +17690,10 @@ export function WorkspacePage({
             sourceBoundaryDuration ??
             payload.data.speechDuration ??
             null;
-          const resolvedSpeechDuration = payload.data!.speechDuration ?? voiceSourceDuration ?? null;
-          const resolvedSpeechStartTime = payload.data!.speechStartTime ?? 0;
+          const speechDuration = normalizeWorkspaceSegmentVoicePreviewTime(payload.data.speechDuration);
+          const speechStartTime = normalizeWorkspaceSegmentVoicePreviewTime(payload.data.speechStartTime);
+          const speechEndTime = normalizeWorkspaceSegmentVoicePreviewTime(payload.data.speechEndTime);
+          const resolvedSpeechDuration = speechDuration ?? voiceSourceDuration ?? assetDuration;
 
           let hasStaleInputs = false;
           const attachment = attachSegmentEditorJobResult({
@@ -17671,23 +17706,25 @@ export function WorkspacePage({
                 return segment;
               }
 
+              const timelineTiming = resolveWorkspaceSegmentAssetLocalSpeechTiming(segment, {
+                speechDuration: resolvedSpeechDuration,
+                speechEndTime,
+                speechStartTime,
+                speechWords: payload.data!.speechWords ?? [],
+                voiceSourceDuration,
+              });
               const measuredSegment = applyWorkspaceSegmentMeasuredSceneVoiceoverDuration(segment, {
                 durationSeconds: resolvedSpeechDuration,
                 latestSceneVoiceoverAudioUrl: voiceoverAsset.remoteUrl ?? null,
-                speechStartTime: resolvedSpeechStartTime,
+                speechStartTime:
+                  timelineTiming.speechStartTime ?? getWorkspaceSegmentEditorDisplayStartTime(segment),
               });
 
               return {
                 ...measuredSegment,
-                speechDuration: resolvedSpeechDuration,
+                ...timelineTiming,
                 speechDurationSource:
                   payload.data!.speechDurationSource ?? (resolvedSpeechDuration !== null ? "audio" : null),
-                speechEndTime: payload.data!.speechEndTime ?? measuredSegment.speechEndTime ?? null,
-                speechStartTime: payload.data!.speechStartTime ?? measuredSegment.speechStartTime ?? null,
-                speechWords: payload.data!.speechWords ?? [],
-                voiceSourceDuration,
-                voiceSourceEndTime: sourceEndTime,
-                voiceSourceStartTime: sourceStartTime,
                 voiceLanguage: options.language,
                 voice_language: options.language,
                 voiceoverAsset,
@@ -21006,7 +21043,6 @@ export function WorkspacePage({
             sourceBoundaryDuration ??
             speechDuration;
           const resolvedSpeechDuration = speechDuration ?? voiceSourceDuration ?? assetDuration;
-          const resolvedSpeechStartTime = speechStartTime ?? 0;
 
           let hasStaleInputs = false;
           const attachment = attachSegmentEditorJobResult({
@@ -21019,23 +21055,25 @@ export function WorkspacePage({
                 return segment;
               }
 
+              const timelineTiming = resolveWorkspaceSegmentAssetLocalSpeechTiming(segment, {
+                speechDuration: resolvedSpeechDuration,
+                speechEndTime,
+                speechStartTime,
+                speechWords: segmentStatus.speechWords ?? [],
+                voiceSourceDuration,
+              });
               const measuredSegment = applyWorkspaceSegmentMeasuredSceneVoiceoverDuration(segment, {
                 durationSeconds: resolvedSpeechDuration,
                 latestSceneVoiceoverAudioUrl: voiceoverAsset.remoteUrl ?? null,
-                speechStartTime: resolvedSpeechStartTime,
+                speechStartTime:
+                  timelineTiming.speechStartTime ?? getWorkspaceSegmentEditorDisplayStartTime(segment),
               });
 
               return {
                 ...measuredSegment,
-                speechDuration: resolvedSpeechDuration,
+                ...timelineTiming,
                 speechDurationSource:
                   segmentStatus.speechDurationSource ?? (resolvedSpeechDuration !== null ? "audio" : null),
-                speechEndTime: speechEndTime ?? measuredSegment.speechEndTime ?? null,
-                speechStartTime: speechStartTime ?? measuredSegment.speechStartTime ?? null,
-                speechWords: segmentStatus.speechWords ?? [],
-                voiceSourceDuration,
-                voiceSourceEndTime: sourceEndTime,
-                voiceSourceStartTime: sourceStartTime,
                 voiceLanguage: segmentStatus.language ?? expectedSegment.language,
                 voice_language: segmentStatus.language ?? expectedSegment.language,
                 voiceoverAsset,

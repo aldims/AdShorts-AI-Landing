@@ -421,14 +421,25 @@ type AdsflowSegmentTalkingPhotoPreviewResponse = {
 };
 
 type AdsflowSegmentAiVideoJobStatusResponse = {
+  _voice_source_duration?: number | string | null;
+  _voice_source_end_time?: number | string | null;
+  _voice_source_start_time?: number | string | null;
   asset?: AdsflowSegmentAiVideoAssetPayload | null;
   error?: string | null;
   job_id?: string;
   project_id?: number | string | null;
   segments?: AdsflowProjectVoiceoverSegmentStatusPayload[] | null;
   segment_index?: number | string | null;
+  speech_duration?: number | string | null;
+  speech_duration_source?: string | null;
+  speech_end_time?: number | string | null;
+  speech_start_time?: number | string | null;
+  speech_words?: AdsflowSegmentVoiceoverSpeechWordPayload[] | null;
   status?: string;
   user?: AdsflowWebUserPayload | null;
+  voice_source_duration?: number | string | null;
+  voice_source_end_time?: number | string | null;
+  voice_source_start_time?: number | string | null;
 };
 
 type AdsflowProjectVoiceoverSegmentStatusPayload = {
@@ -647,7 +658,15 @@ export type StudioSegmentAiVideoJobStatus = {
   error?: string;
   jobId: string;
   profile: WorkspaceProfile;
+  speechDuration?: number | null;
+  speechDurationSource?: "audio" | null;
+  speechEndTime?: number | null;
+  speechStartTime?: number | null;
+  speechWords?: StudioSegmentVoiceoverSpeechWord[];
   status: string;
+  voiceSourceDuration?: number | null;
+  voiceSourceEndTime?: number | null;
+  voiceSourceStartTime?: number | null;
 };
 
 export type StudioProjectCharacter = {
@@ -9904,6 +9923,25 @@ export async function getStudioSegmentTalkingPhotoJobStatus(
     });
     const asset = payload.asset ? normalizeAdsflowSegmentTalkingPhotoAsset(resolvedJobId, payload.asset) : undefined;
     if (asset) {
+      const speechStartTime = payload.speech_start_time === null || typeof payload.speech_start_time === "undefined"
+        ? null
+        : normalizeNumber(payload.speech_start_time);
+      const speechEndTime = payload.speech_end_time === null || typeof payload.speech_end_time === "undefined"
+        ? null
+        : normalizeNumber(payload.speech_end_time);
+      const speechBoundaryDuration =
+        speechStartTime !== null && speechEndTime !== null && speechEndTime > speechStartTime
+          ? roundStudioTimelineSeconds(speechEndTime - speechStartTime)
+          : null;
+      const explicitSpeechDuration =
+        payload.speech_duration === null || typeof payload.speech_duration === "undefined"
+          ? null
+          : normalizeNumber(payload.speech_duration);
+      const speechDuration =
+        explicitSpeechDuration !== null && explicitSpeechDuration > 0
+          ? roundStudioTimelineSeconds(explicitSpeechDuration)
+          : speechBoundaryDuration;
+      const voiceSourceWindow = normalizeAdsflowVoiceSourceWindow(payload);
       warmStudioGeneratedVideoPlayback("segment-talking-photo", resolvedJobId, user);
       warmStudioGeneratedVideoPoster("segment-talking-photo", resolvedJobId, user);
 
@@ -9912,7 +9950,22 @@ export async function getStudioSegmentTalkingPhotoJobStatus(
         error: normalizeGenerationText(payload.error) || undefined,
         jobId: resolvedJobId,
         profile,
+        speechDuration,
+        speechDurationSource:
+          normalizeGenerationText(payload.speech_duration_source).toLowerCase() === "audio" || speechDuration !== null
+            ? "audio"
+            : null,
+        speechEndTime:
+          speechStartTime !== null && speechEndTime !== null
+            ? roundStudioTimelineSeconds(Math.max(speechStartTime, speechEndTime))
+            : null,
+        speechStartTime:
+          speechStartTime !== null ? roundStudioTimelineSeconds(Math.max(0, speechStartTime)) : null,
+        speechWords: normalizeSegmentVoiceoverSpeechWords(payload.speech_words),
         status,
+        voiceSourceDuration: voiceSourceWindow.voiceSourceDuration,
+        voiceSourceEndTime: voiceSourceWindow.voiceSourceEndTime,
+        voiceSourceStartTime: voiceSourceWindow.voiceSourceStartTime,
       };
     }
 

@@ -8,6 +8,9 @@ export type WorkspaceSegmentTimelineRange = {
   startTime: number;
 };
 
+export type WorkspaceSegmentSpeechTimingCoordinateSpace = "asset_local" | "global_timeline";
+export type WorkspaceSegmentVoiceSourceCoordinateSpace = "asset_local" | "global_audio";
+
 export type WorkspaceSegmentDurationMode = "auto" | "manual";
 export type WorkspaceSegmentDurationSyncMode = "voiceover" | "visual";
 
@@ -25,6 +28,30 @@ export type WorkspaceSegmentTimelineSegment = {
   speechWords?: WorkspaceSegmentTimelineWord[] | null;
   startTime?: number | null;
   text?: string | null;
+};
+
+export type WorkspaceSegmentAssetLocalSpeechTiming<
+  TWord extends WorkspaceSegmentTimelineWord = WorkspaceSegmentTimelineWord,
+> = {
+  speechDuration?: number | null;
+  speechEndTime?: number | null;
+  speechStartTime?: number | null;
+  speechWords?: TWord[] | null;
+  voiceSourceDuration?: number | null;
+};
+
+export type WorkspaceSegmentTimelineSpeechTimingPatch<
+  TWord extends WorkspaceSegmentTimelineWord = WorkspaceSegmentTimelineWord,
+> = {
+  speechTimingCoordinateSpace: "global_timeline";
+  speechDuration: number | null;
+  speechEndTime: number | null;
+  speechStartTime: number | null;
+  speechWords: TWord[];
+  voiceSourceCoordinateSpace: "asset_local";
+  voiceSourceDuration: number | null;
+  voiceSourceEndTime: number | null;
+  voiceSourceStartTime: number | null;
 };
 
 export const WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS = 1;
@@ -49,6 +76,130 @@ const normalizeWorkspaceSegmentTimelineOptionalTimeValue = (value: unknown) => {
   }
 
   return normalizeWorkspaceSegmentTimelineTimeValue(value);
+};
+
+const normalizeWorkspaceSegmentPositiveDuration = (value: unknown) => {
+  const normalizedValue = normalizeWorkspaceSegmentTimelineOptionalTimeValue(value);
+  return normalizedValue !== null && normalizedValue > 0
+    ? roundWorkspaceSegmentTimelineSeconds(normalizedValue)
+    : null;
+};
+
+export const normalizeWorkspaceSegmentSpeechTimingCoordinateSpace = (
+  value: unknown,
+): WorkspaceSegmentSpeechTimingCoordinateSpace | null => {
+  const normalizedValue = String(value ?? "").trim().toLowerCase();
+  if (normalizedValue === "asset_local" || normalizedValue === "source_local") {
+    return "asset_local";
+  }
+  if (
+    normalizedValue === "final_timeline" ||
+    normalizedValue === "global_timeline" ||
+    normalizedValue === "global_audio" ||
+    normalizedValue === "global" ||
+    normalizedValue === "batch_audio"
+  ) {
+    return "global_timeline";
+  }
+  return null;
+};
+
+export const normalizeWorkspaceSegmentVoiceSourceCoordinateSpace = (
+  value: unknown,
+): WorkspaceSegmentVoiceSourceCoordinateSpace | null => {
+  const normalizedValue = String(value ?? "").trim().toLowerCase();
+  if (normalizedValue === "asset_local" || normalizedValue === "source_local") {
+    return "asset_local";
+  }
+  if (
+    normalizedValue === "global_audio" ||
+    normalizedValue === "global" ||
+    normalizedValue === "batch_audio" ||
+    normalizedValue === "final_timeline" ||
+    normalizedValue === "global_timeline"
+  ) {
+    return "global_audio";
+  }
+  return null;
+};
+
+/**
+ * Converts timing reported for a standalone audio asset into the project timeline.
+ * Speech boundaries and words become global; the audio source window always remains
+ * local to the asset (0..duration).
+ */
+export const resolveWorkspaceSegmentAssetLocalSpeechTiming = <
+  TWord extends WorkspaceSegmentTimelineWord = WorkspaceSegmentTimelineWord,
+>(
+  segment: Pick<WorkspaceSegmentTimelineSegment, "startTime">,
+  timing: WorkspaceSegmentAssetLocalSpeechTiming<TWord>,
+): WorkspaceSegmentTimelineSpeechTimingPatch<TWord> => {
+  const visualStartTime = roundWorkspaceSegmentTimelineSeconds(
+    normalizeWorkspaceSegmentTimelineOptionalTimeValue(segment.startTime) ?? 0,
+  );
+  const speechWords = Array.isArray(timing.speechWords) ? timing.speechWords : [];
+  const localWordStartTimes = speechWords
+    .map((word) => normalizeWorkspaceSegmentTimelineOptionalTimeValue(word.startTime))
+    .filter((value): value is number => value !== null);
+  const localWordEndTimes = speechWords
+    .map((word) => normalizeWorkspaceSegmentTimelineOptionalTimeValue(word.endTime))
+    .filter((value): value is number => value !== null);
+  const localSpeechStartTime =
+    normalizeWorkspaceSegmentTimelineOptionalTimeValue(timing.speechStartTime) ??
+    (localWordStartTimes.length > 0 ? Math.min(...localWordStartTimes) : 0);
+  const explicitLocalSpeechEndTime = normalizeWorkspaceSegmentTimelineOptionalTimeValue(timing.speechEndTime);
+  const explicitSpeechDuration = normalizeWorkspaceSegmentPositiveDuration(timing.speechDuration);
+  const localSpeechEndTime =
+    explicitLocalSpeechEndTime !== null && explicitLocalSpeechEndTime > localSpeechStartTime
+      ? explicitLocalSpeechEndTime
+      : localWordEndTimes.length > 0 && Math.max(...localWordEndTimes) > localSpeechStartTime
+        ? Math.max(...localWordEndTimes)
+        : explicitSpeechDuration !== null
+          ? localSpeechStartTime + explicitSpeechDuration
+          : null;
+  const boundarySpeechDuration =
+    localSpeechEndTime !== null
+      ? normalizeWorkspaceSegmentPositiveDuration(localSpeechEndTime - localSpeechStartTime)
+      : null;
+  const speechDuration = boundarySpeechDuration ?? explicitSpeechDuration;
+  const voiceSourceDuration =
+    normalizeWorkspaceSegmentPositiveDuration(timing.voiceSourceDuration) ?? explicitSpeechDuration ?? speechDuration;
+  const hasSpeechTiming =
+    speechDuration !== null ||
+    localSpeechEndTime !== null ||
+    localWordStartTimes.length > 0 ||
+    localWordEndTimes.length > 0;
+
+  return {
+    speechTimingCoordinateSpace: "global_timeline",
+    speechDuration,
+    speechEndTime:
+      localSpeechEndTime !== null
+        ? roundWorkspaceSegmentTimelineSeconds(visualStartTime + localSpeechEndTime)
+        : null,
+    speechStartTime: hasSpeechTiming
+      ? roundWorkspaceSegmentTimelineSeconds(visualStartTime + localSpeechStartTime)
+      : null,
+    speechWords: speechWords.map((word) => {
+      const localStartTime = normalizeWorkspaceSegmentTimelineOptionalTimeValue(word.startTime);
+      const localEndTime = normalizeWorkspaceSegmentTimelineOptionalTimeValue(word.endTime);
+      return {
+        ...word,
+        endTime:
+          localEndTime !== null
+            ? roundWorkspaceSegmentTimelineSeconds(visualStartTime + localEndTime)
+            : word.endTime,
+        startTime:
+          localStartTime !== null
+            ? roundWorkspaceSegmentTimelineSeconds(visualStartTime + localStartTime)
+            : word.startTime,
+      };
+    }),
+    voiceSourceCoordinateSpace: "asset_local",
+    voiceSourceDuration,
+    voiceSourceEndTime: voiceSourceDuration,
+    voiceSourceStartTime: voiceSourceDuration !== null ? 0 : null,
+  };
 };
 
 export const normalizeWorkspaceSegmentManualDurationSeconds = (value: unknown) => {

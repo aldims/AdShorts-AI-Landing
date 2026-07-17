@@ -977,6 +977,9 @@ export type WorkspaceSegmentAiVideoJobStatusPayload = {
   speechStartTime?: number | null;
   speechWords?: WorkspaceSegmentEditorSpeechWord[];
   status: string;
+  voiceSourceDuration?: number | null;
+  voiceSourceEndTime?: number | null;
+  voiceSourceStartTime?: number | null;
 };
 
 export type WorkspaceSegmentAiVideoJobStatusResponse = {

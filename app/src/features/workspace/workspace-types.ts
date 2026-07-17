@@ -3,6 +3,8 @@ import type { WorkspaceMediaAssetRef } from "../../../shared/workspace-media-ass
 import type {
   WorkspaceSegmentDurationMode,
   WorkspaceSegmentDurationSyncMode,
+  WorkspaceSegmentSpeechTimingCoordinateSpace,
+  WorkspaceSegmentVoiceSourceCoordinateSpace,
 } from "../../lib/workspaceSegmentEditorTimeline";
 
 export type StudioVideoMode = "ai_photo" | "ai_video" | "custom" | "standard";
@@ -162,11 +164,13 @@ export type WorkspaceSegmentEditorSegment = {
   speechDurationSource?: "audio" | null;
   speechEndTime: number | null;
   speechStartTime: number | null;
+  speechTimingCoordinateSpace?: WorkspaceSegmentSpeechTimingCoordinateSpace | null;
   speechWords: WorkspaceSegmentEditorSpeechWord[];
   startTime: number;
   voiceSourceDuration?: number | null;
   voiceSourceEndTime?: number | null;
   voiceSourceStartTime?: number | null;
+  voiceSourceCoordinateSpace?: WorkspaceSegmentVoiceSourceCoordinateSpace | null;
   voice_source_duration?: number | null;
   voice_source_end_time?: number | null;
   voice_source_start_time?: number | null;

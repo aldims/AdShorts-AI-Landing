@@ -62,6 +62,7 @@ import {
   resolveWorkspaceSegmentBoundaryTiming,
   resolveWorkspaceSegmentVideoExtensionMenuSourceDurationSeconds,
   restoreWorkspaceSegmentTimelineSnapshot,
+  restoreWorkspaceSegmentVoiceTextDraftSnapshot,
   shouldAutoTrimWorkspaceSegmentVideoToVoiceover,
   shouldIgnoreWorkspaceSegmentMeasuredVoiceoverDuration,
   syncWorkspaceSegmentMeasuredVideoVisualDuration,
@@ -2201,6 +2202,48 @@ describe("workspace segment editor project voiceover timeline", () => {
     expect(restored.photoAnimationSourceAsset).toEqual(expect.objectContaining({ assetId: 808 }));
     expect(restored.speechWords).toEqual([{ confidence: 0.95, endTime: 0.55, startTime: 0, text: "Привет" }]);
     expect(restored.speechWords).not.toBe(snapshot.speechWords);
+  });
+
+  it("restores voice timing coordinate markers atomically with the snapshot timing", () => {
+    const currentSegment = createProjectVoiceoverSegment({
+      endTime: 7,
+      index: 1,
+      speechDuration: 3,
+      speechEndTime: 7,
+      speechStartTime: 4,
+      speechTimingCoordinateSpace: "asset_local",
+      startTime: 4,
+      voiceSourceCoordinateSpace: "global_audio",
+      voiceSourceDuration: 3,
+      voiceSourceEndTime: 7,
+      voiceSourceStartTime: 4,
+    });
+    const snapshot = createProjectVoiceoverSegment({
+      endTime: 7,
+      index: 1,
+      speechDuration: 2.8,
+      speechEndTime: 6.9,
+      speechStartTime: 4.1,
+      speechTimingCoordinateSpace: "global_timeline",
+      startTime: 4,
+      voiceSourceCoordinateSpace: "asset_local",
+      voiceSourceDuration: 3,
+      voiceSourceEndTime: 3,
+      voiceSourceStartTime: 0,
+    });
+
+    const restored = restoreWorkspaceSegmentVoiceTextDraftSnapshot(currentSegment, snapshot);
+
+    expect(restored).toEqual(expect.objectContaining({
+      speechDuration: 2.8,
+      speechEndTime: 6.9,
+      speechStartTime: 4.1,
+      speechTimingCoordinateSpace: "global_timeline",
+      voiceSourceCoordinateSpace: "asset_local",
+      voiceSourceDuration: 3,
+      voiceSourceEndTime: 3,
+      voiceSourceStartTime: 0,
+    }));
   });
 
   it("restores baseline visual timeline duration when resetting generated visual to original", () => {

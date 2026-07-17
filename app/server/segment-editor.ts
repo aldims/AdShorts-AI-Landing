@@ -18,6 +18,13 @@ import {
 } from "./upstream-client.js";
 import { listWorkspaceDeletedProjects, listWorkspaceGenerationHistory } from "./workspace-history.js";
 import type { ProjectMediaEnvelope, WorkspaceMediaAssetRef } from "../shared/workspace-media-assets.js";
+import {
+  normalizeWorkspaceSegmentSpeechTimingCoordinateSpace,
+  normalizeWorkspaceSegmentVoiceSourceCoordinateSpace,
+  resolveWorkspaceSegmentAssetLocalSpeechTiming,
+  type WorkspaceSegmentSpeechTimingCoordinateSpace,
+  type WorkspaceSegmentVoiceSourceCoordinateSpace,
+} from "../src/lib/workspaceSegmentEditorTimeline.js";
 
 type SegmentEditorUser = {
   email?: string | null;
@@ -34,12 +41,15 @@ type AdsflowSegmentEditorSpeechWordPayload = {
 
 type AdsflowSegmentEditorSegmentPayload = {
   _skip_project_voiceover_asset?: boolean | null;
+  _voice_source_coordinate_space?: string | null;
   _voice_source_duration?: number | string | null;
   _voice_source_end_time?: number | string | null;
   _voice_source_start_time?: number | string | null;
   voiceSourceDuration?: number | string | null;
   voiceSourceEndTime?: number | string | null;
   voiceSourceStartTime?: number | string | null;
+  voiceSourceCoordinateSpace?: string | null;
+  voice_source_coordinate_space?: string | null;
   voice_source_duration?: number | string | null;
   voice_source_end_time?: number | string | null;
   voice_source_start_time?: number | string | null;
@@ -58,6 +68,10 @@ type AdsflowSegmentEditorSegmentPayload = {
   manual_duration_seconds?: number | string | null;
   media_type?: string | null;
   original_video?: string | null;
+  providerTimingCoordinateSpace?: string | null;
+  provider_timing_coordinate_space?: string | null;
+  wordTimingCoordinateSpace?: string | null;
+  word_timing_coordinate_space?: string | null;
   scene_sound?: AdsflowProjectMediaEntryPayload | null;
   scene_sound_asset_id?: number | string | null;
   speech_duration?: number | string | null;
@@ -65,6 +79,8 @@ type AdsflowSegmentEditorSegmentPayload = {
   speech_start_time?: number | string | null;
   speech_text?: string | null;
   speech_words?: AdsflowSegmentEditorSpeechWordPayload[] | null;
+  speechTimingCoordinateSpace?: string | null;
+  speech_timing_coordinate_space?: string | null;
   start_time?: number | string | null;
   sourceDurationSeconds?: number | string | null;
   source_duration_seconds?: number | string | null;
@@ -285,11 +301,13 @@ export type WorkspaceSegmentEditorSegment = {
   speechDurationSource: "audio" | null;
   speechEndTime: number | null;
   speechStartTime: number | null;
+  speechTimingCoordinateSpace?: WorkspaceSegmentSpeechTimingCoordinateSpace | null;
   speechWords: WorkspaceSegmentEditorSpeechWord[];
   startTime: number;
   voiceSourceDuration: number | null;
   voiceSourceEndTime: number | null;
   voiceSourceStartTime: number | null;
+  voiceSourceCoordinateSpace?: WorkspaceSegmentVoiceSourceCoordinateSpace | null;
   subtitleColor: string | null;
   subtitleStyle: string | null;
   subtitleType: string | null;
@@ -358,6 +376,14 @@ const normalizeWorkspaceSegmentEditorLanguage = (value: unknown) => {
 };
 
 const normalizeInteger = (value: unknown) => {
+  if (
+    value === null ||
+    typeof value === "undefined" ||
+    (typeof value === "string" && value.trim() === "")
+  ) {
+    return null;
+  }
+
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return null;
 
@@ -768,6 +794,82 @@ const pickProjectMediaEntries = (...candidates: unknown[]) => {
   return [] as AdsflowProjectMediaEntryPayload[];
 };
 
+const buildProjectMediaEntriesBySegmentIndex = (
+  entries: AdsflowProjectMediaEntryPayload[],
+  expectedSegmentIndexes: number[],
+  sourceName: string,
+) => {
+  const entriesBySegmentIndex = new Map<number, AdsflowProjectMediaEntryPayload>();
+  const unindexedEntries: AdsflowProjectMediaEntryPayload[] = [];
+  const segmentEntries = entries.filter((entry) => !isWorkspaceSegmentTimelineFallbackEntry(entry));
+
+  for (const entry of segmentEntries) {
+    const segmentIndex = normalizeInteger(entry.segment_index);
+    if (segmentIndex === null) {
+      unindexedEntries.push(entry);
+      continue;
+    }
+
+    if (entriesBySegmentIndex.has(segmentIndex)) {
+      throw new WorkspaceSegmentEditorError(
+        `Источник ${sourceName} содержит несколько медиа для сегмента ${segmentIndex + 1}.`,
+        409,
+      );
+    }
+    entriesBySegmentIndex.set(segmentIndex, entry);
+  }
+
+  if (entriesBySegmentIndex.size > 0) {
+    if (unindexedEntries.length > 0) {
+      throw new WorkspaceSegmentEditorError(
+        `Источник ${sourceName} смешивает медиа с segment_index и без него.`,
+        409,
+      );
+    }
+    return entriesBySegmentIndex;
+  }
+
+  if (segmentEntries.length === 0) {
+    return entriesBySegmentIndex;
+  }
+
+  const uniqueExpectedIndexes = new Set(expectedSegmentIndexes);
+  if (
+    segmentEntries.length !== expectedSegmentIndexes.length ||
+    uniqueExpectedIndexes.size !== expectedSegmentIndexes.length
+  ) {
+    console.warn("[segment-editor] Refusing ambiguous positional media mapping without segment_index", {
+      entryCount: segmentEntries.length,
+      expectedSegmentCount: expectedSegmentIndexes.length,
+      sourceName,
+    });
+    return entriesBySegmentIndex;
+  }
+
+  segmentEntries.forEach((entry, slot) => {
+    entriesBySegmentIndex.set(expectedSegmentIndexes[slot], entry);
+  });
+  return entriesBySegmentIndex;
+};
+
+const findProjectMediaEntryBySegmentIndex = (
+  entries: AdsflowProjectMediaEntryPayload[],
+  segmentIndex: number,
+) => entries.find((entry) => normalizeInteger(entry.segment_index) === segmentIndex) ?? null;
+
+const assertUniqueSegmentEditorIndexes = (indexes: number[], sourceName: string) => {
+  const seenIndexes = new Set<number>();
+  for (const index of indexes) {
+    if (seenIndexes.has(index)) {
+      throw new WorkspaceSegmentEditorError(
+        `Источник ${sourceName} содержит повторяющийся индекс сегмента ${index}.`,
+        409,
+      );
+    }
+    seenIndexes.add(index);
+  }
+};
+
 const detectWorkspaceSegmentSourceKind = (
   entry?: AdsflowProjectMediaEntryPayload | null,
 ): WorkspaceSegmentEditorSourceKind => {
@@ -884,7 +986,7 @@ const getProjectSegmentMarker = (
 const pickProjectDetailSegments = (
   settings: AdsflowProjectGenerationSettingsPayload | null | undefined,
 ) => {
-  const candidates = [settings?.original_video_segments, settings?.video_segments];
+  const candidates = [settings?.video_segments, settings?.original_video_segments];
   for (const candidate of candidates) {
     if (Array.isArray(candidate) && candidate.length > 0) {
       return candidate;
@@ -919,7 +1021,7 @@ const recoverProjectVoiceoverEntriesFromRenderContract = (
     return [];
   }
 
-  const candidateSegmentLists = [settings.original_video_segments, settings.video_segments];
+  const candidateSegmentLists = [settings.video_segments, settings.original_video_segments];
   const matchingSegments = candidateSegmentLists.find((candidate) => {
     if (!Array.isArray(candidate) || candidate.length !== contractSegments.length) {
       return false;
@@ -967,6 +1069,7 @@ const recoverProjectVoiceoverEntriesFromRenderContract = (
 const mergeProjectDetailTimelineIntoSegmentEditorPayload = (
   segment: AdsflowSegmentEditorSegmentPayload,
   authoritativeSegment: AdsflowSegmentEditorSegmentPayload | null | undefined,
+  options?: { currentTimeline?: boolean },
 ): AdsflowSegmentEditorSegmentPayload => {
   if (!authoritativeSegment) {
     return segment;
@@ -993,6 +1096,74 @@ const mergeProjectDetailTimelineIntoSegmentEditorPayload = (
   const segmentDurationMode = normalizeText(segment.duration_mode);
   const segmentManualDurationSeconds = normalizeManualDurationSeconds(segment.manual_duration_seconds);
   const hasSegmentManualTimeline = segmentDurationMode === "manual" || segmentManualDurationSeconds !== null;
+  const preserveSegmentManualTimeline = hasSegmentManualTimeline && options?.currentTimeline !== true;
+  const authoritativeRecord = authoritativeSegment as Record<string, unknown>;
+  const segmentRecord = segment as Record<string, unknown>;
+  const hasOwnTimingField = (record: Record<string, unknown>, fields: readonly string[]) =>
+    fields.some((field) => Object.prototype.hasOwnProperty.call(record, field));
+  const speechTimingFields = [
+    "speech_duration",
+    "speech_end_time",
+    "speech_start_time",
+    "speech_words",
+    "speechTimingCoordinateSpace",
+    "speech_timing_coordinate_space",
+    "providerTimingCoordinateSpace",
+    "provider_timing_coordinate_space",
+    "wordTimingCoordinateSpace",
+    "word_timing_coordinate_space",
+  ] as const;
+  const voiceSourceTimingFields = [
+    "_voice_source_coordinate_space",
+    "_voice_source_duration",
+    "_voice_source_end_time",
+    "_voice_source_start_time",
+    "voiceSourceCoordinateSpace",
+    "voiceSourceDuration",
+    "voiceSourceEndTime",
+    "voiceSourceStartTime",
+    "voice_source_coordinate_space",
+    "voice_source_duration",
+    "voice_source_end_time",
+    "voice_source_start_time",
+  ] as const;
+  const preferredTimingRecord = options?.currentTimeline === true ? authoritativeRecord : segmentRecord;
+  const fallbackTimingRecord = options?.currentTimeline === true ? segmentRecord : authoritativeRecord;
+  const speechTimingRecord = hasOwnTimingField(preferredTimingRecord, speechTimingFields)
+    ? preferredTimingRecord
+    : fallbackTimingRecord;
+  const voiceSourceTimingRecord = hasOwnTimingField(preferredTimingRecord, voiceSourceTimingFields)
+    ? preferredTimingRecord
+    : fallbackTimingRecord;
+  const speechTimingCoordinateSpace = pickSegmentEditorSpeechTimingCoordinateSpace(speechTimingRecord);
+  const voiceSourceCoordinateSpace = pickSegmentEditorVoiceSourceCoordinateSpace(voiceSourceTimingRecord);
+  const speechDuration = normalizeNumber(speechTimingRecord.speech_duration);
+  const speechEndTime = normalizeNumber(speechTimingRecord.speech_end_time);
+  const speechStartTime = normalizeNumber(speechTimingRecord.speech_start_time);
+  const speechWords = Array.isArray(speechTimingRecord.speech_words)
+    ? speechTimingRecord.speech_words as AdsflowSegmentEditorSpeechWordPayload[]
+    : null;
+  const voiceSourceDuration = pickSegmentEditorVoiceSourceDuration(voiceSourceTimingRecord);
+  const voiceSourceEndTime = pickSegmentEditorVoiceSourceEndTime(voiceSourceTimingRecord);
+  const voiceSourceStartTime = pickSegmentEditorVoiceSourceStartTime(voiceSourceTimingRecord);
+  const hasAuthoritativeBoundary = startTime !== null && endTime !== null && endTime > startTime;
+  const authoritativeBoundaryDuration = hasAuthoritativeBoundary
+    ? roundSegmentEditorTimelineSeconds(endTime - startTime)
+    : null;
+  const authoritativeDuration =
+    authoritativeBoundaryDuration ??
+    (duration !== null && duration > 0 ? roundSegmentEditorTimelineSeconds(duration) : null);
+  const authoritativeStartTime = hasAuthoritativeBoundary
+    ? startTime
+    : startTime ??
+      (endTime !== null && endTime > 0 && authoritativeDuration !== null
+        ? roundSegmentEditorTimelineSeconds(Math.max(0, endTime - authoritativeDuration))
+        : segmentStartTime);
+  const authoritativeEndTime = hasAuthoritativeBoundary
+    ? endTime
+    : authoritativeStartTime !== null && authoritativeDuration !== null
+      ? roundSegmentEditorTimelineSeconds(authoritativeStartTime + authoritativeDuration)
+      : endTime;
   const sourceDurationSeconds =
     normalizeNumber(authoritativeSegment.duration_extension_source_duration_seconds) ??
     normalizeNumber(authoritativeSegment.durationExtensionSourceDurationSeconds) ??
@@ -1001,7 +1172,13 @@ const mergeProjectDetailTimelineIntoSegmentEditorPayload = (
 
   return {
     ...segment,
-    duration: hasSegmentManualTimeline ? segmentDuration ?? duration ?? segment.duration : duration ?? segment.duration,
+    _voice_source_coordinate_space: voiceSourceCoordinateSpace,
+    _voice_source_duration: voiceSourceDuration,
+    _voice_source_end_time: voiceSourceEndTime,
+    _voice_source_start_time: voiceSourceStartTime,
+    duration: preserveSegmentManualTimeline
+      ? segmentDuration ?? authoritativeDuration ?? segment.duration
+      : authoritativeDuration ?? segmentDuration ?? segment.duration,
     durationExtensionSourceDurationSeconds:
       sourceDurationSeconds ?? segment.durationExtensionSourceDurationSeconds,
     duration_extension_source_duration_seconds:
@@ -1013,13 +1190,37 @@ const mergeProjectDetailTimelineIntoSegmentEditorPayload = (
     duration_sync_mode: durationSyncMode ?? segment.duration_sync_mode,
     duration_sync_mode_user_selected:
       hasDurationSyncModeUserSelected ? durationSyncModeUserSelected : Boolean(segment.duration_sync_mode_user_selected),
-    end_time: hasSegmentManualTimeline ? segmentEndTime ?? endTime ?? segment.end_time : endTime ?? segment.end_time,
+    end_time: preserveSegmentManualTimeline
+      ? segmentEndTime ?? authoritativeEndTime ?? segment.end_time
+      : authoritativeEndTime ?? segmentEndTime ?? segment.end_time,
     manual_duration_seconds: hasSegmentManualTimeline
-      ? segmentManualDurationSeconds ?? manualDurationSeconds ?? segment.manual_duration_seconds
+      ? preserveSegmentManualTimeline
+        ? segmentManualDurationSeconds ?? manualDurationSeconds ?? segment.manual_duration_seconds
+        : authoritativeDuration ?? segmentManualDurationSeconds ?? manualDurationSeconds ?? segment.manual_duration_seconds
       : manualDurationSeconds ?? segment.manual_duration_seconds,
     sourceDurationSeconds: sourceDurationSeconds ?? segment.sourceDurationSeconds,
     source_duration_seconds: sourceDurationSeconds ?? segment.source_duration_seconds,
-    start_time: hasSegmentManualTimeline ? segmentStartTime ?? startTime ?? segment.start_time : startTime ?? segment.start_time,
+    providerTimingCoordinateSpace: speechTimingCoordinateSpace,
+    provider_timing_coordinate_space: speechTimingCoordinateSpace,
+    speech_duration: speechDuration,
+    speech_end_time: speechEndTime,
+    speech_start_time: speechStartTime,
+    speechTimingCoordinateSpace,
+    speech_timing_coordinate_space: speechTimingCoordinateSpace,
+    speech_words: speechWords,
+    start_time: preserveSegmentManualTimeline
+      ? segmentStartTime ?? authoritativeStartTime ?? segment.start_time
+      : authoritativeStartTime ?? segmentStartTime ?? segment.start_time,
+    voiceSourceCoordinateSpace,
+    voiceSourceDuration: voiceSourceDuration,
+    voiceSourceEndTime: voiceSourceEndTime,
+    voiceSourceStartTime: voiceSourceStartTime,
+    voice_source_coordinate_space: voiceSourceCoordinateSpace,
+    voice_source_duration: voiceSourceDuration,
+    voice_source_end_time: voiceSourceEndTime,
+    voice_source_start_time: voiceSourceStartTime,
+    wordTimingCoordinateSpace: speechTimingCoordinateSpace,
+    word_timing_coordinate_space: speechTimingCoordinateSpace,
   };
 };
 
@@ -1043,6 +1244,13 @@ const getSegmentEditorSegmentIndex = (
 ) => {
   const record = (segment ?? {}) as Record<string, unknown>;
   return normalizeInteger(record.segment_index) ?? normalizeInteger(segment?.index) ?? fallbackIndex;
+};
+
+const getExplicitSegmentEditorSegmentIndex = (
+  segment: AdsflowSegmentEditorSegmentPayload | null | undefined,
+) => {
+  const record = (segment ?? {}) as Record<string, unknown>;
+  return normalizeInteger(record.segment_index) ?? normalizeInteger(segment?.index);
 };
 
 const normalizeSegmentEditorComparableText = (value: unknown) => normalizeText(value).toLowerCase();
@@ -1133,6 +1341,41 @@ const pickSegmentEditorVoiceSourceEndTime = (record: Record<string, unknown> | n
 const pickSegmentEditorVoiceSourceDuration = (record: Record<string, unknown> | null | undefined) =>
   pickSegmentEditorNumber(record?._voice_source_duration, record?.voice_source_duration, record?.voiceSourceDuration);
 
+const pickSegmentEditorSpeechTimingCoordinateSpace = (
+  record: Record<string, unknown> | null | undefined,
+) => {
+  for (const value of [
+    record?.speechTimingCoordinateSpace,
+    record?.speech_timing_coordinate_space,
+    record?.providerTimingCoordinateSpace,
+    record?.provider_timing_coordinate_space,
+    record?.wordTimingCoordinateSpace,
+    record?.word_timing_coordinate_space,
+  ]) {
+    const normalized = normalizeWorkspaceSegmentSpeechTimingCoordinateSpace(value);
+    if (normalized !== null) {
+      return normalized;
+    }
+  }
+  return null;
+};
+
+const pickSegmentEditorVoiceSourceCoordinateSpace = (
+  record: Record<string, unknown> | null | undefined,
+) => {
+  for (const value of [
+    record?.voiceSourceCoordinateSpace,
+    record?.voice_source_coordinate_space,
+    record?._voice_source_coordinate_space,
+  ]) {
+    const normalized = normalizeWorkspaceSegmentVoiceSourceCoordinateSpace(value);
+    if (normalized !== null) {
+      return normalized;
+    }
+  }
+  return null;
+};
+
 const pickSegmentEditorText = (...values: unknown[]) => {
   for (const value of values) {
     const normalized = normalizeText(value);
@@ -1191,6 +1434,18 @@ const buildSegmentEditorPayloadFromProjectDetails = (
 
   const originalEntries = getProjectOriginalMediaEntries(payload);
   const currentEntries = getProjectCurrentMediaEntries(payload, originalEntries);
+  const segmentIndexes = rawSegments.map((segment, slot) => getSegmentEditorSegmentIndex(segment, slot));
+  assertUniqueSegmentEditorIndexes(segmentIndexes, "таймлайна проекта");
+  const originalEntriesBySegmentIndex = buildProjectMediaEntriesBySegmentIndex(
+    originalEntries,
+    segmentIndexes,
+    "исходных медиа проекта",
+  );
+  const currentEntriesBySegmentIndex = buildProjectMediaEntriesBySegmentIndex(
+    currentEntries,
+    segmentIndexes,
+    "текущих медиа проекта",
+  );
   const projectId =
     normalizePositiveProjectId(payload.project_id) ??
     normalizePositiveProjectId(payload.id) ??
@@ -1203,8 +1458,8 @@ const buildSegmentEditorPayloadFromProjectDetails = (
 
       const record = segment as Record<string, unknown>;
       const index = normalizeInteger(record.segment_index) ?? normalizeInteger(record.index) ?? slot;
-      const currentEntry = currentEntries[slot] ?? currentEntries[index] ?? null;
-      const originalEntry = originalEntries[slot] ?? originalEntries[index] ?? currentEntry;
+      const currentEntry = currentEntriesBySegmentIndex.get(index) ?? null;
+      const originalEntry = originalEntriesBySegmentIndex.get(index) ?? currentEntry;
       const startTime = normalizeNumber(record.start_time);
       const endTime = normalizeNumber(record.end_time);
       const duration =
@@ -1236,6 +1491,8 @@ const buildSegmentEditorPayloadFromProjectDetails = (
       const voiceSourceDuration = pickSegmentEditorVoiceSourceDuration(record);
       const voiceSourceEndTime = pickSegmentEditorVoiceSourceEndTime(record);
       const voiceSourceStartTime = pickSegmentEditorVoiceSourceStartTime(record);
+      const speechTimingCoordinateSpace = pickSegmentEditorSpeechTimingCoordinateSpace(record);
+      const voiceSourceCoordinateSpace = pickSegmentEditorVoiceSourceCoordinateSpace(record);
 
       if (!text && duration === null && !currentEntry && !originalEntry) {
         return null;
@@ -1245,6 +1502,7 @@ const buildSegmentEditorPayloadFromProjectDetails = (
         _voice_source_duration: voiceSourceDuration,
         _voice_source_end_time: voiceSourceEndTime,
         _voice_source_start_time: voiceSourceStartTime,
+        _voice_source_coordinate_space: voiceSourceCoordinateSpace,
         current_video: getProjectSegmentMarker(currentEntry, `project:${projectId}:segment:${index}:current`),
         duration,
         durationSyncMode,
@@ -1263,6 +1521,7 @@ const buildSegmentEditorPayloadFromProjectDetails = (
         speech_duration: normalizeNumber(record.speech_duration) ?? voiceSourceDuration,
         speech_end_time: normalizeNumber(record.speech_end_time) ?? voiceSourceEndTime,
         speech_start_time: normalizeNumber(record.speech_start_time) ?? voiceSourceStartTime,
+        speechTimingCoordinateSpace,
         speech_words: Array.isArray(record.speech_words) ? record.speech_words as AdsflowSegmentEditorSpeechWordPayload[] : null,
         start_time: startTime,
         subtitle_color: normalizeText(record.subtitle_color),
@@ -1274,6 +1533,7 @@ const buildSegmentEditorPayloadFromProjectDetails = (
         voiceover_language: normalizeText(record.voiceover_language ?? record.voiceoverLanguage),
         voiceover_text_hash: normalizeText(record.voiceover_text_hash ?? record.voiceoverTextHash),
         voiceover_voice_type: normalizeText(record.voiceover_voice_type ?? record.voiceoverVoiceType),
+        voiceSourceCoordinateSpace,
         voice_type: normalizeText(record.voice_type),
       } satisfies AdsflowSegmentEditorSegmentPayload;
     })
@@ -2092,6 +2352,127 @@ const hasWorkspaceSegmentEditorCoherentPreciseSpeechTiming = (
   );
 };
 
+const hasWorkspaceSegmentEditorLegacyAssetLocalSpeechTiming = (
+  segment: WorkspaceSegmentEditorSegment,
+) => {
+  if (segment.startTime <= SEGMENT_EDITOR_SPEECH_TIMING_EPSILON_SECONDS) {
+    return false;
+  }
+
+  const wordStartTimes = segment.speechWords
+    .map((word) => Number(word.startTime))
+    .filter(Number.isFinite);
+  const wordEndTimes = segment.speechWords
+    .map((word) => Number(word.endTime))
+    .filter(Number.isFinite);
+  const speechStartTime = normalizeNumber(segment.speechStartTime);
+  const speechEndTime = normalizeNumber(segment.speechEndTime);
+  const explicitAssetDuration = normalizeNumber(segment.voiceSourceDuration);
+  const declaredTimingValues = [
+    ...wordStartTimes,
+    ...wordEndTimes,
+    speechStartTime,
+    speechEndTime,
+  ].filter((value): value is number => value !== null);
+  if (
+    explicitAssetDuration !== null &&
+    explicitAssetDuration > 0 &&
+    declaredTimingValues.some(
+      (value) => value > explicitAssetDuration + SEGMENT_EDITOR_SPEECH_TIMING_EPSILON_SECONDS,
+    )
+  ) {
+    return false;
+  }
+
+  if (wordStartTimes.length > 0) {
+    return Math.min(...wordStartTimes) < segment.startTime - SEGMENT_EDITOR_SPEECH_TIMING_EPSILON_SECONDS;
+  }
+
+  if (speechStartTime !== null) {
+    return speechStartTime < segment.startTime - SEGMENT_EDITOR_SPEECH_TIMING_EPSILON_SECONDS;
+  }
+
+  const assetDuration =
+    normalizeNumber(segment.voiceSourceDuration) ??
+    normalizeNumber(segment.speechDuration);
+  return (
+    speechEndTime !== null &&
+    assetDuration !== null &&
+    speechEndTime <= assetDuration + SEGMENT_EDITOR_SPEECH_TIMING_EPSILON_SECONDS
+  );
+};
+
+export const normalizeWorkspaceSegmentEditorStandaloneSpeechTiming = (
+  segment: WorkspaceSegmentEditorSegment,
+  projectTtsAssetId: number | null,
+): WorkspaceSegmentEditorSegment => {
+  const voiceoverAssetId = normalizePositiveProjectId(segment.voiceoverAssetId ?? segment.voiceover?.media_asset_id);
+  if (voiceoverAssetId === null || voiceoverAssetId === projectTtsAssetId) {
+    return segment;
+  }
+
+  const sourceDuration =
+    normalizeNumber(segment.voiceSourceDuration) ??
+    normalizeNumber(segment.speechDuration);
+  const normalizedSourceDuration =
+    sourceDuration !== null && sourceDuration > 0
+      ? roundSegmentEditorTimelineSeconds(sourceDuration)
+      : null;
+  const speechTimingCoordinateSpace = normalizeWorkspaceSegmentSpeechTimingCoordinateSpace(
+    segment.speechTimingCoordinateSpace,
+  );
+  const voiceSourceCoordinateSpace = normalizeWorkspaceSegmentVoiceSourceCoordinateSpace(
+    segment.voiceSourceCoordinateSpace,
+  );
+  const shouldConvertAssetLocalSpeech =
+    speechTimingCoordinateSpace === "asset_local" ||
+    (speechTimingCoordinateSpace === null && hasWorkspaceSegmentEditorLegacyAssetLocalSpeechTiming(segment));
+  if (!shouldConvertAssetLocalSpeech) {
+    if (voiceSourceCoordinateSpace === "global_audio") {
+      return {
+        ...segment,
+        speechTimingCoordinateSpace,
+        voiceSourceCoordinateSpace,
+      };
+    }
+    if (normalizedSourceDuration === null) {
+      return segment;
+    }
+
+    return {
+      ...segment,
+      speechTimingCoordinateSpace,
+      voiceSourceCoordinateSpace: "asset_local",
+      voiceSourceDuration: normalizedSourceDuration,
+      voiceSourceEndTime: normalizedSourceDuration,
+      voiceSourceStartTime: 0,
+    };
+  }
+
+  const convertedTiming = resolveWorkspaceSegmentAssetLocalSpeechTiming(segment, {
+    speechDuration: segment.speechDuration,
+    speechEndTime: segment.speechEndTime,
+    speechStartTime: segment.speechStartTime,
+    speechWords: segment.speechWords,
+    voiceSourceDuration: normalizedSourceDuration,
+  });
+  if (voiceSourceCoordinateSpace === "global_audio") {
+    return {
+      ...segment,
+      ...convertedTiming,
+      voiceSourceCoordinateSpace,
+      voiceSourceDuration: segment.voiceSourceDuration,
+      voiceSourceEndTime: segment.voiceSourceEndTime,
+      voiceSourceStartTime: segment.voiceSourceStartTime,
+    };
+  }
+
+  return {
+    ...segment,
+    ...convertedTiming,
+  };
+};
+
 const enrichWorkspaceSegmentEditorSessionWithVoiceoverDurations = async (
   session: WorkspaceSegmentEditorSession,
 ): Promise<WorkspaceSegmentEditorSession> => {
@@ -2099,7 +2480,12 @@ const enrichWorkspaceSegmentEditorSessionWithVoiceoverDurations = async (
     return session;
   }
 
-  const voiceoverAssetSegmentsNeedingMeasurement = session.segments.filter((segment) => {
+  const normalizedSession = {
+    ...session,
+    segments: session.segments.map((segment) =>
+      normalizeWorkspaceSegmentEditorStandaloneSpeechTiming(segment, session.ttsAssetId)),
+  };
+  const voiceoverAssetSegmentsNeedingMeasurement = normalizedSession.segments.filter((segment) => {
     const assetId = normalizePositiveProjectId(segment.voiceoverAssetId ?? segment.voiceover?.media_asset_id);
     return (
       assetId !== null &&
@@ -2111,7 +2497,7 @@ const enrichWorkspaceSegmentEditorSessionWithVoiceoverDurations = async (
   });
 
   if (voiceoverAssetSegmentsNeedingMeasurement.length === 0) {
-    return session;
+    return normalizedSession;
   }
 
   const measuredVoiceoverAssetDurations = await Promise.all(
@@ -2122,13 +2508,13 @@ const enrichWorkspaceSegmentEditorSessionWithVoiceoverDurations = async (
       }
 
       try {
-        const durationSeconds = await fetchWorkspaceVoiceoverAssetDuration(assetId, session.projectId);
+        const durationSeconds = await fetchWorkspaceVoiceoverAssetDuration(assetId, normalizedSession.projectId);
         return [segment.index, durationSeconds] as const;
       } catch (error) {
         console.warn("[segment-editor] Failed to measure segment voiceover asset duration", {
           assetId,
           error: error instanceof Error ? error.message : String(error),
-          projectId: session.projectId,
+          projectId: normalizedSession.projectId,
           segmentIndex: segment.index,
         });
         return [segment.index, null] as const;
@@ -2140,28 +2526,37 @@ const enrichWorkspaceSegmentEditorSessionWithVoiceoverDurations = async (
     measuredVoiceoverAssetDurations.filter((entry): entry is readonly [number, number] => entry[1] !== null),
   );
   if (durationBySegmentIndex.size === 0) {
-    return session;
+    return normalizedSession;
   }
 
   return {
-    ...session,
-    segments: session.segments.map((segment) => {
+    ...normalizedSession,
+    segments: normalizedSession.segments.map((segment) => {
       const durationSeconds = durationBySegmentIndex.get(segment.index);
       if (!durationSeconds) {
         return segment;
       }
 
       const preservePreciseSpeechTiming = hasWorkspaceSegmentEditorCoherentPreciseSpeechTiming(segment);
+      const measuredTimelineTiming = resolveWorkspaceSegmentAssetLocalSpeechTiming(segment, {
+        speechDuration: durationSeconds,
+        speechEndTime: durationSeconds,
+        speechStartTime: 0,
+        speechWords: [],
+        voiceSourceDuration: durationSeconds,
+      });
 
       return {
         ...segment,
-        speechDuration: preservePreciseSpeechTiming ? segment.speechDuration : durationSeconds,
+        ...(preservePreciseSpeechTiming
+          ? {
+              voiceSourceCoordinateSpace: "asset_local" as const,
+              voiceSourceDuration: durationSeconds,
+              voiceSourceEndTime: durationSeconds,
+              voiceSourceStartTime: 0,
+            }
+          : measuredTimelineTiming),
         speechDurationSource: preservePreciseSpeechTiming ? segment.speechDurationSource : "audio",
-        speechEndTime: preservePreciseSpeechTiming ? segment.speechEndTime : durationSeconds,
-        speechStartTime: preservePreciseSpeechTiming ? segment.speechStartTime : 0,
-        voiceSourceDuration: durationSeconds,
-        voiceSourceEndTime: durationSeconds,
-        voiceSourceStartTime: 0,
       };
     }),
   };
@@ -2536,34 +2931,121 @@ export const buildWorkspaceSegmentEditorSessionFromPayload = (
   const currentEntries = getProjectCurrentMediaEntries(projectDetailsPayload, originalEntries);
   const sceneSoundEntries = pickProjectMediaEntries(generationSettings?.segment_scene_sounds);
   const voiceoverEntries = recoverProjectVoiceoverEntriesFromRenderContract(generationSettings);
+  const authoritativeTimelineSegments = pickProjectDetailSegments(generationSettings);
+  const usesCurrentProjectTimeline =
+    Array.isArray(generationSettings?.video_segments) &&
+    generationSettings.video_segments.length > 0 &&
+    authoritativeTimelineSegments === generationSettings.video_segments;
+  const authoritativeTimelineSegmentIndexes = authoritativeTimelineSegments.map((segment, fallbackIndex) =>
+    getSegmentEditorSegmentIndex(segment, fallbackIndex));
+  assertUniqueSegmentEditorIndexes(authoritativeTimelineSegmentIndexes, "таймлайна проекта");
   const authoritativeTimelineSegmentsByIndex = new Map(
-    pickProjectDetailSegments(generationSettings).map((segment, fallbackIndex) => [
+    authoritativeTimelineSegments.map((segment, fallbackIndex) => [
       getSegmentEditorSegmentIndex(segment, fallbackIndex),
       segment,
     ] as const),
   );
+  const payloadSegments = payload.segments ?? [];
+  const payloadSegmentIndexes = payloadSegments.map((segment, fallbackIndex) =>
+    getSegmentEditorSegmentIndex(segment, fallbackIndex));
+  assertUniqueSegmentEditorIndexes(payloadSegmentIndexes, "редактора сегментов");
+  const payloadSegmentsByIndex = new Map(
+    payloadSegments.map((segment, fallbackIndex) => [
+      getSegmentEditorSegmentIndex(segment, fallbackIndex),
+      segment,
+    ] as const),
+  );
+  if (usesCurrentProjectTimeline) {
+    const authoritativeExplicitIndexes = authoritativeTimelineSegments.map(getExplicitSegmentEditorSegmentIndex);
+    const payloadExplicitIndexes = payloadSegments.map(getExplicitSegmentEditorSegmentIndex);
+    const hasPartialExplicitIndexes = (indexes: Array<number | null>) => {
+      const explicitCount = indexes.filter((index): index is number => index !== null).length;
+      return explicitCount > 0 && explicitCount < indexes.length;
+    };
+    const hasAuthoritativeExplicitIndexes = authoritativeExplicitIndexes.every((index) => index !== null);
+    const hasPayloadExplicitIndexes = payloadExplicitIndexes.every((index) => index !== null);
+    const canUseLegacyPositionalIdentity = (
+      hasAuthoritativeExplicitIndexes !== hasPayloadExplicitIndexes &&
+      (hasAuthoritativeExplicitIndexes ? authoritativeExplicitIndexes : payloadExplicitIndexes)
+        .every((index, slot) => index === slot)
+    );
+    if (
+      hasPartialExplicitIndexes(authoritativeExplicitIndexes) ||
+      hasPartialExplicitIndexes(payloadExplicitIndexes) ||
+      (hasAuthoritativeExplicitIndexes !== hasPayloadExplicitIndexes && !canUseLegacyPositionalIdentity)
+    ) {
+      throw new WorkspaceSegmentEditorError(
+        "Актуальный таймлайн проекта и данные редактора используют неоднозначные индексы сегментов.",
+        409,
+      );
+    }
+
+    const authoritativeIndexSet = new Set(authoritativeTimelineSegmentIndexes);
+    const payloadIndexSet = new Set(payloadSegmentIndexes);
+    const hasMismatchedSegmentSet =
+      authoritativeIndexSet.size !== payloadIndexSet.size ||
+      [...authoritativeIndexSet].some((segmentIndex) => !payloadIndexSet.has(segmentIndex));
+    if (hasMismatchedSegmentSet) {
+      throw new WorkspaceSegmentEditorError(
+        "Актуальный таймлайн проекта и данные редактора содержат разные сегменты. Обновите проект и повторите попытку.",
+        409,
+      );
+    }
+  }
+  const mediaSegmentIndexes = authoritativeTimelineSegmentIndexes.length > 0
+    ? authoritativeTimelineSegmentIndexes
+    : payloadSegmentIndexes;
+  const currentEntriesBySegmentIndex = buildProjectMediaEntriesBySegmentIndex(
+    currentEntries,
+    mediaSegmentIndexes,
+    "текущих медиа проекта",
+  );
+  const originalEntriesBySegmentIndex = buildProjectMediaEntriesBySegmentIndex(
+    originalEntries,
+    mediaSegmentIndexes,
+    "исходных медиа проекта",
+  );
   const projectMediaByAssetId = buildProjectMediaAssetIndex(projectMediaEnvelope.assets);
-  const rawSegments = (payload.segments ?? [])
-    .map((segment, fallbackIndex) =>
+  const segmentsToBuild = usesCurrentProjectTimeline
+    ? authoritativeTimelineSegments.map((authoritativeSegment, fallbackIndex) => {
+        const segmentIndex = getSegmentEditorSegmentIndex(authoritativeSegment, fallbackIndex);
+        const segment = payloadSegmentsByIndex.get(segmentIndex);
+        if (!segment) {
+          throw new WorkspaceSegmentEditorError(
+            `Данные редактора для сегмента ${segmentIndex + 1} отсутствуют.`,
+            409,
+          );
+        }
+        return { authoritativeSegment, segment };
+      })
+    : payloadSegments.map((segment, fallbackIndex) => ({
+        authoritativeSegment:
+          authoritativeTimelineSegmentsByIndex.get(getSegmentEditorSegmentIndex(segment, fallbackIndex)),
+        segment,
+      }));
+  const rawSegments = segmentsToBuild
+    .map(({ authoritativeSegment, segment }) =>
       buildWorkspaceSegmentEditorSegment(
         sessionProjectId,
         mergeProjectDetailTimelineIntoSegmentEditorPayload(
           segment,
-          authoritativeTimelineSegmentsByIndex.get(getSegmentEditorSegmentIndex(segment, fallbackIndex)),
+          authoritativeSegment,
+          { currentTimeline: usesCurrentProjectTimeline },
         ),
         {
           currentEntries,
+          currentEntriesBySegmentIndex,
           projectMediaAssets: projectMediaEnvelope.assets,
           projectMediaLoaded: projectMediaEnvelope.loaded,
           projectMediaByAssetId,
           originalEntries,
+          originalEntriesBySegmentIndex,
           sceneSoundEntries,
           voiceoverEntries,
         },
       ),
     )
-    .filter((segment): segment is WorkspaceSegmentEditorSegment => Boolean(segment))
-    .sort((left, right) => left.index - right.index);
+    .filter((segment): segment is WorkspaceSegmentEditorSegment => Boolean(segment));
   const segments = repairWorkspaceSegmentEditorSpeechWordBoundaries(rawSegments);
 
   if (segments.length < WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS) {
@@ -2746,10 +3228,12 @@ export const buildWorkspaceSegmentEditorSegment = (
   payload: AdsflowSegmentEditorSegmentPayload,
   projectSources?: {
     currentEntries: AdsflowProjectMediaEntryPayload[];
+    currentEntriesBySegmentIndex?: ReadonlyMap<number, AdsflowProjectMediaEntryPayload>;
     projectMediaAssets?: WorkspaceMediaAssetRef[];
     projectMediaLoaded?: boolean;
     projectMediaByAssetId: Map<number, WorkspaceMediaAssetRef>;
     originalEntries: AdsflowProjectMediaEntryPayload[];
+    originalEntriesBySegmentIndex?: ReadonlyMap<number, AdsflowProjectMediaEntryPayload>;
     sceneSoundEntries?: AdsflowProjectMediaEntryPayload[];
     voiceoverEntries?: AdsflowProjectMediaEntryPayload[];
   },
@@ -2787,13 +3271,19 @@ export const buildWorkspaceSegmentEditorSegment = (
       : null);
   const normalizedVoiceSourceDuration =
     voiceSourceDuration !== null ? Math.max(0, Number(voiceSourceDuration.toFixed(3))) : null;
+  const speechTimingCoordinateSpace = pickSegmentEditorSpeechTimingCoordinateSpace(payloadRecord);
+  const voiceSourceCoordinateSpace = pickSegmentEditorVoiceSourceCoordinateSpace(payloadRecord);
   const speechWords = normalizeSpeechWords(payload.speech_words);
   const currentVideoMarker = normalizeText(payload.current_video);
   const originalVideoMarker = normalizeText(payload.original_video);
   const hasCurrentVideo = Boolean(currentVideoMarker);
   const hasOriginalVideo = Boolean(originalVideoMarker);
-  const currentEntry = projectSources?.currentEntries[index] ?? null;
-  const explicitOriginalEntry = projectSources?.originalEntries[index] ?? null;
+  const currentEntry =
+    projectSources?.currentEntriesBySegmentIndex?.get(index) ??
+    findProjectMediaEntryBySegmentIndex(projectSources?.currentEntries ?? [], index);
+  const explicitOriginalEntry =
+    projectSources?.originalEntriesBySegmentIndex?.get(index) ??
+    findProjectMediaEntryBySegmentIndex(projectSources?.originalEntries ?? [], index);
   const originalEntry =
     explicitOriginalEntry ??
     (!hasOriginalVideo && currentEntry && detectWorkspaceSegmentSourceKind(currentEntry) !== "upload" ? currentEntry : null);
@@ -2932,6 +3422,7 @@ export const buildWorkspaceSegmentEditorSegment = (
     speechEndTime:
       speechStartTime !== null && speechEndTime !== null ? Math.max(speechStartTime, speechEndTime) : null,
     speechStartTime: speechStartTime !== null ? Math.max(0, speechStartTime) : null,
+    speechTimingCoordinateSpace,
     speechWords,
     startTime,
     voiceSourceDuration: normalizedVoiceSourceDuration,
@@ -2940,6 +3431,7 @@ export const buildWorkspaceSegmentEditorSegment = (
         ? Math.max(voiceSourceStartTime, voiceSourceEndTime)
         : null,
     voiceSourceStartTime: voiceSourceStartTime !== null ? Math.max(0, voiceSourceStartTime) : null,
+    voiceSourceCoordinateSpace,
     subtitleColor: normalizeText(payload.subtitle_color) || null,
     subtitleStyle: normalizeText(payload.subtitle_style) || null,
     subtitleType: normalizeText(payload.subtitle_type) || null,

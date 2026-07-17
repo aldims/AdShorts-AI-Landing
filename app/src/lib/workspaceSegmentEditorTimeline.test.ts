@@ -6,6 +6,7 @@ import {
   getWorkspaceSegmentTimelineSpeechRange,
   isWorkspaceSegmentEditorLegacyPunctuationEstimatedDuration,
   rebuildWorkspaceSegmentEditorTimeline,
+  resolveWorkspaceSegmentAssetLocalSpeechTiming,
   resolveWorkspaceSegmentTimelineSpeechBoundaryTime,
   resolveWorkspaceSegmentDuration,
   type WorkspaceSegmentTimelineSegment,
@@ -24,6 +25,76 @@ const createSegment = (overrides: Partial<WorkspaceSegmentTimelineSegment> = {})
 });
 
 describe("workspace segment editor timeline", () => {
+  it("converts standalone asset-local speech into the global timeline while keeping the source local", () => {
+    const timing = resolveWorkspaceSegmentAssetLocalSpeechTiming(
+      { startTime: 8.862 },
+      {
+        speechDuration: 4,
+        speechEndTime: 4,
+        speechStartTime: 0.06,
+        speechWords: [
+          { endTime: 0.42, startTime: 0.06 },
+          { endTime: 3.9, startTime: 3.5 },
+        ],
+        voiceSourceDuration: 4,
+      },
+    );
+
+    expect(timing).toEqual({
+      speechTimingCoordinateSpace: "global_timeline",
+      speechDuration: 3.94,
+      speechEndTime: 12.862,
+      speechStartTime: 8.922,
+      speechWords: [
+        { endTime: 9.282, startTime: 8.922 },
+        { endTime: 12.762, startTime: 12.362 },
+      ],
+      voiceSourceCoordinateSpace: "asset_local",
+      voiceSourceDuration: 4,
+      voiceSourceEndTime: 4,
+      voiceSourceStartTime: 0,
+    });
+  });
+
+  it("keeps converted speech stable across repeated timeline rebuilds", () => {
+    const convertedTiming = resolveWorkspaceSegmentAssetLocalSpeechTiming(
+      { startTime: 8.862 },
+      {
+        speechDuration: 4,
+        speechEndTime: 4,
+        speechStartTime: 0,
+        speechWords: [{ endTime: 3.9, startTime: 0.1 }],
+        voiceSourceDuration: 4,
+      },
+    );
+    const segments = [
+      createSegment({ duration: 4.82, endTime: 4.82, mediaType: "video" }),
+      createSegment({ duration: 4.042, endTime: 8.862, mediaType: "video", startTime: 4.82 }),
+      createSegment({
+        ...convertedTiming,
+        duration: 4,
+        endTime: 12.862,
+        mediaType: "video",
+        startTime: 8.862,
+      }),
+    ];
+    const rebuildOptions = {
+      visualDurationSeconds: (segment: WorkspaceSegmentTimelineSegment) => segment.duration,
+      visualKind: () => "video" as const,
+    };
+
+    const firstRebuild = rebuildWorkspaceSegmentEditorTimeline(segments, rebuildOptions);
+    const secondRebuild = rebuildWorkspaceSegmentEditorTimeline(firstRebuild, rebuildOptions);
+
+    expect(secondRebuild).toEqual(firstRebuild);
+    expect(secondRebuild[2]).toEqual(expect.objectContaining({
+      speechEndTime: 12.862,
+      speechStartTime: 8.862,
+      startTime: 8.862,
+    }));
+    expect(secondRebuild[2]?.speechWords).toEqual([{ endTime: 12.762, startTime: 8.962 }]);
+  });
+
   it("rebuilds segment start and end times in the current array order", () => {
     const insertedSegment = createSegment({
       duration: 2.4,

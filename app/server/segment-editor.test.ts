@@ -6,6 +6,7 @@ import {
   buildWorkspaceSegmentEditorSessionFromPayload,
   buildWorkspaceSegmentEditorSegment,
   getWorkspaceSegmentEditorSessionForAccessibleProject,
+  normalizeWorkspaceSegmentEditorStandaloneSpeechTiming,
   readWorkspaceAudioDurationSecondsFromBuffer,
   resolveWorkspaceSegmentEditorCustomMusicMetadata,
 } from "./segment-editor.js";
@@ -96,6 +97,586 @@ describe("segment editor asset lifecycle mapping", () => {
     ...overrides,
   });
 
+  it("uses current video_segments instead of a stale original timeline", () => {
+    const session = buildWorkspaceSegmentEditorSessionFromPayload(
+      4242,
+      {
+        project_id: 4242,
+        segments: [
+          {
+            duration: 3.88,
+            duration_mode: "manual",
+            end_time: 3.88,
+            index: 0,
+            manual_duration_seconds: 3.88,
+            start_time: 0,
+            text: "First scene",
+          },
+          {
+            duration: 4.042,
+            duration_mode: "manual",
+            end_time: 7.922,
+            index: 1,
+            manual_duration_seconds: 4.042,
+            start_time: 3.88,
+            text: "Second scene",
+          },
+          {
+            duration: 4.042,
+            duration_mode: "manual",
+            end_time: 11.964,
+            index: 2,
+            manual_duration_seconds: 4.042,
+            start_time: 7.922,
+            text: "Third scene",
+          },
+          {
+            duration: 4.042,
+            duration_mode: "manual",
+            end_time: 16.006,
+            index: 3,
+            manual_duration_seconds: 4.042,
+            start_time: 11.964,
+            text: "Fourth scene",
+          },
+        ],
+      },
+      {
+        projectDetailsPayload: {
+          generation_settings: {
+            original_video_segments: [
+              {
+                duration: 3.88,
+                end_time: 3.88,
+                index: 0,
+                start_time: 0,
+                text: "First scene",
+              },
+              {
+                duration: 4.042,
+                end_time: 7.922,
+                index: 1,
+                start_time: 3.88,
+                text: "Second scene",
+              },
+              {
+                duration: 4.042,
+                end_time: 11.964,
+                index: 2,
+                start_time: 7.922,
+                text: "Third scene",
+              },
+              {
+                duration: 4.042,
+                end_time: 16.006,
+                index: 3,
+                start_time: 11.964,
+                text: "Fourth scene",
+              },
+            ],
+            video_segments: [
+              {
+                duration: 4.82,
+                end_time: 4.82,
+                index: 0,
+                start_time: 0,
+                text: "First scene",
+              },
+              {
+                duration: 4.042,
+                end_time: 8.862,
+                index: 1,
+                start_time: 4.82,
+                text: "Second scene",
+              },
+              {
+                duration: 4.042,
+                end_time: 12.904,
+                index: 2,
+                start_time: 8.862,
+                text: "Third scene",
+              },
+              {
+                duration: 4.042,
+                end_time: 16.946,
+                index: 3,
+                start_time: 12.904,
+                text: "Fourth scene",
+              },
+            ],
+          },
+        },
+      },
+    );
+
+    expect(session.segments.map((segment) => ({
+      duration: segment.duration,
+      endTime: segment.endTime,
+      manualDurationSeconds: segment.manualDurationSeconds,
+      startTime: segment.startTime,
+    }))).toEqual([
+      { duration: 4.82, endTime: 4.82, manualDurationSeconds: 4.82, startTime: 0 },
+      { duration: 4.042, endTime: 8.862, manualDurationSeconds: 4.042, startTime: 4.82 },
+      { duration: 4.042, endTime: 12.904, manualDurationSeconds: 4.042, startTime: 8.862 },
+      { duration: 4.042, endTime: 16.946, manualDurationSeconds: 4.042, startTime: 12.904 },
+    ]);
+  });
+
+  it("uses the current video_segments order instead of a stale editor payload order", () => {
+    const session = buildWorkspaceSegmentEditorSessionFromPayload(
+      4242,
+      {
+        project_id: 4242,
+        segments: [
+          { duration: 3, end_time: 3, index: 0, start_time: 0, text: "Payload zero" },
+          { duration: 4, end_time: 7, index: 1, start_time: 3, text: "Payload one" },
+        ],
+      },
+      {
+        projectDetailsPayload: {
+          generation_settings: {
+            video_segments: [
+              { duration: 4, end_time: 4, index: 1, start_time: 0, text: "Current one" },
+              { duration: 3, end_time: 7, index: 0, start_time: 4, text: "Current zero" },
+            ],
+          },
+        },
+      },
+    );
+
+    expect(session.segments.map((segment) => ({
+      endTime: segment.endTime,
+      index: segment.index,
+      startTime: segment.startTime,
+      text: segment.text,
+    }))).toEqual([
+      { endTime: 4, index: 1, startTime: 0, text: "Payload one" },
+      { endTime: 7, index: 0, startTime: 4, text: "Payload zero" },
+    ]);
+  });
+
+  it("rejects a stale editor payload with a different segment set than current video_segments", () => {
+    expect(() => buildWorkspaceSegmentEditorSessionFromPayload(
+      4242,
+      {
+        project_id: 4242,
+        segments: [
+          { duration: 3, end_time: 3, index: 0, start_time: 0, text: "Zero" },
+          { duration: 4, end_time: 7, index: 1, start_time: 3, text: "Stale one" },
+        ],
+      },
+      {
+        projectDetailsPayload: {
+          generation_settings: {
+            video_segments: [
+              { duration: 3, end_time: 3, index: 0, start_time: 0, text: "Zero" },
+              { duration: 4, end_time: 7, index: 2, start_time: 3, text: "Current two" },
+            ],
+          },
+        },
+      },
+    )).toThrow("содержат разные сегменты");
+  });
+
+  it("rejects positional enrichment when an explicitly indexed current timeline was reordered", () => {
+    expect(() => buildWorkspaceSegmentEditorSessionFromPayload(
+      4242,
+      {
+        project_id: 4242,
+        segments: [
+          { duration: 3, end_time: 3, start_time: 0, text: "Unknown identity A" },
+          { duration: 4, end_time: 7, start_time: 3, text: "Unknown identity B" },
+        ],
+      },
+      {
+        projectDetailsPayload: {
+          generation_settings: {
+            video_segments: [
+              { duration: 4, end_time: 4, index: 1, start_time: 0, text: "Current one" },
+              { duration: 3, end_time: 7, index: 0, start_time: 4, text: "Current zero" },
+            ],
+          },
+        },
+      },
+    )).toThrow("используют неоднозначные индексы");
+  });
+
+  it("takes coordinate markers and their numeric timing tuple from the same current segment", () => {
+    const session = buildWorkspaceSegmentEditorSessionFromPayload(
+      4242,
+      {
+        project_id: 4242,
+        segments: [{
+          _voice_source_coordinate_space: "asset_local",
+          _voice_source_duration: 2,
+          _voice_source_end_time: 2,
+          _voice_source_start_time: 0,
+          duration: 4,
+          end_time: 9,
+          index: 0,
+          provider_timing_coordinate_space: "asset_local",
+          speech_duration: 2,
+          speech_end_time: 2,
+          speech_start_time: 0,
+          speech_words: [{ end_time: 1.9, start_time: 0.1, text: "Payload" }],
+          start_time: 5,
+          text: "Scene",
+        }],
+      },
+      {
+        projectDetailsPayload: {
+          generation_settings: {
+            video_segments: [{
+              _voice_source_coordinate_space: "global_audio",
+              _voice_source_duration: 2.5,
+              _voice_source_end_time: 7.5,
+              _voice_source_start_time: 5,
+              duration: 4,
+              end_time: 9,
+              index: 0,
+              provider_timing_coordinate_space: "final_timeline",
+              speech_duration: 2.3,
+              speech_end_time: 7.4,
+              speech_start_time: 5.1,
+              speech_words: [{ end_time: 7.4, start_time: 5.1, text: "Current" }],
+              start_time: 5,
+              text: "Scene",
+            }],
+          },
+        },
+      },
+    );
+
+    expect(session.segments[0]).toEqual(expect.objectContaining({
+      speechDuration: 2.3,
+      speechEndTime: 7.4,
+      speechStartTime: 5.1,
+      speechTimingCoordinateSpace: "global_timeline",
+      voiceSourceCoordinateSpace: "global_audio",
+      voiceSourceDuration: 2.5,
+      voiceSourceEndTime: 7.5,
+      voiceSourceStartTime: 5,
+    }));
+    expect(session.segments[0]?.speechWords).toEqual([
+      { confidence: 0, endTime: 7.4, startTime: 5.1, text: "Current" },
+    ]);
+  });
+
+  it("derives a coherent current boundary when only its positive duration is usable", () => {
+    const session = buildWorkspaceSegmentEditorSessionFromPayload(
+      4242,
+      {
+        project_id: 4242,
+        segments: [
+          {
+            duration: 2,
+            duration_mode: "manual",
+            end_time: 2,
+            index: 0,
+            manual_duration_seconds: 2,
+            start_time: 0,
+            text: "Scene",
+          },
+        ],
+      },
+      {
+        projectDetailsPayload: {
+          generation_settings: {
+            video_segments: [
+              {
+                duration: 3,
+                end_time: 0,
+                index: 0,
+                start_time: 0,
+                text: "Scene",
+              },
+            ],
+          },
+        },
+      },
+    );
+
+    expect(session.segments[0]).toEqual(expect.objectContaining({
+      duration: 3,
+      endTime: 3,
+      manualDurationSeconds: 3,
+      startTime: 0,
+    }));
+  });
+
+  it("preserves payload timeline order and maps media by explicit segment_index", () => {
+    const session = buildWorkspaceSegmentEditorSessionFromPayload(
+      4242,
+      {
+        project_id: 4242,
+        segments: [
+          { current_video: "segment-7", duration: 2, index: 7, text: "Seven" },
+          { current_video: "segment-2", duration: 3, index: 2, text: "Two" },
+        ],
+      },
+      {
+        projectDetailsPayload: {
+          video_urls: [
+            {
+              download_url: "/api/media/200/download",
+              media_asset_id: 200,
+              media_type: "photo",
+              segment_index: 2,
+            },
+            {
+              download_url: "/api/media/700/download",
+              media_asset_id: 700,
+              media_type: "photo",
+              segment_index: 7,
+            },
+          ],
+        },
+      },
+    );
+
+    expect(session.segments.map((segment) => segment.index)).toEqual([7, 2]);
+    expect(session.segments.map((segment) => segment.currentAsset?.assetId)).toEqual([700, 200]);
+  });
+
+  it("maps fully unindexed legacy media positionally without treating empty indexes as zero", () => {
+    const session = buildWorkspaceSegmentEditorSessionFromPayload(
+      4242,
+      {
+        project_id: 4242,
+        segments: [
+          { current_video: "legacy-first", duration: 2, index: 0, text: "First" },
+          { current_video: "legacy-second", duration: 3, index: 1, text: "Second" },
+        ],
+      },
+      {
+        projectDetailsPayload: {
+          video_urls: [
+            {
+              download_url: "/api/media/100/download",
+              media_asset_id: 100,
+              media_type: "photo",
+            },
+            {
+              download_url: "/api/media/200/download",
+              media_asset_id: 200,
+              media_type: "photo",
+              segment_index: "  ",
+            },
+          ],
+        },
+      },
+    );
+
+    expect(session.segments.map((segment) => segment.currentAsset?.assetId)).toEqual([100, 200]);
+  });
+
+  it("rejects partially indexed media instead of silently dropping an ambiguous asset", () => {
+    expect(() => buildWorkspaceSegmentEditorSessionFromPayload(
+      4242,
+      {
+        project_id: 4242,
+        segments: [
+          { duration: 2, index: 0, text: "First" },
+          { duration: 3, index: 1, text: "Second" },
+        ],
+      },
+      {
+        projectDetailsPayload: {
+          video_urls: [
+            {
+              download_url: "/api/media/100/download",
+              media_asset_id: 100,
+              media_type: "photo",
+              segment_index: 0,
+            },
+            {
+              download_url: "/api/media/200/download",
+              media_asset_id: 200,
+              media_type: "photo",
+            },
+          ],
+        },
+      },
+    )).toThrow("смешивает медиа с segment_index и без него");
+  });
+
+  it("rejects duplicate segment indexes instead of silently overwriting timeline state", () => {
+    expect(() => buildWorkspaceSegmentEditorSessionFromPayload(4242, {
+      project_id: 4242,
+      segments: [
+        { duration: 2, index: 3, text: "First" },
+        { duration: 2, index: 3, text: "Duplicate" },
+      ],
+    })).toThrow("повторяющийся индекс сегмента 3");
+  });
+
+  it("normalizes standalone asset speech once into the global project timeline", () => {
+    const segment = buildWorkspaceSegmentEditorSegment(4242, {
+      _voice_source_duration: 4,
+      _voice_source_end_time: 4,
+      _voice_source_start_time: 0,
+      duration: 4,
+      end_time: 12.862,
+      index: 2,
+      speech_duration: 4,
+      speech_end_time: 4,
+      speech_start_time: 0,
+      speech_words: [{ end_time: 3.9, start_time: 0.1, text: "Third" }],
+      start_time: 8.862,
+      text: "Third",
+      voiceover_asset_id: 9713,
+    });
+    expect(segment).not.toBeNull();
+
+    const normalized = normalizeWorkspaceSegmentEditorStandaloneSpeechTiming(segment!, null);
+    const normalizedAgain = normalizeWorkspaceSegmentEditorStandaloneSpeechTiming(normalized, null);
+
+    expect(normalized).toEqual(expect.objectContaining({
+      speechTimingCoordinateSpace: "global_timeline",
+      speechEndTime: 12.862,
+      speechStartTime: 8.862,
+      voiceSourceCoordinateSpace: "asset_local",
+      voiceSourceDuration: 4,
+      voiceSourceEndTime: 4,
+      voiceSourceStartTime: 0,
+    }));
+    expect(normalized.speechWords).toEqual([
+      { confidence: 0, endTime: 12.762, startTime: 8.962, text: "Third" },
+    ]);
+    expect(normalizedAgain).toEqual(normalized);
+  });
+
+  it("recognizes asset-local speechEndTime when the start boundary and words are absent", () => {
+    const segment = buildWorkspaceSegmentEditorSegment(4242, {
+      _voice_source_duration: 4,
+      duration: 4,
+      end_time: 12.862,
+      index: 2,
+      speech_duration: 4,
+      start_time: 8.862,
+      text: "Third",
+      voiceover_asset_id: 9713,
+    });
+    expect(segment).not.toBeNull();
+
+    const normalized = normalizeWorkspaceSegmentEditorStandaloneSpeechTiming({
+      ...segment!,
+      speechEndTime: 4,
+      speechStartTime: null,
+      speechWords: [],
+    }, null);
+
+    expect(normalized).toEqual(expect.objectContaining({
+      speechTimingCoordinateSpace: "global_timeline",
+      speechEndTime: 12.862,
+      speechStartTime: 8.862,
+      voiceSourceCoordinateSpace: "asset_local",
+      voiceSourceEndTime: 4,
+      voiceSourceStartTime: 0,
+    }));
+  });
+
+  it("uses explicit asset-local coordinates when local speech starts after the visual offset", () => {
+    const segment = buildWorkspaceSegmentEditorSegment(4242, {
+      _voice_source_coordinate_space: "asset_local",
+      _voice_source_duration: 2.5,
+      _voice_source_end_time: 2.5,
+      _voice_source_start_time: 0,
+      duration: 3,
+      end_time: 4,
+      index: 1,
+      provider_timing_coordinate_space: "asset_local",
+      speech_duration: 0.8,
+      speech_end_time: 2,
+      speech_start_time: 1.2,
+      speech_words: [{ end_time: 2, start_time: 1.2, text: "Late" }],
+      start_time: 1,
+      text: "Late",
+      voiceover_asset_id: 9712,
+    });
+    expect(segment).not.toBeNull();
+
+    const normalized = normalizeWorkspaceSegmentEditorStandaloneSpeechTiming(segment!, null);
+
+    expect(normalized).toEqual(expect.objectContaining({
+      speechEndTime: 3,
+      speechStartTime: 2.2,
+      speechTimingCoordinateSpace: "global_timeline",
+      voiceSourceCoordinateSpace: "asset_local",
+      voiceSourceEndTime: 2.5,
+      voiceSourceStartTime: 0,
+    }));
+    expect(normalized.speechWords).toEqual([
+      { confidence: 0, endTime: 3, startTime: 2.2, text: "Late" },
+    ]);
+  });
+
+  it("does not double-offset explicitly global speech that bleeds before the visual boundary", () => {
+    const segment = buildWorkspaceSegmentEditorSegment(4242, {
+      _voice_source_coordinate_space: "asset_local",
+      _voice_source_duration: 4,
+      _voice_source_end_time: 4,
+      _voice_source_start_time: 0,
+      duration: 4,
+      end_time: 12.862,
+      index: 2,
+      provider_timing_coordinate_space: "final_timeline",
+      speech_duration: 3.9,
+      speech_end_time: 12.6,
+      speech_start_time: 8.7,
+      speech_words: [{ end_time: 9.1, start_time: 8.7, text: "Bleed" }],
+      start_time: 8.862,
+      text: "Bleed",
+      voiceover_asset_id: 9713,
+    });
+    expect(segment).not.toBeNull();
+
+    const normalized = normalizeWorkspaceSegmentEditorStandaloneSpeechTiming(segment!, null);
+    const normalizedAgain = normalizeWorkspaceSegmentEditorStandaloneSpeechTiming(normalized, null);
+
+    expect(normalized).toEqual(expect.objectContaining({
+      speechEndTime: 12.6,
+      speechStartTime: 8.7,
+      speechTimingCoordinateSpace: "global_timeline",
+      voiceSourceCoordinateSpace: "asset_local",
+    }));
+    expect(normalized.speechWords).toEqual([
+      { confidence: 0, endTime: 9.1, startTime: 8.7, text: "Bleed" },
+    ]);
+    expect(normalizedAgain).toEqual(normalized);
+  });
+
+  it("does not double-offset legacy global speech that cannot fit the standalone asset", () => {
+    const segment = buildWorkspaceSegmentEditorSegment(4242, {
+      _voice_source_duration: 4,
+      _voice_source_end_time: 4,
+      _voice_source_start_time: 0,
+      duration: 4,
+      end_time: 12.862,
+      index: 2,
+      speech_duration: 3.9,
+      speech_end_time: 12.6,
+      speech_start_time: 8.7,
+      speech_words: [{ end_time: 9.1, start_time: 8.7, text: "Bleed" }],
+      start_time: 8.862,
+      text: "Bleed",
+      voiceover_asset_id: 9713,
+    });
+    expect(segment).not.toBeNull();
+
+    const normalized = normalizeWorkspaceSegmentEditorStandaloneSpeechTiming(segment!, null);
+
+    expect(normalized).toEqual(expect.objectContaining({
+      speechEndTime: 12.6,
+      speechStartTime: 8.7,
+      speechTimingCoordinateSpace: null,
+      voiceSourceCoordinateSpace: "asset_local",
+    }));
+    expect(normalized.speechWords).toEqual([
+      { confidence: 0, endTime: 9.1, startTime: 8.7, text: "Bleed" },
+    ]);
+  });
+
   it("downgrades upstream video segments to photo when linked entries only expose photo assets", () => {
     const segment = buildWorkspaceSegmentEditorSegment(
       42,
@@ -114,6 +695,7 @@ describe("segment editor asset lifecycle mapping", () => {
             media_type: "photo",
             mime_type: "image/jpeg",
             role: "segment_current",
+            segment_index: 0,
           },
         ],
         originalEntries: [
@@ -123,6 +705,7 @@ describe("segment editor asset lifecycle mapping", () => {
             media_type: "photo",
             mime_type: "image/jpeg",
             role: "segment_original",
+            segment_index: 0,
           },
         ],
         projectMediaByAssetId: new Map(),
@@ -153,6 +736,7 @@ describe("segment editor asset lifecycle mapping", () => {
             media_type: "video",
             mime_type: "video/mp4",
             role: "segment_current",
+            segment_index: 0,
           },
         ],
         originalEntries: [
@@ -162,6 +746,7 @@ describe("segment editor asset lifecycle mapping", () => {
             media_type: "photo",
             mime_type: "image/jpeg",
             role: "segment_original",
+            segment_index: 0,
           },
         ],
         projectMediaByAssetId: new Map(),
@@ -197,6 +782,7 @@ describe("segment editor asset lifecycle mapping", () => {
             media_type: "video",
             mime_type: "video/mp4",
             role: "segment_current",
+            segment_index: 1,
             source_kind: "ai_generated",
           },
         ],
@@ -208,6 +794,7 @@ describe("segment editor asset lifecycle mapping", () => {
             media_type: "video",
             mime_type: "video/mp4",
             role: "segment_original",
+            segment_index: 1,
             source_kind: "ai_generated",
           },
         ],
@@ -243,6 +830,7 @@ describe("segment editor asset lifecycle mapping", () => {
             media_type: "video",
             mime_type: "video/mp4",
             role: "segment_current",
+            segment_index: 1,
             source_kind: "ai_generated",
           },
         ],
@@ -608,6 +1196,7 @@ describe("segment editor asset lifecycle mapping", () => {
             media_asset_id: 900,
             media_type: "photo",
             role: "segment_current",
+            segment_index: 0,
           },
         ],
         originalEntries: [
@@ -616,6 +1205,7 @@ describe("segment editor asset lifecycle mapping", () => {
             media_asset_id: 900,
             media_type: "photo",
             role: "segment_original",
+            segment_index: 0,
           },
         ],
         projectMediaByAssetId: new Map(),
@@ -646,6 +1236,7 @@ describe("segment editor asset lifecycle mapping", () => {
             media_asset_id: 901,
             media_type: "photo",
             role: "segment_current",
+            segment_index: 0,
           },
         ],
         originalEntries: [
@@ -654,6 +1245,7 @@ describe("segment editor asset lifecycle mapping", () => {
             media_asset_id: 901,
             media_type: "photo",
             role: "segment_original",
+            segment_index: 0,
           },
         ],
         projectMediaByAssetId: new Map(),
@@ -691,6 +1283,7 @@ describe("segment editor asset lifecycle mapping", () => {
             media_asset_id: 2405,
             media_type: "video",
             role: "final_video",
+            segment_index: 4,
             source: "final_video",
           },
         ],
@@ -704,6 +1297,7 @@ describe("segment editor asset lifecycle mapping", () => {
             media_asset_id: 2405,
             media_type: "video",
             role: "final_video",
+            segment_index: 4,
             source: "final_video",
           },
         ],
@@ -836,6 +1430,7 @@ describe("segment editor asset lifecycle mapping", () => {
             media_asset_id: 1001,
             media_type: "photo",
             role: "segment_current",
+            segment_index: 0,
             source_kind: "upload",
           },
         ],

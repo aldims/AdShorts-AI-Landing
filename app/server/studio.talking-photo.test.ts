@@ -310,4 +310,64 @@ describe("studio talking photo speaker confirmation", () => {
       ]),
     );
   });
+
+  it("forwards talking photo speech timing and the standalone audio source window", async () => {
+    const { getStudioSegmentTalkingPhotoJobStatus } = await loadStudioModule();
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(String(input));
+        if (url.pathname.startsWith("/api/admin/users")) {
+          return jsonResponse({ items: [] });
+        }
+        if (url.pathname === "/api/web/segment-talking-photo/jobs/talking-job-timing") {
+          return jsonResponse({
+            asset: {
+              duration_seconds: 3.4,
+              file_name: "talking-photo.mp4",
+              media_asset_id: 9913,
+              mime_type: "video/mp4",
+            },
+            job_id: "talking-job-timing",
+            speech_duration: 3.1,
+            speech_duration_source: "audio",
+            speech_end_time: 3.2,
+            speech_start_time: 0.1,
+            speech_words: [
+              { confidence: 0.98, end_time: 0.5, start_time: 0.1, text: "Hello" },
+            ],
+            status: "done",
+            user: {
+              balance: 40,
+              plan: "START",
+              user_id: "8160048802147561000",
+            },
+            voice_source_duration: 3.4,
+            voice_source_end_time: 3.4,
+            voice_source_start_time: 0,
+          });
+        }
+
+        return jsonResponse({ detail: `unexpected ${url.pathname}` }, 500);
+      }),
+    );
+
+    const status = await getStudioSegmentTalkingPhotoJobStatus("talking-job-timing", {
+      email: "alexmamondi@gmail.com",
+    });
+
+    expect(status).toEqual(expect.objectContaining({
+      speechDuration: 3.1,
+      speechDurationSource: "audio",
+      speechEndTime: 3.2,
+      speechStartTime: 0.1,
+      voiceSourceDuration: 3.4,
+      voiceSourceEndTime: 3.4,
+      voiceSourceStartTime: 0,
+    }));
+    expect(status.speechWords).toEqual([
+      { confidence: 0.98, endTime: 0.5, startTime: 0.1, text: "Hello" },
+    ]);
+  });
 });
