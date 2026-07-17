@@ -487,6 +487,7 @@ type AdsflowBatchVoiceoverJobStatusResponse = AdsflowSegmentAiVideoJobCreateResp
 };
 
 type WorkspaceCreditConsumption = {
+  debitEventKey: string;
   purchased: number;
   subscription: number;
 };
@@ -6523,6 +6524,7 @@ const consumeWorkspaceGenerationCredit = async (
 
   return {
     consumed: {
+      debitEventKey: usageEventKey,
       purchased: Math.max(0, Number(payload.consumed.purchased ?? 0)),
       subscription: Math.max(0, Number(payload.consumed.subscription ?? 0)),
     } satisfies WorkspaceCreditConsumption,
@@ -6538,7 +6540,6 @@ const refundWorkspaceGenerationCredit = async (
     jobId?: string;
     projectId?: number;
     taskType?: string;
-    usageEventKey?: string;
   },
 ): Promise<WorkspaceProfile> => {
   if (consumed.purchased <= 0 && consumed.subscription <= 0) {
@@ -6547,18 +6548,22 @@ const refundWorkspaceGenerationCredit = async (
 
   const externalUserId = await resolveStudioExternalUserId(user);
   const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
-  const usageEventKey = normalizeGenerationText(options?.usageEventKey) || `usage:web-credit-refund:${randomUUID()}`;
+  const debitEventKey = normalizeGenerationText(consumed.debitEventKey);
+  if (!debitEventKey) {
+    throw new Error("Consumed web credits are missing their debit event key.");
+  }
   const payloadText = await postAdsflowText("/api/web/credits/refund", {
     admin_token: env.adsflowAdminToken,
     consumed_purchased: Math.max(0, Math.trunc(consumed.purchased || 0)),
     consumed_subscription: Math.max(0, Math.trunc(consumed.subscription || 0)),
+    debit_event_key: debitEventKey,
     external_user_id: externalUserId,
     job_id: options?.jobId,
     language: normalizeStudioLanguage(language),
     project_id: options?.projectId,
     referral_source: "landing_site",
     task_type: options?.taskType,
-    usage_event_key: usageEventKey,
+    usage_event_key: `${debitEventKey}:refund`,
     user_email: user.email ?? undefined,
     user_name: user.name ?? undefined,
   });
@@ -6851,7 +6856,6 @@ export async function createStudioGenerationJob(
   await ensureStudioGenerationWorkersAvailable();
 
   const creditReservationEventKey = `usage:web-video-generation:${randomUUID()}`;
-  const creditReservationRefundEventKey = `${creditReservationEventKey}:refund`;
   const creditTaskType = options?.isRegeneration && !isScratchSegmentEditorGeneration && normalizedProjectId
     ? "video.edit"
     : "video.generate";
@@ -7221,14 +7225,10 @@ export async function createStudioGenerationJob(
 
     if (!jobCreated && refundAllowed) {
       try {
-        const refundUsageEventKey = createdJobId
-          ? `usage:${createdJobId}:refund`
-          : creditReservationRefundEventKey;
         await refundWorkspaceGenerationCredit(user, creditReservation.consumed, normalizedLanguage, {
           jobId: createdJobId,
           projectId: normalizedProjectId ?? undefined,
           taskType: creditTaskType,
-          usageEventKey: refundUsageEventKey,
         });
       } catch (refundError) {
         console.error("[studio] Failed to refund reserved credits", refundError);
@@ -10625,9 +10625,9 @@ const refundWaveSpeedSegmentAiPhotoJobCredits = async (
     return { ...context.profile };
   }
 
-  context.refunded = true;
   try {
     context.profile = await refundWorkspaceGenerationCredit(user, context.consumed, context.language);
+    context.refunded = true;
   } catch (error) {
     console.error("[studio] Failed to refund WaveSpeed GPT Image 2 credits", error);
   }

@@ -5,6 +5,7 @@ const loadStudioModule = async () => {
   vi.stubEnv("ADSFLOW_API_BASE_URL", "https://adsflow.test");
   vi.stubEnv("ADSFLOW_ADMIN_TOKEN", "admin-token");
   vi.stubEnv("OPENROUTER_API_KEY", "test-openrouter-key");
+  vi.stubEnv("WAVESPEED_API_KEY", "test-wavespeed-key");
   return import("./studio.js");
 };
 
@@ -312,6 +313,7 @@ describe("studio generation worker availability", () => {
     const refundBody = calls.find((call) => call.pathname === "/api/web/credits/refund")?.body;
     expect(consumeBody?.usage_event_key).toEqual(expect.stringMatching(/^usage:web-video-generation:/));
     expect(generationBody?.usage_event_key).toBe(consumeBody?.usage_event_key);
+    expect(refundBody?.debit_event_key).toBe(consumeBody?.usage_event_key);
     expect(refundBody?.usage_event_key).toBe(`${consumeBody?.usage_event_key}:refund`);
     expect(refundBody).toEqual(
       expect.objectContaining({
@@ -578,10 +580,102 @@ describe("studio generation worker availability", () => {
       expect.stringMatching(/^usage:web-credit-consume:/),
     );
     expect(consumeCalls[1]?.body.usage_event_key).toBe(consumeCalls[0]?.body.usage_event_key);
-    expect(refundCalls[0]?.body.usage_event_key).toEqual(
-      expect.stringMatching(/^usage:web-credit-refund:/),
-    );
+    expect(refundCalls[0]?.body.debit_event_key).toBe(consumeCalls[0]?.body.usage_event_key);
+    expect(refundCalls[0]?.body.usage_event_key).toBe(`${consumeCalls[0]?.body.usage_event_key}:refund`);
+    expect(refundCalls[1]?.body.debit_event_key).toBe(refundCalls[0]?.body.debit_event_key);
     expect(refundCalls[1]?.body.usage_event_key).toBe(refundCalls[0]?.body.usage_event_key);
+  });
+
+  it("retries a failed WaveSpeed refund from the next status poll with the same debit pair", async () => {
+    const {
+      createStudioSegmentAiPhotoJob,
+      getStudioSegmentAiPhotoJobStatus,
+    } = await loadStudioModule();
+    const calls: Array<{ body: Record<string, unknown>; host: string; pathname: string }> = [];
+    let refundAttempts = 0;
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(String(input));
+        const body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {};
+        calls.push({ body, host: url.host, pathname: url.pathname });
+
+        if (url.host === "api.wavespeed.ai") {
+          if (url.pathname.endsWith("/openai/gpt-image-2/text-to-image")) {
+            return jsonResponse({
+              data: { id: "prediction-refund-retry", status: "created" },
+            });
+          }
+          if (url.pathname.endsWith("/predictions/prediction-refund-retry/result")) {
+            return jsonResponse({
+              data: {
+                error: "WaveSpeed generation failed",
+                id: "prediction-refund-retry",
+                status: "failed",
+              },
+            });
+          }
+        }
+
+        if (url.pathname.startsWith("/api/admin/users")) {
+          return jsonResponse({ items: [] });
+        }
+        if (url.pathname === "/api/web/credits/consume") {
+          return jsonResponse({
+            consumed: { purchased: 10, subscription: 0 },
+            user: { balance: 90, plan: "PRO", user_id: "123" },
+          });
+        }
+        if (url.pathname === "/api/web/credits/refund") {
+          refundAttempts += 1;
+          if (refundAttempts <= 3) {
+            return jsonResponse({ detail: "temporary refund failure" }, 503);
+          }
+          return jsonResponse({
+            refunded: { purchased: 10, subscription: 0 },
+            user: { balance: 100, plan: "PRO", user_id: "123" },
+          });
+        }
+
+        return jsonResponse({ detail: `unexpected ${url.host}${url.pathname}` }, 500);
+      }),
+    );
+
+    const created = await createStudioSegmentAiPhotoJob("A workspace scene reference", {
+      email: "alex@example.test",
+      name: "Alex",
+    }, {
+      language: "en",
+      purpose: "workspace_reference",
+      referenceKind: "scene",
+    });
+
+    await expect(getStudioSegmentAiPhotoJobStatus(created.jobId, {
+      email: "alex@example.test",
+      name: "Alex",
+    })).resolves.toEqual(expect.objectContaining({ status: "failed" }));
+    await expect(getStudioSegmentAiPhotoJobStatus(created.jobId, {
+      email: "alex@example.test",
+      name: "Alex",
+    })).resolves.toEqual(
+      expect.objectContaining({
+        profile: expect.objectContaining({ balance: 100 }),
+        status: "failed",
+      }),
+    );
+    await expect(getStudioSegmentAiPhotoJobStatus(created.jobId, {
+      email: "alex@example.test",
+      name: "Alex",
+    })).resolves.toEqual(expect.objectContaining({ status: "failed" }));
+
+    const consumeCall = calls.find((call) => call.pathname === "/api/web/credits/consume");
+    const refundCalls = calls.filter((call) => call.pathname === "/api/web/credits/refund");
+    expect(refundCalls).toHaveLength(4);
+    expect(refundCalls.every((call) => call.body.debit_event_key === consumeCall?.body.usage_event_key)).toBe(true);
+    expect(refundCalls.every(
+      (call) => call.body.usage_event_key === `${consumeCall?.body.usage_event_key}:refund`,
+    )).toBe(true);
   });
 
   it("keeps the watermark on FREE subscription-credit generations even when false is requested", async () => {
