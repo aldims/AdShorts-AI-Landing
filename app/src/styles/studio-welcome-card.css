@@ -292,7 +292,7 @@
   left: 0;
   z-index: 89;
   display: grid;
-  align-items: start;
+  align-items: center;
   justify-items: center;
   padding: clamp(12px, 1.5vh, 22px) clamp(14px, 2.4vw, 36px) 10px;
   overflow: hidden;
@@ -304,7 +304,7 @@
   position: relative;
   display: flex;
   width: min(1180px, 100%);
-  height: 100%;
+  height: auto;
   max-height: 100%;
   min-height: 0;
   flex-direction: column;
@@ -458,8 +458,6 @@
 
 .studio-welcome-card__modes {
   display: grid;
-  min-height: 0;
-  flex: 1 1 auto;
   grid-template-columns: minmax(0, 0.96fr) minmax(0, 1.04fr);
   gap: clamp(13px, 1.55vw, 20px);
   padding: 0 clamp(16px, 2.25vw, 27px) 8px;
@@ -471,7 +469,6 @@
   display: flex;
   min-width: 0;
   min-height: 384px;
-  height: 100%;
   flex-direction: column;
   align-items: stretch;
   padding: clamp(13px, 1.35vw, 18px);
@@ -895,15 +892,12 @@
   }
 
   .studio-welcome-card__modes {
-    min-height: auto;
-    flex: 0 0 auto;
     grid-template-columns: minmax(0, 1fr);
     padding: 0 20px 17px;
   }
 
   .studio-welcome-card__mode {
     min-height: 0;
-    height: auto;
   }
 
   .studio-welcome-card__showcase {
@@ -1037,63 +1031,13 @@
 
 }
 
-@media (min-width: 1600px) and (min-height: 1200px) {
+@media (min-width: 1600px) and (min-height: 1000px) {
   .studio-welcome-card.studio-canvas-welcome {
     width: min(1480px, 100%);
   }
 
-  .studio-welcome-card__modes {
-    gap: 24px;
-  }
-
   .studio-welcome-card__showcase {
-    height: clamp(280px, 24vh, 340px);
-  }
-
-  .studio-welcome-card__journey {
-    flex: 1 1 auto;
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: repeat(3, minmax(0, 1fr));
-    gap: 10px;
-  }
-
-  .studio-welcome-card__journey li {
-    min-height: 0;
-    justify-content: center;
-    gap: 12px;
-    padding: 10px 14px;
-    font-size: 0.8rem;
-    text-align: center;
-  }
-
-  .studio-welcome-card__journey b {
-    width: 30px;
-    height: 30px;
-    flex-basis: 30px;
-    font-size: 0.72rem;
-  }
-
-  .studio-welcome-card__feature-list--studio {
-    min-height: 0;
-    flex: 1 1 auto;
-    grid-template-rows: repeat(2, minmax(0, 1fr));
-    gap: 10px;
-  }
-
-  .studio-welcome-card__feature-list--studio > span {
-    min-height: 0;
-    flex-direction: column;
-    justify-content: center;
-    gap: 12px;
-    padding: 14px;
-    font-size: 0.78rem;
-    text-align: center;
-  }
-
-  .studio-welcome-card__feature-list--studio > span img {
-    width: 32px;
-    height: 32px;
-    flex-basis: 32px;
+    height: clamp(280px, 22vh, 320px);
   }
 }
 
