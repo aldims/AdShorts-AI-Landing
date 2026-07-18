@@ -139,6 +139,62 @@ const getWorkspaceSegmentDraftVisualChangeIdentity = (segment: WorkspaceSegmentE
     Boolean(segment.visualReset && !isWorkspaceSegmentVisualResetApplied(segment)),
   ]);
 
+const getWorkspaceSegmentVisualHistoryAssetIdentityKey = (
+  asset: StudioCustomVideoFile | null | undefined,
+) => {
+  if (!asset) {
+    return null;
+  }
+
+  const sourceUrl = [asset.objectUrl, asset.remoteUrl, asset.dataUrl]
+    .map((value) => String(value ?? "").trim())
+    .find(Boolean);
+  if (sourceUrl) {
+    return `url:${sourceUrl}`;
+  }
+
+  const libraryItemKey = String(asset.libraryItemKey ?? "").trim();
+  if (libraryItemKey) {
+    return `library:${libraryItemKey}`;
+  }
+
+  const assetId = getWorkspaceSegmentCustomAssetId(asset);
+  if (assetId) {
+    return `asset:${assetId}`;
+  }
+
+  const fileIdentity = [asset.fileName, asset.mimeType, asset.fileSize]
+    .map((value) => String(value ?? "").trim())
+    .filter(Boolean)
+    .join(":");
+  return fileIdentity || null;
+};
+
+export const getWorkspaceSegmentDraftVisualHistoryIdentity = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+) => {
+  const action = getWorkspaceSegmentLatestVisualAction(segment);
+  const activeAsset =
+    action === "custom"
+      ? segment.customVideo
+      : action === "ai_photo"
+        ? segment.aiPhotoAsset
+        : action === "image_edit"
+          ? segment.imageEditAsset
+          : action === "ai" || action === "photo_animation" || action === "talking_photo"
+            ? segment.aiVideoAsset
+            : null;
+
+  return JSON.stringify([
+    action,
+    getWorkspaceSegmentVisualHistoryAssetIdentityKey(activeAsset) ??
+      getWorkspaceSegmentCurrentVisualIdentityKey(segment),
+    segment.currentSourceKind,
+    segment.mediaType,
+    Boolean(segment.visualReset && !isWorkspaceSegmentVisualResetApplied(segment)),
+  ]);
+};
+
 export const isWorkspaceSegmentDraftVisualChangedFromBaseline = (
   segment: WorkspaceSegmentEditorDraftSegment,
   baselineSegment: WorkspaceSegmentEditorDraftSegment | null | undefined,

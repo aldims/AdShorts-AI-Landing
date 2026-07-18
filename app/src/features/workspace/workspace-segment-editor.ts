@@ -2649,6 +2649,58 @@ export const getWorkspaceSegmentTimelineHistoryKey = (
   segmentIndex?: number | null,
 ) => `${kind}:${kind === "music" ? "global" : Number(segmentIndex ?? -1)}`;
 
+export type WorkspaceSegmentTimelineVisualHistory = {
+  future: WorkspaceSegmentEditorDraftSegment[];
+  past: WorkspaceSegmentEditorDraftSegment[];
+};
+
+export const pushWorkspaceSegmentTimelineVisualHistorySnapshot = (
+  history: WorkspaceSegmentTimelineVisualHistory | null | undefined,
+  snapshot: WorkspaceSegmentEditorDraftSegment,
+  limit: number,
+): WorkspaceSegmentTimelineVisualHistory => ({
+  future: [],
+  past: [...(history?.past ?? []), snapshot].slice(-Math.max(1, limit)),
+});
+
+export const stepWorkspaceSegmentTimelineVisualHistoryBack = (
+  history: WorkspaceSegmentTimelineVisualHistory | null | undefined,
+  currentSnapshot: WorkspaceSegmentEditorDraftSegment,
+  limit: number,
+): { history: WorkspaceSegmentTimelineVisualHistory; snapshot: WorkspaceSegmentEditorDraftSegment } | null => {
+  const previousSnapshot = history?.past.at(-1) ?? null;
+  if (!previousSnapshot) {
+    return null;
+  }
+
+  return {
+    history: {
+      future: [...(history?.future ?? []), currentSnapshot].slice(-Math.max(1, limit)),
+      past: history?.past.slice(0, -1) ?? [],
+    },
+    snapshot: previousSnapshot,
+  };
+};
+
+export const stepWorkspaceSegmentTimelineVisualHistoryForward = (
+  history: WorkspaceSegmentTimelineVisualHistory | null | undefined,
+  currentSnapshot: WorkspaceSegmentEditorDraftSegment,
+  limit: number,
+): { history: WorkspaceSegmentTimelineVisualHistory; snapshot: WorkspaceSegmentEditorDraftSegment } | null => {
+  const nextSnapshot = history?.future.at(-1) ?? null;
+  if (!nextSnapshot) {
+    return null;
+  }
+
+  return {
+    history: {
+      future: history?.future.slice(0, -1) ?? [],
+      past: [...(history?.past ?? []), currentSnapshot].slice(-Math.max(1, limit)),
+    },
+    snapshot: nextSnapshot,
+  };
+};
+
 const cloneWorkspaceSegmentSceneSoundPayload = (
   payload: WorkspaceSegmentSceneSoundPayload | null | undefined,
 ): WorkspaceSegmentSceneSoundPayload | null => (payload ? { ...payload } : null);

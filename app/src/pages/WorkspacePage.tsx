@@ -295,6 +295,7 @@ import {
   resolveWorkspaceSegmentSceneSoundPrompt,
   normalizeWorkspaceSegmentVoicePreviewTime,
   preserveWorkspaceSegmentEditorOriginalVisualReferences,
+  pushWorkspaceSegmentTimelineVisualHistorySnapshot,
   clearWorkspaceSegmentEditorVoiceoverGenerationState,
   rebuildWorkspaceSegmentEditorDraftSessionTimeline,
   rebuildWorkspaceSegmentEditorDraftTimeline,
@@ -331,6 +332,8 @@ import {
   shouldUseWorkspaceSegmentProjectVoiceoverSegmentProxyInFullPreview,
   getWorkspaceSegmentVoiceLanguageSelectionPatch,
   studioVoiceOptionsByLanguage,
+  stepWorkspaceSegmentTimelineVisualHistoryBack,
+  stepWorkspaceSegmentTimelineVisualHistoryForward,
   syncWorkspaceSegmentMeasuredVideoVisualDuration,
   truncateStudioCustomAssetName,
   waitForWorkspaceSegmentSceneSoundSelectionSync,
@@ -338,10 +341,12 @@ import {
   WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS,
   WORKSPACE_SEGMENT_EDITOR_MAX_VISUAL_DURATION_SECONDS,
   WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS,
+  type WorkspaceSegmentTimelineVisualHistory,
 } from "../features/workspace/workspace-segment-editor";
 import {
   buildWorkspaceSegmentEditorChangeChecklist,
   canReuseWorkspaceSegmentProjectTimelineVoiceover,
+  getWorkspaceSegmentDraftVisualHistoryIdentity,
   getWorkspaceSegmentDraftVisualStatus,
   getWorkspaceSegmentVisualTimelineHistoryState,
   getWorkspaceSegmentEditorPendingInsertedSegmentIndices,
@@ -1530,7 +1535,7 @@ const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_UNTIMED_PROJECT_VOICE_END_GRACE_SECO
 const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_PREFLIGHT_CONCURRENCY = 3;
 const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_PREFLIGHT_MAX_SOURCE_BYTES = 24 * 1024 * 1024;
 const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_PREFLIGHT_MAX_TOTAL_BYTES = 64 * 1024 * 1024;
-const WORKSPACE_SEGMENT_TIMELINE_VOICE_HISTORY_LIMIT = 50;
+const WORKSPACE_SEGMENT_TIMELINE_HISTORY_LIMIT = 50;
 
 type SegmentEditorFullPreviewPreparedAudioSource = {
   byteLength: number;
@@ -2296,6 +2301,10 @@ export function WorkspacePage({
     Record<string, WorkspaceSegmentTimelineRedoSnapshot>
   >({});
   const segmentTimelineRedoSnapshotsRef = useRef<Record<string, WorkspaceSegmentTimelineRedoSnapshot>>({});
+  const [segmentTimelineVisualHistory, setSegmentTimelineVisualHistoryState] = useState<
+    Record<string, WorkspaceSegmentTimelineVisualHistory>
+  >({});
+  const segmentTimelineVisualHistoryRef = useRef<Record<string, WorkspaceSegmentTimelineVisualHistory>>({});
   const [segmentTimelineVoiceHistory, setSegmentTimelineVoiceHistoryState] = useState<
     Record<string, SegmentTimelineVoiceHistory>
   >({});
@@ -2327,6 +2336,16 @@ export function WorkspacePage({
     segmentTimelineVoiceHistoryRef.current = nextHistory;
     setSegmentTimelineVoiceHistoryState(nextHistory);
   }, []);
+  const setSegmentTimelineVisualHistory = useCallback((
+    nextValue: SetStateAction<Record<string, WorkspaceSegmentTimelineVisualHistory>>,
+  ) => {
+    const nextHistory =
+      typeof nextValue === "function"
+        ? nextValue(segmentTimelineVisualHistoryRef.current)
+        : nextValue;
+    segmentTimelineVisualHistoryRef.current = nextHistory;
+    setSegmentTimelineVisualHistoryState(nextHistory);
+  }, []);
   const setSegmentInfographicHistory = useCallback((
     nextValue: SetStateAction<Record<number, WorkspaceSegmentInfographicHistory>>,
   ) => {
@@ -2337,6 +2356,7 @@ export function WorkspacePage({
   }, []);
   useEffect(() => {
     setSegmentTimelineRedoSnapshots({});
+    setSegmentTimelineVisualHistory({});
     setSegmentTimelineVoiceHistory({});
     setDismissedSegmentTimelineVisualHistory({});
     setSegmentInfographicHistory({});
@@ -2344,6 +2364,7 @@ export function WorkspacePage({
   }, [
     segmentEditorLoadedSession?.projectId,
     setSegmentTimelineRedoSnapshots,
+    setSegmentTimelineVisualHistory,
     setSegmentTimelineVoiceHistory,
     setSegmentInfographicHistory,
   ]);
@@ -12948,10 +12969,64 @@ export function WorkspacePage({
     studioView,
   ]);
 
+  const pushSegmentTimelineVisualHistory = (
+    segmentIndex: number,
+    segment: WorkspaceSegmentEditorDraftSegment,
+  ) => {
+    const historyKey = getWorkspaceSegmentTimelineHistoryKey("visual", segmentIndex);
+    const snapshot = cloneWorkspaceSegmentEditorDraftSegment(segment, selectedLanguage);
+    setSegmentTimelineVisualHistory((current) => ({
+      ...current,
+      [historyKey]: pushWorkspaceSegmentTimelineVisualHistorySnapshot(
+        current[historyKey],
+        snapshot,
+        WORKSPACE_SEGMENT_TIMELINE_HISTORY_LIMIT,
+      ),
+    }));
+    setDismissedSegmentTimelineVisualHistory((current) => {
+      if (!current[historyKey]) {
+        return current;
+      }
+      const next = { ...current };
+      delete next[historyKey];
+      return next;
+    });
+    setSegmentTimelineRedoSnapshots((current) => {
+      if (!current[historyKey]) {
+        return current;
+      }
+      const next = { ...current };
+      delete next[historyKey];
+      return next;
+    });
+  };
+
+  const captureSegmentTimelineVisualChanges = (
+    previousDraft: WorkspaceSegmentEditorDraftSession,
+    nextDraft: WorkspaceSegmentEditorDraftSession,
+  ) => {
+    if (previousDraft.projectId !== nextDraft.projectId) {
+      return;
+    }
+
+    const nextSegmentsByIndex = new Map(nextDraft.segments.map((segment) => [segment.index, segment] as const));
+    previousDraft.segments.forEach((previousSegment) => {
+      const nextSegment = nextSegmentsByIndex.get(previousSegment.index);
+      if (
+        nextSegment &&
+        getWorkspaceSegmentDraftVisualHistoryIdentity(previousSegment) !==
+          getWorkspaceSegmentDraftVisualHistoryIdentity(nextSegment)
+      ) {
+        pushSegmentTimelineVisualHistory(previousSegment.index, previousSegment);
+      }
+    });
+  };
+
   const updateSegmentEditorDraftSegmentByIndex = (
     targetSegmentIndex: number,
     updater: (segment: WorkspaceSegmentEditorDraftSegment) => WorkspaceSegmentEditorDraftSegment,
     options?: {
+      captureVisualHistory?: boolean;
       preserveExistingStillDurations?: boolean | ((segment: WorkspaceSegmentEditorDraftSegment) => boolean);
       preserveSpeechBoundaries?: boolean;
       preserveSourceTimelineEnd?: boolean;
@@ -13049,6 +13124,7 @@ export function WorkspacePage({
   const updateSegmentEditorDraft = (
     updater: (draft: WorkspaceSegmentEditorDraftSession) => WorkspaceSegmentEditorDraftSession,
     options?: {
+      captureVisualHistory?: boolean;
       preserveExistingStillDurations?: boolean | ((segment: WorkspaceSegmentEditorDraftSegment) => boolean);
       preserveSpeechBoundaries?: boolean;
       preserveSourceTimelineEnd?: boolean;
@@ -13065,6 +13141,9 @@ export function WorkspacePage({
       sourceDraft,
       restoreProjectTtsForCurrentSegmentEditorDraft(rebuiltDraft),
     );
+    if (options?.captureVisualHistory !== false) {
+      captureSegmentTimelineVisualChanges(sourceDraft, nextDraft);
+    }
     // Keep the ref ahead of React state: navigation can stash or reopen the editor
     // before a batched state update has rendered.
     segmentEditorDraftRef.current = nextDraft;
@@ -13143,6 +13222,7 @@ export function WorkspacePage({
       restoreProjectTtsForCurrentSegmentEditorDraft(appliedResult.draft),
     );
     if (matchesJobDraft(activeDraft)) {
+      captureSegmentTimelineVisualChanges(sourceDraft, nextDraft);
       segmentEditorDraftRef.current = nextDraft;
       setSegmentEditorDraft((currentDraft) =>
         matchesJobDraft(currentDraft) ? nextDraft : currentDraft,
@@ -13488,6 +13568,7 @@ export function WorkspacePage({
       setAreSubtitlesEnabled(false);
       setIsVoiceoverEnabled(false);
       setSegmentTimelineRedoSnapshots({});
+      setSegmentTimelineVisualHistory({});
       setSegmentTimelineGlobalControlOpen(null);
       setSegmentTimelineGlobalControlAnchorRect(null);
       setSegmentTimelineVisualMenuSegmentIndex(null);
@@ -13613,6 +13694,7 @@ export function WorkspacePage({
       currentSession?.projectId === nextDraft.projectId ? null : currentSession,
     );
     setSegmentTimelineRedoSnapshots({});
+    setSegmentTimelineVisualHistory({});
     setSegmentTimelineVoiceHistory({});
     setDismissedSegmentTimelineVisualHistory({});
     setSegmentTimelineGlobalControlOpen(null);
@@ -13626,7 +13708,7 @@ export function WorkspacePage({
     setHasEditedSegmentSubtitleBulkTextInput(false);
     setSegmentSubtitleBulkTextError(null);
     closeSegmentAiPhotoModal({ immediate: true });
-    const resetDraft = updateSegmentEditorDraft(() => nextDraft) ?? nextDraft;
+    const resetDraft = updateSegmentEditorDraft(() => nextDraft, { captureVisualHistory: false }) ?? nextDraft;
     // Reset is an explicit replacement of the working copy. Persist it immediately
     // so that a mode switch or reopening through "Редактировать" cannot restore an
     // earlier detached/local snapshot while React is committing the state update.
@@ -14518,7 +14600,7 @@ export function WorkspacePage({
                 visualReset: false,
                 videoAction: "original",
               }, null);
-        });
+        }, { captureVisualHistory: false });
       };
 
       updateSegmentEditorDraftSegmentByIndex(targetSegmentIndex, (segment) => invalidateWorkspaceSegmentSceneSoundForVisualChange({
@@ -14538,7 +14620,7 @@ export function WorkspacePage({
         durationExtensionSourceDurationSeconds: null,
         visualReset: false,
         videoAction: "custom",
-      }));
+      }), { captureVisualHistory: false });
 
       const projectId = getPositiveWorkspaceMediaAssetId(currentDraft?.projectId ?? segmentEditorDraft?.projectId);
       let uploadedAssetId: number | null = null;
@@ -14581,6 +14663,10 @@ export function WorkspacePage({
         return false;
       }
 
+      if (previousSegment) {
+        pushSegmentTimelineVisualHistory(targetSegmentIndex, previousSegment);
+      }
+
       // The replacement is now durable. Only at this point discard pending
       // results tied to the previous visual; failed uploads restore both the
       // previous visual and its resumable jobs.
@@ -14610,7 +14696,7 @@ export function WorkspacePage({
             }) ?? undefined,
           },
         };
-      });
+      }, { captureVisualHistory: false });
 
       if (mimeType.startsWith("video/")) {
         try {
@@ -15219,7 +15305,10 @@ export function WorkspacePage({
     return nextDraft;
   };
 
-  const resetSegmentEditorVisualByIndex = (targetSegmentIndex: number) => {
+  const resetSegmentEditorVisualByIndex = (
+    targetSegmentIndex: number,
+    options?: { captureVisualHistory?: boolean },
+  ) => {
     if (isWorkspaceSegmentVisualJobBusy(targetSegmentIndex)) {
       clearSegmentEditorVoiceoverError(targetSegmentIndex);
       setSegmentEditorVideoError("Дождитесь завершения генерации текущего сегмента.");
@@ -15247,10 +15336,14 @@ export function WorkspacePage({
           baselineSegment,
         ),
       ),
+      { captureVisualHistory: options?.captureVisualHistory },
     );
   };
 
-  const restoreSegmentEditorVisualByIndex = (targetSegmentIndex: number) => {
+  const restoreSegmentEditorVisualByIndex = (
+    targetSegmentIndex: number,
+    options?: { captureVisualHistory?: boolean },
+  ) => {
     if (isWorkspaceSegmentVisualJobBusy(targetSegmentIndex)) {
       setSegmentEditorVideoError("Дождитесь завершения генерации текущего сегмента.");
       return;
@@ -15277,6 +15370,7 @@ export function WorkspacePage({
       invalidateWorkspaceSegmentSceneSoundForVisualChange(
         restoreWorkspaceSegmentDraftVisualFromBaseline(segment, baselineSegment),
       ),
+      { captureVisualHistory: options?.captureVisualHistory },
     );
   };
 
@@ -15422,7 +15516,7 @@ export function WorkspacePage({
         ...current,
         [historyKey]: {
           future: [],
-          past: [...history.past, entry].slice(-WORKSPACE_SEGMENT_TIMELINE_VOICE_HISTORY_LIMIT),
+          past: [...history.past, entry].slice(-WORKSPACE_SEGMENT_TIMELINE_HISTORY_LIMIT),
         },
       };
     });
@@ -15468,6 +15562,14 @@ export function WorkspacePage({
       });
     }
     if (kind === "visual") {
+      setSegmentTimelineVisualHistory((current) => {
+        if (!current[historyKey]) {
+          return current;
+        }
+        const next = { ...current };
+        delete next[historyKey];
+        return next;
+      });
       setDismissedSegmentTimelineVisualHistory((current) => ({
         ...current,
         [historyKey]: true,
@@ -15543,6 +15645,27 @@ export function WorkspacePage({
         delete next[historyKey];
         return next;
       });
+      const history = segmentTimelineVisualHistoryRef.current[historyKey] ?? { future: [], past: [] };
+      const currentSnapshot = cloneWorkspaceSegmentEditorDraftSegment(currentSegment, selectedLanguage);
+      const historyStep = stepWorkspaceSegmentTimelineVisualHistoryBack(
+        history,
+        currentSnapshot,
+        WORKSPACE_SEGMENT_TIMELINE_HISTORY_LIMIT,
+      );
+      if (historyStep) {
+        resetSegmentEditorPreviewPlaybackState();
+        updateSegmentEditorDraftSegmentByIndex(
+          safeSegmentIndex,
+          (segment) => restoreWorkspaceSegmentTimelineSnapshot(segment, historyStep.snapshot, "visual"),
+          { captureVisualHistory: false },
+        );
+        setSegmentTimelineVisualHistory((current) => ({
+          ...current,
+          [historyKey]: historyStep.history,
+        }));
+        return;
+      }
+
       const baselineSegment = segmentEditorChecklistBaseSession?.segments.find(
         (segment) => segment.index === safeSegmentIndex,
       );
@@ -15550,15 +15673,14 @@ export function WorkspacePage({
         return;
       }
 
-      setSegmentTimelineRedoSnapshots((current) => ({
+      setSegmentTimelineVisualHistory((current) => ({
         ...current,
         [historyKey]: {
-          kind,
-          segment: cloneWorkspaceSegmentEditorDraftSegment(currentSegment, selectedLanguage),
-          segmentIndex: safeSegmentIndex,
+          future: [...history.future, currentSnapshot].slice(-WORKSPACE_SEGMENT_TIMELINE_HISTORY_LIMIT),
+          past: history.past,
         },
       }));
-      resetSegmentEditorVisualByIndex(safeSegmentIndex);
+      resetSegmentEditorVisualByIndex(safeSegmentIndex, { captureVisualHistory: false });
       return;
     }
 
@@ -15576,7 +15698,7 @@ export function WorkspacePage({
         setSegmentTimelineVoiceHistory((current) => ({
           ...current,
           [historyKey]: {
-            future: [...history.future, currentEntry].slice(-WORKSPACE_SEGMENT_TIMELINE_VOICE_HISTORY_LIMIT),
+            future: [...history.future, currentEntry].slice(-WORKSPACE_SEGMENT_TIMELINE_HISTORY_LIMIT),
             past: history.past.slice(0, -1),
           },
         }));
@@ -15586,7 +15708,7 @@ export function WorkspacePage({
       setSegmentTimelineVoiceHistory((current) => ({
         ...current,
         [historyKey]: {
-          future: [...history.future, currentEntry].slice(-WORKSPACE_SEGMENT_TIMELINE_VOICE_HISTORY_LIMIT),
+          future: [...history.future, currentEntry].slice(-WORKSPACE_SEGMENT_TIMELINE_HISTORY_LIMIT),
           past: [],
         },
       }));
@@ -15654,28 +15776,56 @@ export function WorkspacePage({
         ...current,
         [historyKey]: {
           future: history.future.slice(0, -1),
-          past: [...history.past, currentEntry].slice(-WORKSPACE_SEGMENT_TIMELINE_VOICE_HISTORY_LIMIT),
+          past: [...history.past, currentEntry].slice(-WORKSPACE_SEGMENT_TIMELINE_HISTORY_LIMIT),
         },
       }));
       return;
     }
 
+    if (kind === "visual") {
+      const safeSegmentIndex = Number(segmentIndex);
+      const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+      const currentSegment =
+        currentDraft && Number.isInteger(safeSegmentIndex)
+          ? getSegmentEditorDraftSegmentByIndex(currentDraft, safeSegmentIndex)
+          : null;
+      if (!currentSegment) {
+        return;
+      }
+
+      const history = segmentTimelineVisualHistoryRef.current[historyKey] ?? { future: [], past: [] };
+      const currentSnapshot = cloneWorkspaceSegmentEditorDraftSegment(currentSegment, selectedLanguage);
+      const historyStep = stepWorkspaceSegmentTimelineVisualHistoryForward(
+        history,
+        currentSnapshot,
+        WORKSPACE_SEGMENT_TIMELINE_HISTORY_LIMIT,
+      );
+      if (historyStep) {
+        setSegmentEditorVideoError(null);
+        resetSegmentEditorPreviewPlaybackState();
+        updateSegmentEditorDraftSegmentByIndex(
+          safeSegmentIndex,
+          (segment) => restoreWorkspaceSegmentTimelineSnapshot(segment, historyStep.snapshot, "visual"),
+          { captureVisualHistory: false },
+        );
+        setSegmentTimelineVisualHistory((current) => ({
+          ...current,
+          [historyKey]: historyStep.history,
+        }));
+        return;
+      }
+
+      const baselineSegment = segmentEditorChecklistBaseSession?.segments.find(
+        (segment) => segment.index === safeSegmentIndex,
+      );
+      if (isWorkspaceSegmentAppliedVisualResetChange(currentSegment, baselineSegment)) {
+        restoreSegmentEditorVisualByIndex(safeSegmentIndex, { captureVisualHistory: false });
+      }
+      return;
+    }
+
     const snapshot = segmentTimelineRedoSnapshotsRef.current[historyKey];
     if (!snapshot || snapshot.kind !== kind) {
-      if (kind === "visual") {
-        const safeSegmentIndex = Number(segmentIndex);
-        const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
-        const currentSegment =
-          currentDraft && Number.isInteger(safeSegmentIndex)
-            ? getSegmentEditorDraftSegmentByIndex(currentDraft, safeSegmentIndex)
-            : null;
-        const baselineSegment = segmentEditorChecklistBaseSession?.segments.find(
-          (segment) => segment.index === safeSegmentIndex,
-        );
-        if (currentSegment && isWorkspaceSegmentAppliedVisualResetChange(currentSegment, baselineSegment)) {
-          restoreSegmentEditorVisualByIndex(safeSegmentIndex);
-        }
-      }
       return;
     }
 
@@ -15683,9 +15833,6 @@ export function WorkspacePage({
     if (snapshot.kind === "music") {
       applySegmentTimelineMusicSnapshot(snapshot);
     } else {
-      if (snapshot.kind === "visual") {
-        resetSegmentEditorPreviewPlaybackState();
-      }
       updateSegmentEditorDraftSegmentByIndex(snapshot.segmentIndex, (segment) =>
         restoreWorkspaceSegmentTimelineSnapshot(segment, snapshot.segment, snapshot.kind),
       );
@@ -33209,6 +33356,7 @@ export function WorkspacePage({
               );
               const isSegmentDurationManual = normalizeWorkspaceSegmentDurationMode(segment.durationMode) === "manual";
               const visualHistoryKey = getWorkspaceSegmentTimelineHistoryKey("visual", segment.index);
+              const visualHistory = segmentTimelineVisualHistory[visualHistoryKey] ?? { future: [], past: [] };
               const segmentExtensionPlan = getWorkspaceSegmentDurationExtensionPlan(segment, baselineVisualSegment);
               const imageDurationMaxSeconds = getWorkspaceSegmentEditorVisualDurationMaxSeconds(segment);
               const shouldShowSegmentDeleteButton =
@@ -33217,9 +33365,9 @@ export function WorkspacePage({
               const visualHistoryState = getWorkspaceSegmentVisualTimelineHistoryState(
                 segment,
                 baselineVisualSegment,
-                Boolean(segmentTimelineRedoSnapshots[visualHistoryKey]),
+                Boolean(visualHistory.future.length || segmentTimelineRedoSnapshots[visualHistoryKey]),
               );
-              const canBackVisual = visualHistoryState.canBack;
+              const canBackVisual = visualHistory.past.length > 0 || visualHistoryState.canBack;
               const canForwardVisual =
                 visualHistoryState.canForward && !dismissedSegmentTimelineVisualHistory[visualHistoryKey];
               return (

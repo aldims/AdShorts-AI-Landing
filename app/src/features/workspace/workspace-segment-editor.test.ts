@@ -61,10 +61,13 @@ import {
   resolveWorkspaceSegmentSceneSoundPrompt,
   resolveWorkspaceSegmentBoundaryTiming,
   resolveWorkspaceSegmentVideoExtensionMenuSourceDurationSeconds,
+  pushWorkspaceSegmentTimelineVisualHistorySnapshot,
   restoreWorkspaceSegmentTimelineSnapshot,
   restoreWorkspaceSegmentVoiceTextDraftSnapshot,
   shouldAutoTrimWorkspaceSegmentVideoToVoiceover,
   shouldIgnoreWorkspaceSegmentMeasuredVoiceoverDuration,
+  stepWorkspaceSegmentTimelineVisualHistoryBack,
+  stepWorkspaceSegmentTimelineVisualHistoryForward,
   syncWorkspaceSegmentMeasuredVideoVisualDuration,
   waitForWorkspaceSegmentSceneSoundSelectionSync,
 } from "./workspace-segment-editor";
@@ -75,7 +78,10 @@ import {
   getWorkspaceSegmentSceneSoundVisualAssetId,
   isWorkspaceSegmentReadyVisualSelectionTab,
 } from "./workspace-segment-visual-helpers";
-import { canReuseWorkspaceSegmentProjectTimelineVoiceover } from "./workspace-segment-editor-checklist";
+import {
+  canReuseWorkspaceSegmentProjectTimelineVoiceover,
+  getWorkspaceSegmentDraftVisualHistoryIdentity,
+} from "./workspace-segment-editor-checklist";
 import { normalizeStoredWorkspaceSegmentEditorDraftSession } from "./workspace-segment-editor-storage";
 import type {
   WorkspaceSegmentEditorDraftSegment,
@@ -2111,6 +2117,81 @@ describe("workspace segment editor project voiceover timeline", () => {
       startTime: 0,
       videoAction: "custom",
     }));
+  });
+
+  it("walks through consecutive visual replacements instead of jumping to the baseline", () => {
+    const originalSegment = createProjectVoiceoverSegment({
+      currentPlaybackUrl: "/api/workspace/media-assets/100",
+      currentPreviewUrl: "/api/workspace/media-assets/100",
+      videoAction: "original",
+    });
+    const firstVisualSegment = createProjectVoiceoverSegment({
+      customVideo: {
+        assetId: 101,
+        fileName: "first.png",
+        fileSize: 1024,
+        mimeType: "image/png",
+        remoteUrl: "/api/workspace/media-assets/101",
+        source: "media-library",
+      },
+      videoAction: "custom",
+    });
+    const secondVisualSegment = createProjectVoiceoverSegment({
+      customVideo: {
+        assetId: 102,
+        fileName: "second.png",
+        fileSize: 1024,
+        mimeType: "image/png",
+        remoteUrl: "/api/workspace/media-assets/102",
+        source: "media-library",
+      },
+      videoAction: "custom",
+    });
+
+    let history = pushWorkspaceSegmentTimelineVisualHistorySnapshot(undefined, originalSegment, 50);
+    history = pushWorkspaceSegmentTimelineVisualHistorySnapshot(history, firstVisualSegment, 50);
+
+    const firstBack = stepWorkspaceSegmentTimelineVisualHistoryBack(history, secondVisualSegment, 50);
+    expect(firstBack?.snapshot.customVideo?.assetId).toBe(101);
+
+    const secondBack = stepWorkspaceSegmentTimelineVisualHistoryBack(
+      firstBack?.history,
+      firstBack?.snapshot ?? firstVisualSegment,
+      50,
+    );
+    expect(secondBack?.snapshot.currentPreviewUrl).toBe("/api/workspace/media-assets/100");
+
+    const firstForward = stepWorkspaceSegmentTimelineVisualHistoryForward(
+      secondBack?.history,
+      secondBack?.snapshot ?? originalSegment,
+      50,
+    );
+    expect(firstForward?.snapshot.customVideo?.assetId).toBe(101);
+  });
+
+  it("does not treat durable upload metadata as another visual replacement", () => {
+    const pendingUpload = createProjectVoiceoverSegment({
+      customVideo: {
+        fileName: "visual.png",
+        fileSize: 1024,
+        mimeType: "image/png",
+        objectUrl: "blob:visual-upload",
+        source: "upload",
+      },
+      videoAction: "custom",
+    });
+    const durableUpload = createProjectVoiceoverSegment({
+      customVideo: {
+        ...pendingUpload.customVideo!,
+        assetId: 103,
+        remoteUrl: "/api/workspace/media-assets/103",
+      },
+      videoAction: "custom",
+    });
+
+    expect(getWorkspaceSegmentDraftVisualHistoryIdentity(durableUpload)).toBe(
+      getWorkspaceSegmentDraftVisualHistoryIdentity(pendingUpload),
+    );
   });
 
   it("restores talking photo visual snapshots with embedded audio timing", () => {
