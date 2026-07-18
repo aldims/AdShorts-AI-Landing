@@ -937,6 +937,7 @@ import {
   isWorkspaceSegmentInfographicStale,
   pushWorkspaceSegmentInfographicHistory,
   redoWorkspaceSegmentInfographicHistory,
+  shouldUploadWorkspaceSegmentInfographicSourceAsset,
   truncateWorkspaceSegmentInfographicText,
   undoWorkspaceSegmentInfographicHistory,
   WORKSPACE_SEGMENT_INFOGRAPHIC_STYLE_MAX_CHARS,
@@ -20473,7 +20474,10 @@ export function WorkspacePage({
     try {
       let sourceMediaAssetId = getWorkspaceSegmentSceneSoundVisualAssetId(targetSegment);
       const draftVisualAsset = getWorkspaceSegmentDraftVisualAsset(targetSegment);
-      if (draftVisualAsset) {
+      if (
+        shouldUploadWorkspaceSegmentInfographicSourceAsset(sourceMediaAssetId, Boolean(draftVisualAsset)) &&
+        draftVisualAsset
+      ) {
         sourceMediaAssetId = (await ensureStudioUploadedAssetId(draftVisualAsset, {
           ensureProjectBinding: Boolean(persistedProjectId),
           fallbackFileName: draftVisualAsset.fileName || `segment-visual-${targetSegmentIndex + 1}.bin`,

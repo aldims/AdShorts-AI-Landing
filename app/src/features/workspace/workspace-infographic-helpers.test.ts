@@ -21,6 +21,7 @@ import {
   pushWorkspaceSegmentInfographicHistory,
   redoWorkspaceSegmentInfographicHistory,
   resizeWorkspaceSegmentInfographicFromCorner,
+  shouldUploadWorkspaceSegmentInfographicSourceAsset,
   truncateWorkspaceSegmentInfographicText,
   undoWorkspaceSegmentInfographicHistory,
 } from "./workspace-infographic-helpers";
@@ -308,6 +309,12 @@ describe("workspace infographic helpers", () => {
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
     );
     expect(getWorkspaceSegmentInfographicSourceVisualIdentity(77)).toBe("asset:77");
+  });
+
+  it("does not republish a visual that already has a source media asset", () => {
+    expect(shouldUploadWorkspaceSegmentInfographicSourceAsset(77, true)).toBe(false);
+    expect(shouldUploadWorkspaceSegmentInfographicSourceAsset(null, true)).toBe(true);
+    expect(shouldUploadWorkspaceSegmentInfographicSourceAsset(null, false)).toBe(false);
   });
 
   it("keeps bounded per-segment snapshots and supports undo/redo for applied state", () => {

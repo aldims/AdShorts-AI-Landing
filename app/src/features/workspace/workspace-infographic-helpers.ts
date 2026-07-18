@@ -496,6 +496,11 @@ export const getWorkspaceSegmentInfographicSourceVisualIdentity = (mediaAssetId:
   return normalizedAssetId ? `asset:${normalizedAssetId}` : "";
 };
 
+export const shouldUploadWorkspaceSegmentInfographicSourceAsset = (
+  sourceMediaAssetId: number | null | undefined,
+  hasDraftVisualAsset: boolean,
+) => !positiveInteger(sourceMediaAssetId) && hasDraftVisualAsset;
+
 export const isWorkspaceSegmentInfographicJobResultContextValid = (options: {
   draftId?: string;
   expectedDraftId?: string;
