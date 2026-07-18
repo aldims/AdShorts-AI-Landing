@@ -22,6 +22,8 @@ const createMediaLibraryItem = (
   assetKind: null,
   assetLifecycle: null,
   assetMediaType: null,
+  assetRenderedAnimationMode: null,
+  assetRenderedViaI2v: null,
   createdAt: 0,
   dedupeKey: "dedupe",
   downloadName: "file.jpg",
@@ -79,6 +81,35 @@ describe("workspace media library display identity", () => {
       "talking_photo",
       "image_edit",
     ]);
+  });
+
+  it("excludes persisted camera movement renders but keeps real photo animations", () => {
+    const cameraMovement = createMediaLibraryItem({
+      assetKind: "rendered_segment",
+      assetRenderedAnimationMode: "ffmpeg",
+      assetRenderedViaI2v: false,
+      kind: "photo_animation",
+    });
+    const realAnimation = createMediaLibraryItem({
+      assetKind: "rendered_segment",
+      assetRenderedAnimationMode: "i2v",
+      assetRenderedViaI2v: true,
+      kind: "photo_animation",
+    });
+    const unprovenPersistedAnimation = createMediaLibraryItem({
+      assetKind: "rendered_segment",
+      kind: "photo_animation",
+    });
+    const liveAnimation = createMediaLibraryItem({
+      assetKind: "rendered_segment",
+      kind: "photo_animation",
+      source: "live",
+    });
+
+    expect(isWorkspaceMediaLibraryVisualSelectionItem(cameraMovement)).toBe(false);
+    expect(isWorkspaceMediaLibraryVisualSelectionItem(unprovenPersistedAnimation)).toBe(false);
+    expect(isWorkspaceMediaLibraryVisualSelectionItem(realAnimation)).toBe(true);
+    expect(isWorkspaceMediaLibraryVisualSelectionItem(liveAnimation)).toBe(true);
   });
 
   it("deduplicates photo animations by their poster image", () => {

@@ -250,6 +250,45 @@ describe("media library photo sources", () => {
     expect(items).toHaveLength(0);
   });
 
+  it("does not expose a non-AI camera movement render as a photo animation", () => {
+    const segment = createPhotoSegment();
+    segment.currentAsset = {
+      ...segment.currentAsset!,
+      kind: "rendered_segment",
+      libraryKind: "photo_animation",
+      renderedAnimationMode: "ffmpeg",
+      renderedViaI2v: false,
+      role: "rendered_segment",
+      storageKey: "users/1/assets/202/rendered_segment/202-rendered_segment_cache_ai_0.mp4",
+    };
+
+    const items = buildWorkspacePersistedMediaLibraryItems(project, session(segment));
+
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      assetId: 101,
+      kind: "ai_photo",
+      previewKind: "image",
+    });
+  });
+
+  it("keeps a real image-to-video animation in the media library", () => {
+    const segment = createPhotoSegment();
+    segment.currentAsset = {
+      ...segment.currentAsset!,
+      kind: "rendered_segment",
+      libraryKind: "photo_animation",
+      renderedAnimationMode: "i2v",
+      renderedViaI2v: true,
+      role: "rendered_segment",
+      storageKey: "users/1/assets/202/rendered_segment/202-wavespeed-animation.mp4",
+    };
+
+    const items = buildWorkspacePersistedMediaLibraryItems(project, session(segment));
+
+    expect(items.map((item) => item.kind)).toEqual(["ai_photo", "photo_animation"]);
+  });
+
   it("does not store uploaded original photos as ai_photo items", () => {
     const segment = createPhotoSegment();
     segment.currentAsset = null;
@@ -405,7 +444,7 @@ describe("media library photo sources", () => {
     });
   });
 
-  it("preserves explicit photo animation kind when both persisted assets are videos", () => {
+  it("preserves explicit i2v photo animation kind when both persisted assets are videos", () => {
     const segment = createPhotoSegment();
     segment.mediaType = "video";
     segment.currentAsset = {
@@ -415,6 +454,8 @@ describe("media library photo sources", () => {
       libraryKind: "photo_animation",
       mediaType: "video",
       mimeType: "video/mp4",
+      renderedAnimationMode: "i2v",
+      renderedViaI2v: true,
       role: "source_upload",
     };
     segment.originalAsset = {
@@ -424,6 +465,8 @@ describe("media library photo sources", () => {
       libraryKind: "photo_animation",
       mediaType: "video",
       mimeType: "video/mp4",
+      renderedAnimationMode: "i2v",
+      renderedViaI2v: true,
       role: "source_upload",
     };
 
@@ -469,7 +512,7 @@ describe("media library durable assets", () => {
     expect(getWorkspaceMediaLibraryKindFromDurableAsset(asset)).toBe("ai_video");
   });
 
-  it("uses durable library_kind to classify photo animations", () => {
+  it("uses durable library_kind and i2v metadata to classify photo animations", () => {
     const asset = buildWorkspaceMediaAssetRef({
       download_path: "/api/media/786/download",
       id: 786,
@@ -477,6 +520,8 @@ describe("media library durable assets", () => {
       library_kind: "photo_animation",
       media_type: "video",
       project_id: 42,
+      rendered_animation_mode: "i2v",
+      rendered_via_i2v: true,
       role: "rendered_segment",
       segment_index: 0,
       source_kind: "ai_generated",
@@ -485,6 +530,46 @@ describe("media library durable assets", () => {
     });
 
     expect(getWorkspaceMediaLibraryKindFromDurableAsset(asset)).toBe("photo_animation");
+  });
+
+  it("does not classify durable ffmpeg camera movement renders as AI video", () => {
+    const asset = buildWorkspaceMediaAssetRef({
+      download_path: "/api/media/788/download",
+      id: 788,
+      kind: "rendered_segment",
+      library_kind: "photo_animation",
+      media_type: "video",
+      mime_type: "video/mp4",
+      project_id: 42,
+      rendered_animation_mode: "ffmpeg",
+      rendered_via_i2v: false,
+      role: "rendered_segment",
+      segment_index: 0,
+      source_kind: "ai_generated",
+      status: "ready",
+      storage_key: "users/1/assets/788/rendered_segment/788-rendered_segment_cache_ai_0.mp4",
+    });
+
+    expect(getWorkspaceMediaLibraryKindFromDurableAsset(asset)).toBeNull();
+  });
+
+  it("does not infer image-to-video generation from a provider-looking file name", () => {
+    const asset = buildWorkspaceMediaAssetRef({
+      download_path: "/api/media/789/download",
+      id: 789,
+      kind: "rendered_segment",
+      library_kind: "photo_animation",
+      media_type: "video",
+      mime_type: "video/mp4",
+      project_id: 42,
+      role: "rendered_segment",
+      segment_index: 0,
+      source_kind: "ai_generated",
+      status: "ready",
+      storage_key: "users/1/assets/789/rendered_segment/789-wavespeed-source-camera-motion.mp4",
+    });
+
+    expect(getWorkspaceMediaLibraryKindFromDurableAsset(asset)).toBeNull();
   });
 
   it("uses durable library_kind to classify talking photos", () => {
@@ -515,6 +600,8 @@ describe("media library durable assets", () => {
       media_type: "video",
       mime_type: "video/mp4",
       project_id: 42,
+      rendered_animation_mode: "i2v",
+      rendered_via_i2v: true,
       role: "rendered_segment",
       segment_index: 6,
       source_kind: "ai_generated",

@@ -20,6 +20,8 @@ export type WorkspaceMediaIndexStoredItem = {
   assetKind?: string | null;
   assetLifecycle?: WorkspaceMediaAssetLifecycle | null;
   assetMediaType?: string | null;
+  assetRenderedAnimationMode?: string | null;
+  assetRenderedViaI2v?: boolean | null;
   createdAt?: number | string | null;
   kind: WorkspaceMediaLibraryItemKind;
   previewKind: WorkspaceMediaLibraryPreviewKind;

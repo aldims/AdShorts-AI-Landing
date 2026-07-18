@@ -19,6 +19,8 @@ export type WorkspaceMediaLibraryItem = {
   assetKind: string | null;
   assetLifecycle: WorkspaceMediaAssetLifecycle | null;
   assetMediaType: string | null;
+  assetRenderedAnimationMode?: string | null;
+  assetRenderedViaI2v?: boolean | null;
   createdAt: number;
   dedupeKey: string;
   downloadName: string;
@@ -42,13 +44,27 @@ export const isWorkspaceMediaLibraryDisplayItem = (
 ) => item.kind === "ai_photo" || item.kind === "ai_video";
 
 export const isWorkspaceMediaLibraryVisualSelectionItem = (
-  item: Pick<WorkspaceMediaLibraryItem, "kind">,
-) =>
-  item.kind === "ai_photo" ||
-  item.kind === "ai_video" ||
-  item.kind === "photo_animation" ||
-  item.kind === "talking_photo" ||
-  item.kind === "image_edit";
+  item: Pick<
+    WorkspaceMediaLibraryItem,
+    "assetKind" | "assetRenderedAnimationMode" | "assetRenderedViaI2v" | "kind" | "source"
+  >,
+) => {
+  if (item.kind === "photo_animation" && item.source === "persisted") {
+    const assetKind = String(item.assetKind ?? "").trim().toLowerCase();
+    const renderedAnimationMode = String(item.assetRenderedAnimationMode ?? "").trim().toLowerCase();
+    if (assetKind === "rendered_segment") {
+      return item.assetRenderedViaI2v === true || renderedAnimationMode === "i2v";
+    }
+  }
+
+  return (
+    item.kind === "ai_photo" ||
+    item.kind === "ai_video" ||
+    item.kind === "photo_animation" ||
+    item.kind === "talking_photo" ||
+    item.kind === "image_edit"
+  );
+};
 
 export const normalizeWorkspaceMediaLibraryCreatedAt = (value: number | string | null | undefined) => {
   const timestamp =
@@ -584,6 +600,8 @@ export const createWorkspaceMediaLibraryItem = (options: {
   assetKind?: string | null;
   assetLifecycle?: WorkspaceMediaAssetLifecycle | null;
   assetMediaType?: string | null;
+  assetRenderedAnimationMode?: string | null;
+  assetRenderedViaI2v?: boolean | null;
   createdAt?: number | string | null;
   downloadName: string;
   downloadUrl: string | null;
@@ -618,6 +636,11 @@ export const createWorkspaceMediaLibraryItem = (options: {
       typeof options.assetMediaType === "string" && options.assetMediaType.trim()
         ? options.assetMediaType.trim()
         : null,
+    assetRenderedAnimationMode:
+      typeof options.assetRenderedAnimationMode === "string" && options.assetRenderedAnimationMode.trim()
+        ? options.assetRenderedAnimationMode.trim()
+        : null,
+    assetRenderedViaI2v: typeof options.assetRenderedViaI2v === "boolean" ? options.assetRenderedViaI2v : null,
     createdAt: normalizeWorkspaceMediaLibraryCreatedAt(options.createdAt),
     dedupeKey,
     downloadName: options.downloadName,

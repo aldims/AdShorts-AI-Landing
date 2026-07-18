@@ -12,7 +12,10 @@ import {
   STUDIO_WORKSPACE_CHARACTER_REFERENCE_CREDIT_COST,
   type StudioSegmentVisualQuality,
 } from "../../../shared/studio-credit-costs";
-import type { WorkspaceMediaAssetRef } from "../../../shared/workspace-media-assets";
+import {
+  isWorkspaceNonAiRenderedPhotoVideoAsset,
+  type WorkspaceMediaAssetRef,
+} from "../../../shared/workspace-media-assets";
 import type { WorkspaceReferenceKind } from "../../../shared/workspace-references";
 import { WORKSPACE_SEGMENT_PHOTO_DURATION_AUDIO_GUARD_EPSILON_SECONDS } from "./workspace-constants";
 import {
@@ -1808,37 +1811,6 @@ export const getWorkspaceSegmentPreviewKind = (segment: WorkspaceSegmentEditorDr
 export const normalizeWorkspaceMediaAssetToken = (value: unknown) =>
   String(value ?? "").trim().toLowerCase();
 
-const normalizeWorkspaceMediaAssetBoolean = (value: unknown) => {
-  if (typeof value === "boolean") {
-    return value;
-  }
-
-  if (typeof value === "number") {
-    return value === 1;
-  }
-
-  const normalized = String(value ?? "").trim().toLowerCase();
-  if (normalized === "true" || normalized === "1") {
-    return true;
-  }
-
-  if (normalized === "false" || normalized === "0") {
-    return false;
-  }
-
-  return null;
-};
-
-const getWorkspaceMediaAssetRenderedAnimationMode = (asset: WorkspaceMediaAssetRef | null | undefined) =>
-  normalizeWorkspaceMediaAssetToken(
-    asset?.renderedAnimationMode ?? (asset as { rendered_animation_mode?: string | null } | null | undefined)?.rendered_animation_mode,
-  );
-
-const getWorkspaceMediaAssetRenderedViaI2v = (asset: WorkspaceMediaAssetRef | null | undefined) =>
-  normalizeWorkspaceMediaAssetBoolean(
-    asset?.renderedViaI2v ?? (asset as { rendered_via_i2v?: boolean | string | number | null } | null | undefined)?.rendered_via_i2v,
-  );
-
 export const getWorkspaceMediaAssetSignature = (asset: WorkspaceMediaAssetRef | null | undefined) =>
   [
     asset?.kind,
@@ -1944,41 +1916,9 @@ export const isWorkspaceAiPhotoRenderedStillAsset = (asset: WorkspaceMediaAssetR
   return isRenderedSegment && hasAiPhotoMarker && (libraryKind === "ai_photo" || sourceKind === "ai_generated");
 };
 
-export const isWorkspaceHoldableRenderedPhotoVisualAsset = (asset: WorkspaceMediaAssetRef | null | undefined) => {
-  if (!isWorkspaceVideoMediaAsset(asset)) {
-    return false;
-  }
-
-  const signature = getWorkspaceMediaAssetSignature(asset);
-  const libraryKind = normalizeWorkspaceMediaAssetToken(asset?.libraryKind);
-  const renderedAnimationMode = getWorkspaceMediaAssetRenderedAnimationMode(asset);
-  const renderedViaI2v = getWorkspaceMediaAssetRenderedViaI2v(asset);
-  const isRenderedSegment =
-    signature.includes("rendered_segment") ||
-    signature.includes("current_rendered_segment") ||
-    signature.includes("/rendered_segment/");
-  const hasPhotoMarker =
-    libraryKind === "photo_animation" ||
-    libraryKind === "ai_photo" ||
-    signature.includes("photo_animation") ||
-    signature.includes("photo-animation") ||
-    signature.includes("source_ai_image") ||
-    signature.includes("ai_photo") ||
-    signature.includes("ai-photo");
-  const hasGeneratedVideoMarker =
-    renderedViaI2v === true ||
-    renderedAnimationMode === "i2v" ||
-    signature.includes("wavespeed") ||
-    signature.includes("deapi");
-  const hasStillRenderMarker =
-    renderedAnimationMode === "ffmpeg" ||
-    renderedAnimationMode === "still" ||
-    renderedAnimationMode === "image" ||
-    signature.includes("rendered_segment_cache") ||
-    signature.includes("segment_animation_fallback");
-
-  return isRenderedSegment && hasPhotoMarker && hasStillRenderMarker && !hasGeneratedVideoMarker;
-};
+export const isWorkspaceHoldableRenderedPhotoVisualAsset = (
+  asset: WorkspaceMediaAssetRef | null | undefined,
+) => isWorkspaceNonAiRenderedPhotoVideoAsset(asset);
 
 export const isWorkspaceSegmentAiPhotoRenderedStill = (segment: WorkspaceSegmentEditorDraftSegment) =>
   Boolean(
