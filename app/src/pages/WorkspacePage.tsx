@@ -998,6 +998,7 @@ import {
   getWorkspaceSegmentEditorFullPreviewAudioFadeOptions,
   getWorkspaceSegmentEditorFullPreviewAudioFadeMultiplier,
   getWorkspaceSegmentEditorFullPreviewAudioPreloadUrls,
+  getWorkspaceSegmentEditorHeldVideoSourceTime,
   getWorkspaceSegmentTimelineAudioPreviewEndWatchdogDelayMs,
   getWorkspaceSegmentEditorFullPreviewDuckedVolume,
   getWorkspaceSegmentEditorFullPreviewSegmentRatio,
@@ -1318,13 +1319,13 @@ export const resolveWorkspaceSegmentDurationMenuTrimLabels = (options: {
     voiceoverDurationSeconds,
     options.locale,
   ).replace(/\s+/g, "")}`;
-  const fullResultLoopsToVoiceover =
+  const fullResultHoldsToVoiceover =
     voiceoverDurationSeconds > currentVideoDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS;
 
   return {
     fullDurationLabel,
-    fullResultDurationLabel: fullResultLoopsToVoiceover ? voiceoverDurationLabel : fullDurationLabel,
-    fullResultLoopsToVoiceover,
+    fullResultDurationLabel: fullResultHoldsToVoiceover ? voiceoverDurationLabel : fullDurationLabel,
+    fullResultHoldsToVoiceover,
     voiceoverDurationLabel,
   };
 };
@@ -27318,7 +27319,6 @@ export function WorkspacePage({
         }
       | null,
     visualDurationFallbackLabel?: string | null,
-    holdLastFrame = false,
   ) => {
     if (!mismatch) {
       return null;
@@ -27328,12 +27328,8 @@ export function WorkspacePage({
     if (mismatch.voiceoverDurationSource === "estimated") {
       return workspaceText(
         locale,
-        holdLastFrame
-          ? "Визуал может оказаться короче озвучки. Тогда последний кадр будет удерживаться до конца сцены. Можно уменьшить текст озвучки или продлить визуал."
-          : "Исходное видео может оказаться короче озвучки. Тогда оно повторится с начала до конца сцены. Можно уменьшить текст озвучки или продлить видео с помощью ИИ.",
-        holdLastFrame
-          ? "The visual may be shorter than the voiceover. In that case, its final frame will be held until the scene ends. You can shorten the voiceover text or extend the visual."
-          : "The source video may be shorter than the voiceover. In that case, it will replay from the beginning until the scene ends. You can shorten the voiceover text or extend the video with AI.",
+        "Визуал может оказаться короче озвучки. Тогда последний кадр будет удерживаться до конца сцены. Можно уменьшить текст озвучки или продлить визуал.",
+        "The visual may be shorter than the voiceover. In that case, its final frame will be held until the scene ends. You can shorten the voiceover text or extend the visual.",
       );
     }
 
@@ -27346,12 +27342,8 @@ export function WorkspacePage({
 
     return workspaceText(
       locale,
-      holdLastFrame
-        ? `Озвучка ${voiceoverDurationLabel} длиннее визуала ${finalVisualDurationLabel}. Последний кадр будет удерживаться до конца сцены.`
-        : `Озвучка ${voiceoverDurationLabel} длиннее исходного видео ${finalVisualDurationLabel}. Видео повторится с начала до конца сцены. Чтобы убрать повтор, продлите видео с помощью ИИ.`,
-      holdLastFrame
-        ? `Voiceover ${voiceoverDurationLabel} is longer than the ${finalVisualDurationLabel} visual. The final frame will be held until the scene ends.`
-        : `Voiceover ${voiceoverDurationLabel} is longer than the ${finalVisualDurationLabel} source video. The video will replay from the beginning until the scene ends. Extend the video with AI to remove the repeat.`,
+      `Озвучка ${voiceoverDurationLabel} длиннее визуала ${finalVisualDurationLabel}. Последний кадр будет удерживаться до конца сцены.`,
+      `Voiceover ${voiceoverDurationLabel} is longer than the ${finalVisualDurationLabel} visual. The final frame will be held until the scene ends.`,
     );
   };
   const showSegmentTimelinePhotoDurationAudioGuardWarning = (
@@ -30555,7 +30547,7 @@ export function WorkspacePage({
     ensureVideoElementLoading(element, HTMLMediaElement.HAVE_CURRENT_DATA);
 
     const mediaDuration = Number.isFinite(element.duration) && element.duration > 0.2 ? element.duration : null;
-    const targetTime = mediaDuration ? resolvedSegment.localTime % mediaDuration : resolvedSegment.localTime;
+    const targetTime = getWorkspaceSegmentEditorHeldVideoSourceTime(resolvedSegment.localTime, mediaDuration);
     if (element.readyState >= HTMLMediaElement.HAVE_METADATA && Number.isFinite(targetTime)) {
       try {
         element.currentTime = targetTime;
@@ -31146,15 +31138,13 @@ export function WorkspacePage({
       element.defaultMuted = !shouldUseVisualEmbeddedAudioFallback;
       element.volume = shouldUseVisualEmbeddedAudioFallback ? WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_VOLUME : 0;
     };
-    const targetTime = mediaDuration ? resolvedSegment.localTime % mediaDuration : resolvedSegment.localTime;
+    const targetTime = getWorkspaceSegmentEditorHeldVideoSourceTime(resolvedSegment.localTime, mediaDuration);
     const shouldResetSilentEmbeddedVisualPrime =
       false;
     if (!shouldResetSilentEmbeddedVisualPrime) {
       applyVisualEmbeddedAudioFallbackVolume();
     }
-    element.loop =
-      mediaDuration !== null &&
-      resolvedSegment.duration > mediaDuration + WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_END_TOLERANCE_SECONDS;
+    element.loop = false;
     const visualDataSyncKey = `${segmentEditorFullPreviewTokenRef.current}:${segmentPlaybackIndex}:${mediaSurface.displayUrl ?? ""}`;
     if (
       options?.playVideo !== false &&
@@ -32343,11 +32333,6 @@ export function WorkspacePage({
       qualitySwitch={null}
       segment={segmentTimelineDurationMenuSegment}
       segmentArrayIndex={segmentTimelineDurationMenuArrayIndex}
-      shortVideoFillMode={
-        segmentTimelineDurationMenuSegment && isWorkspaceSegmentGeneratedVideoVisual(segmentTimelineDurationMenuSegment)
-          ? "hold"
-          : "loop"
-      }
       shouldShowManualDurationInput={shouldShowSegmentTimelineManualDurationInput}
       subtitle={segmentTimelineDurationMenuSubtitle}
       title={segmentTimelineDurationMenuTitle}
@@ -32600,11 +32585,6 @@ export function WorkspacePage({
     ? getSegmentTimelineVisualAudioDurationMismatchWarning(
         segmentTimelineVoiceMenuVisualAudioDurationMismatch,
         null,
-        Boolean(
-          segmentTimelineVoiceMenuSegment &&
-            (segmentTimelineVoiceMenuSegment.mediaType === "photo" ||
-              getWorkspaceSegmentLatestVisualAction(segmentTimelineVoiceMenuSegment) === "talking_photo"),
-        ),
       )
     : null;
   const segmentTimelineVoiceMenu = (
@@ -33226,7 +33206,6 @@ export function WorkspacePage({
               const segmentDurationWarningTitle = getSegmentTimelineVisualAudioDurationMismatchWarning(
                 visualAudioDurationMismatch,
                 segmentVisualDurationBadgeLabel,
-                segment.mediaType === "photo" || getWorkspaceSegmentLatestVisualAction(segment) === "talking_photo",
               );
               const isSegmentDurationManual = normalizeWorkspaceSegmentDurationMode(segment.durationMode) === "manual";
               const visualHistoryKey = getWorkspaceSegmentTimelineHistoryKey("visual", segment.index);

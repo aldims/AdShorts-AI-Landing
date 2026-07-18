@@ -4930,7 +4930,7 @@ describe("WorkspacePage studio locale defaults", () => {
     });
   });
 
-  it("warns when a 5.2 second voiceover loops a 5 second video", () => {
+  it("warns when a 5.2 second voiceover outlasts a 5 second video", () => {
     const segment = createDraftSegment({
       aiVideoAsset: {
         durationSeconds: 5,
@@ -5063,7 +5063,7 @@ describe("WorkspacePage studio locale defaults", () => {
     });
   });
 
-  it("uses the baseline video duration for the visual badge when voiceover loops the scene", () => {
+  it("uses the baseline video duration for the visual badge when voiceover outlasts the scene", () => {
     const videoAsset = createMediaAsset(505, {
       mediaType: "video",
       sourceKind: "ai_generated",
@@ -5215,7 +5215,7 @@ describe("WorkspacePage studio locale defaults", () => {
     });
   });
 
-  it("measures video visual duration from the raw asset instead of the looped segment preview", () => {
+  it("measures video visual duration from the raw asset instead of the padded segment preview", () => {
     const segment = createDraftSegment({
       currentExternalPlaybackUrl: "/api/workspace/media-assets/505/playback",
       currentPlaybackUrl: "/api/workspace/project-segment-video?projectId=77&segmentIndex=3&source=current&delivery=playback",
@@ -7728,7 +7728,7 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(labels).toEqual({
       fullDurationLabel: "5с",
       fullResultDurationLabel: "5с",
-      fullResultLoopsToVoiceover: false,
+      fullResultHoldsToVoiceover: false,
       voiceoverDurationLabel: "2.4с",
     });
     expect(labels?.fullDurationLabel).not.toBe(
@@ -7736,7 +7736,7 @@ describe("WorkspacePage studio locale defaults", () => {
     );
   });
 
-  it("labels the video mode result as looped when voiceover is longer than video", () => {
+  it("labels the video mode result as held when voiceover is longer than video", () => {
     expect(
       resolveWorkspaceSegmentDurationMenuTrimLabels({
         currentVideoDurationSeconds: 5,
@@ -7747,7 +7747,7 @@ describe("WorkspacePage studio locale defaults", () => {
     ).toEqual({
       fullDurationLabel: "5с",
       fullResultDurationLabel: "5.9с",
-      fullResultLoopsToVoiceover: true,
+      fullResultHoldsToVoiceover: true,
       voiceoverDurationLabel: "5.9с",
     });
   });

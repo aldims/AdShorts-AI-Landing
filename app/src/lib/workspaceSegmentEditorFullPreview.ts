@@ -454,6 +454,29 @@ export const clampWorkspaceSegmentEditorFullPreviewTime = (
   return Math.min(safeDuration, safeTime);
 };
 
+export const getWorkspaceSegmentEditorHeldVideoSourceTime = (
+  localTime: number,
+  mediaDuration: number | null | undefined,
+  endFrameOffsetSeconds = 0.04,
+) => {
+  const safeLocalTime = normalizePreviewTime(localTime) ?? 0;
+  if (mediaDuration === null || mediaDuration === undefined) {
+    return safeLocalTime;
+  }
+
+  const safeMediaDuration = normalizePreviewTime(mediaDuration);
+  if (safeMediaDuration === null) {
+    return safeLocalTime;
+  }
+
+  const safeEndFrameOffsetSeconds = normalizePreviewTime(endFrameOffsetSeconds) ?? 0;
+  const finalFrameTime = Math.max(
+    0,
+    safeMediaDuration - Math.min(safeMediaDuration, safeEndFrameOffsetSeconds),
+  );
+  return Math.min(safeLocalTime, finalFrameTime);
+};
+
 export const getWorkspaceSegmentEditorFullPreviewTimeRatio = (
   currentTime: number,
   duration: number,

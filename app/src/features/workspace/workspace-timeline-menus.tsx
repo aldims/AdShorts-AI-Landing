@@ -58,7 +58,6 @@ type WorkspaceSegmentTimelineDurationMenuProps = {
   qualitySwitch: ReactNode;
   segment: WorkspaceSegmentEditorDraftSegment | null;
   segmentArrayIndex: number;
-  shortVideoFillMode: "hold" | "loop";
   shouldShowManualDurationInput: boolean;
   subtitle: string | null;
   title: string;
@@ -66,7 +65,7 @@ type WorkspaceSegmentTimelineDurationMenuProps = {
   trimToVoiceoverLabels: {
     fullDurationLabel: string;
     fullResultDurationLabel: string;
-    fullResultLoopsToVoiceover: boolean;
+    fullResultHoldsToVoiceover: boolean;
     voiceoverDurationLabel: string;
   } | null;
 };
@@ -102,7 +101,6 @@ export function WorkspaceSegmentTimelineDurationMenu({
   qualitySwitch,
   segment,
   segmentArrayIndex,
-  shortVideoFillMode,
   shouldShowManualDurationInput,
   subtitle,
   title,
@@ -119,12 +117,10 @@ export function WorkspaceSegmentTimelineDurationMenu({
       onClose();
     }
   };
-  const fullVideoResultDurationLabel =
-    trimToVoiceoverLabels?.fullResultDurationLabel ?? trimToVoiceoverLabels?.fullDurationLabel;
-  const fullVideoResultLoopsToVoiceover = trimToVoiceoverLabels?.fullResultLoopsToVoiceover === true;
+  const fullVideoResultHoldsToVoiceover = trimToVoiceoverLabels?.fullResultHoldsToVoiceover === true;
   const shouldShowDurationModeChoices =
-    canTrimToVoiceover && trimToVoiceoverLabels !== null && !fullVideoResultLoopsToVoiceover;
-  const shouldShowLoopedDurationSummary = trimToVoiceoverLabels !== null && fullVideoResultLoopsToVoiceover;
+    canTrimToVoiceover && trimToVoiceoverLabels !== null && !fullVideoResultHoldsToVoiceover;
+  const shouldShowHeldDurationSummary = trimToVoiceoverLabels !== null && fullVideoResultHoldsToVoiceover;
   const shouldShowCustomDurationChoice = shouldShowManualDurationInput && shouldShowDurationModeChoices;
   const shouldShowStandaloneManualDurationInput = shouldShowManualDurationInput && !shouldShowCustomDurationChoice;
   const selectDurationMode = (nextTrimToVoiceover: boolean) => {
@@ -243,7 +239,7 @@ export function WorkspaceSegmentTimelineDurationMenu({
           </span>
         </div>
         {shouldShowStandaloneManualDurationInput ? renderDurationInputField("primary") : null}
-        {shouldShowLoopedDurationSummary && trimToVoiceoverLabels ? (
+        {shouldShowHeldDurationSummary && trimToVoiceoverLabels ? (
           <>
             <div className="studio-segment-editor__timeline-duration-summary">
               <div>
@@ -256,17 +252,11 @@ export function WorkspaceSegmentTimelineDurationMenu({
               </div>
             </div>
             <p className="studio-segment-editor__timeline-duration-loop-note" role="status">
-              {shortVideoFillMode === "hold"
-                ? workspaceText(
-                    locale,
-                    "Без ИИ-продления последний кадр будет удерживаться до конца озвучки. Чтобы сохранить движение, продлите видео с ИИ.",
-                    "Without AI extension, the last frame will be held until the voiceover ends. Extend with AI to keep the motion.",
-                  )
-                : workspaceText(
-                    locale,
-                    "Без ИИ-продления видео повторится с начала до конца озвучки. Чтобы убрать повтор, продлите видео с ИИ.",
-                    "Without AI extension, the video will replay from the beginning until the voiceover ends. Extend with AI to remove the repeat.",
-                  )}
+              {workspaceText(
+                locale,
+                "Без ИИ-продления последний кадр будет удерживаться до конца озвучки. Чтобы сохранить движение, продлите видео с ИИ.",
+                "Without AI extension, the last frame will be held until the voiceover ends. Extend with AI to keep the motion.",
+              )}
             </p>
           </>
         ) : null}
@@ -297,12 +287,8 @@ export function WorkspaceSegmentTimelineDurationMenu({
               <small>
                 {workspaceText(
                   locale,
-                  fullVideoResultLoopsToVoiceover
-                    ? `${fullVideoResultDurationLabel} с повтором`
-                    : trimToVoiceoverLabels.fullDurationLabel,
-                  fullVideoResultLoopsToVoiceover
-                    ? `${fullVideoResultDurationLabel}, looped`
-                    : trimToVoiceoverLabels.fullDurationLabel,
+                  trimToVoiceoverLabels.fullDurationLabel,
+                  trimToVoiceoverLabels.fullDurationLabel,
                 )}
               </small>
             </button>
@@ -370,15 +356,13 @@ export function WorkspaceSegmentTimelineDurationMenu({
               <div className="studio-segment-editor__timeline-duration-action-cluster">
                 {qualitySwitch}
                 {durationSwitch}
-                {shouldShowLoopedDurationSummary ? (
+                {shouldShowHeldDurationSummary ? (
                   <button
                     className="studio-segment-editor__timeline-duration-keep-button"
                     type="button"
                     onClick={onClose}
                   >
-                    {shortVideoFillMode === "hold"
-                      ? workspaceText(locale, "Оставить с удержанием кадра", "Keep held frame")
-                      : workspaceText(locale, "Оставить с повтором", "Keep replaying")}
+                    {workspaceText(locale, "Оставить с удержанием кадра", "Keep held frame")}
                   </button>
                 ) : null}
                 <button
@@ -405,7 +389,7 @@ export function WorkspaceSegmentTimelineDurationMenu({
             </div>
           </div>
         ) : null}
-        {!hasExtensionPlan && !shouldShowManualDurationInput && !shouldShowDurationModeChoices && !shouldShowLoopedDurationSummary ? (
+        {!hasExtensionPlan && !shouldShowManualDurationInput && !shouldShowDurationModeChoices && !shouldShowHeldDurationSummary ? (
           <div className="studio-segment-editor__timeline-text-menu-actions studio-segment-editor__timeline-duration-menu-actions">
             <button type="button" onClick={applyDuration}>
               {workspaceText(locale, "Сохранить", "Save")}

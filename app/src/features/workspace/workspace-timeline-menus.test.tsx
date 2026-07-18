@@ -183,7 +183,6 @@ describe("WorkspaceSegmentTimelineDurationMenu", () => {
       text: "Текст сцены",
     } as any,
     segmentArrayIndex: 0,
-    shortVideoFillMode: "loop" as const,
     shouldShowManualDurationInput: false,
     subtitle: "0с -> 5с",
     title: "Продлить видео на 5 секунд",
@@ -191,7 +190,7 @@ describe("WorkspaceSegmentTimelineDurationMenu", () => {
     trimToVoiceoverLabels: {
       fullDurationLabel: "5с",
       fullResultDurationLabel: "5с",
-      fullResultLoopsToVoiceover: false,
+      fullResultHoldsToVoiceover: false,
       voiceoverDurationLabel: "3с",
     },
   };
@@ -293,7 +292,7 @@ describe("WorkspaceSegmentTimelineDurationMenu", () => {
         trimToVoiceoverLabels={{
           fullDurationLabel: "60с",
           fullResultDurationLabel: "60с",
-          fullResultLoopsToVoiceover: false,
+          fullResultHoldsToVoiceover: false,
           voiceoverDurationLabel: "5с",
         }}
       />,
@@ -326,7 +325,7 @@ describe("WorkspaceSegmentTimelineDurationMenu", () => {
         trimToVoiceoverLabels={{
           fullDurationLabel: "5.5с",
           fullResultDurationLabel: "5.5с",
-          fullResultLoopsToVoiceover: false,
+          fullResultHoldsToVoiceover: false,
           voiceoverDurationLabel: "≈1.8с",
         }}
       />,
@@ -355,7 +354,7 @@ describe("WorkspaceSegmentTimelineDurationMenu", () => {
         trimToVoiceoverLabels={{
           fullDurationLabel: "60с",
           fullResultDurationLabel: "60с",
-          fullResultLoopsToVoiceover: false,
+          fullResultHoldsToVoiceover: false,
           voiceoverDurationLabel: "5с",
         }}
       />,
@@ -368,7 +367,7 @@ describe("WorkspaceSegmentTimelineDurationMenu", () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
-  it("shows the replayed result as a summary when voiceover is longer than video", () => {
+  it("shows the held-frame result as a summary when voiceover is longer than video", () => {
     render(
       <WorkspaceSegmentTimelineDurationMenu
         {...baseDurationProps}
@@ -376,7 +375,7 @@ describe("WorkspaceSegmentTimelineDurationMenu", () => {
         trimToVoiceoverLabels={{
           fullDurationLabel: "5с",
           fullResultDurationLabel: "5.9с",
-          fullResultLoopsToVoiceover: true,
+          fullResultHoldsToVoiceover: true,
           voiceoverDurationLabel: "5.9с",
         }}
       />,
@@ -389,21 +388,22 @@ describe("WorkspaceSegmentTimelineDurationMenu", () => {
     expect(screen.getByText("Текущая озвучка")).toBeTruthy();
     expect(screen.getByText("5.9с")).toBeTruthy();
     expect(
-      screen.getByText("Без ИИ-продления видео повторится с начала до конца озвучки. Чтобы убрать повтор, продлите видео с ИИ."),
+      screen.getByText(
+        "Без ИИ-продления последний кадр будет удерживаться до конца озвучки. Чтобы сохранить движение, продлите видео с ИИ.",
+      ),
     ).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Оставить с повтором" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Оставить с удержанием кадра" })).toBeTruthy();
   });
 
-  it("describes the held final frame used for a short generated video", () => {
+  it("describes the same held final frame for every short video", () => {
     render(
       <WorkspaceSegmentTimelineDurationMenu
         {...baseDurationProps}
-        shortVideoFillMode="hold"
         trimToVoiceover={false}
         trimToVoiceoverLabels={{
           fullDurationLabel: "4с",
           fullResultDurationLabel: "5с",
-          fullResultLoopsToVoiceover: true,
+          fullResultHoldsToVoiceover: true,
           voiceoverDurationLabel: "5с",
         }}
       />,

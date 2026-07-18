@@ -6,6 +6,7 @@ import {
   getWorkspaceSegmentEditorFullPreviewAudioFadeMultiplier,
   getWorkspaceSegmentEditorFullPreviewDuckedVolume,
   getWorkspaceSegmentEditorFullPreviewDuration,
+  getWorkspaceSegmentEditorHeldVideoSourceTime,
   getWorkspaceSegmentEditorFullPreviewPlaybackEndTime,
   getWorkspaceSegmentEditorFullPreviewSegmentRatio,
   getWorkspaceSegmentEditorFullPreviewTimeFromSegmentRatio,
@@ -64,6 +65,13 @@ describe("workspace segment editor full preview", () => {
     expect(clampWorkspaceSegmentEditorFullPreviewTime(-1, 9)).toBe(0);
     expect(clampWorkspaceSegmentEditorFullPreviewTime(4, 9)).toBe(4);
     expect(clampWorkspaceSegmentEditorFullPreviewTime(12, 9)).toBe(9);
+  });
+
+  it("holds a short video's final frame instead of wrapping to its beginning", () => {
+    expect(getWorkspaceSegmentEditorHeldVideoSourceTime(2, 5)).toBe(2);
+    expect(getWorkspaceSegmentEditorHeldVideoSourceTime(8, 5)).toBeCloseTo(4.96);
+    expect(getWorkspaceSegmentEditorHeldVideoSourceTime(-1, 5)).toBe(0);
+    expect(getWorkspaceSegmentEditorHeldVideoSourceTime(8, null)).toBe(8);
   });
 
   it("resolves total duration from segment end times", () => {
