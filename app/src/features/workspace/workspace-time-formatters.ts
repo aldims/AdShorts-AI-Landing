@@ -41,7 +41,7 @@ export const formatWorkspaceSegmentEditorTime = (value: number) => {
 
 const getWorkspaceVideoPlayerDisplayedSeconds = (value: number, mode: "current" | "duration" = "current") => {
   const safeValue = Number.isFinite(value) ? Math.max(0, value) : 0;
-  return mode === "duration" ? Math.ceil(safeValue) : Math.floor(safeValue);
+  return mode === "duration" ? Math.round(safeValue) : Math.floor(safeValue);
 };
 
 export const formatWorkspaceVideoPlayerTime = (value: number, mode?: "current" | "duration") => {
