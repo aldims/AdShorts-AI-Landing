@@ -2246,7 +2246,7 @@ describe("workspace segment editor project voiceover timeline", () => {
     expect(resolveWorkspaceSegmentVideoExtensionMenuSourceDurationSeconds(segment)).toBe(5);
   });
 
-  it("keeps the photo animation tool selected for generated photo animations", () => {
+  it("offers AI video extension for generated photo animations", () => {
     const segment = createProjectVoiceoverSegment({
       aiVideoAsset: {
         assetId: 611,
@@ -2274,7 +2274,8 @@ describe("workspace segment editor project voiceover timeline", () => {
     });
 
     expect(getWorkspaceSegmentSelectedVisualPreviewKind(segment)).toBe("video");
-    expect(canWorkspaceSegmentUseVideoExtensionTool(segment)).toBe(false);
+    expect(canWorkspaceSegmentUseVideoExtensionTool(segment)).toBe(true);
+    expect(getWorkspaceSegmentCurrentVideoSourceAsset(segment)).toEqual(segment.aiVideoAsset);
   });
 
   it("uses the longer current video slot for the extension menu over a stale stored source duration", () => {

@@ -5439,6 +5439,14 @@ describe("WorkspacePage studio locale defaults", () => {
     ).toBe(true);
     expect(
       canWorkspaceSegmentUseVideoExtensionTool(createDraftSegment({
+        aiVideoAsset: {
+          fileName: "animated-scene.mp4",
+          fileSize: 0,
+          mimeType: "video/mp4",
+          posterUrl: "/api/workspace/media-assets/102/poster",
+          remoteUrl: "/api/workspace/media-assets/102/playback",
+          source: "media-library",
+        },
         aiVideoGeneratedMode: "photo_animation",
         mediaType: "video",
         photoAnimationSourceAsset: {
@@ -5450,7 +5458,7 @@ describe("WorkspacePage studio locale defaults", () => {
         },
         videoAction: "photo_animation",
       })),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       canWorkspaceSegmentUseVideoExtensionTool(createDraftSegment({
         mediaType: "photo",
