@@ -19,10 +19,17 @@ import {
   normalizeWorkspaceSegmentEditorSession,
   preserveWorkspaceSegmentEditorOriginalVisualReferences,
   rebuildWorkspaceSegmentEditorDraftSessionTimeline,
+  type WorkspaceSegmentTimelineVisualHistory,
 } from "./workspace-segment-editor";
 import { normalizeWorkspaceVideoSourceUrl } from "./workspace-utils";
-import { truncateWorkspaceSegmentInfographicText } from "./workspace-infographic-helpers";
+import {
+  cloneWorkspaceSegmentInfographic,
+  truncateWorkspaceSegmentInfographicText,
+  type WorkspaceSegmentInfographicHistory,
+} from "./workspace-infographic-helpers";
+import type { WorkspaceSegmentTimelineRedoSnapshot } from "./workspace-page-model";
 import type {
+  StudioCustomMusicFile,
   StudioLanguage,
   StudioCustomVideoFile,
   WorkspaceSegmentEditorDraftSegment,
@@ -163,6 +170,33 @@ export type StoredWorkspaceSegmentBatchVoiceoverJob = {
   segments: StoredWorkspaceSegmentBatchVoiceoverSegment[];
   source: "create-shorts" | "global-voiceover";
   status: string;
+};
+
+export type StoredWorkspaceSegmentTimelineVoiceHistoryEntry = {
+  segment: WorkspaceSegmentEditorDraftSegment;
+  segmentIndex: number;
+};
+
+export type StoredWorkspaceSegmentTimelineVoiceHistory = {
+  future: StoredWorkspaceSegmentTimelineVoiceHistoryEntry[];
+  past: StoredWorkspaceSegmentTimelineVoiceHistoryEntry[];
+};
+
+export type WorkspaceSegmentEditorRuntimeState = {
+  activeSegmentIndex: number;
+  dismissedVisualHistory: Record<string, true>;
+  infographicHistory: Record<number, WorkspaceSegmentInfographicHistory>;
+  redoSnapshots: Record<string, WorkspaceSegmentTimelineRedoSnapshot>;
+  soundPromptDraft: {
+    prompt: string;
+    segmentIndex: number | null;
+  };
+  visualDurationInputDraft: {
+    segmentIndex: number;
+    value: string;
+  } | null;
+  visualHistory: Record<string, WorkspaceSegmentTimelineVisualHistory>;
+  voiceHistory: Record<string, StoredWorkspaceSegmentTimelineVoiceHistory>;
 };
 
 export const isStoredWorkspaceSegmentJobForDraft = (
@@ -546,8 +580,12 @@ const WORKSPACE_SEGMENT_EDITOR_EXPLICIT_STRUCTURE_STORAGE_KEY_PREFIX = "adshorts
 const WORKSPACE_SEGMENT_EDITOR_EXPLICIT_RESET_STORAGE_KEY_PREFIX = "adshorts.segment-editor-explicit-reset:";
 const WORKSPACE_SEGMENT_EDITOR_BRAND_STORAGE_KEY_PREFIX = "adshorts.segment-editor-brand:";
 const WORKSPACE_SEGMENT_EDITOR_CONSUMED_SOURCE_STORAGE_KEY_PREFIX = "adshorts.segment-editor-consumed-source:";
+const WORKSPACE_SEGMENT_EDITOR_RUNTIME_STORAGE_KEY_PREFIX = "adshorts.segment-editor-runtime:";
 const WORKSPACE_SEGMENT_EDITOR_DRAFT_STORAGE_VERSION = 3;
+const WORKSPACE_SEGMENT_EDITOR_RUNTIME_STORAGE_VERSION = 1;
 const WORKSPACE_SEGMENT_EDITOR_PERSISTED_DATA_URL_MAX_CHARS = 512_000;
+const WORKSPACE_SEGMENT_EDITOR_RUNTIME_HISTORY_LIMIT = 50;
+const WORKSPACE_SEGMENT_EDITOR_RUNTIME_INFOGRAPHIC_HISTORY_LIMIT = 40;
 export const WORKSPACE_SEGMENT_TALKING_PHOTO_DURATION_OVERFLOW_TOLERANCE_SECONDS = 0.1;
 const WORKSPACE_SEGMENT_AI_PHOTO_PENDING_STORAGE_KEY_PREFIX = "adshorts.segment-ai-photo-pending:";
 const WORKSPACE_SEGMENT_AI_PHOTO_PENDING_TTL_MS = 24 * 60 * 60 * 1000;
@@ -774,6 +812,21 @@ const normalizeStoredWorkspaceSegmentLegacyEstimatedDuration = (
   };
 };
 
+const normalizePersistedWorkspaceSegmentEditorDraftSegment = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  fallbackLanguage: StudioLanguage,
+) =>
+  normalizeStoredWorkspaceSegmentLegacyEstimatedDuration({
+    ...cloneWorkspaceSegmentEditorDraftSegment(segment, fallbackLanguage),
+    aiPhotoAsset: normalizePersistedStudioCustomVideoFile(segment.aiPhotoAsset),
+    aiVideoAsset: normalizePersistedStudioCustomVideoFile(segment.aiVideoAsset),
+    customVideo: normalizePersistedStudioCustomVideoFile(segment.customVideo),
+    imageEditAsset: normalizePersistedStudioCustomVideoFile(segment.imageEditAsset),
+    photoAnimationSourceAsset: normalizePersistedStudioCustomVideoFile(segment.photoAnimationSourceAsset),
+    sceneSoundAsset: normalizePersistedStudioCustomVideoFile(segment.sceneSoundAsset),
+    voiceoverAsset: normalizePersistedStudioCustomVideoFile(segment.voiceoverAsset),
+  });
+
 export const normalizeStoredWorkspaceSegmentEditorDraftSession = (
   session: WorkspaceSegmentEditorDraftSession,
 ): WorkspaceSegmentEditorDraftSession => {
@@ -787,16 +840,7 @@ export const normalizeStoredWorkspaceSegmentEditorDraftSession = (
   const normalizedSession = normalizeLegacyWorkspaceSegmentEditorDraftSession(rebuildWorkspaceSegmentEditorDraftSessionTimeline({
     ...clonedSession,
     segments: clonedSession.segments.map((segment) =>
-      normalizeStoredWorkspaceSegmentLegacyEstimatedDuration({
-        ...cloneWorkspaceSegmentEditorDraftSegment(segment, fallbackLanguage),
-        aiPhotoAsset: normalizePersistedStudioCustomVideoFile(segment.aiPhotoAsset),
-        aiVideoAsset: normalizePersistedStudioCustomVideoFile(segment.aiVideoAsset),
-        customVideo: normalizePersistedStudioCustomVideoFile(segment.customVideo),
-        imageEditAsset: normalizePersistedStudioCustomVideoFile(segment.imageEditAsset),
-        photoAnimationSourceAsset: normalizePersistedStudioCustomVideoFile(segment.photoAnimationSourceAsset),
-        sceneSoundAsset: normalizePersistedStudioCustomVideoFile(segment.sceneSoundAsset),
-        voiceoverAsset: normalizePersistedStudioCustomVideoFile(segment.voiceoverAsset),
-      }),
+      normalizePersistedWorkspaceSegmentEditorDraftSegment(segment, fallbackLanguage),
     ),
   }));
 
@@ -804,6 +848,380 @@ export const normalizeStoredWorkspaceSegmentEditorDraftSession = (
     ...normalizedSession,
     clientUpdatedAt: Number.isFinite(clientUpdatedAt) && clientUpdatedAt > 0 ? clientUpdatedAt : undefined,
   };
+};
+
+type StoredWorkspaceSegmentEditorRuntimePayload = WorkspaceSegmentEditorRuntimeState & {
+  draftId: string;
+  projectId: number;
+  storageVersion: number;
+  updatedAt: number;
+};
+
+const getWorkspaceSegmentEditorRuntimeStorageKey = (email: string, projectId: number) =>
+  `${WORKSPACE_SEGMENT_EDITOR_RUNTIME_STORAGE_KEY_PREFIX}${email}:${projectId}`;
+
+const normalizePersistedStudioCustomMusicFile = (
+  value: StudioCustomMusicFile | null | undefined,
+): StudioCustomMusicFile | null => {
+  if (!value) {
+    return null;
+  }
+
+  const assetId = getPositiveWorkspaceMediaAssetId(value.assetId);
+  const dataUrl = typeof value.dataUrl === "string" ? value.dataUrl.trim() : "";
+  const shouldPersistDataUrl = Boolean(dataUrl) && !assetId && dataUrl.length <= WORKSPACE_SEGMENT_EDITOR_PERSISTED_DATA_URL_MAX_CHARS;
+  if (!assetId && !shouldPersistDataUrl) {
+    return null;
+  }
+
+  return {
+    assetId: assetId ?? undefined,
+    dataUrl: shouldPersistDataUrl ? dataUrl : undefined,
+    fileName: typeof value.fileName === "string" ? value.fileName : "",
+    fileSize: Number.isFinite(Number(value.fileSize)) ? Math.max(0, Number(value.fileSize)) : 0,
+  };
+};
+
+const normalizeStoredRuntimeSegment = (
+  value: unknown,
+  fallbackLanguage: StudioLanguage,
+): WorkspaceSegmentEditorDraftSegment | null => {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  try {
+    return normalizePersistedWorkspaceSegmentEditorDraftSegment(
+      value as WorkspaceSegmentEditorDraftSegment,
+      fallbackLanguage,
+    );
+  } catch {
+    return null;
+  }
+};
+
+const normalizeStoredRuntimeSegmentHistory = (
+  value: unknown,
+  options: {
+    fallbackLanguage: StudioLanguage;
+    historyKind: "visual" | "voice";
+    validSegmentIndexes: ReadonlySet<number>;
+  },
+) => {
+  const normalized: Record<string, WorkspaceSegmentTimelineVisualHistory | StoredWorkspaceSegmentTimelineVoiceHistory> = {};
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return normalized;
+  }
+
+  Object.entries(value as Record<string, unknown>).forEach(([historyKey, rawHistory]) => {
+    const match = new RegExp(`^${options.historyKind}:(\\d+)$`).exec(historyKey);
+    const segmentIndex = match ? Number(match[1]) : Number.NaN;
+    if (!Number.isInteger(segmentIndex) || !options.validSegmentIndexes.has(segmentIndex)) {
+      return;
+    }
+    if (!rawHistory || typeof rawHistory !== "object" || Array.isArray(rawHistory)) {
+      return;
+    }
+
+    const normalizeEntries = (rawEntries: unknown) => {
+      if (!Array.isArray(rawEntries)) {
+        return [];
+      }
+      return rawEntries
+        .slice(-WORKSPACE_SEGMENT_EDITOR_RUNTIME_HISTORY_LIMIT)
+        .map((rawEntry) => {
+          if (options.historyKind === "voice") {
+            const entry = rawEntry as Partial<StoredWorkspaceSegmentTimelineVoiceHistoryEntry>;
+            const entrySegmentIndex = Number(entry?.segmentIndex);
+            const segment = normalizeStoredRuntimeSegment(entry?.segment, options.fallbackLanguage);
+            return (
+              Number.isInteger(entrySegmentIndex) &&
+              entrySegmentIndex === segmentIndex &&
+              segment?.index === segmentIndex
+            )
+              ? { segment, segmentIndex }
+              : null;
+          }
+          const segment = normalizeStoredRuntimeSegment(rawEntry, options.fallbackLanguage);
+          return segment?.index === segmentIndex ? segment : null;
+        })
+        .filter((entry): entry is WorkspaceSegmentEditorDraftSegment | StoredWorkspaceSegmentTimelineVoiceHistoryEntry => Boolean(entry));
+    };
+
+    normalized[historyKey] = {
+      future: normalizeEntries((rawHistory as { future?: unknown }).future),
+      past: normalizeEntries((rawHistory as { past?: unknown }).past),
+    } as WorkspaceSegmentTimelineVisualHistory | StoredWorkspaceSegmentTimelineVoiceHistory;
+  });
+
+  return normalized;
+};
+
+const normalizeStoredRuntimeInfographicHistory = (
+  value: unknown,
+  validSegmentIndexes: ReadonlySet<number>,
+) => {
+  const normalized: Record<number, WorkspaceSegmentInfographicHistory> = {};
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return normalized;
+  }
+
+  Object.entries(value as Record<string, unknown>).forEach(([rawSegmentIndex, rawHistory]) => {
+    const segmentIndex = Number(rawSegmentIndex);
+    if (!Number.isInteger(segmentIndex) || !validSegmentIndexes.has(segmentIndex)) {
+      return;
+    }
+    if (!rawHistory || typeof rawHistory !== "object" || Array.isArray(rawHistory)) {
+      return;
+    }
+
+    const normalizeSnapshots = (value: unknown) => {
+      if (!Array.isArray(value)) {
+        return [];
+      }
+      return value
+        .slice(-WORKSPACE_SEGMENT_EDITOR_RUNTIME_INFOGRAPHIC_HISTORY_LIMIT)
+        .filter((snapshot) => Boolean(snapshot && typeof snapshot === "object" && !Array.isArray(snapshot)))
+        .map((snapshot) => {
+          const source = snapshot as WorkspaceSegmentInfographicHistory["past"][number];
+          return {
+            infographic: cloneWorkspaceSegmentInfographic(source.infographic),
+            infographicRemoved: source.infographicRemoved === true,
+            infographicSourceWarningDismissedForIdentity:
+              typeof source.infographicSourceWarningDismissedForIdentity === "string"
+                ? source.infographicSourceWarningDismissedForIdentity
+                : null,
+            infographicStylePromptDraft: typeof source.infographicStylePromptDraft === "string"
+              ? source.infographicStylePromptDraft
+              : "",
+            infographicTextDraft: typeof source.infographicTextDraft === "string" ? source.infographicTextDraft : "",
+          };
+        });
+    };
+
+    normalized[segmentIndex] = {
+      future: normalizeSnapshots((rawHistory as { future?: unknown }).future),
+      past: normalizeSnapshots((rawHistory as { past?: unknown }).past),
+    };
+  });
+
+  return normalized;
+};
+
+const normalizeStoredRuntimeRedoSnapshots = (
+  value: unknown,
+  options: {
+    fallbackLanguage: StudioLanguage;
+    validSegmentIndexes: ReadonlySet<number>;
+  },
+) => {
+  const normalized: Record<string, WorkspaceSegmentTimelineRedoSnapshot> = {};
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return normalized;
+  }
+
+  const segmentKinds = new Set(["infographic", "sound", "subtitle", "text", "visual", "voice"]);
+  Object.entries(value as Record<string, unknown>).forEach(([historyKey, rawSnapshot]) => {
+    if (!rawSnapshot || typeof rawSnapshot !== "object" || Array.isArray(rawSnapshot)) {
+      return;
+    }
+    const snapshot = rawSnapshot as Partial<WorkspaceSegmentTimelineRedoSnapshot> & { kind?: unknown };
+    const kind = typeof snapshot.kind === "string" ? snapshot.kind : "";
+    if (kind === "music" && historyKey === "music:global") {
+      const musicSnapshot = rawSnapshot as Extract<WorkspaceSegmentTimelineRedoSnapshot, { kind: "music" }>;
+      normalized[historyKey] = {
+        customMusicAssetId: getPositiveWorkspaceMediaAssetId(musicSnapshot.customMusicAssetId),
+        customMusicFileName: typeof musicSnapshot.customMusicFileName === "string" ? musicSnapshot.customMusicFileName : null,
+        kind: "music",
+        musicAssetId: getPositiveWorkspaceMediaAssetId(musicSnapshot.musicAssetId),
+        musicName: typeof musicSnapshot.musicName === "string" ? musicSnapshot.musicName : null,
+        musicType: typeof musicSnapshot.musicType === "string" ? musicSnapshot.musicType : "ai",
+        selectedCustomMusic: normalizePersistedStudioCustomMusicFile(musicSnapshot.selectedCustomMusic),
+      };
+      return;
+    }
+    if (!segmentKinds.has(kind)) {
+      return;
+    }
+
+    const segmentSnapshot = rawSnapshot as Extract<WorkspaceSegmentTimelineRedoSnapshot, { segment: unknown }>;
+    const segmentIndex = Number(segmentSnapshot.segmentIndex);
+    const segment = normalizeStoredRuntimeSegment(segmentSnapshot.segment, options.fallbackLanguage);
+    if (
+      !Number.isInteger(segmentIndex) ||
+      !options.validSegmentIndexes.has(segmentIndex) ||
+      historyKey !== `${kind}:${segmentIndex}` ||
+      segment?.index !== segmentIndex
+    ) {
+      return;
+    }
+    normalized[historyKey] = {
+      kind: kind as Exclude<WorkspaceSegmentTimelineRedoSnapshot["kind"], "music">,
+      segment,
+      segmentIndex,
+    };
+  });
+
+  return normalized;
+};
+
+const normalizeWorkspaceSegmentEditorRuntimeState = (
+  value: unknown,
+  draft: WorkspaceSegmentEditorDraftSession,
+): WorkspaceSegmentEditorRuntimeState | null => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const payload = value as Partial<StoredWorkspaceSegmentEditorRuntimePayload>;
+  const draftId = getWorkspaceSegmentEditorDraftId(draft);
+  if (
+    payload.storageVersion !== WORKSPACE_SEGMENT_EDITOR_RUNTIME_STORAGE_VERSION ||
+    Number(payload.projectId) !== draft.projectId ||
+    String(payload.draftId ?? "") !== draftId
+  ) {
+    return null;
+  }
+
+  const fallbackLanguage = getWorkspaceSegmentEditorSessionLanguage(draft);
+  const validSegmentIndexes = new Set(draft.segments.map((segment) => segment.index));
+  const activeSegmentIndex = Math.max(
+    0,
+    Math.min(Math.trunc(Number(payload.activeSegmentIndex) || 0), Math.max(0, draft.segments.length - 1)),
+  );
+  const dismissedVisualHistory: Record<string, true> = {};
+  if (payload.dismissedVisualHistory && typeof payload.dismissedVisualHistory === "object") {
+    Object.entries(payload.dismissedVisualHistory).forEach(([historyKey, dismissed]) => {
+      const match = /^visual:(\d+)$/.exec(historyKey);
+      if (dismissed === true && match && validSegmentIndexes.has(Number(match[1]))) {
+        dismissedVisualHistory[historyKey] = true;
+      }
+    });
+  }
+
+  const soundPromptDraftSegmentIndex = Number(payload.soundPromptDraft?.segmentIndex);
+  const soundPromptDraft =
+    Number.isInteger(soundPromptDraftSegmentIndex) && validSegmentIndexes.has(soundPromptDraftSegmentIndex)
+      ? {
+          prompt: String(payload.soundPromptDraft?.prompt ?? ""),
+          segmentIndex: soundPromptDraftSegmentIndex,
+        }
+      : { prompt: "", segmentIndex: null };
+  const visualDurationDraftSegmentIndex = Number(payload.visualDurationInputDraft?.segmentIndex);
+  const visualDurationInputDraft =
+    Number.isInteger(visualDurationDraftSegmentIndex) && validSegmentIndexes.has(visualDurationDraftSegmentIndex)
+      ? {
+          segmentIndex: visualDurationDraftSegmentIndex,
+          value: String(payload.visualDurationInputDraft?.value ?? ""),
+        }
+      : null;
+
+  return {
+    activeSegmentIndex,
+    dismissedVisualHistory,
+    infographicHistory: normalizeStoredRuntimeInfographicHistory(payload.infographicHistory, validSegmentIndexes),
+    redoSnapshots: normalizeStoredRuntimeRedoSnapshots(payload.redoSnapshots, {
+      fallbackLanguage,
+      validSegmentIndexes,
+    }),
+    soundPromptDraft,
+    visualDurationInputDraft,
+    visualHistory: normalizeStoredRuntimeSegmentHistory(payload.visualHistory, {
+      fallbackLanguage,
+      historyKind: "visual",
+      validSegmentIndexes,
+    }) as Record<string, WorkspaceSegmentTimelineVisualHistory>,
+    voiceHistory: normalizeStoredRuntimeSegmentHistory(payload.voiceHistory, {
+      fallbackLanguage,
+      historyKind: "voice",
+      validSegmentIndexes,
+    }) as Record<string, StoredWorkspaceSegmentTimelineVoiceHistory>,
+  };
+};
+
+export const readStoredWorkspaceSegmentEditorRuntimeState = (
+  email: string | null | undefined,
+  draft: WorkspaceSegmentEditorDraftSession | null | undefined,
+) => {
+  if (typeof window === "undefined" || !draft) {
+    return null;
+  }
+  const normalizedEmail = normalizeWorkspaceSegmentEditorStorageEmail(email);
+  const projectId = Number(draft.projectId);
+  if (!normalizedEmail || !Number.isInteger(projectId) || projectId < 0 || !getWorkspaceSegmentEditorDraftId(draft)) {
+    return null;
+  }
+
+  const storageKey = getWorkspaceSegmentEditorRuntimeStorageKey(normalizedEmail, projectId);
+  for (const candidate of readWorkspaceSegmentEditorStorageCandidates(storageKey)) {
+    try {
+      const runtimeState = normalizeWorkspaceSegmentEditorRuntimeState(JSON.parse(candidate.rawValue), draft);
+      if (!runtimeState) {
+        removeWorkspaceSegmentEditorStorageValueFrom(candidate.storageName, storageKey);
+        continue;
+      }
+      if (candidate.storageName === "sessionStorage") {
+        writeStoredWorkspaceSegmentEditorRuntimeState(normalizedEmail, draft, runtimeState);
+      }
+      return runtimeState;
+    } catch {
+      removeWorkspaceSegmentEditorStorageValueFrom(candidate.storageName, storageKey);
+    }
+  }
+  return null;
+};
+
+export const writeStoredWorkspaceSegmentEditorRuntimeState = (
+  email: string | null | undefined,
+  draft: WorkspaceSegmentEditorDraftSession | null | undefined,
+  runtimeState: WorkspaceSegmentEditorRuntimeState | null | undefined,
+) => {
+  if (typeof window === "undefined" || !draft || !runtimeState) {
+    return;
+  }
+  const normalizedEmail = normalizeWorkspaceSegmentEditorStorageEmail(email);
+  const projectId = Number(draft.projectId);
+  const draftId = getWorkspaceSegmentEditorDraftId(draft);
+  if (!normalizedEmail || !Number.isInteger(projectId) || projectId < 0 || !draftId) {
+    return;
+  }
+
+  const normalizedRuntimeState = normalizeWorkspaceSegmentEditorRuntimeState({
+    ...runtimeState,
+    draftId,
+    projectId,
+    storageVersion: WORKSPACE_SEGMENT_EDITOR_RUNTIME_STORAGE_VERSION,
+    updatedAt: Date.now(),
+  }, draft);
+  if (!normalizedRuntimeState) {
+    return;
+  }
+  writeWorkspaceSegmentEditorStorageValue(
+    getWorkspaceSegmentEditorRuntimeStorageKey(normalizedEmail, projectId),
+    JSON.stringify({
+      ...normalizedRuntimeState,
+      draftId,
+      projectId,
+      storageVersion: WORKSPACE_SEGMENT_EDITOR_RUNTIME_STORAGE_VERSION,
+      updatedAt: Date.now(),
+    }),
+  );
+};
+
+export const removeStoredWorkspaceSegmentEditorRuntimeState = (
+  email: string | null | undefined,
+  projectId: number | null | undefined,
+) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const normalizedEmail = normalizeWorkspaceSegmentEditorStorageEmail(email);
+  const normalizedProjectId = Number(projectId);
+  if (!normalizedEmail || !Number.isInteger(normalizedProjectId) || normalizedProjectId < 0) {
+    return;
+  }
+  removeWorkspaceSegmentEditorStorageValue(
+    getWorkspaceSegmentEditorRuntimeStorageKey(normalizedEmail, normalizedProjectId),
+  );
 };
 
 const isStoredWorkspaceSegmentAiPhotoJob = (value: unknown): value is StoredWorkspaceSegmentAiPhotoJob => {
@@ -2387,6 +2805,7 @@ export const removeStoredWorkspaceSegmentEditorDraft = (
   }
 
   removeWorkspaceSegmentEditorStorageValue(getWorkspaceSegmentEditorDraftStorageKey(normalizedEmail, normalizedProjectId));
+  removeStoredWorkspaceSegmentEditorRuntimeState(normalizedEmail, normalizedProjectId);
 };
 
 export const readStoredWorkspaceSegmentEditorScratchDraft = (
@@ -2550,6 +2969,7 @@ export const removeStoredWorkspaceSegmentEditorScratchDraft = (
   }
 
   removeWorkspaceSegmentEditorStorageValue(getWorkspaceSegmentEditorScratchDraftStorageKey(normalizedEmail));
+  removeStoredWorkspaceSegmentEditorRuntimeState(normalizedEmail, 0);
 };
 
 export const readStoredWorkspaceSegmentEditorExplicitStructureChange = (
@@ -2760,6 +3180,7 @@ export const clearStoredWorkspaceSegmentEditorTemporaryStateExcept = (
   };
 
   clearStoragePrefix(`${WORKSPACE_SEGMENT_EDITOR_DRAFT_STORAGE_KEY_PREFIX}${normalizedEmail}:`);
+  clearStoragePrefix(`${WORKSPACE_SEGMENT_EDITOR_RUNTIME_STORAGE_KEY_PREFIX}${normalizedEmail}:`);
   clearStoragePrefix(`${WORKSPACE_SEGMENT_EDITOR_EXPLICIT_STRUCTURE_STORAGE_KEY_PREFIX}${normalizedEmail}:`);
   clearStoragePrefix(`${WORKSPACE_SEGMENT_EDITOR_EXPLICIT_RESET_STORAGE_KEY_PREFIX}${normalizedEmail}:`);
 

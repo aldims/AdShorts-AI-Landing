@@ -5,6 +5,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   findOldestStoredWorkspaceSegmentJobForDraft,
   isStoredWorkspaceSegmentJobForDraft,
+  readStoredWorkspaceSegmentEditorDraft,
+  readStoredWorkspaceSegmentEditorRuntimeState,
   readStoredWorkspaceSegmentEditorScratchDraft,
   readStoredWorkspaceSegmentEditorExplicitReset,
   readStoredWorkspaceSegmentAiPhotoJobs,
@@ -13,6 +15,7 @@ import {
   readStoredWorkspaceSegmentSceneSoundJobs,
   readStoredWorkspaceSegmentVoiceoverJobs,
   readWorkspaceSegmentEditorStorageCandidates,
+  removeStoredWorkspaceSegmentEditorDraft,
   removeStoredWorkspaceSegmentEditorExplicitReset,
   removeStoredWorkspaceSegmentAiPhotoJobsForSegment,
   removeStoredWorkspaceSegmentPhotoAnimationJobsForSegment,
@@ -24,6 +27,8 @@ import {
   upsertStoredWorkspaceSegmentPhotoAnimationJob,
   upsertStoredWorkspaceSegmentVoiceoverJob,
   writeStoredWorkspaceSegmentEditorExplicitReset,
+  writeStoredWorkspaceSegmentEditorDraft,
+  writeStoredWorkspaceSegmentEditorRuntimeState,
   writeStoredWorkspaceSegmentEditorScratchDraft,
   writeWorkspaceSegmentEditorStorageValue,
 } from "./workspace-segment-editor-storage";
@@ -210,6 +215,183 @@ describe("workspace segment editor storage fallback", () => {
       posterUrl: "/api/workspace/media-assets/741/poster",
       remoteUrl: "/api/workspace/media-assets/741/playback",
     });
+  });
+
+  it("restores the complete applied scene state after a page refresh", () => {
+    const draft = {
+      ...createWorkspaceSegmentEditorScratchDraftSession(),
+      customMusicAssetId: 905,
+      customMusicFileName: "project-music.mp3",
+      draftId: "project:4201",
+      musicAssetId: 905,
+      musicName: "Project music",
+      musicType: "custom",
+      projectId: 4201,
+    };
+    draft.segments[0] = {
+      ...draft.segments[0],
+      customVideo: {
+        assetId: 701,
+        durationSeconds: 6.4,
+        fileName: "scene.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/studio/uploads/temporary-scene",
+      },
+      duration: 5.2,
+      durationMode: "manual",
+      durationSyncMode: "voiceover",
+      durationSyncModeUserSelected: true,
+      endTime: 5.2,
+      manualDurationSeconds: 5.2,
+      sceneSoundAsset: {
+        assetId: 702,
+        fileName: "rain.wav",
+        fileSize: 0,
+        mimeType: "audio/wav",
+        remoteUrl: "/api/studio/scene-sound/jobs/job-1/audio",
+      },
+      sceneSoundGeneratedFromPrompt: "rain on glass",
+      sceneSoundPrompt: "rain on glass",
+      sceneSoundPromptInitialized: true,
+      speechDuration: 4.8,
+      speechEndTime: 4.9,
+      speechStartTime: 0.1,
+      speechWords: [
+        { confidence: 0.97, endTime: 0.7, startTime: 0.1, text: "Первое" },
+      ],
+      subtitleColor: "yellow",
+      subtitleStyle: "bold",
+      subtitleType: "modern",
+      videoAction: "custom",
+      visualReset: false,
+    };
+
+    writeStoredWorkspaceSegmentEditorDraft("editor@example.test", draft);
+
+    const restoredDraft = readStoredWorkspaceSegmentEditorDraft("EDITOR@example.test", 4201);
+    expect(restoredDraft).toMatchObject({
+      customMusicAssetId: 905,
+      musicAssetId: 905,
+      musicType: "custom",
+    });
+    expect(restoredDraft?.segments[0]).toMatchObject({
+      customVideo: {
+        assetId: 701,
+        durationSeconds: 6.4,
+        remoteUrl: "/api/workspace/media-assets/701/playback",
+      },
+      duration: 5.2,
+      durationMode: "manual",
+      durationSyncMode: "voiceover",
+      durationSyncModeUserSelected: true,
+      manualDurationSeconds: 5.2,
+      sceneSoundAsset: {
+        assetId: 702,
+        remoteUrl: "/api/workspace/media-assets/702",
+      },
+      sceneSoundPrompt: "rain on glass",
+      speechDuration: 4.8,
+      subtitleColor: "yellow",
+      subtitleStyle: "bold",
+      subtitleType: "modern",
+      videoAction: "custom",
+    });
+    expect(restoredDraft?.segments[0].speechWords[0]).toMatchObject({ text: "Первое" });
+  });
+
+  it("restores per-scene undo and redo history for the same draft only", () => {
+    const baseDraft = createWorkspaceSegmentEditorScratchDraftSession();
+    const firstSegment = {
+      ...baseDraft.segments[0],
+      sceneSoundPrompt: "before rain",
+      sceneSoundPromptInitialized: true,
+    };
+    const secondSegment = {
+      ...baseDraft.segments[0],
+      duration: 4.5,
+      endTime: 8.5,
+      index: 1,
+      sceneSoundPrompt: "after rain",
+      sceneSoundPromptInitialized: true,
+      startTime: 4,
+    };
+    const previousSecondSegment = {
+      ...secondSegment,
+      sceneSoundPrompt: "before rain",
+    };
+    const draft = {
+      ...baseDraft,
+      draftId: "project:4202",
+      projectId: 4202,
+      segments: [firstSegment, secondSegment],
+    };
+    const infographicSnapshot = {
+      infographic: null,
+      infographicRemoved: false,
+      infographicSourceWarningDismissedForIdentity: null,
+      infographicStylePromptDraft: "minimal",
+      infographicTextDraft: "42%",
+    };
+
+    writeStoredWorkspaceSegmentEditorRuntimeState("editor@example.test", draft, {
+      activeSegmentIndex: 1,
+      dismissedVisualHistory: { "visual:1": true },
+      infographicHistory: {
+        1: { future: [infographicSnapshot], past: [infographicSnapshot] },
+      },
+      redoSnapshots: {
+        "sound:1": { kind: "sound", segment: secondSegment, segmentIndex: 1 },
+      },
+      soundPromptDraft: { prompt: "wind and rain", segmentIndex: 1 },
+      visualDurationInputDraft: { segmentIndex: 1, value: "4.75" },
+      visualHistory: {
+        "visual:1": { future: [secondSegment], past: [previousSecondSegment] },
+      },
+      voiceHistory: {
+        "voice:1": {
+          future: [{ segment: secondSegment, segmentIndex: 1 }],
+          past: [{ segment: previousSecondSegment, segmentIndex: 1 }],
+        },
+      },
+    });
+
+    const restoredRuntime = readStoredWorkspaceSegmentEditorRuntimeState("EDITOR@example.test", draft);
+    expect(restoredRuntime).toMatchObject({
+      activeSegmentIndex: 1,
+      dismissedVisualHistory: { "visual:1": true },
+      soundPromptDraft: { prompt: "wind and rain", segmentIndex: 1 },
+      visualDurationInputDraft: { segmentIndex: 1, value: "4.75" },
+    });
+    expect(restoredRuntime?.visualHistory["visual:1"]?.past[0]).toMatchObject({
+      sceneSoundPrompt: "before rain",
+    });
+    expect(restoredRuntime?.voiceHistory["voice:1"]?.future[0]).toMatchObject({
+      segmentIndex: 1,
+      segment: expect.objectContaining({ sceneSoundPrompt: "after rain" }),
+    });
+    expect(restoredRuntime?.redoSnapshots["sound:1"]).toMatchObject({
+      kind: "sound",
+      segmentIndex: 1,
+    });
+    expect(restoredRuntime?.infographicHistory[1]?.past[0]).toMatchObject({
+      infographicStylePromptDraft: "minimal",
+      infographicTextDraft: "42%",
+    });
+
+    expect(
+      readStoredWorkspaceSegmentEditorRuntimeState("editor@example.test", {
+        ...draft,
+        draftId: "project:4202:new",
+      }),
+    ).toBeNull();
+
+    writeStoredWorkspaceSegmentEditorRuntimeState("editor@example.test", draft, {
+      ...restoredRuntime!,
+      activeSegmentIndex: 1,
+    });
+    removeStoredWorkspaceSegmentEditorDraft("editor@example.test", draft.projectId);
+    expect(readStoredWorkspaceSegmentEditorRuntimeState("editor@example.test", draft)).toBeNull();
   });
 
   it("persists the source visual identity of a pending scene sound job", () => {

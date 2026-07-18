@@ -777,6 +777,7 @@ import {
   readStoredWorkspaceSegmentEditorDrafts,
   readStoredWorkspaceSegmentEditorExplicitReset,
   readStoredWorkspaceSegmentEditorExplicitStructureChange,
+  readStoredWorkspaceSegmentEditorRuntimeState,
   readStoredWorkspaceSegmentEditorScratchBaseline,
   readStoredWorkspaceSegmentEditorScratchDraft,
   readStoredWorkspaceSegmentEditorSession,
@@ -832,6 +833,7 @@ import {
   writeStoredWorkspaceSegmentEditorConsumedSourceProject,
   writeStoredWorkspaceSegmentEditorExplicitStructureChange,
   writeStoredWorkspaceSegmentEditorExplicitReset,
+  writeStoredWorkspaceSegmentEditorRuntimeState,
   writeStoredWorkspaceSegmentEditorScratchBaseline,
   writeStoredWorkspaceSegmentEditorScratchDraft,
   writeStoredWorkspaceSegmentEditorSession,
@@ -2310,6 +2312,9 @@ export function WorkspacePage({
     Record<string, SegmentTimelineVoiceHistory>
   >({});
   const segmentTimelineVoiceHistoryRef = useRef<Record<string, SegmentTimelineVoiceHistory>>({});
+  const [segmentInfographicHistory, setSegmentInfographicHistoryState] = useState<
+    Record<number, WorkspaceSegmentInfographicHistory>
+  >({});
   const segmentInfographicHistoryRef = useRef<Record<number, WorkspaceSegmentInfographicHistory>>({});
   const segmentInfographicPendingTransformsRef = useRef<
     Record<number, WorkspaceSegmentInfographicTransform | undefined>
@@ -2354,24 +2359,8 @@ export function WorkspacePage({
       ? nextValue(segmentInfographicHistoryRef.current)
       : nextValue;
     segmentInfographicHistoryRef.current = nextHistory;
+    setSegmentInfographicHistoryState(nextHistory);
   }, []);
-  useEffect(() => {
-    setSegmentTimelineRedoSnapshots({});
-    setSegmentTimelineVisualHistory({});
-    setSegmentTimelineVoiceHistory({});
-    setDismissedSegmentTimelineVisualHistory({});
-    setSegmentInfographicHistory({});
-    segmentInfographicPendingTransformsRef.current = {};
-  }, [
-    segmentEditorLoadedSession?.projectId,
-    setSegmentTimelineRedoSnapshots,
-    setSegmentTimelineVisualHistory,
-    setSegmentTimelineVoiceHistory,
-    setSegmentInfographicHistory,
-  ]);
-  useEffect(() => {
-    setSegmentTimelineVisualDurationInputDraft(null);
-  }, [segmentEditorLoadedSession?.projectId]);
   useEffect(() => {
     setIsSegmentEditorVisualPanelOpen(false);
   }, [segmentEditorLoadedSession?.projectId]);
@@ -2496,6 +2485,82 @@ export function WorkspacePage({
     readStoredWorkspaceSegmentEditorDrafts(session.email),
   );
   const storedSegmentEditorDraftLeadProjectIdRef = useRef<number | null>(storedSegmentEditorDrafts[0]?.projectId ?? null);
+  const segmentEditorRuntimeHydratedIdentityRef = useRef<string | null>(null);
+  const segmentEditorRuntimeSkipNextPersistIdentityRef = useRef<string | null>(null);
+  const segmentEditorRuntimeDraftId = getWorkspaceSegmentEditorDraftId(segmentEditorDraft);
+  const segmentEditorRuntimeIdentity = segmentEditorDraft && segmentEditorRuntimeDraftId
+    ? `${segmentEditorDraft.projectId}:${segmentEditorRuntimeDraftId}`
+    : null;
+
+  useLayoutEffect(() => {
+    if (!segmentEditorDraft || !segmentEditorRuntimeIdentity) {
+      segmentEditorRuntimeHydratedIdentityRef.current = null;
+      segmentEditorRuntimeSkipNextPersistIdentityRef.current = null;
+      return;
+    }
+
+    const storedRuntimeState = readStoredWorkspaceSegmentEditorRuntimeState(session.email, segmentEditorDraft);
+    setSegmentTimelineRedoSnapshots(storedRuntimeState?.redoSnapshots ?? {});
+    setSegmentTimelineVisualHistory(storedRuntimeState?.visualHistory ?? {});
+    setSegmentTimelineVoiceHistory(storedRuntimeState?.voiceHistory ?? {});
+    setDismissedSegmentTimelineVisualHistory(storedRuntimeState?.dismissedVisualHistory ?? {});
+    setSegmentInfographicHistory(storedRuntimeState?.infographicHistory ?? {});
+    setSegmentTimelineSoundMenuPromptDraft(
+      storedRuntimeState?.soundPromptDraft ?? { prompt: "", segmentIndex: null },
+    );
+    setSegmentTimelineVisualDurationInputDraft(storedRuntimeState?.visualDurationInputDraft ?? null);
+    segmentInfographicPendingTransformsRef.current = {};
+    segmentEditorRuntimeHydratedIdentityRef.current = segmentEditorRuntimeIdentity;
+    // The persistence layout effect below still sees state from the previous
+    // draft during this commit. Skip it once so it cannot overwrite the stored
+    // history before React applies the restored state.
+    segmentEditorRuntimeSkipNextPersistIdentityRef.current = segmentEditorRuntimeIdentity;
+  }, [
+    segmentEditorRuntimeIdentity,
+    session.email,
+    setSegmentInfographicHistory,
+    setSegmentTimelineRedoSnapshots,
+    setSegmentTimelineSoundMenuPromptDraft,
+    setSegmentTimelineVisualHistory,
+    setSegmentTimelineVoiceHistory,
+  ]);
+
+  useLayoutEffect(() => {
+    if (
+      !segmentEditorDraft ||
+      !segmentEditorRuntimeIdentity ||
+      segmentEditorRuntimeHydratedIdentityRef.current !== segmentEditorRuntimeIdentity
+    ) {
+      return;
+    }
+    if (segmentEditorRuntimeSkipNextPersistIdentityRef.current === segmentEditorRuntimeIdentity) {
+      segmentEditorRuntimeSkipNextPersistIdentityRef.current = null;
+      return;
+    }
+
+    writeStoredWorkspaceSegmentEditorRuntimeState(session.email, segmentEditorDraft, {
+      activeSegmentIndex,
+      dismissedVisualHistory: dismissedSegmentTimelineVisualHistory,
+      infographicHistory: segmentInfographicHistory,
+      redoSnapshots: segmentTimelineRedoSnapshots,
+      soundPromptDraft: segmentTimelineSoundMenuPromptDraft,
+      visualDurationInputDraft: segmentTimelineVisualDurationInputDraft,
+      visualHistory: segmentTimelineVisualHistory,
+      voiceHistory: segmentTimelineVoiceHistory,
+    });
+  }, [
+    activeSegmentIndex,
+    dismissedSegmentTimelineVisualHistory,
+    segmentEditorDraft,
+    segmentEditorRuntimeIdentity,
+    segmentInfographicHistory,
+    segmentTimelineRedoSnapshots,
+    segmentTimelineSoundMenuPromptDraft,
+    segmentTimelineVisualDurationInputDraft,
+    segmentTimelineVisualHistory,
+    segmentTimelineVoiceHistory,
+    session.email,
+  ]);
   const [generatedMediaLibraryEntries, setGeneratedMediaLibraryEntries] = useState<WorkspaceGeneratedMediaLibraryEntry[]>(() =>
     readStoredGeneratedMediaLibraryEntries(session.email),
   );
@@ -11500,10 +11565,13 @@ export function WorkspacePage({
     if (!previousDraftId || previousDraftId !== nextDraftId) {
       clearAllSegmentVisualRuns();
     }
+    const storedRuntimeState = readStoredWorkspaceSegmentEditorRuntimeState(session.email, nextDraftSnapshot);
+    const requestedInitialSegmentIndex =
+      options?.initialSegmentIndex ?? storedRuntimeState?.activeSegmentIndex ?? 0;
     const boundedSegmentIndex =
       options?.initialSegmentMode === "route"
-        ? resolveSegmentEditorArrayIndexFromRouteSegment(nextDraftSnapshot, options?.initialSegmentIndex ?? 0)
-        : Math.max(0, Math.min(options?.initialSegmentIndex ?? 0, Math.max(0, nextDraftSnapshot.segments.length - 1)));
+        ? resolveSegmentEditorArrayIndexFromRouteSegment(nextDraftSnapshot, requestedInitialSegmentIndex)
+        : Math.max(0, Math.min(requestedInitialSegmentIndex, Math.max(0, nextDraftSnapshot.segments.length - 1)));
     const initialSegment = nextDraftSnapshot.segments[boundedSegmentIndex];
     setActiveSegmentIndex(boundedSegmentIndex);
     setSegmentEditorPromptSceneMode("create");
@@ -11584,7 +11652,10 @@ export function WorkspacePage({
     setSegmentEditorVideoError(null);
     setActiveTab("studio");
     setStudioView("create");
-    openSegmentEditorWithDraft(nextDraft, { initialSegmentIndex: 0 });
+    openSegmentEditorWithDraft(
+      nextDraft,
+      scratchDraftOpenSource === "fresh" ? { initialSegmentIndex: 0 } : undefined,
+    );
     syncStudioRouteSection("create", {
       mode: "scenes",
       replace: options?.replaceRoute ?? false,
@@ -13578,6 +13649,9 @@ export function WorkspacePage({
       setIsVoiceoverEnabled(false);
       setSegmentTimelineRedoSnapshots({});
       setSegmentTimelineVisualHistory({});
+      setSegmentTimelineVoiceHistory({});
+      setDismissedSegmentTimelineVisualHistory({});
+      setSegmentInfographicHistory({});
       setSegmentTimelineGlobalControlOpen(null);
       setSegmentTimelineGlobalControlAnchorRect(null);
       setSegmentTimelineVisualMenuSegmentIndex(null);
@@ -13706,6 +13780,9 @@ export function WorkspacePage({
     setSegmentTimelineVisualHistory({});
     setSegmentTimelineVoiceHistory({});
     setDismissedSegmentTimelineVisualHistory({});
+    setSegmentInfographicHistory({});
+    setSegmentTimelineSoundMenuPromptDraft({ prompt: "", segmentIndex: null });
+    setSegmentTimelineVisualDurationInputDraft(null);
     setSegmentTimelineGlobalControlOpen(null);
     setSegmentTimelineGlobalControlAnchorRect(null);
     setSegmentTimelineDurationMenuSegmentIndex(null);
@@ -26990,6 +27067,13 @@ export function WorkspacePage({
     setSegmentEditorVideoError(null);
     setSegmentSceneSoundModalPrompt(nextValue);
     setSegmentTimelineSoundMenuPromptDraft({ prompt: nextValue, segmentIndex });
+    updateSegmentEditorDraftSegmentByIndex(segmentIndex, (segment) => ({
+      ...segment,
+      sceneSoundPrompt: nextValue,
+      sceneSoundPromptInitialized: Boolean(
+        nextValue || segment.sceneSoundAsset || segment.sceneSoundGeneratedFromPrompt,
+      ),
+    }));
   };
   const handleSegmentTimelineSoundGenerate = (segmentIndex: number, prompt: string) => {
     void handleSegmentEditorSceneSoundGenerate({
@@ -33465,10 +33549,14 @@ export function WorkspacePage({
                         }}
                         onFocus={(event) => {
                           setSegmentEditorVideoError(null);
-                          setSegmentTimelineVisualDurationInputDraft({
-                            segmentIndex: segment.index,
-                            value: segmentDurationInputInitialValue,
-                          });
+                          setSegmentTimelineVisualDurationInputDraft((currentDraft) =>
+                            currentDraft?.segmentIndex === segment.index
+                              ? currentDraft
+                              : {
+                                  segmentIndex: segment.index,
+                                  value: segmentDurationInputInitialValue,
+                                },
+                          );
                           previewSegmentTimelineActiveStateByArrayIndex(index);
                           const input = event.currentTarget;
                           window.requestAnimationFrame(() => input.select());
