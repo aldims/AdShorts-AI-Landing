@@ -4,6 +4,7 @@ import {
   dedupeWorkspaceMediaLibraryPageItems,
   dedupeWorkspaceMediaLibraryItems,
   getWorkspaceMediaLibraryAssetIdentityKey,
+  getWorkspaceMediaLibraryDisplayKind,
   getWorkspaceMediaLibraryDisplayAssetIdentityKey,
   getWorkspaceMediaLibraryHiddenIdentityKeys,
   getWorkspaceMediaLibraryResolvedDedupeKey,
@@ -58,6 +59,7 @@ describe("workspace media library display identity", () => {
       .map((item) => item.kind);
 
     expect(visibleKinds).toEqual(["ai_photo", "ai_video", "photo_animation"]);
+    expect(getWorkspaceMediaLibraryDisplayKind(createMediaLibraryItem({ kind: "photo_animation" }))).toBe("ai_video");
   });
 
   it("makes every generated visual available in the scene visual picker", () => {

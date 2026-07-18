@@ -12,6 +12,7 @@ export type WorkspaceMediaLibraryItemKind =
   | "scene_reference";
 export type WorkspaceMediaLibraryItemSource = "draft" | "live" | "persisted";
 export type WorkspaceMediaLibraryPreviewKind = "video" | "image";
+export type WorkspaceMediaLibraryDisplayKind = "ai_photo" | "ai_video";
 
 export type WorkspaceMediaLibraryItem = {
   assetExpiresAt: string | null;
@@ -39,9 +40,23 @@ export type WorkspaceMediaLibraryItem = {
   source: WorkspaceMediaLibraryItemSource;
 };
 
+export const getWorkspaceMediaLibraryDisplayKind = (
+  item: Pick<WorkspaceMediaLibraryItem, "kind">,
+) => {
+  if (item.kind === "ai_photo") {
+    return "ai_photo" satisfies WorkspaceMediaLibraryDisplayKind;
+  }
+
+  if (item.kind === "ai_video" || item.kind === "photo_animation") {
+    return "ai_video" satisfies WorkspaceMediaLibraryDisplayKind;
+  }
+
+  return null;
+};
+
 export const isWorkspaceMediaLibraryDisplayItem = (
   item: Pick<WorkspaceMediaLibraryItem, "kind">,
-) => item.kind === "ai_photo" || item.kind === "ai_video" || item.kind === "photo_animation";
+) => getWorkspaceMediaLibraryDisplayKind(item) !== null;
 
 export const isWorkspaceMediaLibraryVisualSelectionItem = (
   item: Pick<

@@ -334,6 +334,15 @@ export const getWorkspaceMediaLibraryItemKindLabel = (
   return workspaceText(locale, "ИИ фото", "AI photo");
 };
 
+export const getWorkspaceMediaLibraryDisplayItemKindLabel = (
+  kind: WorkspaceMediaLibraryItemKind,
+  assetKind?: string | null,
+  locale: Locale = "ru",
+) =>
+  kind === "photo_animation"
+    ? workspaceText(locale, "ИИ видео", "AI video")
+    : getWorkspaceMediaLibraryItemKindLabel(kind, assetKind, locale);
+
 const getWorkspaceMediaLibraryItemMimeType = (item: WorkspaceMediaLibraryItem) =>
   item.previewKind === "video" ? "video/mp4" : "image/jpeg";
 

@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   getWorkspaceGeneratedMediaLibraryStorageKey,
+  getWorkspaceMediaLibraryDisplayItemKindLabel,
+  getWorkspaceMediaLibraryItemKindLabel,
   getWorkspaceMediaLibraryResolvedMediaSurface,
   getWorkspaceMediaLibraryTileImageUrl,
   getWorkspaceMediaLibraryTilePosterUrl,
@@ -72,6 +74,14 @@ const createGeneratedEntry = (
     ...overrides,
   };
 };
+
+describe("workspace media library display labels", () => {
+  it("presents photo animations as AI videos without changing their internal label", () => {
+    expect(getWorkspaceMediaLibraryDisplayItemKindLabel("photo_animation", null, "ru")).toBe("ИИ видео");
+    expect(getWorkspaceMediaLibraryDisplayItemKindLabel("photo_animation", null, "en")).toBe("AI video");
+    expect(getWorkspaceMediaLibraryItemKindLabel("photo_animation", null, "ru")).toBe("ИИ анимация фото");
+  });
+});
 
 describe("workspace generated media library storage", () => {
   beforeEach(() => {
