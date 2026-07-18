@@ -107,6 +107,7 @@ describe("workspace generated media library storage", () => {
     const stored = JSON.parse(window.localStorage.getItem(getWorkspaceGeneratedMediaLibraryStorageKey(TEST_EMAIL)) ?? "[]");
     expect(stored).toHaveLength(1);
     expect(stored[0]?.item?.assetId).toBe(901);
+    expect(stored[0]?.item?.source).toBe("persisted");
   });
 
   it("filters legacy fallback download entries when reading existing storage", () => {
@@ -128,7 +129,9 @@ describe("workspace generated media library storage", () => {
       JSON.stringify([staleEntry, durableEntry]),
     );
 
-    expect(readStoredGeneratedMediaLibraryEntries(TEST_EMAIL).map((entry) => entry.item.assetId)).toEqual([901]);
+    const restoredEntries = readStoredGeneratedMediaLibraryEntries(TEST_EMAIL);
+    expect(restoredEntries.map((entry) => entry.item.assetId)).toEqual([901]);
+    expect(restoredEntries[0]?.item.source).toBe("persisted");
   });
 });
 

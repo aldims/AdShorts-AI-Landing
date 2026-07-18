@@ -7,6 +7,7 @@ import {
   cloneWorkspaceSegmentEditorDraftSegment,
   getPositiveWorkspaceMediaAssetId,
   getStudioCustomAssetPreviewUrl,
+  getStudioCustomVideoFileIdentityKey,
   getStudioLanguageForVoiceId,
   getUniqueWorkspaceSegmentPreviewUrls,
   getWorkspaceMediaAssetDurablePreviewUrl,
@@ -578,16 +579,37 @@ export const hydrateWorkspaceSegmentEditorDraftFromGeneratedMediaLibrary = (
     const resolveItem = (kind: WorkspaceMediaLibraryItemKind) =>
       latestItemsByRestoreKey.get(getWorkspaceGeneratedMediaLibraryRestoreKey(draft.projectId, segment.index, kind)) ?? null;
 
+    const isMediaLibraryItemCanonicalCurrentVisual = (item: WorkspaceMediaLibraryItem) => {
+      if (item.source !== "persisted") {
+        return false;
+      }
+
+      const itemAsset = createStudioCustomVideoFileFromMediaLibraryItem(item);
+      return getStudioCustomVideoFileIdentityKey(itemAsset) === getWorkspaceMediaAssetIdentityKey(nextSegment.currentAsset);
+    };
+
     const applyGeneratedVisualAsset = (
       item: WorkspaceMediaLibraryItem,
       currentAsset: StudioCustomVideoFile | null,
       patch: (asset: StudioCustomVideoFile) => Partial<WorkspaceSegmentEditorDraftSegment>,
+      canonicalPatch: Partial<WorkspaceSegmentEditorDraftSegment>,
     ) => {
       if (!item) {
         return false;
       }
 
       const nextAsset = createStudioCustomVideoFileFromMediaLibraryItem(item);
+      const assetMatchesCurrentVisual = isMediaLibraryItemCanonicalCurrentVisual(item);
+      if (assetMatchesCurrentVisual) {
+        const shouldApplyCanonicalPatch = Object.entries(canonicalPatch).some(
+          ([key, value]) => nextSegment[key as keyof WorkspaceSegmentEditorDraftSegment] !== value,
+        );
+        if (shouldApplyCanonicalPatch) {
+          applyPatch(canonicalPatch);
+        }
+        return true;
+      }
+
       if (areStudioCustomVideoFilesSameIdentity(currentAsset, nextAsset)) {
         return true;
       }
@@ -599,52 +621,82 @@ export const hydrateWorkspaceSegmentEditorDraftFromGeneratedMediaLibrary = (
     const aiVideoItem = resolveItem("ai_video");
     if (
       aiVideoItem &&
-      shouldHydrateWorkspaceGeneratedMediaLibraryItem(nextSegment, aiVideoItem, {
-        allowExplicitDraftVisual: true,
-        aiVideoMode: "ai_video",
-        videoAction: "ai",
-      })
+      (isMediaLibraryItemCanonicalCurrentVisual(aiVideoItem) ||
+        shouldHydrateWorkspaceGeneratedMediaLibraryItem(nextSegment, aiVideoItem, {
+          allowExplicitDraftVisual: true,
+          aiVideoMode: "ai_video",
+          videoAction: "ai",
+        }))
     ) {
-      applyGeneratedVisualAsset(aiVideoItem, nextSegment.aiVideoAsset, (asset) => ({
-        aiVideoAsset: asset,
-        aiVideoGeneratedMode: "ai_video",
-        durationExtensionSourceDurationSeconds: null,
-        visualReset: false,
-        videoAction: "ai",
-      }));
-    } else if (!nextSegment.aiVideoAsset) {
+      applyGeneratedVisualAsset(
+        aiVideoItem,
+        nextSegment.aiVideoAsset,
+        (asset) => ({
+          aiVideoAsset: asset,
+          aiVideoGeneratedMode: "ai_video",
+          durationExtensionSourceDurationSeconds: null,
+          visualReset: false,
+          videoAction: "ai",
+        }),
+        {
+          aiVideoAsset: null,
+          aiVideoGeneratedMode: null,
+          videoAction: "original",
+        },
+      );
+    } else {
       const photoAnimationItem = resolveItem("photo_animation");
       if (
         photoAnimationItem &&
-        shouldHydrateWorkspaceGeneratedMediaLibraryItem(nextSegment, photoAnimationItem, {
-          aiVideoMode: "photo_animation",
-          videoAction: "photo_animation",
-        })
+        (isMediaLibraryItemCanonicalCurrentVisual(photoAnimationItem) ||
+          shouldHydrateWorkspaceGeneratedMediaLibraryItem(nextSegment, photoAnimationItem, {
+            aiVideoMode: "photo_animation",
+            videoAction: "photo_animation",
+          }))
       ) {
-        applyGeneratedVisualAsset(photoAnimationItem, nextSegment.aiVideoAsset, (asset) => ({
-          aiVideoAsset: asset,
-          aiVideoGeneratedMode: "photo_animation",
-          durationExtensionSourceDurationSeconds: null,
-          visualReset: false,
-          videoAction: "photo_animation",
-        }));
+        applyGeneratedVisualAsset(
+          photoAnimationItem,
+          nextSegment.aiVideoAsset,
+          (asset) => ({
+            aiVideoAsset: asset,
+            aiVideoGeneratedMode: "photo_animation",
+            durationExtensionSourceDurationSeconds: null,
+            visualReset: false,
+            videoAction: "photo_animation",
+          }),
+          {
+            aiVideoAsset: null,
+            aiVideoGeneratedMode: null,
+            videoAction: "original",
+          },
+        );
       } else {
         const talkingPhotoItem = resolveItem("talking_photo");
         if (
           talkingPhotoItem &&
-          shouldHydrateWorkspaceGeneratedMediaLibraryItem(nextSegment, talkingPhotoItem, {
-            allowPersistedGeneratedVideoRecovery: true,
-            aiVideoMode: "talking_photo",
-            videoAction: "talking_photo",
-          })
+          (isMediaLibraryItemCanonicalCurrentVisual(talkingPhotoItem) ||
+            shouldHydrateWorkspaceGeneratedMediaLibraryItem(nextSegment, talkingPhotoItem, {
+              allowPersistedGeneratedVideoRecovery: true,
+              aiVideoMode: "talking_photo",
+              videoAction: "talking_photo",
+            }))
         ) {
-          applyGeneratedVisualAsset(talkingPhotoItem, nextSegment.aiVideoAsset, (asset) => ({
-            aiVideoAsset: asset,
-            aiVideoGeneratedMode: "talking_photo",
-            durationExtensionSourceDurationSeconds: null,
-            visualReset: false,
-            videoAction: "talking_photo",
-          }));
+          applyGeneratedVisualAsset(
+            talkingPhotoItem,
+            nextSegment.aiVideoAsset,
+            (asset) => ({
+              aiVideoAsset: asset,
+              aiVideoGeneratedMode: "talking_photo",
+              durationExtensionSourceDurationSeconds: null,
+              visualReset: false,
+              videoAction: "talking_photo",
+            }),
+            {
+              aiVideoAsset: null,
+              aiVideoGeneratedMode: nextSegment.videoAction === "talking_photo" ? "talking_photo" : null,
+              videoAction: nextSegment.videoAction === "talking_photo" ? "talking_photo" : "original",
+            },
+          );
         }
       }
     }
@@ -652,37 +704,49 @@ export const hydrateWorkspaceSegmentEditorDraftFromGeneratedMediaLibrary = (
     const aiPhotoItem = resolveItem("ai_photo");
     if (
       aiPhotoItem &&
-      shouldHydrateWorkspaceGeneratedMediaLibraryItem(nextSegment, aiPhotoItem, {
-        allowExplicitDraftVisual: true,
-        videoAction: "ai_photo",
-      })
+      (isMediaLibraryItemCanonicalCurrentVisual(aiPhotoItem) ||
+        shouldHydrateWorkspaceGeneratedMediaLibraryItem(nextSegment, aiPhotoItem, {
+          allowExplicitDraftVisual: true,
+          videoAction: "ai_photo",
+        }))
     ) {
-      applyGeneratedVisualAsset(aiPhotoItem, nextSegment.aiPhotoAsset, (asset) => ({
-        aiVideoAsset: null,
-        aiVideoGeneratedMode: null,
-        aiPhotoAsset: asset,
-        durationExtensionSourceDurationSeconds: null,
-        visualReset: false,
-        videoAction: "ai_photo",
-      }));
+      applyGeneratedVisualAsset(
+        aiPhotoItem,
+        nextSegment.aiPhotoAsset,
+        (asset) => ({
+          aiVideoAsset: null,
+          aiVideoGeneratedMode: null,
+          aiPhotoAsset: asset,
+          durationExtensionSourceDurationSeconds: null,
+          visualReset: false,
+          videoAction: "ai_photo",
+        }),
+        { aiPhotoAsset: null, videoAction: "original" },
+      );
     }
 
     const imageEditItem = resolveItem("image_edit");
     if (
       imageEditItem &&
-      shouldHydrateWorkspaceGeneratedMediaLibraryItem(nextSegment, imageEditItem, {
-        allowExplicitDraftVisual: true,
-        videoAction: "image_edit",
-      })
+      (isMediaLibraryItemCanonicalCurrentVisual(imageEditItem) ||
+        shouldHydrateWorkspaceGeneratedMediaLibraryItem(nextSegment, imageEditItem, {
+          allowExplicitDraftVisual: true,
+          videoAction: "image_edit",
+        }))
     ) {
-      applyGeneratedVisualAsset(imageEditItem, nextSegment.imageEditAsset, (asset) => ({
-        aiVideoAsset: null,
-        aiVideoGeneratedMode: null,
-        imageEditAsset: asset,
-        durationExtensionSourceDurationSeconds: null,
-        visualReset: false,
-        videoAction: "image_edit",
-      }));
+      applyGeneratedVisualAsset(
+        imageEditItem,
+        nextSegment.imageEditAsset,
+        (asset) => ({
+          aiVideoAsset: null,
+          aiVideoGeneratedMode: null,
+          imageEditAsset: asset,
+          durationExtensionSourceDurationSeconds: null,
+          visualReset: false,
+          videoAction: "image_edit",
+        }),
+        { imageEditAsset: null, videoAction: "original" },
+      );
     }
 
     return nextSegment;
@@ -767,6 +831,7 @@ const normalizeStoredWorkspaceGeneratedMediaLibraryEntry = (
       downloadUrl,
       previewPosterUrl: entry.item.previewPosterUrl ?? null,
       previewUrl,
+      source: "persisted",
     },
     sourceJobId: String(entry.sourceJobId),
   };

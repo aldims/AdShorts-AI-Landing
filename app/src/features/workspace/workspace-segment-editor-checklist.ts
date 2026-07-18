@@ -139,6 +139,45 @@ const getWorkspaceSegmentDraftVisualChangeIdentity = (segment: WorkspaceSegmentE
     Boolean(segment.visualReset && !isWorkspaceSegmentVisualResetApplied(segment)),
   ]);
 
+const createWorkspaceSegmentDraftVisualComparableToBaseline = (
+  segment: WorkspaceSegmentEditorDraftSegment,
+  baselineSegment: WorkspaceSegmentEditorDraftSegment,
+) => {
+  const currentVisualIdentity = getWorkspaceSegmentCurrentVisualIdentityKey(segment);
+  if (
+    !currentVisualIdentity ||
+    currentVisualIdentity !== getWorkspaceSegmentCurrentVisualIdentityKey(baselineSegment)
+  ) {
+    return segment;
+  }
+
+  const activeAssetKey =
+    segment.videoAction === "custom"
+      ? "customVideo"
+      : segment.videoAction === "ai_photo"
+        ? "aiPhotoAsset"
+        : segment.videoAction === "image_edit"
+          ? "imageEditAsset"
+          : segment.videoAction === "ai" ||
+              segment.videoAction === "photo_animation" ||
+              segment.videoAction === "talking_photo"
+            ? "aiVideoAsset"
+            : null;
+  if (
+    !activeAssetKey ||
+    getWorkspaceSegmentCustomAssetIdentityKey(segment[activeAssetKey]) !== currentVisualIdentity
+  ) {
+    return segment;
+  }
+
+  return {
+    ...segment,
+    [activeAssetKey]: baselineSegment[activeAssetKey],
+    aiVideoGeneratedMode: baselineSegment.aiVideoGeneratedMode,
+    videoAction: baselineSegment.videoAction,
+  };
+};
+
 const getWorkspaceSegmentVisualHistoryAssetIdentityKey = (
   asset: StudioCustomVideoFile | null | undefined,
 ) => {
@@ -207,7 +246,8 @@ export const isWorkspaceSegmentDraftVisualChangedFromBaseline = (
     return false;
   }
 
-  return getWorkspaceSegmentDraftVisualChangeIdentity(segment) !== getWorkspaceSegmentDraftVisualChangeIdentity(baselineSegment);
+  const comparableSegment = createWorkspaceSegmentDraftVisualComparableToBaseline(segment, baselineSegment);
+  return getWorkspaceSegmentDraftVisualChangeIdentity(comparableSegment) !== getWorkspaceSegmentDraftVisualChangeIdentity(baselineSegment);
 };
 
 export const getWorkspaceSegmentDraftVisualStatus = (

@@ -3925,7 +3925,7 @@ describe("WorkspacePage studio locale defaults", () => {
         aiVideoGeneratedMode: null,
         videoAction: "original",
       }),
-    ).toBe(true);
+    ).toBe(false);
     expect(buildWorkspaceSegmentEditorChangeChecklist(draft, baseline)).toEqual([
       expect.objectContaining({
         label: "Сегмент 2: добавлено движение в фото",

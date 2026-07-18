@@ -1172,6 +1172,60 @@ describe("workspace segment editor scene sound preview", () => {
     expect(hydrated).toBe(draft);
   });
 
+  it("removes a recovered draft asset when media library already points to the canonical current visual", () => {
+    const segment = createProjectVoiceoverSegment({
+      aiVideoAsset: {
+        assetId: 812,
+        fileName: "segment-video.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/812/playback",
+        source: "media-library",
+      },
+      aiVideoGeneratedMode: "photo_animation",
+      currentAsset: { assetId: 812 } as WorkspaceSegmentEditorDraftSegment["currentAsset"],
+      currentSourceKind: "ai_generated",
+      mediaType: "video",
+      videoAction: "photo_animation",
+    });
+    const draft = createProjectVoiceoverDraft([segment]);
+
+    const hydrated = hydrateWorkspaceSegmentEditorDraftFromGeneratedMediaLibrary(draft, [
+      {
+        createdAt: 1234,
+        id: "photo-animation-812",
+        item: {
+          assetExpiresAt: null,
+          assetId: 812,
+          assetKind: "segment_current",
+          assetLifecycle: "ready",
+          assetMediaType: "video",
+          createdAt: 1234,
+          dedupeKey: "photo-animation-812",
+          downloadName: "segment-video.mp4",
+          downloadUrl: "/api/workspace/media-assets/812/download",
+          itemKey: "photo-animation-812",
+          kind: "photo_animation",
+          previewKind: "video",
+          previewPosterUrl: null,
+          previewUrl: "/api/workspace/media-assets/812/playback",
+          projectId: 77,
+          projectTitle: "Session",
+          segmentIndex: 0,
+          segmentListIndex: 0,
+          segmentNumber: 1,
+          source: "persisted",
+        },
+        sourceJobId: "photo-animation-812",
+      },
+    ]);
+
+    expect(hydrated).not.toBe(draft);
+    expect(hydrated?.segments[0]?.aiVideoAsset).toBeNull();
+    expect(hydrated?.segments[0]?.aiVideoGeneratedMode).toBeNull();
+    expect(hydrated?.segments[0]?.videoAction).toBe("original");
+  });
+
   it("attaches an uploaded visual source id to custom visual drafts", () => {
     const segment = createProjectVoiceoverSegment({
       customVideo: {
