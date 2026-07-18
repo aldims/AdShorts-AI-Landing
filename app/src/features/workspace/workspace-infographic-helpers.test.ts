@@ -143,7 +143,7 @@ describe("workspace infographic helpers", () => {
     });
 
     expect(infographic).not.toBeNull();
-    expect(infographic?.animation.durationSeconds).toBe(2.2);
+    expect(infographic?.animation.durationSeconds).toBe(1);
     expect(infographic?.mediaAssetId).toBe(42);
     expect(infographic?.transform.width).toBe(0.96);
     expect(infographic?.transform.centerX).toBe(0.48);
@@ -218,23 +218,29 @@ describe("workspace infographic helpers", () => {
     expect(resized.centerY - resizedHeight / 2).toBeCloseTo(originalAnchor.y);
   });
 
-  it("holds the complete infographic for two seconds between fade in and fade out", () => {
+  it("uses one second each for fade in, full visibility, and fade out", () => {
     const timing = getWorkspaceSegmentInfographicTiming(8);
 
-    expect(timing.revealEndSeconds).toBeCloseTo(2.2);
-    expect(timing.holdSeconds).toBe(2);
-    expect(timing.fadeOutStartSeconds).toBeCloseTo(4.2);
-    expect(timing.endSeconds).toBeCloseTo(6.4);
-    expect(getWorkspaceSegmentInfographicTiming(5).holdSeconds).toBe(2);
-    expect(getWorkspaceSegmentInfographicFadeDuration(5)).toBeCloseTo(1.5);
+    expect(timing.revealEndSeconds).toBeCloseTo(1);
+    expect(timing.holdSeconds).toBe(1);
+    expect(timing.fadeOutStartSeconds).toBeCloseTo(2);
+    expect(timing.endSeconds).toBeCloseTo(3);
+    expect(getWorkspaceSegmentInfographicTiming(5).holdSeconds).toBe(1);
+    expect(getWorkspaceSegmentInfographicFadeDuration(5)).toBeCloseTo(1);
     expect(getWorkspaceSegmentInfographicOpacity(0, 5)).toBe(0);
-    expect(getWorkspaceSegmentInfographicOpacity(1.5, 5)).toBe(1);
-    expect(getWorkspaceSegmentInfographicOpacity(3.5, 5)).toBe(1);
-    expect(getWorkspaceSegmentInfographicOpacity(4.25, 5)).toBeCloseTo(0.5);
-    expect(getWorkspaceSegmentInfographicOpacity(5, 5)).toBe(0);
+    expect(getWorkspaceSegmentInfographicOpacity(1, 5)).toBe(1);
+    expect(getWorkspaceSegmentInfographicOpacity(2, 5)).toBe(1);
+    expect(getWorkspaceSegmentInfographicOpacity(2.5, 5)).toBeCloseTo(0.5);
+    expect(getWorkspaceSegmentInfographicOpacity(3, 5)).toBe(0);
+
+    const shortTiming = getWorkspaceSegmentInfographicTiming(2);
+    expect(shortTiming.revealEndSeconds).toBeCloseTo(0.5);
+    expect(shortTiming.holdSeconds).toBe(1);
+    expect(shortTiming.fadeOutDurationSeconds).toBeCloseTo(0.5);
+    expect(shortTiming.endSeconds).toBe(2);
   });
 
-  it("starts the two-second hold after the final semantic part is fully visible", () => {
+  it("fits semantic part reveals into one second before the one-second hold", () => {
     const parts = [
       {
         frame: { height: 0.4, width: 0.9, x: 0.05, y: 0.05 },
@@ -253,13 +259,14 @@ describe("workspace infographic helpers", () => {
         text: "Есть решение",
       },
     ];
-    const timing = getWorkspaceSegmentInfographicTiming(8, 2.2, parts);
+    const timing = getWorkspaceSegmentInfographicTiming(8, 1, parts);
 
-    expect(timing.revealEndSeconds).toBe(3);
-    expect(timing.fadeOutStartSeconds - timing.revealEndSeconds).toBe(2);
-    expect(getWorkspaceSegmentInfographicPartOpacity(parts[1], 3, 8, 2.2, parts)).toBe(1);
-    expect(getWorkspaceSegmentInfographicPartOpacity(parts[1], 5, 8, 2.2, parts)).toBe(1);
-    expect(getWorkspaceSegmentInfographicPartOpacity(parts[1], 6.1, 8, 2.2, parts)).toBeCloseTo(0.5);
+    expect(timing.revealEndSeconds).toBe(1);
+    expect(timing.transitionScale).toBeCloseTo(1 / 3);
+    expect(timing.fadeOutStartSeconds - timing.revealEndSeconds).toBe(1);
+    expect(getWorkspaceSegmentInfographicPartOpacity(parts[1], 1, 8, 1, parts)).toBe(1);
+    expect(getWorkspaceSegmentInfographicPartOpacity(parts[1], 2, 8, 1, parts)).toBe(1);
+    expect(getWorkspaceSegmentInfographicPartOpacity(parts[1], 2.5, 8, 1, parts)).toBeCloseTo(0.5);
   });
 
   it("marks an infographic stale only when the current visual identity changed", () => {

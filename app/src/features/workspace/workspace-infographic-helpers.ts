@@ -11,8 +11,8 @@ export const WORKSPACE_SEGMENT_INFOGRAPHIC_STYLE_MAX_CHARS = 300;
 export const WORKSPACE_SEGMENT_INFOGRAPHIC_DEFAULT_WIDTH = 0.7;
 export const WORKSPACE_SEGMENT_INFOGRAPHIC_MIN_WIDTH = 0.12;
 export const WORKSPACE_SEGMENT_INFOGRAPHIC_MAX_WIDTH = 0.96;
-export const WORKSPACE_SEGMENT_INFOGRAPHIC_FADE_SECONDS = 2.2;
-export const WORKSPACE_SEGMENT_INFOGRAPHIC_HOLD_SECONDS = 2;
+export const WORKSPACE_SEGMENT_INFOGRAPHIC_FADE_SECONDS = 1;
+export const WORKSPACE_SEGMENT_INFOGRAPHIC_HOLD_SECONDS = 1;
 export const WORKSPACE_SEGMENT_INFOGRAPHIC_PART_REVEAL_SECONDS = 1.3;
 export const WORKSPACE_SEGMENT_INFOGRAPHIC_LEGACY_PART_REVEAL_SECONDS = 0.65;
 export const WORKSPACE_SEGMENT_INFOGRAPHIC_TIMING_SCALE = 2;
@@ -414,18 +414,19 @@ export const getWorkspaceSegmentInfographicTiming = (
   }
 
   // Keep a real fade on both sides even when the segment is shorter than the
-  // preferred reveal + 2-second hold + fade-out sequence. Only transition
-  // timing is compressed; the full-visibility hold remains two seconds when
-  // the segment is long enough to accommodate it.
+  // preferred one-second reveal + one-second hold + one-second fade-out
+  // sequence. Semantic parts still reveal sequentially, but their complete
+  // reveal is scaled into the same one-second reveal phase.
   const minimumTransitionBudget = Math.min(duration, 0.1);
   const holdSeconds = Math.min(
     WORKSPACE_SEGMENT_INFOGRAPHIC_HOLD_SECONDS,
     Math.max(0, duration - minimumTransitionBudget),
   );
   const transitionBudget = Math.max(0, duration - holdSeconds);
-  const transitionScale = Math.min(1, transitionBudget / (naturalRevealEnd + fade));
-  const revealEndSeconds = naturalRevealEnd * transitionScale;
-  const fadeOutDurationSeconds = fade * transitionScale;
+  const phaseScale = Math.min(1, transitionBudget / (fade * 2));
+  const revealEndSeconds = fade * phaseScale;
+  const transitionScale = revealEndSeconds / naturalRevealEnd;
+  const fadeOutDurationSeconds = fade * phaseScale;
   const fadeOutStartSeconds = revealEndSeconds + holdSeconds;
 
   return {

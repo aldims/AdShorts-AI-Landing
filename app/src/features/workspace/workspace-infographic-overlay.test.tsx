@@ -47,7 +47,7 @@ describe("WorkspaceSegmentInfographicOverlay", () => {
         editable={false}
         infographic={infographic}
         isPlaying
-        localTimeSeconds={1}
+        localTimeSeconds={0.5}
         segmentDurationSeconds={5}
       />,
     );
@@ -55,7 +55,7 @@ describe("WorkspaceSegmentInfographicOverlay", () => {
     const parts = overlay.querySelectorAll(".studio-segment-infographic__image");
 
     expect(parts).toHaveLength(1);
-    expect(Number(overlay.style.getPropertyValue("--workspace-infographic-opacity"))).toBeCloseTo(2 / 3);
+    expect(Number(overlay.style.getPropertyValue("--workspace-infographic-opacity"))).toBeCloseTo(0.5);
   });
 
   it("reveals semantic parts independently and shows all parts while paused", () => {
@@ -90,7 +90,7 @@ describe("WorkspaceSegmentInfographicOverlay", () => {
         editable={false}
         infographic={infographic}
         isPlaying
-        localTimeSeconds={0.8}
+        localTimeSeconds={0.4}
         segmentDurationSeconds={5}
       />,
     );
