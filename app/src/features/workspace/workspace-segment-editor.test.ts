@@ -38,6 +38,7 @@ import {
   isWorkspaceTalkingPhotoMediaAsset,
   isWorkspaceSegmentProjectTimelineVoiceoverAvailable,
   isWorkspaceSegmentCachedLanguageTextUsable,
+  isWorkspaceSegmentStaleFinalizedVoiceTrim,
   isWorkspaceSegmentStaleMeasuredRenderedPhotoDuration,
   isWorkspaceSegmentVoiceoverPlaybackFresh,
   invalidateWorkspaceSegmentSceneSoundForVisualChange,
@@ -1946,6 +1947,144 @@ describe("workspace segment editor project voiceover timeline", () => {
       endTime: 8.8,
       startTime: 4,
     }));
+  });
+
+  it("keeps the rendered timeline and project settings when a finalized project has stale voice-owned flags", () => {
+    const firstSegment = createProjectVoiceoverSegment({
+      currentPlaybackUrl: "/api/workspace/media-assets/1001/content",
+      duration: 5.042,
+      durationMode: "manual",
+      durationSyncMode: "voiceover",
+      durationSyncModeUserSelected: true,
+      endTime: 5.042,
+      index: 0,
+      manualDurationSeconds: 5.042,
+      mediaType: "video",
+      startTime: 0,
+      voiceoverAsset: null,
+      voiceSourceDuration: 4.3,
+      voiceSourceEndTime: 4.3,
+      voiceSourceStartTime: 0,
+    });
+    const secondSegment = createProjectVoiceoverSegment({
+      currentPlaybackUrl: "/api/workspace/media-assets/1002/content",
+      duration: 5,
+      durationMode: "manual",
+      durationSyncMode: "voiceover",
+      durationSyncModeUserSelected: true,
+      endTime: 10.042,
+      index: 1,
+      manualDurationSeconds: 5,
+      mediaType: "video",
+      startTime: 5.042,
+      voiceoverAsset: null,
+      voiceSourceDuration: 3.64,
+      voiceSourceEndTime: 3.64,
+      voiceSourceStartTime: 0,
+    });
+    const session = {
+      ...createProjectVoiceoverDraft([firstSegment, secondSegment]),
+      finalVideoAssetId: 9001,
+      finalVideoStale: false,
+      musicName: "energetic_9.mp3",
+      musicType: "energetic",
+      subtitleColor: "purple",
+      subtitleStyle: "modern",
+      subtitleType: "ai",
+      voiceType: "Liam_Timing",
+    };
+
+    const normalized = createWorkspaceSegmentEditorDraftSession(session);
+
+    expect(normalized.segments.map((segment) => ({
+      duration: segment.duration,
+      durationMode: segment.durationMode,
+      durationSyncMode: segment.durationSyncMode,
+      endTime: segment.endTime,
+      manualDurationSeconds: segment.manualDurationSeconds,
+      startTime: segment.startTime,
+    }))).toEqual([
+      {
+        duration: 5.042,
+        durationMode: "manual",
+        durationSyncMode: "visual",
+        endTime: 5.042,
+        manualDurationSeconds: 5.042,
+        startTime: 0,
+      },
+      {
+        duration: 5,
+        durationMode: "manual",
+        durationSyncMode: "visual",
+        endTime: 10.042,
+        manualDurationSeconds: 5,
+        startTime: 5.042,
+      },
+    ]);
+    expect(normalized).toEqual(expect.objectContaining({
+      musicName: "energetic_9.mp3",
+      musicType: "energetic",
+      subtitleColor: "purple",
+      subtitleStyle: "modern",
+      subtitleType: "ai",
+      voiceType: "Liam_Timing",
+    }));
+
+    const restoredStoredDraft = normalizeLegacyWorkspaceSegmentEditorDraftSession(session);
+    expect(restoredStoredDraft.segments.map((segment) => segment.durationSyncMode)).toEqual([
+      "visual",
+      "visual",
+    ]);
+    expect(restoredStoredDraft.segments.map((segment) => segment.duration)).toEqual([5.042, 5]);
+
+    const normalizedStoredDraft = normalizeStoredWorkspaceSegmentEditorDraftSession({
+      ...session,
+      storageVersion: 3,
+    } as WorkspaceSegmentEditorDraftSession);
+    expect(normalizedStoredDraft.segments.map((segment) => segment.durationSyncMode)).toEqual([
+      "visual",
+      "visual",
+    ]);
+    expect(normalizedStoredDraft.segments.map((segment) => segment.duration)).toEqual([5.042, 5]);
+
+    const staleStoredSegment = {
+      ...normalized.segments[0],
+      duration: 4.3,
+      durationMode: "auto" as const,
+      durationSyncMode: "voiceover" as const,
+      durationSyncModeUserSelected: true,
+      endTime: 4.3,
+      manualDurationSeconds: null,
+    };
+    expect(
+      isWorkspaceSegmentStaleFinalizedVoiceTrim(staleStoredSegment, normalized.segments[0], normalized),
+    ).toBe(true);
+
+    const staleStoredDraft = {
+      ...normalized,
+      segments: normalized.segments.map((segment, index) => {
+        const duration = index === 0 ? 4.3 : 3.64;
+        const startTime = index === 0 ? 0 : 4.3;
+        return {
+          ...segment,
+          duration,
+          durationMode: "auto" as const,
+          durationSyncMode: "voiceover" as const,
+          durationSyncModeUserSelected: true,
+          endTime: startTime + duration,
+          manualDurationSeconds: null,
+          startTime,
+        };
+      }),
+    };
+    const refreshedStoredDraft = refreshWorkspaceSegmentEditorDraftWithFreshSession(staleStoredDraft, session, {
+      repairStaleFinalizedVoiceTrim: true,
+    });
+    expect(refreshedStoredDraft.segments.map((segment) => segment.duration)).toEqual([5.042, 5]);
+    expect(refreshedStoredDraft.segments.map((segment) => segment.durationSyncMode)).toEqual([
+      "visual",
+      "visual",
+    ]);
   });
 
   it("does not warn when an ffmpeg-rendered photo segment is shorter than voiceover", () => {

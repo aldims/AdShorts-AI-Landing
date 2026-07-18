@@ -277,6 +277,7 @@ import {
   isWorkspaceSegmentEditorCleanEmptyDraft,
   isWorkspaceSegmentEditorDraftSegmentEmpty,
   isWorkspaceSegmentEditorScratchDraft,
+  isWorkspaceSegmentStaleFinalizedVoiceTrim,
   isWorkspaceSegmentStaleMeasuredRenderedPhotoDuration,
   isWorkspaceSegmentImageFile,
   isWorkspaceSegmentProjectVoiceoverAsset,
@@ -11867,6 +11868,11 @@ export function WorkspacePage({
         areWorkspaceSegmentDurationValuesEqual(draftSourceDurationSeconds, baselineSourceDurationSeconds) &&
         baselineManualDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS < draftManualDurationSeconds;
       if (!isStaleSourceDuration) {
+        if (isWorkspaceSegmentStaleFinalizedVoiceTrim(draftSegment, baselineSegment, baseline)) {
+          hasStaleDurationDrift = true;
+          continue;
+        }
+
         if (isWorkspaceSegmentStaleMeasuredRenderedPhotoDuration(draftSegment, baselineSegment)) {
           hasStaleDurationDrift = true;
           continue;
@@ -12343,6 +12349,7 @@ export function WorkspacePage({
             baselineSession: existingBaselineForRefresh,
             preserveUnbaselinedManualDuration: Boolean(existingBaselineForRefresh),
             preserveLiveStructure: segmentEditorExplicitStructureChangeProjectIdsRef.current.has(projectId),
+            repairStaleFinalizedVoiceTrim: options?.bypassCache === true && options.openDraft === false,
           }),
         );
         logSegmentEditorDiagnostics(
@@ -12832,10 +12839,18 @@ export function WorkspacePage({
       : segmentEditorLoadedSession?.projectId === routeProjectId
         ? segmentEditorLoadedSession
         : readStoredWorkspaceSegmentEditorSession(session.email, routeProjectId);
-    const storedDraftChangeChecklist =
+    const reconciledStoredDraftForRoute =
       storedDraftForRoute && storedSessionForRoute
+        ? refreshWorkspaceSegmentEditorDraftWithFreshSession(storedDraftForRoute, storedSessionForRoute, {
+            baselineSession: storedSessionForRoute,
+            preserveUnbaselinedManualDuration: true,
+            repairStaleFinalizedVoiceTrim: true,
+          })
+        : storedDraftForRoute;
+    const storedDraftChangeChecklist =
+      reconciledStoredDraftForRoute && storedSessionForRoute
         ? buildWorkspaceSegmentEditorChangeChecklist(
-            storedDraftForRoute,
+            reconciledStoredDraftForRoute,
             createWorkspaceSegmentEditorDraftSession(storedSessionForRoute),
             {
               locale,
@@ -12848,11 +12863,11 @@ export function WorkspacePage({
       ? createWorkspaceSegmentEditorDraftSession(storedSessionForRoute)
       : null;
     const shouldPreferFreshRouteSessionOverStoredDraft =
-      Boolean(storedDraftForRoute && storedSessionForRoute) &&
+      Boolean(reconciledStoredDraftForRoute && storedSessionForRoute) &&
       !hasStoredExplicitResetForRoute &&
       ((storedDraftChangeChecklist !== null && storedDraftChangeChecklist.length === 0) ||
         hasOnlyStaleSegmentEditorSourceDurationDrift(
-          storedDraftForRoute,
+          reconciledStoredDraftForRoute,
           storedSessionDraftForRoute,
           storedDraftChangeChecklist,
         ));
@@ -12944,7 +12959,7 @@ export function WorkspacePage({
     const shouldRefreshInitialEditRoute =
       !hasProcessedInitialSegmentEditorEditRouteRef.current &&
       segmentEditorRouteRestoreKeyRef.current !== restoreKey &&
-      (!storedDraftForRoute || !storedSessionForRoute || shouldPreferFreshRouteSessionOverStoredDraft);
+      (!reconciledStoredDraftForRoute || !storedSessionForRoute || shouldPreferFreshRouteSessionOverStoredDraft);
     hasProcessedInitialSegmentEditorEditRouteRef.current = true;
 
     if (shouldRefreshInitialEditRoute) {
@@ -12993,7 +13008,7 @@ export function WorkspacePage({
       return;
     }
 
-    const storedDraft = storedDraftForRoute;
+    const storedDraft = reconciledStoredDraftForRoute;
     const storedSession = storedSessionForRoute;
 
     if (storedDraft) {

@@ -222,6 +222,123 @@ describe("segment editor asset lifecycle mapping", () => {
     ]);
   });
 
+  it("keeps a finalized render timeline when stale voice-owned flags disagree with TTS", () => {
+    const session = buildWorkspaceSegmentEditorSessionFromPayload(
+      4249,
+      {
+        music_name: "energetic_9.mp3",
+        music_type: "energetic",
+        project_id: 4249,
+        segments: [
+          {
+            _voice_source_duration: 4.3,
+            _voice_source_end_time: 4.3,
+            _voice_source_start_time: 0,
+            duration: 4.3,
+            duration_sync_mode: "voiceover",
+            duration_sync_mode_user_selected: true,
+            end_time: 4.3,
+            index: 0,
+            start_time: 0,
+            text: "First rendered scene",
+          },
+          {
+            _voice_source_duration: 3.64,
+            _voice_source_end_time: 3.64,
+            _voice_source_start_time: 0,
+            duration: 3.64,
+            duration_sync_mode: "voiceover",
+            duration_sync_mode_user_selected: true,
+            end_time: 7.94,
+            index: 1,
+            start_time: 4.3,
+            text: "Second rendered scene",
+          },
+        ],
+        subtitle_color: "purple",
+        subtitle_style: "modern",
+        subtitle_type: "ai",
+        tts_asset_id: 9833,
+        voice_type: "Liam_Timing",
+      },
+      {
+        projectDetailsPayload: {
+          final_video_asset_id: 9832,
+          generation_settings: {
+            final_video_asset_id: 9832,
+            video_segments: [
+              {
+                _voice_source_duration: 4.3,
+                _voice_source_end_time: 4.3,
+                _voice_source_start_time: 0,
+                duration: 5.042,
+                duration_mode: "manual",
+                duration_sync_mode: "voiceover",
+                duration_sync_mode_user_selected: true,
+                end_time: 5.042,
+                segment_index: 0,
+                start_time: 0,
+                text: "First rendered scene",
+              },
+              {
+                _voice_source_duration: 3.64,
+                _voice_source_end_time: 3.64,
+                _voice_source_start_time: 0,
+                duration: 5,
+                duration_mode: "manual",
+                duration_sync_mode: "voiceover",
+                duration_sync_mode_user_selected: true,
+                end_time: 10.042,
+                segment_index: 1,
+                start_time: 5.042,
+                text: "Second rendered scene",
+              },
+            ],
+          },
+        },
+      },
+    );
+
+    expect(session).toEqual(expect.objectContaining({
+      finalVideoAssetId: 9832,
+      musicName: "energetic_9.mp3",
+      musicType: "energetic",
+      subtitleColor: "purple",
+      subtitleStyle: "modern",
+      subtitleType: "ai",
+      ttsAssetId: 9833,
+      voiceType: "Liam_Timing",
+    }));
+    expect(session.segments.map((segment) => ({
+      duration: segment.duration,
+      durationMode: segment.durationMode,
+      durationSyncMode: segment.durationSyncMode,
+      durationSyncModeUserSelected: segment.durationSyncModeUserSelected,
+      endTime: segment.endTime,
+      manualDurationSeconds: segment.manualDurationSeconds,
+      startTime: segment.startTime,
+    }))).toEqual([
+      {
+        duration: 5.042,
+        durationMode: "manual",
+        durationSyncMode: "visual",
+        durationSyncModeUserSelected: true,
+        endTime: 5.042,
+        manualDurationSeconds: 5.042,
+        startTime: 0,
+      },
+      {
+        duration: 5,
+        durationMode: "manual",
+        durationSyncMode: "visual",
+        durationSyncModeUserSelected: true,
+        endTime: 10.042,
+        manualDurationSeconds: 5,
+        startTime: 5.042,
+      },
+    ]);
+  });
+
   it("uses the current video_segments order instead of a stale editor payload order", () => {
     const session = buildWorkspaceSegmentEditorSessionFromPayload(
       4242,

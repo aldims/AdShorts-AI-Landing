@@ -1069,7 +1069,7 @@ const recoverProjectVoiceoverEntriesFromRenderContract = (
 const mergeProjectDetailTimelineIntoSegmentEditorPayload = (
   segment: AdsflowSegmentEditorSegmentPayload,
   authoritativeSegment: AdsflowSegmentEditorSegmentPayload | null | undefined,
-  options?: { currentTimeline?: boolean },
+  options?: { currentTimeline?: boolean; preserveFinalizedTimelineDuration?: boolean },
 ): AdsflowSegmentEditorSegmentPayload => {
   if (!authoritativeSegment) {
     return segment;
@@ -1153,6 +1153,19 @@ const mergeProjectDetailTimelineIntoSegmentEditorPayload = (
   const authoritativeDuration =
     authoritativeBoundaryDuration ??
     (duration !== null && duration > 0 ? roundSegmentEditorTimelineSeconds(duration) : null);
+  const hasFinalizedVoiceDurationPolicyConflict = Boolean(
+    options?.preserveFinalizedTimelineDuration &&
+    durationSyncMode === "voiceover" &&
+    authoritativeDuration !== null &&
+    voiceSourceDuration !== null &&
+    Math.abs(authoritativeDuration - voiceSourceDuration) > 0.02
+  );
+  const resolvedDurationSyncMode = hasFinalizedVoiceDurationPolicyConflict
+    ? ("visual" as const)
+    : durationSyncMode;
+  const resolvedDurationSyncModeUserSelected = hasFinalizedVoiceDurationPolicyConflict
+    ? true
+    : durationSyncModeUserSelected;
   const authoritativeStartTime = hasAuthoritativeBoundary
     ? startTime
     : startTime ??
@@ -1183,17 +1196,29 @@ const mergeProjectDetailTimelineIntoSegmentEditorPayload = (
       sourceDurationSeconds ?? segment.durationExtensionSourceDurationSeconds,
     duration_extension_source_duration_seconds:
       sourceDurationSeconds ?? segment.duration_extension_source_duration_seconds,
-    duration_mode: hasSegmentManualTimeline ? segment.duration_mode : durationMode || segment.duration_mode,
-    durationSyncMode: durationSyncMode ?? segment.durationSyncMode,
+    duration_mode: hasFinalizedVoiceDurationPolicyConflict
+      ? "manual"
+      : hasSegmentManualTimeline ? segment.duration_mode : durationMode || segment.duration_mode,
+    durationSyncMode: resolvedDurationSyncMode ?? segment.durationSyncMode,
     durationSyncModeUserSelected:
-      hasDurationSyncModeUserSelected ? durationSyncModeUserSelected : Boolean(segment.durationSyncModeUserSelected),
-    duration_sync_mode: durationSyncMode ?? segment.duration_sync_mode,
+      hasFinalizedVoiceDurationPolicyConflict
+        ? resolvedDurationSyncModeUserSelected
+        : hasDurationSyncModeUserSelected
+          ? durationSyncModeUserSelected
+          : Boolean(segment.durationSyncModeUserSelected),
+    duration_sync_mode: resolvedDurationSyncMode ?? segment.duration_sync_mode,
     duration_sync_mode_user_selected:
-      hasDurationSyncModeUserSelected ? durationSyncModeUserSelected : Boolean(segment.duration_sync_mode_user_selected),
+      hasFinalizedVoiceDurationPolicyConflict
+        ? resolvedDurationSyncModeUserSelected
+        : hasDurationSyncModeUserSelected
+          ? durationSyncModeUserSelected
+          : Boolean(segment.duration_sync_mode_user_selected),
     end_time: preserveSegmentManualTimeline
       ? segmentEndTime ?? authoritativeEndTime ?? segment.end_time
       : authoritativeEndTime ?? segmentEndTime ?? segment.end_time,
-    manual_duration_seconds: hasSegmentManualTimeline
+    manual_duration_seconds: hasFinalizedVoiceDurationPolicyConflict
+      ? authoritativeDuration
+      : hasSegmentManualTimeline
       ? preserveSegmentManualTimeline
         ? segmentManualDurationSeconds ?? manualDurationSeconds ?? segment.manual_duration_seconds
         : authoritativeDuration ?? segmentManualDurationSeconds ?? manualDurationSeconds ?? segment.manual_duration_seconds
@@ -2927,6 +2952,13 @@ export const buildWorkspaceSegmentEditorSessionFromPayload = (
     projectDetailsPayload?.generation_settings && typeof projectDetailsPayload.generation_settings === "object"
       ? projectDetailsPayload.generation_settings
       : null;
+  const finalVideoAssetId =
+    normalizePositiveProjectId(projectDetailsPayload?.final_video_asset_id) ??
+    normalizePositiveProjectId(generationSettings?.final_video_asset_id) ??
+    normalizePositiveProjectId(generationSettings?.final_asset_id) ??
+    null;
+  const hasReadyFinalVideo =
+    finalVideoAssetId !== null && !normalizeBooleanFlag(generationSettings?.final_video_stale);
   const originalEntries = getProjectOriginalMediaEntries(projectDetailsPayload);
   const currentEntries = getProjectCurrentMediaEntries(projectDetailsPayload, originalEntries);
   const sceneSoundEntries = pickProjectMediaEntries(generationSettings?.segment_scene_sounds);
@@ -3030,7 +3062,10 @@ export const buildWorkspaceSegmentEditorSessionFromPayload = (
         mergeProjectDetailTimelineIntoSegmentEditorPayload(
           segment,
           authoritativeSegment,
-          { currentTimeline: usesCurrentProjectTimeline },
+          {
+            currentTimeline: usesCurrentProjectTimeline,
+            preserveFinalizedTimelineDuration: hasReadyFinalVideo,
+          },
         ),
         {
           currentEntries,
@@ -3076,12 +3111,6 @@ export const buildWorkspaceSegmentEditorSessionFromPayload = (
     normalizePositiveProjectId(projectDetailsPayload?.tts_asset_id) ??
     normalizePositiveProjectId(generationSettings?.tts_asset_id) ??
     null;
-  const finalVideoAssetId =
-    normalizePositiveProjectId(projectDetailsPayload?.final_video_asset_id) ??
-    normalizePositiveProjectId(generationSettings?.final_video_asset_id) ??
-    normalizePositiveProjectId(generationSettings?.final_asset_id) ??
-    null;
-
   return {
     customMusicAssetId: customMusicMetadata.customMusicAssetId,
     customMusicFileName: customMusicMetadata.customMusicFileName,

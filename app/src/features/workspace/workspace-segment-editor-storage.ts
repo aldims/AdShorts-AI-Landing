@@ -837,12 +837,14 @@ export const normalizeStoredWorkspaceSegmentEditorDraftSession = (
       cloneWorkspaceSegmentEditorDraftSession(session),
     ),
   );
-  const normalizedSession = normalizeLegacyWorkspaceSegmentEditorDraftSession(rebuildWorkspaceSegmentEditorDraftSessionTimeline({
-    ...clonedSession,
-    segments: clonedSession.segments.map((segment) =>
-      normalizePersistedWorkspaceSegmentEditorDraftSegment(segment, fallbackLanguage),
-    ),
-  }));
+  const normalizedSession = rebuildWorkspaceSegmentEditorDraftSessionTimeline(
+    normalizeLegacyWorkspaceSegmentEditorDraftSession({
+      ...clonedSession,
+      segments: clonedSession.segments.map((segment) =>
+        normalizePersistedWorkspaceSegmentEditorDraftSegment(segment, fallbackLanguage),
+      ),
+    }),
+  );
 
   return {
     ...normalizedSession,
