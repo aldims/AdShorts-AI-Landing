@@ -9,18 +9,14 @@ export const ensureVideoElementLoading = (
     return;
   }
 
-  if (element.preload !== "auto") {
+  const didUpgradePreload = element.preload !== "auto";
+  if (didUpgradePreload) {
     element.preload = "auto";
   }
 
-  if (element.networkState === HTMLMediaElement.NETWORK_EMPTY) {
-    element.load();
-    return;
-  }
-
   if (
-    element.readyState < minimumReadyState &&
-    element.networkState !== HTMLMediaElement.NETWORK_LOADING
+    element.networkState === HTMLMediaElement.NETWORK_EMPTY ||
+    (didUpgradePreload && element.networkState === HTMLMediaElement.NETWORK_IDLE)
   ) {
     element.load();
   }
@@ -94,6 +90,103 @@ export const waitForWorkspaceAttachedVideoElement = (
     };
 
     tryResolve();
+  });
+
+export const waitForWorkspaceAttachedVideoElementReady = (
+  resolveElement: () => HTMLVideoElement | null,
+  sourceUrls: Array<string | null | undefined>,
+  options?: {
+    minimumReadyState?: number;
+    timeoutMs?: number;
+  },
+) =>
+  new Promise<boolean>((resolve) => {
+    if (typeof window === "undefined") {
+      resolve(false);
+      return;
+    }
+
+    const minimumReadyState = options?.minimumReadyState ?? HTMLMediaElement.HAVE_CURRENT_DATA;
+    const timeoutMs = options?.timeoutMs ?? WORKSPACE_SEGMENT_GENERATED_VIDEO_WARMUP_TIMEOUT_MS;
+    let observedElement: HTMLVideoElement | null = null;
+    let animationFrameId = 0;
+    let settled = false;
+
+    const cleanupObservedElement = () => {
+      if (!observedElement) {
+        return;
+      }
+
+      observedElement.removeEventListener("loadedmetadata", handlePotentialReady);
+      observedElement.removeEventListener("loadeddata", handlePotentialReady);
+      observedElement.removeEventListener("canplay", handlePotentialReady);
+      observedElement.removeEventListener("canplaythrough", handlePotentialReady);
+      observedElement.removeEventListener("error", handlePotentialReady);
+    };
+
+    const finish = (result: boolean) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      window.clearTimeout(timeoutId);
+      if (animationFrameId) {
+        window.cancelAnimationFrame(animationFrameId);
+      }
+      cleanupObservedElement();
+      resolve(result);
+    };
+
+    const isCurrentElementReady = () => {
+      const currentElement = resolveElement();
+      return Boolean(
+        currentElement &&
+        videoElementUsesAnyWorkspaceSourceUrl(currentElement, sourceUrls) &&
+        currentElement.readyState >= minimumReadyState,
+      );
+    };
+
+    function handlePotentialReady() {
+      if (isCurrentElementReady()) {
+        finish(true);
+      }
+    }
+
+    const inspectCurrentElement = () => {
+      if (settled) {
+        return;
+      }
+
+      const currentElement = resolveElement();
+      if (currentElement !== observedElement) {
+        cleanupObservedElement();
+        observedElement = currentElement;
+        if (observedElement) {
+          observedElement.addEventListener("loadedmetadata", handlePotentialReady);
+          observedElement.addEventListener("loadeddata", handlePotentialReady);
+          observedElement.addEventListener("canplay", handlePotentialReady);
+          observedElement.addEventListener("canplaythrough", handlePotentialReady);
+          observedElement.addEventListener("error", handlePotentialReady);
+          if (videoElementUsesAnyWorkspaceSourceUrl(observedElement, sourceUrls)) {
+            ensureVideoElementLoading(observedElement, minimumReadyState);
+          }
+        }
+      }
+
+      if (isCurrentElementReady()) {
+        finish(true);
+        return;
+      }
+
+      animationFrameId = window.requestAnimationFrame(inspectCurrentElement);
+    };
+
+    const timeoutId = window.setTimeout(() => {
+      finish(isCurrentElementReady());
+    }, timeoutMs);
+
+    inspectCurrentElement();
   });
 
 export const disposeWorkspaceDetachedVideoElement = (element: HTMLVideoElement | null | undefined) => {
