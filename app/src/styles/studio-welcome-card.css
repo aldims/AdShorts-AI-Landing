@@ -465,6 +465,7 @@
 
 .studio-welcome-card__mode {
   position: relative;
+  isolation: isolate;
   display: flex;
   min-width: 0;
   min-height: 384px;
@@ -479,6 +480,11 @@
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.055),
     0 24px 58px -42px rgba(0, 0, 0, 0.88);
+  cursor: pointer;
+  transition:
+    border-color 180ms ease,
+    box-shadow 220ms ease,
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .studio-welcome-card__mode::before {
@@ -489,6 +495,67 @@
   border-radius: inherit;
   opacity: 0.7;
   pointer-events: none;
+}
+
+.studio-welcome-card__mode-action {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: transparent;
+  cursor: pointer;
+}
+
+.studio-welcome-card__mode-action:focus-visible {
+  outline: none;
+}
+
+.studio-welcome-card__mode:hover {
+  border-color: rgba(174, 188, 255, 0.7);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    0 30px 70px -38px rgba(55, 73, 180, 0.72),
+    0 0 0 1px rgba(133, 153, 255, 0.12);
+  transform: translateY(-4px);
+}
+
+.studio-welcome-card__mode:focus-within {
+  border-color: rgba(179, 194, 255, 0.86);
+  outline: 3px solid rgba(129, 148, 255, 0.42);
+  outline-offset: 3px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 28px 68px -38px rgba(74, 88, 206, 0.82),
+    0 0 30px rgba(105, 94, 255, 0.16);
+}
+
+.studio-welcome-card__mode:active {
+  transform: translateY(-1px) scale(0.995);
+  transition-duration: 80ms;
+}
+
+.studio-welcome-card__showcase,
+.studio-welcome-card__showcase img {
+  transition:
+    border-color 220ms ease,
+    filter 220ms ease,
+    transform 300ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.studio-welcome-card__mode:hover .studio-welcome-card__showcase,
+.studio-welcome-card__mode:focus-within .studio-welcome-card__showcase {
+  border-color: rgba(153, 174, 255, 0.36);
+}
+
+.studio-welcome-card__mode:hover .studio-welcome-card__showcase img,
+.studio-welcome-card__mode:focus-within .studio-welcome-card__showcase img {
+  filter: brightness(1.06) saturate(1.05);
+  transform: scale(1.018);
 }
 
 .studio-welcome-card__mode--idea {
@@ -749,53 +816,6 @@
   filter: drop-shadow(0 2px 5px rgba(77, 131, 255, 0.28));
 }
 
-.studio-welcome-card__primary-action {
-  display: inline-flex;
-  width: 100%;
-  min-height: 46px;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  margin-top: auto;
-  padding: 0 22px;
-  border: 1px solid rgba(176, 199, 255, 0.72);
-  border-radius: 12px;
-  background: linear-gradient(100deg, #6a2af0 0%, #5b43f1 45%, #2391ff 100%);
-  color: #fff;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.3),
-    0 18px 38px -20px rgba(73, 91, 255, 0.9),
-    0 0 24px rgba(71, 97, 255, 0.16);
-  font: inherit;
-  font-size: clamp(0.92rem, 1.3vw, 1.14rem);
-  font-weight: 760;
-  cursor: pointer;
-  transition: filter 170ms ease, box-shadow 170ms ease, transform 170ms ease;
-}
-
-.studio-welcome-card__primary-action svg {
-  width: 22px;
-  height: 22px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.8;
-}
-
-.studio-welcome-card__primary-action:hover {
-  filter: brightness(1.1) saturate(1.08);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.38),
-    0 21px 44px -19px rgba(73, 91, 255, 1),
-    0 0 32px rgba(77, 104, 255, 0.24);
-  transform: translateY(-2px);
-}
-
-.studio-welcome-card__mode--scenes .studio-welcome-card__primary-action {
-  margin-top: 8px;
-}
-
 .studio-welcome-card__bridge-note {
   display: flex;
   min-height: 27px;
@@ -1002,11 +1022,6 @@
     font-size: 0.61rem;
   }
 
-  .studio-welcome-card__primary-action {
-    min-height: 51px;
-    font-size: 0.9rem;
-  }
-
   .studio-welcome-card__bridge-note {
     align-items: flex-start;
     padding: 2px 17px 14px;
@@ -1062,15 +1077,16 @@
     min-height: 39px;
   }
 
-  .studio-welcome-card__primary-action {
-    min-height: 44px;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .studio-welcome-card.studio-canvas-welcome,
   .studio-welcome-card__eyebrow-dot,
+  .studio-welcome-card__mode,
+  .studio-welcome-card__showcase,
+  .studio-welcome-card__showcase img,
   .studio-idea-empty-state {
     animation: none !important;
+    transition: none !important;
   }
 }

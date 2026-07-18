@@ -39429,6 +39429,18 @@ export function WorkspacePage({
                     aria-label={workspaceText(locale, "Способы создания Shorts", "Ways to create a Short")}
                   >
                     <article className="studio-welcome-card__mode studio-welcome-card__mode--idea">
+                      <button
+                        className="studio-welcome-card__mode-action"
+                        type="button"
+                        aria-label={workspaceText(locale, "Открыть режим «Из идеи»", "Open From an idea mode")}
+                        onClick={() => {
+                          closeStudioWelcomeCard();
+                          handleStudioCreateIdeaModeSelect();
+                          window.requestAnimationFrame(() => {
+                            window.requestAnimationFrame(() => promptTextareaRef.current?.focus({ preventScroll: false }));
+                          });
+                        }}
+                      />
                       <div className="studio-welcome-card__mode-badges">
                         <span>{workspaceText(locale, "БЫСТРЫЙ СТАРТ", "QUICK START")}</span>
                       </div>
@@ -39455,27 +39467,20 @@ export function WorkspacePage({
                         <li><b>2</b>{workspaceText(locale, "AI соберёт ролик", "AI builds the video")}</li>
                         <li><b>3</b>{workspaceText(locale, "Публикуйте или улучшайте", "Publish or refine")}</li>
                       </ol>
-
-                      <button
-                        className="studio-welcome-card__primary-action"
-                        type="button"
-                        onClick={() => {
-                          closeStudioWelcomeCard();
-                          handleStudioCreateIdeaModeSelect();
-                          window.requestAnimationFrame(() => {
-                            window.requestAnimationFrame(() => promptTextareaRef.current?.focus({ preventScroll: false }));
-                          });
-                        }}
-                      >
-                        <svg viewBox="0 0 24 24" aria-hidden="true">
-                          <path d="m12 3 1.7 4.3L18 9l-4.3 1.7L12 15l-1.7-4.3L6 9l4.3-1.7L12 3Z" />
-                          <path d="m18.5 14 .9 2.2 2.1.8-2.1.9-.9 2.1-.8-2.1-2.2-.9 2.2-.8.8-2.2Z" />
-                        </svg>
-                        {workspaceText(locale, "Создать из идеи", "Create a finished Short")}
-                      </button>
                     </article>
 
                     <article className="studio-welcome-card__mode studio-welcome-card__mode--scenes">
+                      <button
+                        className="studio-welcome-card__mode-action"
+                        type="button"
+                        aria-label={workspaceText(locale, "Открыть режим «По сценам»", "Open Scene by scene mode")}
+                        onClick={() => {
+                          handleStudioCreateScenesModeSelect();
+                          if (!isGuest) {
+                            closeStudioWelcomeCard();
+                          }
+                        }}
+                      />
                       <div className="studio-welcome-card__mode-badges">
                         <span>{workspaceText(locale, "ПОЛНЫЙ КОНТРОЛЬ", "FULL CONTROL")}</span>
                         <span className="is-featured">{workspaceText(locale, "МАКСИМУМ ВОЗМОЖНОСТЕЙ", "MAXIMUM CAPABILITY")}</span>
@@ -39553,23 +39558,6 @@ export function WorkspacePage({
                           </span>
                         ))}
                       </div>
-
-                      <button
-                        className="studio-welcome-card__primary-action"
-                        type="button"
-                        onClick={() => {
-                          handleStudioCreateScenesModeSelect();
-                          if (!isGuest) {
-                            closeStudioWelcomeCard();
-                          }
-                        }}
-                      >
-                        <svg viewBox="0 0 24 24" aria-hidden="true">
-                          <rect x="4" y="5" width="16" height="14" rx="3" />
-                          <path d="M9 5v14M15 5v14" />
-                        </svg>
-                        {workspaceText(locale, "Создать по сценам", "Create from scratch by scenes")}
-                      </button>
                     </article>
                   </div>
 
