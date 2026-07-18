@@ -397,6 +397,8 @@ assert(
   "deploy-production.sh: public landing, pricing, examples, and app routes must use the React app shell",
 );
 assert(/header @app_html X-Robots-Tag "noindex, nofollow"/.test(deployProduction), "deploy-production.sh: app shell routes must send X-Robots-Tag noindex");
+assert(/@app_assets path[^\n]*\/studio\/\*/.test(deployProduction), "deploy-production.sh: Studio assets must be served from the React build");
+assert(/@html not path[^\n]*\/studio\/\*/.test(deployProduction), "deploy-production.sh: Studio assets must not receive HTML cache headers");
 assert(!/@app_routes path[^\n]*\/app\*/.test(deployProduction), "deploy-production.sh: broad /app* matcher can make nonexistent app URLs return 200");
 assert(!/@app_html path[^\n]*\/app\*/.test(deployProduction), "deploy-production.sh: broad /app* noindex matcher can hide route mistakes");
 assert(!/path_regexp referral/.test(deployProduction), "deploy-production.sh: broad referral matcher can make arbitrary missing slugs return soft-404 200");
@@ -413,6 +415,9 @@ assert(/check_status "\$PROD_URL\/nonexistent-yandex-test-404\/" "404"/.test(dep
 assert(/check_status "\$PROD_URL\/zzzzzzzzz999" "404"/.test(deployProduction), "deploy-production.sh: missing smoke check for arbitrary referral-like slug 404");
 assert(/check_status "\$PROD_URL\/en\/zzzzzzzzz999" "404"/.test(deployProduction), "deploy-production.sh: missing smoke check for arbitrary English referral-like slug 404");
 assert(/check_status "\$PROD_URL\/contacts\/" "200"/.test(deployProduction), "deploy-production.sh: missing contacts trust page smoke check");
+assert(/check_status "\$PROD_URL\/studio\/welcome-idea-flow\.webp" "200"/.test(deployProduction), "deploy-production.sh: missing Studio welcome asset smoke check");
+assert(/check_status "\$PROD_URL\/studio\/welcome-scene-filmstrip-v2\.webp" "200"/.test(deployProduction), "deploy-production.sh: missing Studio scene asset smoke check");
+assert(/check_status "\$PROD_URL\/studio\/feature-icons\/ai-media\.webp" "200"/.test(deployProduction), "deploy-production.sh: missing Studio feature icon smoke check");
 assert(/Contacts trust page must be indexable/.test(deployProduction), "deploy-production.sh: missing contacts noindex regression check");
 
 if (errors.length) {
