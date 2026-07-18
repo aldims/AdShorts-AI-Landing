@@ -208,21 +208,8 @@ describe("createStudioDurableGeneratedVisualAsset", () => {
 });
 
 describe("ensureStudioDurableGeneratedVisualAsset", () => {
-  it("binds an existing generated asset to the project segment before returning it", async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      expect(String(input)).toBe("/api/studio/media-upload/complete");
-      expect(init).toEqual(expect.objectContaining({
-        body: JSON.stringify({
-          assetId: 744,
-          language: "ru",
-          projectId: 91,
-          role: "segment_generated",
-          segmentIndex: 1,
-        }),
-        method: "POST",
-      }));
-      return Response.json({ data: { asset: { id: 744 } } });
-    });
+  it("uses an existing generated asset without trying to publish it again", async () => {
+    const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(ensureStudioDurableGeneratedVisualAsset({
@@ -244,7 +231,7 @@ describe("ensureStudioDurableGeneratedVisualAsset", () => {
       remoteUrl: "/api/workspace/media-assets/744",
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("materializes a transient generated video before returning it to the editor", async () => {

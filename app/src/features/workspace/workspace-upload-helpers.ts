@@ -507,9 +507,19 @@ export const ensureStudioDurableGeneratedVisualAsset = async (
   asset: StudioCustomVideoFile,
   options: Parameters<typeof ensureStudioUploadedAssetId>[1],
 ) => {
+  const existingAssetId = getStudioUploadableAssetId(asset);
+  if (existingAssetId) {
+    // Generation jobs publish assets atomically. Completing the upload again
+    // would be a second publication attempt and is rejected by the API.
+    return createStudioDurableGeneratedVisualAsset(
+      asset,
+      existingAssetId,
+      options.mediaType === "video" ? "video" : "photo",
+    );
+  }
+
   const assetId = await ensureStudioUploadedAssetId(asset, {
     ...options,
-    ensureProjectBinding: Boolean(options.projectId),
   });
   if (!assetId) {
     throw new Error("Generated visual could not be saved as a media asset.");
