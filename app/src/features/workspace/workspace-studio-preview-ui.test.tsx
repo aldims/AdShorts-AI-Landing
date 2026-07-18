@@ -45,14 +45,16 @@ describe("renderWorkspaceStudioInlinePreviewActions", () => {
     render(
       renderWorkspaceStudioInlinePreviewActions({
         downloadName: "short.mp4",
+        editUnavailableTitle: "Editing unavailable",
         isExpanded: true,
-        isProjectReadyForActions: true,
+        isProjectReadyForEditing: true,
+        isProjectReadyForPublishing: true,
         locale,
         onDismiss: () => undefined,
         onOpenSegmentEditor: () => undefined,
         onPublish: () => undefined,
         playbackUrl: "/short.mp4",
-        projectPreparingTitle: "Preparing",
+        publishUnavailableTitle: "Preparing",
       }),
     );
 
@@ -68,5 +70,30 @@ describe("renderWorkspaceStudioInlinePreviewActions", () => {
 
     expect(screen.getByRole("button", { name: "Edit" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Improve" })).toBeNull();
+  });
+
+  it("keeps publishing available when only the editor snapshot is unavailable", () => {
+    render(
+      renderWorkspaceStudioInlinePreviewActions({
+        downloadName: "short.mp4",
+        editUnavailableTitle: "Scene voiceovers require restoration",
+        isExpanded: true,
+        isProjectReadyForEditing: false,
+        isProjectReadyForPublishing: true,
+        locale: "en",
+        onDismiss: () => undefined,
+        onOpenSegmentEditor: () => undefined,
+        onPublish: () => undefined,
+        playbackUrl: "/short.mp4",
+        publishUnavailableTitle: "Preparing",
+      }),
+    );
+
+    const editButton = screen.getByRole("button", { name: "Edit" }) as HTMLButtonElement;
+    const publishButton = screen.getByRole("button", { name: "Publish" }) as HTMLButtonElement;
+
+    expect(editButton.disabled).toBe(true);
+    expect(editButton.title).toBe("Scene voiceovers require restoration");
+    expect(publishButton.disabled).toBe(false);
   });
 });

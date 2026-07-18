@@ -3,8 +3,10 @@ import { workspaceText } from "./workspace-page-model";
 
 type WorkspaceStudioInlinePreviewActionsOptions = {
   downloadName: string;
+  editUnavailableTitle: string;
   isExpanded: boolean;
-  isProjectReadyForActions: boolean;
+  isProjectReadyForEditing: boolean;
+  isProjectReadyForPublishing: boolean;
   isSegmentEditorLoading?: boolean;
   isEditHideEnabled?: boolean;
   locale: Locale;
@@ -12,13 +14,15 @@ type WorkspaceStudioInlinePreviewActionsOptions = {
   onOpenSegmentEditor: () => void | Promise<void>;
   onPublish: () => void | Promise<void>;
   playbackUrl: string | null;
-  projectPreparingTitle: string;
+  publishUnavailableTitle: string;
 };
 
 export const renderWorkspaceStudioInlinePreviewActions = ({
   downloadName,
+  editUnavailableTitle,
   isExpanded,
-  isProjectReadyForActions,
+  isProjectReadyForEditing,
+  isProjectReadyForPublishing,
   isSegmentEditorLoading = false,
   isEditHideEnabled = false,
   locale,
@@ -26,12 +30,12 @@ export const renderWorkspaceStudioInlinePreviewActions = ({
   onOpenSegmentEditor,
   onPublish,
   playbackUrl,
-  projectPreparingTitle,
+  publishUnavailableTitle,
 }: WorkspaceStudioInlinePreviewActionsOptions) => {
   const editLabel = workspaceText(locale, "Редактировать", "Edit");
   const editSoonLabel = workspaceText(locale, "Редактировать (Скоро)", "Edit (Soon)");
   const editMobileLabel = editLabel;
-  const isEditActionDisabled = isEditHideEnabled || !isProjectReadyForActions || isSegmentEditorLoading;
+  const isEditActionDisabled = isEditHideEnabled || !isProjectReadyForEditing || isSegmentEditorLoading;
   const shouldHideEditAction = isEditHideEnabled;
   const editActionDisabledLabel = workspaceText(locale, "Скоро", "Coming soon");
 
@@ -48,9 +52,9 @@ export const renderWorkspaceStudioInlinePreviewActions = ({
         title={
           shouldHideEditAction
             ? editActionDisabledLabel
-            : isProjectReadyForActions
+            : isProjectReadyForEditing
               ? editLabel
-              : editActionDisabledLabel
+              : editUnavailableTitle
         }
         disabled={isEditActionDisabled}
         onClick={() => void onOpenSegmentEditor()}
@@ -65,8 +69,8 @@ export const renderWorkspaceStudioInlinePreviewActions = ({
         className="studio-canvas-preview__quick-action studio-canvas-preview__quick-action--expanded"
         type="button"
         aria-label={workspaceText(locale, "Опубликовать", "Publish")}
-        title={isProjectReadyForActions ? workspaceText(locale, "Опубликовать", "Publish") : projectPreparingTitle}
-        disabled={!isProjectReadyForActions}
+        title={isProjectReadyForPublishing ? workspaceText(locale, "Опубликовать", "Publish") : publishUnavailableTitle}
+        disabled={!isProjectReadyForPublishing}
         onClick={() => void onPublish()}
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -108,9 +112,9 @@ export const renderWorkspaceStudioInlinePreviewActions = ({
         title={
           shouldHideEditAction
             ? workspaceText(locale, "Скоро", "Soon")
-            : isProjectReadyForActions
+            : isProjectReadyForEditing
               ? editMobileLabel
-              : editActionDisabledLabel
+              : editUnavailableTitle
         }
         disabled={isEditActionDisabled}
         onClick={() => void onOpenSegmentEditor()}
@@ -124,8 +128,8 @@ export const renderWorkspaceStudioInlinePreviewActions = ({
         className="studio-canvas-preview__quick-action"
         type="button"
         aria-label={workspaceText(locale, "Опубликовать в YouTube", "Publish to YouTube")}
-        title={isProjectReadyForActions ? workspaceText(locale, "Опубликовать в YouTube", "Publish to YouTube") : projectPreparingTitle}
-        disabled={!isProjectReadyForActions}
+        title={isProjectReadyForPublishing ? workspaceText(locale, "Опубликовать в YouTube", "Publish to YouTube") : publishUnavailableTitle}
+        disabled={!isProjectReadyForPublishing}
         onClick={() => void onPublish()}
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">

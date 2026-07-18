@@ -6159,21 +6159,34 @@ export function WorkspacePage({
   );
   const shouldPreferMutedModalFallback = true;
   const previewModalDownloadName = getVideoDownloadName(previewModalTitle);
-  const isGeneratedVideoProjectReadyForActions =
+  const isGeneratedVideoProjectReadyForEditing =
     Boolean(visibleGeneratedVideo?.adId) &&
     visibleGeneratedVideo?.isReadyForEditor !== false &&
     String(visibleGeneratedVideo?.readyReason ?? "").trim().toLowerCase() !== "project_not_ready" &&
     !["processing", "rendering", "queued", "draft", "failed"].includes(
       String(visibleGeneratedVideo?.projectStatus ?? "").trim().toLowerCase(),
     );
+  const isGeneratedVideoProjectReadyForPublishing =
+    Boolean(visibleGeneratedVideo?.adId && visibleGeneratedVideoPlaybackUrl) &&
+    !["processing", "rendering", "queued", "draft", "failed"].includes(
+      String(visibleGeneratedVideo?.projectStatus ?? "").trim().toLowerCase(),
+    );
   const canPublishPreviewModalVideo = isProjectPreviewModalOpen
     ? Boolean(projectPreviewModal?.adId && projectPreviewModal.status === "ready" && projectPreviewModal.videoUrl)
-    : isGeneratedVideoProjectReadyForActions;
+    : isGeneratedVideoProjectReadyForPublishing;
   const generatedVideoProjectPreparingTitle = workspaceText(
     locale,
     "Проект ещё готовится. Скачать видео уже можно.",
     "The project is still preparing. The video can already be downloaded.",
   );
+  const generatedVideoEditUnavailableTitle =
+    String(visibleGeneratedVideo?.readyReason ?? "").trim().toLowerCase() === "missing_segment_voiceovers"
+      ? workspaceText(
+          locale,
+          "Редактирование недоступно: требуется восстановить озвучку сцен.",
+          "Editing is unavailable because scene voiceovers must be restored.",
+        )
+      : generatedVideoProjectPreparingTitle;
   const projectPreviewModalPanelStyle = isProjectPreviewModalOpen
     ? ({
         "--studio-video-modal-aspect-ratio": String(projectPreviewModalAspectRatio ?? 9 / 16),
@@ -6183,8 +6196,10 @@ export function WorkspacePage({
   const renderStudioInlinePreviewActions = () =>
     renderWorkspaceStudioInlinePreviewActions({
       downloadName: studioInlinePreviewDownloadName,
+      editUnavailableTitle: generatedVideoEditUnavailableTitle,
       isExpanded: isGeneratedVideoPrimaryActionExpanded,
-      isProjectReadyForActions: isGeneratedVideoProjectReadyForActions,
+      isProjectReadyForEditing: isGeneratedVideoProjectReadyForEditing,
+      isProjectReadyForPublishing: isGeneratedVideoProjectReadyForPublishing,
       isSegmentEditorLoading,
       isEditHideEnabled,
       locale,
@@ -6192,7 +6207,7 @@ export function WorkspacePage({
       onOpenSegmentEditor: handleOpenSegmentEditor,
       onPublish: handlePublishPreview,
       playbackUrl: visibleGeneratedVideoPlaybackUrl,
-      projectPreparingTitle: generatedVideoProjectPreparingTitle,
+      publishUnavailableTitle: generatedVideoProjectPreparingTitle,
     });
   const mediaLibraryPreviewModalSurface = mediaLibraryPreviewModal
     ? getWorkspaceMediaLibraryResolvedMediaSurface(mediaLibraryPreviewModal, "media-viewer")
@@ -12450,8 +12465,8 @@ export function WorkspacePage({
       return;
     }
 
-    if (!isGeneratedVideoProjectReadyForActions) {
-      setSegmentEditorError(generatedVideoProjectPreparingTitle);
+    if (!isGeneratedVideoProjectReadyForEditing) {
+      setSegmentEditorError(generatedVideoEditUnavailableTitle);
       return;
     }
 
