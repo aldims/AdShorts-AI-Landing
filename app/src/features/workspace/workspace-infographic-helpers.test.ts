@@ -7,6 +7,7 @@ import {
   createWorkspaceSegmentInfographic,
   createWorkspaceSegmentInfographicStateSnapshot,
   getWorkspaceSegmentInfographicCharacterCount,
+  getWorkspaceSegmentInfographicCreateErrorMessage,
   getWorkspaceInfographicNormalizedHeight,
   getWorkspaceSegmentInfographicFadeDuration,
   getWorkspaceSegmentInfographicOpacity,
@@ -29,6 +30,17 @@ import { createWorkspaceSegmentEditorScratchDraftSession } from "./workspace-seg
 const TEST_INPUT_HASH = "a".repeat(64);
 
 describe("workspace infographic helpers", () => {
+  it("localizes a stale source binding error without leaking the backend message", () => {
+    const backendError = "Source media asset is not the current visual for this segment";
+
+    expect(getWorkspaceSegmentInfographicCreateErrorMessage(backendError, "ru")).toBe(
+      "Визуал сцены не синхронизирован. Сохраните визуал и попробуйте создать инфографику ещё раз.",
+    );
+    expect(getWorkspaceSegmentInfographicCreateErrorMessage(backendError, "en")).toBe(
+      "The scene visual was not synchronized. Save the visual and try creating the infographic again.",
+    );
+  });
+
   it("uses the fixed two-credit product price", () => {
     expect(STUDIO_SEGMENT_INFOGRAPHIC_CREDIT_COST).toBe(2);
   });

@@ -434,6 +434,7 @@ const uploadStudioMediaFileToStorage = async (
 export const ensureStudioUploadedAssetId = async (
   asset: StudioUploadableAsset | null | undefined,
   options: {
+    ensureProjectBinding?: boolean;
     fallbackFileName: string;
     fallbackMimeType?: string | null;
     forceUpload?: boolean;
@@ -447,7 +448,9 @@ export const ensureStudioUploadedAssetId = async (
 ) => {
   const existingAssetId = getStudioUploadableAssetId(asset);
   if (existingAssetId && !options.forceUpload) {
-    return existingAssetId;
+    return options.ensureProjectBinding && options.projectId
+      ? completeStudioMediaFileUpload(existingAssetId, options)
+      : existingAssetId;
   }
 
   const uploadFile = await buildStudioUploadFileFromAsset(asset, {
@@ -504,7 +507,10 @@ export const ensureStudioDurableGeneratedVisualAsset = async (
   asset: StudioCustomVideoFile,
   options: Parameters<typeof ensureStudioUploadedAssetId>[1],
 ) => {
-  const assetId = await ensureStudioUploadedAssetId(asset, options);
+  const assetId = await ensureStudioUploadedAssetId(asset, {
+    ...options,
+    ensureProjectBinding: Boolean(options.projectId),
+  });
   if (!assetId) {
     throw new Error("Generated visual could not be saved as a media asset.");
   }

@@ -922,6 +922,7 @@ import {
   createWorkspaceSegmentInfographicIdempotencyKey,
   createWorkspaceSegmentInfographic,
   createWorkspaceSegmentInfographicStateSnapshot,
+  getWorkspaceSegmentInfographicCreateErrorMessage,
   getWorkspaceSegmentInfographicSourceVisualIdentity,
   getWorkspaceSegmentInfographicCharacterCount,
   getWorkspaceSegmentInfographicStatusFailureAction,
@@ -20238,8 +20239,9 @@ export function WorkspacePage({
     try {
       let sourceMediaAssetId = getWorkspaceSegmentSceneSoundVisualAssetId(targetSegment);
       const draftVisualAsset = getWorkspaceSegmentDraftVisualAsset(targetSegment);
-      if (!sourceMediaAssetId && draftVisualAsset) {
+      if (draftVisualAsset) {
         sourceMediaAssetId = (await ensureStudioUploadedAssetId(draftVisualAsset, {
+          ensureProjectBinding: Boolean(persistedProjectId),
           fallbackFileName: draftVisualAsset.fileName || `segment-visual-${targetSegmentIndex + 1}.bin`,
           fallbackMimeType: draftVisualAsset.mimeType,
           kind: "segment_source",
@@ -20300,7 +20302,7 @@ export function WorkspacePage({
         return;
       }
       if (!response.ok || !payload?.data?.jobId) {
-        throw new Error(payload?.error ?? "Не удалось запустить создание инфографики.");
+        throw new Error(getWorkspaceSegmentInfographicCreateErrorMessage(payload?.error, locale));
       }
       const serverRequestFingerprint = String(payload.data.requestFingerprint ?? "").trim().toLowerCase();
       if (!/^[0-9a-f]{64}$/i.test(serverRequestFingerprint)) {

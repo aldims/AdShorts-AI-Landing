@@ -29,6 +29,25 @@ export const truncateWorkspaceSegmentInfographicText = (
 
 export const createWorkspaceSegmentInfographicIdempotencyKey = createWorkspaceClientJobId;
 
+const WORKSPACE_SEGMENT_INFOGRAPHIC_STALE_SOURCE_ERROR =
+  "Source media asset is not the current visual for this segment";
+
+export const getWorkspaceSegmentInfographicCreateErrorMessage = (
+  value: string | null | undefined,
+  locale: string,
+) => {
+  const message = String(value ?? "").trim();
+  if (message.includes(WORKSPACE_SEGMENT_INFOGRAPHIC_STALE_SOURCE_ERROR)) {
+    return locale === "en"
+      ? "The scene visual was not synchronized. Save the visual and try creating the infographic again."
+      : "Визуал сцены не синхронизирован. Сохраните визуал и попробуйте создать инфографику ещё раз.";
+  }
+
+  return message || (locale === "en"
+    ? "Failed to start infographic generation."
+    : "Не удалось запустить создание инфографики.");
+};
+
 const finiteNumber = (value: unknown, fallback: number) => {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : fallback;
