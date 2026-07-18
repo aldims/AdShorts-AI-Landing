@@ -517,6 +517,7 @@ const evaluateLayout = async (page) =>
       .querySelector(".studio-segment-editor__preview-column")
       ?.getBoundingClientRect();
     const headerRect = document.querySelector("header")?.getBoundingClientRect();
+    const firstHeadingRect = document.querySelector("main h1")?.getBoundingClientRect();
 
     return {
       clientWidth: viewportWidth,
@@ -563,6 +564,12 @@ const evaluateLayout = async (page) =>
           }
         : null,
       headerBottom: headerRect ? Math.round(headerRect.bottom) : null,
+      firstHeading: firstHeadingRect
+        ? {
+            top: Math.round(firstHeadingRect.top),
+            bottom: Math.round(firstHeadingRect.bottom),
+          }
+        : null,
     };
   });
 
@@ -629,6 +636,16 @@ const auditRoute = async ({ browser, baseUrl, route, surface, scenario, sampleSt
     }
 
     if (
+      metrics.firstHeading &&
+      typeof metrics.headerBottom === "number" &&
+      metrics.firstHeading.top < metrics.headerBottom + 8
+    ) {
+      failures.push(
+        `page heading overlaps header: ${metrics.firstHeading.top} < ${metrics.headerBottom + 8}`,
+      );
+    }
+
+    if (
       expectsScenesMode &&
       metrics.scenePreview &&
       (metrics.scenePreview.width < 160 || metrics.scenePreview.height < 280)
@@ -692,6 +709,9 @@ const auditRoute = async ({ browser, baseUrl, route, surface, scenario, sampleSt
       (isCanonicalSample || isScenesStressSample) &&
       (shouldAlwaysCaptureScenesSample || sampleState.count < 8)
     ) {
+      if (route === "/" || route === "/en") {
+        await page.waitForTimeout(800);
+      }
       const screenshotPath = path.join(artifactDir, "samples", screenshotName);
       await mkdir(path.dirname(screenshotPath), { recursive: true });
       await page.screenshot({ path: screenshotPath, fullPage: false });

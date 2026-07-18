@@ -1,0 +1,165 @@
+/*
+ * Final responsive polish for public product pages.
+ *
+ * Keep this layer imported after the visual theme: the theme intentionally has
+ * many art-direction overrides, while these rules protect readability, zoom,
+ * and first-screen composition at the narrowest breakpoints.
+ */
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+.route-page:not(.studio-canvas-route) {
+  overflow-x: clip;
+}
+
+.route-page:not(.studio-canvas-route) main,
+.route-page:not(.studio-canvas-route) section,
+.route-page:not(.studio-canvas-route) .container {
+  min-width: 0;
+}
+
+/* A current or already used plan should remain clearly readable. */
+.pricing-page .pricing-max-card--disabled,
+.pricing-page .pricing-max-card--disabled:hover {
+  opacity: 0.72 !important;
+  filter: saturate(0.62) brightness(0.94) !important;
+}
+
+/* Two columns make the tablet layout feel intentional instead of stretched. */
+@media (min-width: 720px) and (max-width: 860px) {
+  .pricing-page .pricing-max-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .pricing-page .pricing-max-card {
+    padding: 28px 24px !important;
+  }
+
+  .pricing-page .pricing-max-card h3 {
+    font-size: 1.32rem !important;
+  }
+
+  .pricing-page .pricing-max-card__price strong {
+    font-size: clamp(2.2rem, 6vw, 2.85rem) !important;
+  }
+}
+
+@keyframes public-hero-mobile-in {
+  from {
+    opacity: 0.28;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 640px) {
+  .route-page:not(.studio-canvas-route) > main .container {
+    width: min(calc(100% - 32px), 1480px);
+  }
+
+  /* The mobile header is two rows tall; keep pricing content below it. */
+  .pricing-page .pricing-max-hero {
+    padding-top: calc(136px + env(safe-area-inset-top, 0px)) !important;
+    padding-bottom: 22px !important;
+  }
+
+  .pricing-page .pricing-max-plans {
+    padding-top: 24px !important;
+  }
+
+  .pricing-page .pricing-max-card--disabled,
+  .pricing-page .pricing-max-card--disabled:hover {
+    opacity: 0.78 !important;
+  }
+
+  /* Keep the premium reveal, but never show a blurred, apparently broken hero. */
+  .route-page--layered-hero .hero h1,
+  .route-page--video-hero .hero h1 {
+    animation: public-hero-mobile-in 0.48s 0s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .route-page--layered-hero .hero__lead,
+  .route-page--video-hero .hero__lead {
+    animation: public-hero-mobile-in 0.48s 0.04s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .route-page--layered-hero .hero__actions,
+  .route-page--video-hero .hero__actions {
+    animation: public-hero-mobile-in 0.48s 0.08s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .route-page--layered-hero .hero__features,
+  .route-page--video-hero .hero__features {
+    animation: public-hero-mobile-in 0.48s 0.12s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .route-page--layered-hero .hero__actions .btn,
+  .route-page--video-hero .hero__actions .btn {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .route-page--layered-hero .hero__features,
+  .route-page--video-hero .hero__features {
+    row-gap: 10px;
+  }
+}
+
+@media (max-width: 380px) {
+  .route-page:not(.studio-canvas-route) > main .container {
+    width: min(calc(100% - 28px), 1480px);
+  }
+
+  .route-page--layered-hero .hero__lead,
+  .route-page--video-hero .hero__lead {
+    margin-top: 26px;
+    font-size: 1rem;
+    line-height: 1.58;
+  }
+
+  .route-page--layered-hero .hero__actions,
+  .route-page--video-hero .hero__actions {
+    margin-top: 30px;
+  }
+
+  .route-page--layered-hero .hero__features,
+  .route-page--video-hero .hero__features {
+    gap: 9px 18px;
+    margin-top: 18px;
+  }
+
+  .route-page--layered-hero .hero__features li,
+  .route-page--video-hero .hero__features li {
+    font-size: 0.84rem;
+  }
+}
+
+@media (hover: none) {
+  .pricing-page .pricing-max-card:hover,
+  .pricing-page .pricing-max-card--featured:hover {
+    transform: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .route-page--layered-hero .hero h1,
+  .route-page--layered-hero .hero__lead,
+  .route-page--layered-hero .hero__actions,
+  .route-page--layered-hero .hero__features,
+  .route-page--video-hero .hero h1,
+  .route-page--video-hero .hero__lead,
+  .route-page--video-hero .hero__actions,
+  .route-page--video-hero .hero__features {
+    animation: none !important;
+    filter: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
