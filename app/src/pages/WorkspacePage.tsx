@@ -2480,7 +2480,6 @@ export function WorkspacePage({
   const [projects, setProjects] = useState<WorkspaceProject[]>([]);
   const [projectsError, setProjectsError] = useState<string | null>(null);
   const [projectDeleteError, setProjectDeleteError] = useState<string | null>(null);
-  const [projectEditError, setProjectEditError] = useState<string | null>(null);
   const [projectPendingDelete, setProjectPendingDelete] = useState<WorkspaceProject | null>(null);
   const [projectPendingDeleteProjects, setProjectPendingDeleteProjects] = useState<WorkspaceProject[]>([]);
   const [expandedAccountProjectStackKey, setExpandedAccountProjectStackKey] = useState<string | null>(null);
@@ -4440,7 +4439,6 @@ export function WorkspacePage({
     setProjects([]);
     setProjectsError(null);
     setProjectDeleteError(null);
-    setProjectEditError(null);
     setProjectPendingDelete(null);
     setProjectPendingDeleteProjects([]);
     setSegmentEditorPendingDeleteIndex(null);
@@ -5540,7 +5538,6 @@ export function WorkspacePage({
       setIsProjectsLoading(true);
       setProjectsError(null);
       setProjectDeleteError(null);
-      setProjectEditError(null);
 
       try {
         const response = await fetch("/api/workspace/projects", {
@@ -11924,15 +11921,21 @@ export function WorkspacePage({
       bypassCache?: boolean;
       discardLocalDraft?: boolean;
       forceRefresh?: boolean;
-      onLoadError?: (message: string | null) => void;
+      onLoadFailure?: (message: string) => void;
       openDraft?: boolean;
       replaceRoute?: boolean;
       syncRoute?: boolean;
     },
   ) => {
-    const reportLoadError = (message: string | null) => {
-      if (options?.onLoadError) {
-        options.onLoadError(message);
+    const setLoadError = (message: string | null) => {
+      if (options?.onLoadFailure) {
+        return;
+      }
+      setSegmentEditorLoadError(message);
+    };
+    const reportLoadFailure = (message: string) => {
+      if (options?.onLoadFailure) {
+        options.onLoadFailure(message);
         return;
       }
       setSegmentEditorLoadError(message);
@@ -11961,7 +11964,6 @@ export function WorkspacePage({
 
     setSegmentEditorError(null);
     setSegmentEditorLoadError(null);
-    reportLoadError(null);
     setSegmentEditorVideoError(null);
 
     if (isConsumedSourceProject && shouldDiscardLocalDraft) {
@@ -12209,7 +12211,7 @@ export function WorkspacePage({
           throw new Error(errorMessage);
         }
 
-        reportLoadError("Готовим данные для редактора...");
+        setLoadError("Готовим данные для редактора...");
         setStatus("Готовим данные для редактора...");
         await waitWorkspaceDelay(
           Math.min(SEGMENT_EDITOR_PREPARING_RETRY_DELAY_MS, Math.max(0, SEGMENT_EDITOR_REQUEST_TIMEOUT_MS - elapsedMs)),
@@ -12219,7 +12221,7 @@ export function WorkspacePage({
       if (!payload?.data) {
         throw new Error(payload?.error ?? "Не удалось загрузить сегменты проекта.");
       }
-      reportLoadError(null);
+      setLoadError(null);
       if (status === "Готовим данные для редактора...") {
         setStatus("");
       }
@@ -12432,7 +12434,7 @@ export function WorkspacePage({
           },
         );
         if (controller.signal.reason === "segment-editor-timeout" && segmentEditorRunRef.current === runId) {
-          reportLoadError("Сегменты загружаются слишком долго. Попробуйте ещё раз.");
+          reportLoadFailure("Сегменты загружаются слишком долго. Попробуйте ещё раз.");
         }
 
         return null;
@@ -12467,7 +12469,7 @@ export function WorkspacePage({
         setSegmentEditorDraft(null);
         setSegmentEditorLoadedSession(null);
         setSegmentEditorAppliedSession(null);
-        reportLoadError(null);
+        setLoadError(null);
         setCreateMode("default");
         setStudioView("projects");
         setProjectDeleteError(errorMessage);
@@ -12480,7 +12482,7 @@ export function WorkspacePage({
         }
         return null;
       }
-      reportLoadError(
+      reportLoadFailure(
         isWorkspaceSegmentEditorNotFoundError(errorMessage)
           ? "Для этого проекта сегменты пока недоступны."
           : errorMessage,
@@ -22722,7 +22724,6 @@ export function WorkspacePage({
     }
 
     setProjectDeleteError(null);
-    setProjectEditError(null);
     setProjectPendingDelete(project);
     setProjectPendingDeleteProjects([project]);
   };
@@ -22739,7 +22740,6 @@ export function WorkspacePage({
     }
 
     setProjectDeleteError(null);
-    setProjectEditError(null);
     setProjectPendingDelete(projectsToDelete[0] ?? null);
     setProjectPendingDeleteProjects(projectsToDelete);
   };
@@ -24515,12 +24515,15 @@ export function WorkspacePage({
   const handleOpenProjectSegmentEditor = async (project: WorkspaceProject) => {
     const projectId = project.adId;
     if (!projectId) {
-      setProjectEditError("Редактор Shorts доступен только для сохранённого проекта.");
+      showStudioToast("Редактор Shorts доступен только для сохранённого проекта.", {
+        durationMs: 5000,
+        kind: "warning",
+      });
       return;
     }
 
     if (project.status !== "ready" || !project.videoUrl) {
-      setProjectEditError(generatedVideoProjectPreparingTitle);
+      showStudioToast(generatedVideoProjectPreparingTitle, { durationMs: 5000, kind: "warning" });
       return;
     }
 
@@ -24535,13 +24538,14 @@ export function WorkspacePage({
           {
             ...getWorkspaceSegmentEditorProjectOpenOptions(),
             bypassCache: true,
-            onLoadError: setProjectEditError,
+            onLoadFailure: (message) => {
+              showStudioToast(message, { durationMs: 5000, kind: "warning" });
+            },
             openDraft: false,
             syncRoute: false,
           },
         ),
       (draft) => {
-        setProjectEditError(null);
         setActiveTab("studio");
         setStudioView("create");
         openSegmentEditorWithDraft(draft);
@@ -38955,9 +38959,9 @@ export function WorkspacePage({
 
             {studioView === "projects" ? (
               <div className="studio-projects">
-              {projectEditError || projectDeleteError ? (
+              {projectDeleteError ? (
                 <p className="project-action-error" role="alert">
-                  {projectEditError || projectDeleteError}
+                  {projectDeleteError}
                 </p>
               ) : null}
               {isProjectsLoading ? (
@@ -41047,9 +41051,9 @@ export function WorkspacePage({
 
                   {!isProjectsLoading && !projectsError && projects.length ? (
                     <div className="account-library account-library--projects">
-                      {projectEditError || projectDeleteError ? (
+                      {projectDeleteError ? (
                         <p className="project-action-error" role="alert">
-                          {projectEditError || projectDeleteError}
+                          {projectDeleteError}
                         </p>
                       ) : null}
                       {accountProjectGroups.flatMap((group: WorkspaceProjectStackGroup<WorkspaceProject>) => {
