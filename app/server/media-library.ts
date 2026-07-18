@@ -1129,12 +1129,16 @@ export const buildWorkspacePersistedMediaLibraryItems = (
             currentClassifier.includes("talking_photo") ||
             currentClassifier.includes("talking-photo") ||
             currentClassifier.includes("talking_avatar");
+          const isExplicitAiVideoVariant =
+            currentClassifier.includes("ai_video") ||
+            currentClassifier.includes("ai-video");
           const isPhotoAnimationVariant =
-            currentClassifier.includes("photo_animation") ||
-            currentClassifier.includes("photo-animation") ||
-            originalAssetMediaType === "photo" ||
-            originalAssetMediaType === "image" ||
-            originalAssetMimeType.startsWith("image/");
+            !isExplicitAiVideoVariant &&
+            (currentClassifier.includes("photo_animation") ||
+              currentClassifier.includes("photo-animation") ||
+              originalAssetMediaType === "photo" ||
+              originalAssetMediaType === "image" ||
+              originalAssetMimeType.startsWith("image/"));
           const videoKind = isTalkingPhotoVariant ? "talking_photo" : isPhotoAnimationVariant ? "photo_animation" : "ai_video";
           const videoSuffix = isTalkingPhotoVariant ? "talking-photo" : isPhotoAnimationVariant ? "animation" : "ai-video";
           const assetPosterUrl = segment.currentAsset?.assetId

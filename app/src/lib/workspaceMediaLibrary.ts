@@ -41,7 +41,7 @@ export type WorkspaceMediaLibraryItem = {
 
 export const isWorkspaceMediaLibraryDisplayItem = (
   item: Pick<WorkspaceMediaLibraryItem, "kind">,
-) => item.kind === "ai_photo" || item.kind === "ai_video";
+) => item.kind === "ai_photo" || item.kind === "ai_video" || item.kind === "photo_animation";
 
 export const isWorkspaceMediaLibraryVisualSelectionItem = (
   item: Pick<

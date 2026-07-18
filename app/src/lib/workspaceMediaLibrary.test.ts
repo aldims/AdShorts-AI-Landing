@@ -43,7 +43,7 @@ const createMediaLibraryItem = (
 });
 
 describe("workspace media library display identity", () => {
-  it("only displays AI photos and full AI videos in the user media library", () => {
+  it("displays AI photos, full AI videos, and photo animations in the user media library", () => {
     const visibleKinds = [
       "ai_photo",
       "ai_video",
@@ -57,7 +57,7 @@ describe("workspace media library display identity", () => {
       .filter(isWorkspaceMediaLibraryDisplayItem)
       .map((item) => item.kind);
 
-    expect(visibleKinds).toEqual(["ai_photo", "ai_video"]);
+    expect(visibleKinds).toEqual(["ai_photo", "ai_video", "photo_animation"]);
   });
 
   it("makes every generated visual available in the scene visual picker", () => {

@@ -444,6 +444,34 @@ describe("media library photo sources", () => {
     });
   });
 
+  it("keeps an explicitly classified AI video even when it was generated from a photo source", () => {
+    const segment = createPhotoSegment();
+    segment.mediaType = "video";
+    segment.currentAsset = {
+      ...segment.currentAsset!,
+      assetId: 304,
+      kind: "rendered_segment",
+      libraryKind: "ai_video",
+      mediaType: "video",
+      mimeType: "video/mp4",
+      role: "rendered_segment",
+    };
+    segment.originalAsset = {
+      ...segment.originalAsset!,
+      mediaType: "photo",
+      mimeType: "image/png",
+    };
+
+    const items = buildWorkspacePersistedMediaLibraryItems(project, session(segment));
+
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      assetId: 304,
+      kind: "ai_video",
+      previewKind: "video",
+    });
+  });
+
   it("preserves explicit i2v photo animation kind when both persisted assets are videos", () => {
     const segment = createPhotoSegment();
     segment.mediaType = "video";

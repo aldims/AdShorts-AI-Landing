@@ -6666,6 +6666,9 @@ export function WorkspacePage({
         (mediaLibraryDisplayTotalCount === null || mediaLibraryDisplayTotalCount > 0)));
   const visibleAiPhotoMediaItemsCount = visibleMediaLibraryItems.filter((item) => item.kind === "ai_photo").length;
   const visibleAiVideoMediaItemsCount = visibleMediaLibraryItems.filter((item) => item.kind === "ai_video").length;
+  const visiblePhotoAnimationMediaItemsCount = visibleMediaLibraryItems.filter(
+    (item) => item.kind === "photo_animation",
+  ).length;
   const allMediaLibraryTypeFilterOptions: Array<{ count: number; filter: WorkspaceMediaLibraryFilter; label: string }> = [
     {
       count: visibleAiPhotoMediaItemsCount,
@@ -6676,6 +6679,11 @@ export function WorkspacePage({
       count: visibleAiVideoMediaItemsCount,
       filter: "ai_video",
       label: workspaceText(locale, "ИИ видео", "AI videos"),
+    },
+    {
+      count: visiblePhotoAnimationMediaItemsCount,
+      filter: "photo_animation",
+      label: workspaceText(locale, "ИИ анимация", "AI animations"),
     },
   ];
   const mediaLibraryTypeFilterOptions = allMediaLibraryTypeFilterOptions.filter(
@@ -6705,10 +6713,19 @@ export function WorkspacePage({
       return visibleMediaLibraryItems.filter((item) => item.kind === "ai_video");
     }
 
+    if (mediaLibraryFilter === "photo_animation") {
+      return visibleMediaLibraryItems.filter((item) => item.kind === "photo_animation");
+    }
+
     return visibleMediaLibraryItems;
   }, [mediaLibraryFilter, visibleMediaLibraryItems]);
   useEffect(() => {
-    if (mediaLibraryFilter !== "all" && mediaLibraryFilter !== "ai_photo" && mediaLibraryFilter !== "ai_video") {
+    if (
+      mediaLibraryFilter !== "all" &&
+      mediaLibraryFilter !== "ai_photo" &&
+      mediaLibraryFilter !== "ai_video" &&
+      mediaLibraryFilter !== "photo_animation"
+    ) {
       setMediaLibraryFilter("all");
     }
   }, [mediaLibraryFilter]);
@@ -39293,8 +39310,8 @@ export function WorkspacePage({
                   <p>
                     {workspaceText(
                       locale,
-                      "Сгенерируйте ИИ фото или ИИ видео в редакторе сегментов, чтобы они появились здесь сразу.",
-                      "Generate AI photos or AI videos in the segment editor and they will appear here.",
+                      "Сгенерируйте ИИ фото, ИИ видео или ИИ анимацию в редакторе сегментов, чтобы они появились здесь сразу.",
+                      "Generate AI photos, AI videos, or AI animations in the segment editor and they will appear here.",
                     )}
                   </p>
                   <button
