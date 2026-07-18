@@ -9,6 +9,7 @@ import { WorkspaceModalVideoPlayer, WorkspaceSegmentPreviewCardMedia } from "./w
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   vi.useRealTimers();
 });
 
@@ -101,6 +102,28 @@ describe("WorkspaceSegmentPreviewCardMedia", () => {
 });
 
 describe("WorkspaceModalVideoPlayer", () => {
+  it("explicitly starts muted autoplay instead of relying on the video attribute", async () => {
+    const play = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+    const pause = vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
+
+    const { container } = render(
+      <LocaleProvider locale="ru">
+        <WorkspaceModalVideoPlayer
+          autoPlay
+          preferMutedAutoplay
+          src="/preview.mp4"
+          videoKey="preview-autoplay"
+        />
+      </LocaleProvider>,
+    );
+
+    await waitFor(() => expect(play).toHaveBeenCalledOnce());
+
+    const video = container.querySelector("video");
+    expect(video?.muted).toBe(true);
+    expect(pause).not.toHaveBeenCalled();
+  });
+
   it("opens the complete player shell in fullscreen from the right-side control", async () => {
     const requestFullscreen = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(HTMLElement.prototype, "requestFullscreen", {

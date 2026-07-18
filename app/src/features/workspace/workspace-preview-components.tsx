@@ -802,9 +802,10 @@ export function WorkspaceModalVideoPlayer({
   const playerRef = useRef<WorkspaceFullscreenElement | null>(null);
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const lastNonZeroVolumeRef = useRef(Math.max(0.2, clampWorkspaceModalPlayerVolume(volume)));
+  const playbackVolumeRef = useRef(clampWorkspaceModalPlayerVolume(volume));
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(autoPlay);
+  const [isPlaying, setIsPlaying] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const shouldPreferMutedAutoplay = autoPlay && preferMutedAutoplay;
   const [isActuallyMuted, setIsActuallyMuted] = useState(shouldPreferMutedAutoplay || clampWorkspaceModalPlayerVolume(volume) <= 0);
@@ -835,19 +836,40 @@ export function WorkspaceModalVideoPlayer({
   const attemptPlayback = useCallback(async () => {
     const element = localVideoRef.current;
     if (!element) {
-      return;
+      return false;
     }
 
-    const result = await playWorkspaceModalVideoElement(element, shouldPreferMutedAutoplay ? 0 : safeVolume);
+    const result = await playWorkspaceModalVideoElement(
+      element,
+      shouldPreferMutedAutoplay ? 0 : playbackVolumeRef.current,
+    );
+    if (localVideoRef.current !== element) {
+      return false;
+    }
     setIsActuallyMuted(result.muted);
-  }, [safeVolume, shouldPreferMutedAutoplay]);
+    setIsPlaying(result.played);
+    return result.played;
+  }, [shouldPreferMutedAutoplay]);
 
   useEffect(() => {
     setCurrentTime(0);
     setDuration(0);
-    setIsPlaying(autoPlay);
+    setIsPlaying(false);
     setIsActuallyMuted(shouldPreferMutedAutoplay || safeVolume <= 0);
   }, [autoPlay, shouldPreferMutedAutoplay, videoKey]);
+
+  useEffect(() => {
+    playbackVolumeRef.current = safeVolume;
+  }, [safeVolume]);
+
+  useEffect(() => {
+    const element = localVideoRef.current;
+    if (!autoPlay || !element || !element.paused) {
+      return;
+    }
+
+    void attemptPlayback();
+  }, [attemptPlayback, autoPlay, src, videoKey]);
 
   useEffect(() => {
     const player = playerRef.current;
