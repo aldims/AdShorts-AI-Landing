@@ -198,7 +198,7 @@ export const env = {
   redisUrl: trim(process.env.REDIS_URL),
   studioSegmentInfographicEnabled: toBoolean(
     process.env.STUDIO_SEGMENT_INFOGRAPHIC_ENABLED,
-    process.env.NODE_ENV !== "production",
+    true,
   ),
   studioSegmentInfographicCohort: trim(process.env.STUDIO_SEGMENT_INFOGRAPHIC_COHORT),
   disableBackgroundWarming: toBoolean(process.env.DISABLE_BACKGROUND_WARMING, false),
