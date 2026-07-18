@@ -50,6 +50,7 @@ export type StoredWorkspaceSegmentPhotoAnimationJob = {
   durationExtensionSourceDurationSeconds?: number | null;
   durationExtensionTargetDurationSeconds?: number | null;
   durationSeconds?: number | null;
+  generateAudio?: boolean;
   jobId: string;
   projectId: number;
   prompt: string;
@@ -111,6 +112,7 @@ export type StoredWorkspaceSegmentAiVideoJob = {
   createdAt: number;
   draftId?: string;
   durationSeconds?: number;
+  generateAudio?: boolean;
   jobId: string;
   projectId: number;
   prompt: string;
@@ -1384,6 +1386,7 @@ const normalizeStoredWorkspaceSegmentAiVideoJob = (
   createdAt: Number.isFinite(Number(value.createdAt)) ? Number(value.createdAt) : Date.now(),
   draftId: normalizeStoredWorkspaceSegmentJobDraftId(value.draftId),
   durationSeconds: normalizeWorkspaceSegmentManualDurationSeconds(value.durationSeconds) ?? undefined,
+  ...(value.generateAudio === true ? { generateAudio: true } : {}),
   jobId: String(value.jobId ?? "").trim(),
   projectId: Math.max(0, Math.trunc(Number(value.projectId))),
   prompt: normalizeWorkspaceSegmentAiVideoPrompt(value.prompt),
@@ -2112,6 +2115,7 @@ const normalizeStoredWorkspaceSegmentPhotoAnimationJob = (
     value.durationExtensionTargetDurationSeconds,
   ),
   durationSeconds: normalizeWorkspaceSegmentManualDurationSeconds(value.durationSeconds),
+  ...(value.generateAudio === true ? { generateAudio: true } : {}),
   jobId: String(value.jobId ?? "").trim(),
   projectId: Math.trunc(Number(value.projectId)),
   prompt: normalizeWorkspaceSegmentAiVideoPrompt(value.prompt),

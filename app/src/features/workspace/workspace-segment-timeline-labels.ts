@@ -2,6 +2,8 @@ import type { Locale } from "../../lib/i18n";
 import { workspaceText } from "./workspace-page-model";
 import { formatWorkspaceSegmentEditorChecklistPreview } from "./workspace-segment-editor-checklist";
 import {
+  createWorkspaceSegmentSceneSoundAsset,
+  getWorkspaceSegmentEmbeddedVisualSoundAsset,
   getWorkspaceSegmentEffectiveSubtitleSettings,
   normalizeWorkspaceSegmentEditorTextForCompare,
   normalizeWorkspaceSegmentSceneSoundPrompt,
@@ -99,6 +101,13 @@ export const getWorkspaceSegmentTimelineSoundLabel = (
 
   if (options?.isEmpty) {
     return workspaceText(locale, "Добавить звук", "Add sound");
+  }
+
+  if (
+    !createWorkspaceSegmentSceneSoundAsset(segment, segment.index) &&
+    getWorkspaceSegmentEmbeddedVisualSoundAsset(segment)
+  ) {
+    return workspaceText(locale, "Звук ИИ видео", "AI video sound");
   }
 
   const prompt = segment.sceneSoundPrompt || segment.sceneSoundGeneratedFromPrompt || "";

@@ -191,6 +191,7 @@ import {
   createWorkspaceSegmentEditorDraftSession,
   createWorkspaceSegmentEditorInsertedSegment,
   createWorkspaceSegmentSceneSoundAsset,
+  createWorkspaceSegmentTimelineSoundAsset,
   createWorkspaceSegmentEditorResetDraftFromBaseline,
   createWorkspaceSegmentEditorScratchDraftSession,
   doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio,
@@ -295,6 +296,7 @@ import {
   normalizeWorkspaceSegmentEditorTextForCompare,
   normalizeWorkspaceSegmentSceneSoundPrompt,
   resolveWorkspaceSegmentSceneSoundPrompt,
+  resolveWorkspaceGeneratedVideoAudioIntent,
   normalizeWorkspaceSegmentVoicePreviewTime,
   preserveWorkspaceSegmentEditorOriginalVisualReferences,
   pushWorkspaceSegmentTimelineVisualHistorySnapshot,
@@ -8325,6 +8327,7 @@ export function WorkspacePage({
         segmentEditorTrackBaselineSession,
         {
           activeArrayIndex: segmentEditorTimelineActiveArrayIndex,
+          isSoundPresent: (segment) => Boolean(createWorkspaceSegmentTimelineSoundAsset(segment, segment.index)),
           suppressActiveState: isSegmentEditorCleanEmptyDraft,
           suppressEditedState: shouldSuppressSegmentEditorEmptyDraftChanges,
           isSoundEdited: shouldSuppressSegmentEditorEmptyDraftChanges
@@ -16573,6 +16576,7 @@ export function WorkspacePage({
       createdAt?: number;
       draftId?: string;
       durationSeconds?: number;
+      generateAudio?: boolean;
       prompt: string;
       projectId: number;
       runId: number;
@@ -16665,6 +16669,7 @@ export function WorkspacePage({
           createdAt: startedAt,
           draftId: options.draftId,
           durationSeconds: options.durationSeconds,
+          generateAudio: options.generateAudio,
           jobId: safeJobId,
           projectId: options.projectId,
           prompt: options.prompt,
@@ -16675,12 +16680,15 @@ export function WorkspacePage({
         const aiVideoPayload = payload.data;
         const aiVideoAsset = aiVideoPayload.asset;
         if (aiVideoAsset) {
-          const durableAiVideoAsset = await ensureSegmentEditorGeneratedVisualAssetDurable(aiVideoAsset, {
-            mediaType: "video",
-            projectId: options.projectId,
-            segmentIndex: options.segmentIndex,
-            sourceJobId: safeJobId,
-          });
+          const durableAiVideoAsset = resolveWorkspaceGeneratedVideoAudioIntent(
+            await ensureSegmentEditorGeneratedVisualAssetDurable(aiVideoAsset, {
+              mediaType: "video",
+              projectId: options.projectId,
+              segmentIndex: options.segmentIndex,
+              sourceJobId: safeJobId,
+            }),
+            options.generateAudio,
+          );
           const durableAiVideoAssetWithDuration = await ensureSegmentEditorGeneratedVideoAssetDuration(
             durableAiVideoAsset,
             {
@@ -16790,7 +16798,7 @@ export function WorkspacePage({
                 getWorkspaceSegmentLatestVisualAction(refreshedSegment) === "ai"
               ) {
                 const recoveredAiVideoAsset = await ensureSegmentEditorGeneratedVideoAssetDuration(
-                  recoveredAiVideoAssetWithoutDuration,
+                  resolveWorkspaceGeneratedVideoAudioIntent(recoveredAiVideoAssetWithoutDuration, options.generateAudio),
                   {
                     fallbackDurationSeconds: options.durationSeconds,
                     sourceJobId: safeJobId,
@@ -16888,6 +16896,7 @@ export function WorkspacePage({
       durationExtensionSourceDurationSeconds?: number | null;
       durationExtensionTargetDurationSeconds?: number | null;
       durationSeconds?: number | null;
+      generateAudio?: boolean;
       projectId: number;
       prompt: string;
       refreshSceneSoundPrompt?: string | null;
@@ -16981,6 +16990,7 @@ export function WorkspacePage({
           durationExtensionSourceDurationSeconds: options.durationExtensionSourceDurationSeconds ?? null,
           durationExtensionTargetDurationSeconds: options.durationExtensionTargetDurationSeconds ?? null,
           durationSeconds: options.durationSeconds ?? null,
+          generateAudio: options.generateAudio,
           jobId: safeJobId,
           projectId: options.projectId,
           prompt: options.prompt,
@@ -16997,12 +17007,15 @@ export function WorkspacePage({
         const photoAnimationPayload = payload.data;
         const photoAnimationAsset = photoAnimationPayload.asset;
         if (photoAnimationAsset) {
-          const durablePhotoAnimationAsset = await ensureSegmentEditorGeneratedVisualAssetDurable(photoAnimationAsset, {
-            mediaType: "video",
-            projectId: options.projectId,
-            segmentIndex: options.segmentIndex,
-            sourceJobId: safeJobId,
-          });
+          const durablePhotoAnimationAsset = resolveWorkspaceGeneratedVideoAudioIntent(
+            await ensureSegmentEditorGeneratedVisualAssetDurable(photoAnimationAsset, {
+              mediaType: "video",
+              projectId: options.projectId,
+              segmentIndex: options.segmentIndex,
+              sourceJobId: safeJobId,
+            }),
+            options.generateAudio,
+          );
           if (!isSegmentVisualRunCurrent(segmentPhotoAnimationRunRef, options.segmentIndex, options.runId)) {
             removeStoredWorkspaceSegmentPhotoAnimationJob(session.email, safeJobId);
             return;
@@ -17091,7 +17104,7 @@ export function WorkspacePage({
             options.segmentIndex,
           );
           const refreshSceneSoundPrompt = normalizeWorkspaceSegmentSceneSoundPrompt(options.refreshSceneSoundPrompt);
-          if (refreshSceneSoundPrompt && isJobDraftActive) {
+          if (refreshSceneSoundPrompt && isJobDraftActive && nextPhotoAnimationAssetWithDuration.generateAudio !== true) {
             window.setTimeout(() => {
               void handleSegmentEditorSceneSoundGenerate({
                 prompt: refreshSceneSoundPrompt,
@@ -18882,6 +18895,7 @@ export function WorkspacePage({
         createdAt: pendingJobCreatedAt,
         draftId: jobDraftId,
         durationSeconds,
+        generateAudio,
         jobId: requestedJobId,
         projectId: jobProjectId,
         prompt: normalizedPrompt,
@@ -18962,6 +18976,7 @@ export function WorkspacePage({
         createdAt: pendingJobCreatedAt,
         draftId: jobDraftId,
         durationSeconds,
+        generateAudio,
         jobId: serverJobId,
         projectId: jobProjectId,
         prompt: normalizedPrompt,
@@ -18979,6 +18994,7 @@ export function WorkspacePage({
         createdAt: pendingJobCreatedAt,
         draftId: jobDraftId,
         durationSeconds,
+        generateAudio,
         prompt: normalizedPrompt,
         projectId: jobProjectId,
         runId,
@@ -19048,6 +19064,7 @@ export function WorkspacePage({
       createdAt: job.createdAt,
       draftId: job.draftId,
       durationSeconds: job.durationSeconds,
+      generateAudio: job.generateAudio,
       projectId: job.projectId,
       prompt: job.prompt,
       runId,
@@ -19438,6 +19455,7 @@ export function WorkspacePage({
         durationExtensionSourceDurationSeconds: options?.durationExtensionSourceDurationSeconds ?? null,
         durationExtensionTargetDurationSeconds: options?.durationExtensionTargetDurationSeconds ?? null,
         durationSeconds,
+        generateAudio,
         jobId: payload.data.jobId,
         projectId: jobProjectId,
         prompt: normalizedPrompt,
@@ -19454,6 +19472,7 @@ export function WorkspacePage({
         durationExtensionSourceDurationSeconds: options?.durationExtensionSourceDurationSeconds,
         durationExtensionTargetDurationSeconds: options?.durationExtensionTargetDurationSeconds,
         durationSeconds,
+        generateAudio,
         projectId: jobProjectId,
         prompt: normalizedPrompt,
         refreshSceneSoundPrompt: options?.refreshSceneSoundPrompt,
@@ -20066,6 +20085,7 @@ export function WorkspacePage({
       durationExtensionSourceDurationSeconds: job.durationExtensionSourceDurationSeconds,
       durationExtensionTargetDurationSeconds: job.durationExtensionTargetDurationSeconds,
       durationSeconds: job.durationSeconds,
+      generateAudio: job.generateAudio,
       projectId: job.projectId,
       prompt: job.prompt,
       refreshSceneSoundPrompt: job.refreshSceneSoundPrompt,
@@ -29179,12 +29199,14 @@ export function WorkspacePage({
         return;
       }
 
-      const sceneSoundAsset = createWorkspaceSegmentSceneSoundAsset(segment, segment.index);
+      const sceneSoundAsset = createWorkspaceSegmentTimelineSoundAsset(segment, segment.index);
       const soundPreviewUrl = getStudioSceneSoundAssetPreviewUrl(sceneSoundAsset);
+      const soundPreviewMediaKind = getStudioSceneSoundAssetPreviewMediaKind(sceneSoundAsset);
       if (soundPreviewUrl) {
         tracks.push({
           key: `full-preview:sound:${segment.index}:${soundPreviewUrl}`,
           kind: "sound",
+          mediaKind: soundPreviewMediaKind,
           previewArrayIndex: arrayIndex,
           segmentIndex: segment.index,
           sourceKind: "isolated",
@@ -32973,7 +32995,7 @@ export function WorkspacePage({
   );
   const canDeleteSegmentTimelineSoundMenu = Boolean(
     segmentTimelineSoundMenuSegment &&
-      (segmentTimelineSoundMenuAsset ||
+      (getWorkspaceSegmentSceneSoundStateAssetId(segmentTimelineSoundMenuSegment) ||
         segmentTimelineSoundMenuSegment.sceneSoundPrompt ||
         segmentTimelineSoundMenuSegment.sceneSoundGeneratedFromPrompt ||
         isSegmentTimelineSoundMenuPending),
@@ -34330,7 +34352,7 @@ export function WorkspacePage({
                 segmentEditorGeneratingSceneSoundRunIds,
                 segment.index,
               );
-              const sceneSoundAsset = createWorkspaceSegmentSceneSoundAsset(segment, segment.index);
+              const sceneSoundAsset = createWorkspaceSegmentTimelineSoundAsset(segment, segment.index);
               const soundPreviewUrl = getStudioSceneSoundAssetPreviewUrl(sceneSoundAsset);
               const soundPreviewMediaKind = getStudioSceneSoundAssetPreviewMediaKind(sceneSoundAsset);
               const soundAudioKey = `timeline:sound:${segment.index}:${soundPreviewUrl ?? "empty"}`;
@@ -36479,7 +36501,7 @@ export function WorkspacePage({
     />
   );
   const activeSegmentSceneSoundAsset = activeSegment
-    ? createWorkspaceSegmentSceneSoundAsset(activeSegment, activeSegment.index)
+    ? createWorkspaceSegmentTimelineSoundAsset(activeSegment, activeSegment.index)
     : null;
   const activeSegmentSceneSoundUrl = getStudioSceneSoundAssetPreviewUrl(activeSegmentSceneSoundAsset);
   const activeSegmentEffectiveVoiceIdForGeneration =

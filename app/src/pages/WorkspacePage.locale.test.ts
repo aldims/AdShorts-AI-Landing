@@ -8269,6 +8269,7 @@ describe("WorkspacePage studio locale defaults", () => {
         videoAction: "custom",
       }),
     );
+    expect(result.payload.segments[0]?.sceneSoundAssetId).toBeUndefined();
   });
 
   it("exports scratch visual-only custom media with snake-case media asset ids", async () => {

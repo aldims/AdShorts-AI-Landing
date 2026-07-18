@@ -145,6 +145,19 @@ describe("buildWorkspaceSegmentEditorTracks", () => {
     expect(tracks.rows.find((row) => row.kind === "sound")?.spans[0]?.isEmpty).toBe(false);
   });
 
+  it("lets the editor expose embedded generated-video audio as a non-empty sound row", () => {
+    const segment = createSegment(1);
+    const tracks = buildWorkspaceSegmentEditorTracks(
+      [segment],
+      [],
+      null,
+      null,
+      { isSoundPresent: () => true },
+    );
+
+    expect(tracks.rows.find((row) => row.kind === "sound")?.spans[0]?.isEmpty).toBe(false);
+  });
+
   it("keeps active array index stable after reordering by consuming current array order", () => {
     const tracks = buildWorkspaceSegmentEditorTracks(
       [

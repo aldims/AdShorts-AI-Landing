@@ -37,6 +37,23 @@ describe("getWorkspaceSegmentTimelineSoundLabel", () => {
 
     expect(getWorkspaceSegmentTimelineSoundLabel("ru", customSegment)).toBe("Шаги по мокрому асфальту");
   });
+
+  it("labels audio embedded in a generated AI video", () => {
+    const generatedVideoSegment = {
+      ...segment,
+      aiVideoAsset: {
+        fileName: "generated.mp4",
+        fileSize: 1024,
+        generateAudio: true,
+        mimeType: "video/mp4",
+      },
+      aiVideoGeneratedMode: "ai_video",
+      videoAction: "ai",
+    };
+
+    expect(getWorkspaceSegmentTimelineSoundLabel("ru", generatedVideoSegment)).toBe("Звук ИИ видео");
+    expect(getWorkspaceSegmentTimelineSoundLabel("en", generatedVideoSegment)).toBe("AI video sound");
+  });
 });
 
 describe("getWorkspaceSegmentTimelineVoiceLabel", () => {

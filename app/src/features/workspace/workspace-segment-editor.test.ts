@@ -23,6 +23,7 @@ import {
   getWorkspaceSegmentEditorBulkSceneSoundCreditCost,
   getWorkspaceSegmentSceneSoundSelectionSyncKey,
   getWorkspaceSegmentEditorVisibleTimelineDisplayRange,
+  getWorkspaceSegmentEmbeddedVisualSoundAsset,
   getWorkspaceSegmentEstimatedVoiceoverLabelDurationSeconds,
   getStudioSceneSoundAssetPreviewUrl,
   hasWorkspaceSegmentEditorUnreflectedLiveGeneratedVideo,
@@ -43,6 +44,7 @@ import {
   isWorkspaceSegmentVoiceoverPlaybackFresh,
   invalidateWorkspaceSegmentSceneSoundForVisualChange,
   createWorkspaceSegmentSceneSoundAsset,
+  createWorkspaceSegmentTimelineSoundAsset,
   createWorkspaceSegmentEditorInsertedSegment,
   createWorkspaceSegmentEditorDraftSession,
   createWorkspaceSegmentEditorScratchDraftSession,
@@ -61,6 +63,7 @@ import {
   resetWorkspaceSegmentDraftVisualToOriginal,
   resolveWorkspaceSegmentEditorSegmentsAfterDelete,
   resolveWorkspaceSegmentSceneSoundPrompt,
+  resolveWorkspaceGeneratedVideoAudioIntent,
   resolveWorkspaceSegmentBoundaryTiming,
   resolveWorkspaceSegmentVideoExtensionMenuSourceDurationSeconds,
   pushWorkspaceSegmentTimelineVisualHistorySnapshot,
@@ -967,6 +970,62 @@ it("repairs repeated speech words that leaked into the next project voiceover sc
 });
 
 describe("workspace segment editor scene sound preview", () => {
+  it("uses generated AI video audio as the timeline sound without creating a separate scene sound", () => {
+    const segment = createProjectVoiceoverSegment({
+      aiVideoAsset: {
+        assetId: 817,
+        fileName: "generated-with-audio.mp4",
+        fileSize: 4096,
+        generateAudio: true,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/817/playback",
+      },
+      aiVideoGeneratedMode: "ai_video",
+      sceneSoundAsset: null,
+      sceneSoundAssetId: null,
+      scene_sound_asset_id: null,
+      videoAction: "ai",
+    });
+
+    expect(getWorkspaceSegmentEmbeddedVisualSoundAsset(segment)?.assetId).toBe(817);
+    expect(createWorkspaceSegmentTimelineSoundAsset(segment, segment.index)).toMatchObject({
+      assetId: 817,
+      generateAudio: true,
+      mimeType: "video/mp4",
+    });
+    expect(createWorkspaceSegmentSceneSoundAsset(segment, segment.index)).toBeNull();
+    expect(segment.sceneSoundAsset).toBeNull();
+    expect(segment.sceneSoundAssetId).toBeNull();
+  });
+
+  it("preserves the requested generated-audio intent when the provider omits it from the asset", () => {
+    expect(resolveWorkspaceGeneratedVideoAudioIntent({
+      assetId: 819,
+      fileName: "generated.mp4",
+      fileSize: 4096,
+      mimeType: "video/mp4",
+    }, true)).toMatchObject({
+      assetId: 819,
+      generateAudio: true,
+    });
+  });
+
+  it("uses generated photo-animation audio as the timeline sound", () => {
+    const segment = createProjectVoiceoverSegment({
+      aiVideoAsset: {
+        assetId: 820,
+        fileName: "animated-with-audio.mp4",
+        fileSize: 4096,
+        generateAudio: true,
+        mimeType: "video/mp4",
+      },
+      aiVideoGeneratedMode: "photo_animation",
+      videoAction: "photo_animation",
+    });
+
+    expect(createWorkspaceSegmentTimelineSoundAsset(segment, segment.index)?.assetId).toBe(820);
+  });
+
   it("attaches extracted video audio to every persisted scene sound field", () => {
     const segment = createProjectVoiceoverSegment({
       sceneSoundGeneratedFromPrompt: "old generated ambience",

@@ -172,6 +172,7 @@ describe("workspace segment editor storage fallback", () => {
       createdAt,
       draftId: "project:42",
       durationSeconds: 4,
+      generateAudio: true,
       jobId,
       projectId: 42,
       prompt: "Camera pulls back",
@@ -184,6 +185,7 @@ describe("workspace segment editor storage fallback", () => {
         createdAt,
         draftId: "project:42",
         durationSeconds: 4,
+        generateAudio: true,
         jobId,
         projectId: 42,
         prompt: "Camera pulls back",
@@ -425,6 +427,7 @@ describe("workspace segment editor storage fallback", () => {
     const buildJob = (jobId: string) => ({
       createdAt: Date.now(),
       draftId: "project:42",
+      generateAudio: true,
       jobId,
       projectId: 42,
       prompt: "animate the frame",
@@ -441,6 +444,7 @@ describe("workspace segment editor storage fallback", () => {
     expect(readStoredWorkspaceSegmentPhotoAnimationJobs("editor@example.test")).toHaveLength(1);
     expect(readStoredWorkspaceSegmentPhotoAnimationJobs("editor@example.test")[0]).toMatchObject({
       jobId: "animation-2",
+      generateAudio: true,
       refreshSceneSoundPrompt: "rain on glass",
       sourceVisualIdentity: "asset:501",
     });

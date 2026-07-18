@@ -1272,6 +1272,27 @@ export const getStudioSceneSoundAssetPreviewMediaKind = (
   return mimeType.startsWith("video/") || WORKSPACE_VIDEO_FILE_NAME_PATTERN.test(fileName) ? "video" : "audio";
 };
 
+export const resolveWorkspaceGeneratedVideoAudioIntent = (
+  asset: StudioCustomVideoFile,
+  generateAudio?: boolean,
+): StudioCustomVideoFile =>
+  asset.generateAudio === true || generateAudio === true
+    ? { ...asset, generateAudio: true }
+    : asset;
+
+export const getWorkspaceSegmentEmbeddedVisualSoundAsset = (
+  segment: WorkspaceSegmentEditorSegment,
+): StudioCustomVideoFile | null => {
+  const draftSegment = segment as Partial<WorkspaceSegmentEditorDraftSegment>;
+  const asset = draftSegment.aiVideoAsset ?? null;
+  const action = String(draftSegment.videoAction ?? "").trim();
+  const isSoundGeneratingVisual = action === "ai" || action === "photo_animation";
+
+  return isSoundGeneratingVisual && asset?.generateAudio === true
+    ? cloneStudioCustomVideoFile(asset)
+    : null;
+};
+
 export const getWorkspaceMediaAssetFileName = (asset: WorkspaceMediaAssetRef | null | undefined, fallbackName: string) => {
   const storageFileName = String(asset?.storageKey ?? "").split("/").pop()?.trim();
   const downloadFileName = String(asset?.downloadPath ?? asset?.downloadUrl ?? asset?.playbackUrl ?? "").split("/").pop()?.split("?")[0]?.trim();
@@ -1363,6 +1384,26 @@ export const createWorkspaceSegmentSceneSoundAsset = (
     mimeType,
     remoteUrl: remoteUrl ?? undefined,
     source: "media-library",
+  };
+};
+
+export const createWorkspaceSegmentTimelineSoundAsset = (
+  segment: WorkspaceSegmentEditorSegment,
+  fallbackSegmentIndex: number,
+): StudioCustomVideoFile | null => {
+  const sceneSoundAsset = createWorkspaceSegmentSceneSoundAsset(segment, fallbackSegmentIndex);
+  if (sceneSoundAsset) {
+    return sceneSoundAsset;
+  }
+
+  const embeddedVisualSoundAsset = getWorkspaceSegmentEmbeddedVisualSoundAsset(segment);
+  if (!embeddedVisualSoundAsset) {
+    return null;
+  }
+
+  return {
+    ...embeddedVisualSoundAsset,
+    remoteUrl: getWorkspaceMediaAssetResolvedPreviewUrl(embeddedVisualSoundAsset) ?? undefined,
   };
 };
 
