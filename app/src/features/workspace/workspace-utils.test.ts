@@ -6,6 +6,7 @@ import {
   shouldDisplayWorkspaceSegmentGeneratedVoiceoverEdited,
   shouldDisplayWorkspaceSegmentSubtitleCellEdited,
   shouldDisplayWorkspaceSegmentVoiceCellEdited,
+  storeWorkspaceSegmentMeasuredVisualDuration,
 } from "./workspace-utils";
 import { isWorkspaceSegmentEffectiveVoiceEdited } from "./workspace-segment-editor-checklist";
 
@@ -14,6 +15,36 @@ describe("workspace client job ids", () => {
     expect(createWorkspaceClientJobId({ crypto: null })).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
     );
+  });
+});
+
+describe("workspace measured visual durations", () => {
+  it("keeps measurements for every source URL of the same scene", () => {
+    const firstSourceState = storeWorkspaceSegmentMeasuredVisualDuration(
+      {},
+      1,
+      "https://example.test/current.mp4",
+      4.8,
+    );
+    const bothSourcesState = storeWorkspaceSegmentMeasuredVisualDuration(
+      firstSourceState,
+      1,
+      "https://example.test/draft.mp4",
+      5,
+    );
+
+    expect(bothSourcesState[1]).toEqual({
+      "https://example.test/current.mp4": 4.8,
+      "https://example.test/draft.mp4": 5,
+    });
+    expect(
+      storeWorkspaceSegmentMeasuredVisualDuration(
+        bothSourcesState,
+        1,
+        "https://example.test/current.mp4",
+        4.81,
+      ),
+    ).toBe(bothSourcesState);
   });
 });
 

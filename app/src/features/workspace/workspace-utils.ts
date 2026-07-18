@@ -56,6 +56,29 @@ export const normalizeWorkspaceVideoSourceUrl = (value: string | null | undefine
   }
 };
 
+export type WorkspaceSegmentMeasuredVisualDurations = Record<number, Record<string, number>>;
+
+export const storeWorkspaceSegmentMeasuredVisualDuration = (
+  current: WorkspaceSegmentMeasuredVisualDurations,
+  segmentIndex: number,
+  sourceUrl: string,
+  durationSeconds: number,
+): WorkspaceSegmentMeasuredVisualDurations => {
+  const currentSegmentDurations = current[segmentIndex] ?? {};
+  const currentDurationSeconds = currentSegmentDurations[sourceUrl];
+  if (currentDurationSeconds !== undefined && Math.abs(currentDurationSeconds - durationSeconds) < 0.04) {
+    return current;
+  }
+
+  return {
+    ...current,
+    [segmentIndex]: {
+      ...currentSegmentDurations,
+      [sourceUrl]: durationSeconds,
+    },
+  };
+};
+
 export const formatWorkspaceSegmentDurationInputValue = (value: number | null | undefined) => {
   const normalizedValue = normalizeWorkspaceSegmentManualDurationSeconds(value);
   return normalizedValue === null ? "" : String(Number(normalizedValue.toFixed(1)));

@@ -5254,6 +5254,7 @@ export const syncWorkspaceSegmentMeasuredVideoVisualDuration = (
   segment: WorkspaceSegmentEditorDraftSegment,
   durationSeconds: number | null | undefined,
   options?: {
+    preserveAuthoritativeTimelineDuration?: boolean;
     voiceoverDurationSeconds?: number | null;
   },
 ): WorkspaceSegmentEditorDraftSegment => {
@@ -5267,6 +5268,18 @@ export const syncWorkspaceSegmentMeasuredVideoVisualDuration = (
   // treating the encoded file length as a user duration changes both the UI
   // and the reset checklist immediately after opening an untouched project.
   if (isWorkspaceSegmentHoldableRenderedPhotoVisual(segment)) {
+    return segment;
+  }
+
+  const durationMode = normalizeWorkspaceSegmentDurationMode(segment.durationMode);
+  const durationSyncMode = normalizeWorkspaceSegmentDurationSyncMode(segment.durationSyncMode);
+  const manualDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds);
+  if (
+    options?.preserveAuthoritativeTimelineDuration === true &&
+    durationMode === "manual" &&
+    durationSyncMode === "visual" &&
+    manualDurationSeconds !== null
+  ) {
     return segment;
   }
 
@@ -5286,8 +5299,6 @@ export const syncWorkspaceSegmentMeasuredVideoVisualDuration = (
     storedDurationExtensionSourceDurationSeconds === null &&
     voiceoverDurationSeconds !== null &&
     voiceoverDurationSeconds > measuredVisualDuration + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS;
-  const durationMode = normalizeWorkspaceSegmentDurationMode(segment.durationMode);
-  const manualDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds);
   const currentSlotDurationSeconds = getWorkspaceSegmentCanonicalSlotDurationSeconds(segment);
   const hasManualTimelineOverride =
     durationMode === "manual" ||
@@ -5327,7 +5338,7 @@ export const syncWorkspaceSegmentMeasuredVideoVisualDuration = (
   }
 
   if (
-    normalizeWorkspaceSegmentDurationSyncMode(segment.durationSyncMode) === "voiceover" &&
+    durationSyncMode === "voiceover" &&
     !shouldLoopMeasuredVideoToVoiceover &&
     !shouldRepairVoiceoverRenderTail
   ) {

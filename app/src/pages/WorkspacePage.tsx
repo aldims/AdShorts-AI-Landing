@@ -905,6 +905,8 @@ import {
   shouldDisplayWorkspaceSegmentGeneratedVoiceoverEdited,
   shouldDisplayWorkspaceSegmentSubtitleCellEdited,
   shouldDisplayWorkspaceSegmentVoiceCellEdited,
+  storeWorkspaceSegmentMeasuredVisualDuration,
+  type WorkspaceSegmentMeasuredVisualDurations,
 } from "../features/workspace/workspace-utils";
 import type {
   StudioBrandLogoFile,
@@ -2239,9 +2241,8 @@ export function WorkspacePage({
     useState<{ ready: number; total: number } | null>(null);
   const [segmentEditorFullPreviewIsScrubbing, setSegmentEditorFullPreviewIsScrubbing] = useState(false);
   const [segmentEditorFullPreviewAudioUnlockRequired, setSegmentEditorFullPreviewAudioUnlockRequired] = useState(false);
-  const [segmentEditorMeasuredVisualDurations, setSegmentEditorMeasuredVisualDurations] = useState<
-    Record<number, { durationSeconds: number; sourceUrl: string }>
-  >({});
+  const [segmentEditorMeasuredVisualDurations, setSegmentEditorMeasuredVisualDurations] =
+    useState<WorkspaceSegmentMeasuredVisualDurations>({});
   const [segmentEditorMeasuredVoiceoverDurations, setSegmentEditorMeasuredVoiceoverDurations] = useState<
     Record<number, { durationSeconds: number; sourceUrl: string }>
   >({});
@@ -4628,23 +4629,14 @@ export function WorkspacePage({
 
       const nextDurationSeconds = roundWorkspaceSegmentTimelineSeconds(normalizedDurationSeconds);
       writeWorkspaceSegmentVisualDurationCache(normalizedSourceUrl, nextDurationSeconds);
-      setSegmentEditorMeasuredVisualDurations((current) => {
-        const currentEntry = current[segmentIndex];
-        if (
-          currentEntry?.sourceUrl === normalizedSourceUrl &&
-          Math.abs(currentEntry.durationSeconds - nextDurationSeconds) < 0.04
-        ) {
-          return current;
-        }
-
-        return {
-          ...current,
-          [segmentIndex]: {
-            durationSeconds: nextDurationSeconds,
-            sourceUrl: normalizedSourceUrl,
-          },
-        };
-      });
+      setSegmentEditorMeasuredVisualDurations((current) =>
+        storeWorkspaceSegmentMeasuredVisualDuration(
+          current,
+          segmentIndex,
+          normalizedSourceUrl,
+          nextDurationSeconds,
+        ),
+      );
     },
     [],
   );
@@ -4724,8 +4716,8 @@ export function WorkspacePage({
     const maxAttempts = 3;
 
     segmentEditorVisualDurationMeasurementTargets.forEach(({ previewUrl, segmentIndex, sourceUrl }) => {
-      const currentEntry = segmentEditorMeasuredVisualDurations[segmentIndex];
-      if (currentEntry?.sourceUrl === sourceUrl && currentEntry.durationSeconds > 0) {
+      const currentDurationSeconds = segmentEditorMeasuredVisualDurations[segmentIndex]?.[sourceUrl];
+      if (currentDurationSeconds !== undefined && currentDurationSeconds > 0) {
         return;
       }
 
@@ -4769,12 +4761,12 @@ export function WorkspacePage({
   const getSegmentEditorMeasuredVisualDurationSeconds = useCallback(
     (segment: WorkspaceSegmentEditorDraftSegment) => {
       const sourceUrls = getSegmentEditorVisualDurationMeasurementCandidates(segment).map((candidate) => candidate.sourceUrl);
-      const measuredDuration = segmentEditorMeasuredVisualDurations[segment.index] ?? null;
-      if (measuredDuration && sourceUrls.includes(measuredDuration.sourceUrl)) {
-        return measuredDuration.durationSeconds;
-      }
-
       for (const sourceUrl of sourceUrls) {
+        const measuredDurationSeconds = segmentEditorMeasuredVisualDurations[segment.index]?.[sourceUrl];
+        if (measuredDurationSeconds !== undefined) {
+          return measuredDurationSeconds;
+        }
+
         const cachedDurationSeconds = readWorkspaceSegmentVisualDurationCache(sourceUrl);
         if (cachedDurationSeconds !== null) {
           return cachedDurationSeconds;
@@ -13388,6 +13380,9 @@ export function WorkspacePage({
         getWorkspaceSegmentTimelineVoiceoverDurationInfo(durationRepairedSegment, currentDraft, { allowEstimated: false })?.durationSeconds ??
         null;
       const nextSegment = syncWorkspaceSegmentMeasuredVideoVisualDuration(durationRepairedSegment, measuredDurationSeconds, {
+        preserveAuthoritativeTimelineDuration:
+          getPositiveWorkspaceMediaAssetId(currentDraft.finalVideoAssetId) !== null &&
+          currentDraft.finalVideoStale !== true,
         voiceoverDurationSeconds,
       });
       if (nextSegment !== segment) {
@@ -33407,7 +33402,15 @@ export function WorkspacePage({
                 baselineSegment: baselineVisualSegment,
                 measuredVisualDurationSeconds,
               });
+              const hasAuthoritativeFinalizedVisualSlot =
+                getPositiveWorkspaceMediaAssetId(segmentEditorDraft.finalVideoAssetId) !== null &&
+                segmentEditorDraft.finalVideoStale !== true &&
+                selectedVisualPreviewKind === "video" &&
+                normalizeWorkspaceSegmentDurationMode(segment.durationMode) === "manual" &&
+                normalizeWorkspaceSegmentDurationSyncMode(segment.durationSyncMode) === "visual" &&
+                normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds) !== null;
               const shouldUseShorterSourceVideoDuration =
+                !hasAuthoritativeFinalizedVisualSlot &&
                 selectedVisualPreviewKind === "video" &&
                 sourceVideoVisualDurationSeconds !== null &&
                 sourceVideoVisualDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS < segmentSlotDurationSeconds;
@@ -33446,7 +33449,7 @@ export function WorkspacePage({
                 selectedVisualPreviewKind === "video" &&
                 normalizeWorkspaceSegmentDurationSyncMode(segment.durationSyncMode) === "voiceover";
               const segmentVideoVisualDurationBadgeSeconds =
-                selectedVisualPreviewKind === "video"
+                selectedVisualPreviewKind === "video" && !hasAuthoritativeFinalizedVisualSlot
                   ? (shouldUseShorterSourceVideoDuration ? sourceVideoVisualDurationSeconds : null) ??
                     actualVideoVisualDurationSeconds ??
                     visualAudioDurationMismatch?.visualDurationSeconds ??

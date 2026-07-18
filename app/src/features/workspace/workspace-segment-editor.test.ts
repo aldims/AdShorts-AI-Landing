@@ -3809,6 +3809,32 @@ describe("workspace segment editor project voiceover timeline", () => {
     }));
   });
 
+  it("does not let measured media metadata rewrite an authoritative finalized timeline slot", () => {
+    const segment = createProjectVoiceoverSegment({
+      aiVideoAsset: {
+        fileName: "segment-ai-video.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/9820/playback",
+      },
+      duration: 4,
+      durationMode: "manual",
+      durationSyncMode: "visual",
+      durationSyncModeUserSelected: true,
+      endTime: 9.042,
+      index: 1,
+      manualDurationSeconds: 4,
+      mediaType: "video",
+      startTime: 5.042,
+      videoAction: "ai",
+    });
+
+    expect(syncWorkspaceSegmentMeasuredVideoVisualDuration(segment, 5, {
+      preserveAuthoritativeTimelineDuration: true,
+      voiceoverDurationSeconds: 3.64,
+    })).toBe(segment);
+  });
+
   it("preserves an explicitly extended AI video slot after measuring its source", () => {
     const segment = createProjectVoiceoverSegment({
       aiVideoAsset: {
