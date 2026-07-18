@@ -53,6 +53,7 @@ import {
   repairWorkspaceSegmentEditorSpeechWordBoundaries,
   refreshWorkspaceSegmentEditorDraftWithFreshSession,
   restoreWorkspaceSegmentStaleMeasuredRenderedPhotoDuration,
+  doesWorkspaceSegmentEditorDraftReflectFreshVoiceoverAssets,
   restoreWorkspaceSegmentEditorDraftProjectTtsAsset,
   restoreWorkspaceSegmentEffectiveVoiceFromBaseline,
   restoreWorkspaceSegmentSceneSoundState,
@@ -1620,6 +1621,38 @@ describe("workspace segment editor visual and voiceover mismatch", () => {
 });
 
 describe("workspace segment editor project voiceover timeline", () => {
+  it("recognizes a fresh server voiceover version already reflected by the live draft", () => {
+    const baselineSegment = createProjectVoiceoverSegment({
+      voiceoverAsset: {
+        ...createProjectVoiceoverSegment().voiceoverAsset!,
+        assetId: 777,
+      },
+    });
+    const freshSegment = createProjectVoiceoverSegment({
+      voiceoverAsset: {
+        ...baselineSegment.voiceoverAsset!,
+        assetId: 778,
+      },
+    });
+    const baselineSession = createProjectVoiceoverDraft([baselineSegment]);
+    const freshSession = createProjectVoiceoverDraft([freshSegment]);
+
+    expect(
+      doesWorkspaceSegmentEditorDraftReflectFreshVoiceoverAssets(
+        createProjectVoiceoverDraft([freshSegment]),
+        freshSession,
+        baselineSession,
+      ),
+    ).toBe(true);
+    expect(
+      doesWorkspaceSegmentEditorDraftReflectFreshVoiceoverAssets(
+        createProjectVoiceoverDraft([baselineSegment]),
+        freshSession,
+        baselineSession,
+      ),
+    ).toBe(false);
+  });
+
   it("treats an ffmpeg-rendered photo wrapper as a still visual", () => {
     const segment = createProjectVoiceoverSegment({
       currentAsset: {

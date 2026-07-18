@@ -1248,6 +1248,23 @@ describe("WorkspacePage segment editor draft persistence", () => {
     expect(loadedBaseline.segments[0]?.text).toBe(baselineText);
     expect(loadedBaseline.segments[0]?.speechDuration).toBe(6.5);
     expect(loadedBaseline.segments[0]?.currentAsset?.assetId).toBe(101);
+
+    const reconciledBaseline = resolveWorkspaceSegmentEditorLoadedBaselineSession(
+      refreshedSession,
+      baselineSession,
+      { currentDraftMatchesIncomingSession: true },
+    );
+    expect(reconciledBaseline).toBe(refreshedSession);
+    expect(reconciledBaseline.segments[0]?.speechDuration).toBe(12.4);
+    expect(reconciledBaseline.segments[0]?.currentAsset?.assetId).toBe(303);
+
+    expect(
+      resolveWorkspaceSegmentEditorLoadedBaselineSession(
+        refreshedSession,
+        baselineSession,
+        { currentDraftReflectsFreshVoiceoverAssets: true },
+      ),
+    ).toBe(refreshedSession);
   });
 
   it("uses the loaded project state as the reset baseline even when it retains source references", () => {

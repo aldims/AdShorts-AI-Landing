@@ -2247,8 +2247,58 @@ export const preserveWorkspaceSegmentEditorOriginalVisualReferences = (
 export const resolveWorkspaceSegmentEditorLoadedBaselineSession = (
   incomingSession: WorkspaceSegmentEditorSession,
   existingBaselineSession: WorkspaceSegmentEditorSession | null | undefined,
+  options?: {
+    currentDraftMatchesIncomingSession?: boolean;
+    currentDraftReflectsFreshVoiceoverAssets?: boolean;
+  },
 ): WorkspaceSegmentEditorSession =>
-  existingBaselineSession?.projectId === incomingSession.projectId ? existingBaselineSession : incomingSession;
+  existingBaselineSession?.projectId === incomingSession.projectId &&
+  options?.currentDraftMatchesIncomingSession !== true &&
+  options?.currentDraftReflectsFreshVoiceoverAssets !== true
+    ? existingBaselineSession
+    : incomingSession;
+
+export const doesWorkspaceSegmentEditorDraftReflectFreshVoiceoverAssets = (
+  currentDraft: WorkspaceSegmentEditorDraftSession | null | undefined,
+  incomingSession: WorkspaceSegmentEditorSession,
+  existingBaselineSession: WorkspaceSegmentEditorSession | null | undefined,
+) => {
+  if (
+    !currentDraft ||
+    currentDraft.projectId !== incomingSession.projectId ||
+    existingBaselineSession?.projectId !== incomingSession.projectId
+  ) {
+    return false;
+  }
+
+  const currentSegmentsByIndex = new Map(
+    currentDraft.segments.map((segment) => [segment.index, segment] as const),
+  );
+  const baselineSegmentsByIndex = new Map(
+    existingBaselineSession.segments.map((segment) => [segment.index, segment] as const),
+  );
+  let hasFreshVoiceoverAssets = false;
+
+  for (const incomingSegment of incomingSession.segments) {
+    const incomingAssetId = getWorkspaceSegmentVoiceoverAssetIdForInference(incomingSegment);
+    const baselineAssetId = getWorkspaceSegmentVoiceoverAssetIdForInference(
+      baselineSegmentsByIndex.get(incomingSegment.index),
+    );
+    if (incomingAssetId === baselineAssetId) {
+      continue;
+    }
+
+    hasFreshVoiceoverAssets = true;
+    const currentAssetId = getWorkspaceSegmentVoiceoverAssetIdForInference(
+      currentSegmentsByIndex.get(incomingSegment.index),
+    );
+    if (currentAssetId !== incomingAssetId) {
+      return false;
+    }
+  }
+
+  return hasFreshVoiceoverAssets;
+};
 
 export const isWorkspaceSegmentCurrentVisualDifferentFromOriginal = (segment: WorkspaceSegmentEditorDraftSegment) => {
   const currentAssetIdentity = getWorkspaceMediaAssetIdentityKey(segment.currentAsset);

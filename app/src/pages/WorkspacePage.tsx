@@ -268,6 +268,7 @@ import {
   hasWorkspaceSegmentEditorRenderableScratchScene,
   hasWorkspaceSegmentEditorUnreflectedLiveGeneratedVideo,
   hasWorkspaceSegmentEditorUnreflectedLiveGeneratedVoiceover,
+  doesWorkspaceSegmentEditorDraftReflectFreshVoiceoverAssets,
   hasStudioBranding,
   hasWorkspaceSegmentExplicitDraftVisual,
   hasWorkspaceSegmentPersistedMediaReference,
@@ -12230,13 +12231,29 @@ export function WorkspacePage({
         normalizedSessionCandidate,
         existingBaselineSession,
       );
+      const nextDraft = restoreProjectTtsForDraft(createWorkspaceSegmentEditorDraftSession(normalizedSession));
+      const liveDraft = segmentEditorDraftRef.current;
+      const liveDraftFreshChecklist = liveDraft?.projectId === projectId
+        ? buildWorkspaceSegmentEditorChangeChecklist(liveDraft, nextDraft, {
+            locale,
+            subtitleColorOptions,
+            subtitleStyleOptions,
+          })
+        : null;
       const loadedBaselineSession = resolveWorkspaceSegmentEditorLoadedBaselineSession(
         normalizedSession,
         existingBaselineSession,
+        {
+          currentDraftMatchesIncomingSession: liveDraftFreshChecklist?.length === 0,
+          currentDraftReflectsFreshVoiceoverAssets:
+            doesWorkspaceSegmentEditorDraftReflectFreshVoiceoverAssets(
+              liveDraft,
+              normalizedSession,
+              existingBaselineSession,
+            ),
+        },
       );
       setSegmentEditorLoadedSession(loadedBaselineSession);
-      const nextDraft = restoreProjectTtsForDraft(createWorkspaceSegmentEditorDraftSession(normalizedSession));
-      const liveDraft = segmentEditorDraftRef.current;
       const existingBaselineForRefresh =
         existingBaselineSession?.projectId === projectId ? existingBaselineSession : null;
 
