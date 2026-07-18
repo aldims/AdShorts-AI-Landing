@@ -1498,12 +1498,17 @@ export const resolveWorkspaceRetainedScenesDraftState = <TDraft,>(
 export const resolveWorkspaceScenesModeSwitchTarget = (options: {
   hasDisplayedGeneratedProject: boolean;
   hasRetainedScenesDraft?: boolean;
+  isIdeaEmptyStateVisible?: boolean;
   isSegmentEditorActive: boolean;
   latestProjectId?: number | null;
   latestProjectUpdatedAt?: number | string | null;
   retainedDraftProjectId?: number | null;
   retainedDraftUpdatedAt?: number | string | null;
 }): WorkspaceScenesModeSwitchTarget => {
+  if (options.isIdeaEmptyStateVisible) {
+    return "scratch";
+  }
+
   if (options.isSegmentEditorActive || options.hasRetainedScenesDraft) {
     if (!options.isSegmentEditorActive && options.hasDisplayedGeneratedProject) {
       const latestProjectId = Number(options.latestProjectId);

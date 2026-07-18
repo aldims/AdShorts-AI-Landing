@@ -398,6 +398,18 @@ describe("studio creation mode switching", () => {
     ).toBe("scratch");
   });
 
+  it("creates a fresh scenes project from the visible Idea empty state instead of restoring a retained draft", () => {
+    expect(
+      resolveWorkspaceScenesModeSwitchTarget({
+        hasDisplayedGeneratedProject: false,
+        hasRetainedScenesDraft: true,
+        isIdeaEmptyStateVisible: true,
+        isSegmentEditorActive: false,
+        retainedDraftProjectId: 4178,
+      }),
+    ).toBe("scratch");
+  });
+
   it("shows the start-fresh action for content or unsaved editor changes", () => {
     expect(
       shouldShowWorkspaceStartFreshScenesAction({

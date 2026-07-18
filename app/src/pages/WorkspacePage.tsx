@@ -12554,6 +12554,7 @@ export function WorkspacePage({
     const target = resolveWorkspaceScenesModeSwitchTarget({
       hasDisplayedGeneratedProject: Boolean(studioInlinePreview?.video.adId),
       hasRetainedScenesDraft: Boolean(retainedScenesDraft),
+      isIdeaEmptyStateVisible: shouldShowStudioIdeaEmptyState,
       isSegmentEditorActive: createMode === "segment-editor",
       latestProjectId: studioInlinePreview?.video.adId,
       latestProjectUpdatedAt: studioInlinePreview?.video.generatedAt,
