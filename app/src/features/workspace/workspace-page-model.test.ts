@@ -9,9 +9,11 @@ import {
   getWorkspaceSegmentEditorSessionUrl,
   getPublishBootstrapForPlatform,
   getPublishChannelsForPlatform,
+  isWorkspacePublishPlatformAvailable,
   isWorkspaceSegmentCustomVisualUploadBusy,
   isWorkspaceExplicitSegmentEditorRoute,
   isWorkspaceSegmentEditorProjectUnavailableError,
+  openWorkspaceProjectEditorAfterSuccessfulLoad,
   isWorkspaceSegmentLibraryLoadMoreSentinelNearViewport,
   isWorkspaceSegmentSceneSoundRunBusy,
   isStudioGenerationUserFacing,
@@ -597,6 +599,30 @@ describe("segment editor project availability errors", () => {
     expect(isWorkspaceSegmentEditorProjectUnavailableError("Project deleted and not available for editing.")).toBe(true);
     expect(isWorkspaceSegmentEditorProjectUnavailableError("Not found")).toBe(false);
   });
+
+  it("does not open an editor when project compatibility loading fails", async () => {
+    const openedDrafts: string[] = [];
+
+    const didOpen = await openWorkspaceProjectEditorAfterSuccessfulLoad<string>(
+      async () => null,
+      (draft) => openedDrafts.push(draft),
+    );
+
+    expect(didOpen).toBe(false);
+    expect(openedDrafts).toEqual([]);
+  });
+
+  it("opens an editor only after a compatible project draft is loaded", async () => {
+    const openedDrafts: string[] = [];
+
+    const didOpen = await openWorkspaceProjectEditorAfterSuccessfulLoad(
+      async () => "compatible-draft",
+      (draft) => openedDrafts.push(draft),
+    );
+
+    expect(didOpen).toBe(true);
+    expect(openedDrafts).toEqual(["compatible-draft"]);
+  });
 });
 
 describe("segment scene sound generation availability", () => {
@@ -678,5 +704,10 @@ describe("publish platform bootstrap scoping", () => {
   it("keeps channels available for the matching platform", () => {
     expect(getPublishBootstrapForPlatform(youtubeBootstrap, "youtube")).toBe(youtubeBootstrap);
     expect(getPublishChannelsForPlatform(youtubeBootstrap, "youtube")).toEqual(youtubeBootstrap.channels);
+  });
+
+  it("keeps Instagram publishing unavailable while the coming-soon state is active", () => {
+    expect(isWorkspacePublishPlatformAvailable("youtube")).toBe(true);
+    expect(isWorkspacePublishPlatformAvailable("instagram")).toBe(false);
   });
 });

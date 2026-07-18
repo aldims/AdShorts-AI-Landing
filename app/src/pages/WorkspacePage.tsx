@@ -648,6 +648,7 @@ import {
   WORKSPACE_CHECKOUT_REQUEST_TIMEOUT_MS,
   isWorkspaceSegmentEditorNotFoundError,
   isWorkspaceSegmentEditorProjectUnavailableError,
+  openWorkspaceProjectEditorAfterSuccessfulLoad,
   isWorkspaceSegmentEditorPreparingError,
   isStudioGenerationUserFacing,
   resolveWorkspaceLatestStoredScenesDraft,
@@ -665,6 +666,7 @@ import {
   shouldShowWorkspaceSegmentEditorFullPreviewBusyIndicator,
   getPublishBootstrapForPlatform,
   getPublishChannelsForPlatform,
+  isWorkspacePublishPlatformAvailable,
   waitWorkspaceDelay,
   isTextInputTarget,
   renderWorkspaceMediaLibraryPlayOverlay,
@@ -1863,12 +1865,7 @@ export function WorkspacePage({
     const hideEditSearchParam = hideSearchParams.get("hide_edit");
     return [editHideSearchParam, hideEditSearchParam].some(isTruthyFlagEnabled);
   }, [location.search]);
-  const isInstagramHideEnabled = useMemo(() => {
-    const hideSearchParams = new URLSearchParams(location.search);
-    const instagramHideSearchParam = hideSearchParams.get("instagram_hide");
-    const hideInstagramSearchParam = hideSearchParams.get("hide_instagram");
-    return [instagramHideSearchParam, hideInstagramSearchParam].some(isTruthyFlagEnabled);
-  }, [location.search]);
+  const isInstagramPublishingUnavailable = !isWorkspacePublishPlatformAvailable("instagram");
   const previousRouteLocaleLanguageRef = useRef<StudioLanguage>(routeLocaleLanguage);
   const routeStudioState = useMemo(() => getStudioRouteState(location.search), [location.search]);
   const initialExamplePrefillRef = useRef(readExamplePrefillIntent());
@@ -2234,6 +2231,8 @@ export function WorkspacePage({
   const hasSavedSegmentEditorTextAndVoiceForSubtitles = hasSegmentEditorTextAndVoiceForSubtitles(segmentEditorDraft);
   const [segmentEditorAppliedSession, setSegmentEditorAppliedSession] = useState<WorkspaceSegmentEditorDraftSession | null>(null);
   const [segmentEditorError, setSegmentEditorError] = useState<string | null>(null);
+  const [segmentEditorLoadError, setSegmentEditorLoadError] = useState<string | null>(null);
+  const visibleSegmentEditorError = segmentEditorLoadError ?? segmentEditorError;
   const [segmentEditorVideoError, setSegmentEditorVideoError] = useState<string | null>(null);
   const [segmentEditorPreviewTimes, setSegmentEditorPreviewTimes] = useState<Record<number, number>>({});
   const [segmentEditorFullPreviewStatus, setSegmentEditorFullPreviewStatus] =
@@ -2481,6 +2480,7 @@ export function WorkspacePage({
   const [projects, setProjects] = useState<WorkspaceProject[]>([]);
   const [projectsError, setProjectsError] = useState<string | null>(null);
   const [projectDeleteError, setProjectDeleteError] = useState<string | null>(null);
+  const [projectEditError, setProjectEditError] = useState<string | null>(null);
   const [projectPendingDelete, setProjectPendingDelete] = useState<WorkspaceProject | null>(null);
   const [projectPendingDeleteProjects, setProjectPendingDeleteProjects] = useState<WorkspaceProject[]>([]);
   const [expandedAccountProjectStackKey, setExpandedAccountProjectStackKey] = useState<string | null>(null);
@@ -4440,6 +4440,7 @@ export function WorkspacePage({
     setProjects([]);
     setProjectsError(null);
     setProjectDeleteError(null);
+    setProjectEditError(null);
     setProjectPendingDelete(null);
     setProjectPendingDeleteProjects([]);
     setSegmentEditorPendingDeleteIndex(null);
@@ -4529,6 +4530,7 @@ export function WorkspacePage({
       setSegmentEditorAppliedSession(null);
       clearDetachedSegmentEditorDraft();
       setSegmentEditorError(null);
+      setSegmentEditorLoadError(null);
       setSegmentEditorVideoError(null);
       closeSegmentAiPhotoModal({ immediate: true });
       clearAllSegmentVisualRuns();
@@ -4557,6 +4559,14 @@ export function WorkspacePage({
 
     setContentPlanQueryInput((current) => (current.trim() ? current : normalizedTopic));
   }, [activeTab, createMode, hasEditedContentPlanQueryInput, studioView, topicInput]);
+
+  useEffect(() => {
+    if (createMode === "segment-editor" && studioView === "create") {
+      return;
+    }
+
+    setSegmentEditorLoadError(null);
+  }, [createMode, studioView]);
 
   useEffect(() => {
     if (contentPlans.length === 0) {
@@ -5530,6 +5540,7 @@ export function WorkspacePage({
       setIsProjectsLoading(true);
       setProjectsError(null);
       setProjectDeleteError(null);
+      setProjectEditError(null);
 
       try {
         const response = await fetch("/api/workspace/projects", {
@@ -11670,6 +11681,7 @@ export function WorkspacePage({
     setSegmentEditorLoadedSession(null);
     setSegmentEditorAppliedSession(null);
     setSegmentEditorError(null);
+    setSegmentEditorLoadError(null);
     setSegmentEditorVideoError(null);
     setActiveTab("studio");
     setStudioView("create");
@@ -11912,11 +11924,19 @@ export function WorkspacePage({
       bypassCache?: boolean;
       discardLocalDraft?: boolean;
       forceRefresh?: boolean;
+      onLoadError?: (message: string | null) => void;
       openDraft?: boolean;
       replaceRoute?: boolean;
       syncRoute?: boolean;
     },
   ) => {
+    const reportLoadError = (message: string | null) => {
+      if (options?.onLoadError) {
+        options.onLoadError(message);
+        return;
+      }
+      setSegmentEditorLoadError(message);
+    };
     const requestedSegmentIndex = options?.initialSegmentIndex ?? 0;
     const isConsumedSourceProject = isSegmentEditorConsumedSourceProject(projectId);
     const shouldResetConsumedSourceProject = shouldResetWorkspaceSegmentEditorConsumedSourceProject(
@@ -11927,7 +11947,9 @@ export function WorkspacePage({
     const shouldDiscardLocalDraft = Boolean(
       options?.discardLocalDraft || options?.forceRefresh || shouldResetConsumedSourceProject,
     );
-    segmentEditorRouteRestoreKeyRef.current = `${projectId}:${requestedSegmentIndex}`;
+    if (options?.syncRoute !== false) {
+      segmentEditorRouteRestoreKeyRef.current = `${projectId}:${requestedSegmentIndex}`;
+    }
 
     logSegmentEditorDiagnostics("client.segment-editor.load.start", {
       openDraft: options?.openDraft ?? true,
@@ -11938,6 +11960,8 @@ export function WorkspacePage({
     });
 
     setSegmentEditorError(null);
+    setSegmentEditorLoadError(null);
+    reportLoadError(null);
     setSegmentEditorVideoError(null);
 
     if (isConsumedSourceProject && shouldDiscardLocalDraft) {
@@ -12185,7 +12209,7 @@ export function WorkspacePage({
           throw new Error(errorMessage);
         }
 
-        setSegmentEditorError("Готовим данные для редактора...");
+        reportLoadError("Готовим данные для редактора...");
         setStatus("Готовим данные для редактора...");
         await waitWorkspaceDelay(
           Math.min(SEGMENT_EDITOR_PREPARING_RETRY_DELAY_MS, Math.max(0, SEGMENT_EDITOR_REQUEST_TIMEOUT_MS - elapsedMs)),
@@ -12195,7 +12219,7 @@ export function WorkspacePage({
       if (!payload?.data) {
         throw new Error(payload?.error ?? "Не удалось загрузить сегменты проекта.");
       }
-      setSegmentEditorError(null);
+      reportLoadError(null);
       if (status === "Готовим данные для редактора...") {
         setStatus("");
       }
@@ -12408,7 +12432,7 @@ export function WorkspacePage({
           },
         );
         if (controller.signal.reason === "segment-editor-timeout" && segmentEditorRunRef.current === runId) {
-          setSegmentEditorError("Сегменты загружаются слишком долго. Попробуйте ещё раз.");
+          reportLoadError("Сегменты загружаются слишком долго. Попробуйте ещё раз.");
         }
 
         return null;
@@ -12443,7 +12467,7 @@ export function WorkspacePage({
         setSegmentEditorDraft(null);
         setSegmentEditorLoadedSession(null);
         setSegmentEditorAppliedSession(null);
-        setSegmentEditorError(null);
+        reportLoadError(null);
         setCreateMode("default");
         setStudioView("projects");
         setProjectDeleteError(errorMessage);
@@ -12456,7 +12480,7 @@ export function WorkspacePage({
         }
         return null;
       }
-      setSegmentEditorError(
+      reportLoadError(
         isWorkspaceSegmentEditorNotFoundError(errorMessage)
           ? "Для этого проекта сегменты пока недоступны."
           : errorMessage,
@@ -12477,12 +12501,12 @@ export function WorkspacePage({
     const projectId = generatedVideo?.adId ?? null;
 
     if (!projectId) {
-      setSegmentEditorError("Редактор Shorts доступен только для сохранённого проекта.");
+      setSegmentEditorLoadError("Редактор Shorts доступен только для сохранённого проекта.");
       return;
     }
 
     if (!isGeneratedVideoProjectReadyForEditing) {
-      setSegmentEditorError(generatedVideoEditUnavailableTitle);
+      setSegmentEditorLoadError(generatedVideoEditUnavailableTitle);
       return;
     }
 
@@ -12501,6 +12525,7 @@ export function WorkspacePage({
     if (nextMode === "default") {
       closeSegmentAiPhotoModal();
       resetSegmentEditorPreviewPlaybackState({ clearRefs: true });
+      setSegmentEditorLoadError(null);
       setCreateMode("default");
       return;
     }
@@ -12642,6 +12667,7 @@ export function WorkspacePage({
         segmentEditorFreshRouteFetchKeyRef.current = null;
         segmentEditorFreshRouteAttemptedKeyRef.current = null;
         setSegmentEditorDraft(null);
+        setSegmentEditorLoadError(null);
         setCreateMode("default");
         setStudioView("projects");
       });
@@ -12659,6 +12685,7 @@ export function WorkspacePage({
         segmentEditorFreshRouteFetchKeyRef.current = null;
         segmentEditorFreshRouteAttemptedKeyRef.current = null;
         setSegmentEditorDraft(null);
+        setSegmentEditorLoadError(null);
         setCreateMode("default");
         setStudioView("media");
       });
@@ -12939,7 +12966,7 @@ export function WorkspacePage({
         shouldRequestWorkspaceSegmentEditorOpenRouteRefresh(
           pendingRouteSync.didReachPendingRoute,
           isSegmentEditorLoading,
-          Boolean(segmentEditorError),
+          Boolean(segmentEditorLoadError),
         )
       ) {
         requestFreshRouteSession();
@@ -12970,7 +12997,7 @@ export function WorkspacePage({
 
     if (
       segmentEditorRouteRestoreKeyRef.current === restoreKey &&
-      (isSegmentEditorLoading || Boolean(segmentEditorError))
+      (isSegmentEditorLoading || Boolean(segmentEditorLoadError))
     ) {
       return;
     }
@@ -13055,7 +13082,7 @@ export function WorkspacePage({
     routeStudioState.segmentIndex,
     segmentEditorLoadedSession,
     segmentEditorDraft,
-    segmentEditorError,
+    segmentEditorLoadError,
     session.email,
   ]);
 
@@ -22695,6 +22722,7 @@ export function WorkspacePage({
     }
 
     setProjectDeleteError(null);
+    setProjectEditError(null);
     setProjectPendingDelete(project);
     setProjectPendingDeleteProjects([project]);
   };
@@ -22711,6 +22739,7 @@ export function WorkspacePage({
     }
 
     setProjectDeleteError(null);
+    setProjectEditError(null);
     setProjectPendingDelete(projectsToDelete[0] ?? null);
     setProjectPendingDeleteProjects(projectsToDelete);
   };
@@ -22849,7 +22878,7 @@ export function WorkspacePage({
     initialError?: string | null,
     initialPlatform: WorkspacePublishPlatform = "youtube",
   ) => {
-    const resolvedInitialPlatform = isInstagramHideEnabled && initialPlatform === "instagram" ? "youtube" : initialPlatform;
+    const resolvedInitialPlatform = isInstagramPublishingUnavailable && initialPlatform === "instagram" ? "youtube" : initialPlatform;
     publishRunRef.current += 1;
     const runId = publishRunRef.current;
     const optimisticBootstrap = buildOptimisticPublishBootstrap(videoProjectId, title, resolvedInitialPlatform);
@@ -23016,7 +23045,7 @@ export function WorkspacePage({
 
   const handleStartPlatformConnect = async () => {
     if (!publishTargetVideoProjectId) return;
-    if (isInstagramHideEnabled && publishPlatform === "instagram") {
+    if (isInstagramPublishingUnavailable && publishPlatform === "instagram") {
       setPublishError(workspaceText(locale, "Instagram пока недоступен. Скоро.", "Instagram publishing is not available yet. Coming soon."));
       return;
     }
@@ -23101,7 +23130,7 @@ export function WorkspacePage({
 
   const handleSubmitPublish = async () => {
     if (!publishTargetVideoProjectId) return;
-    if (isInstagramHideEnabled && publishPlatform === "instagram") {
+    if (isInstagramPublishingUnavailable && publishPlatform === "instagram") {
       setPublishError(workspaceText(locale, "Instagram пока недоступен. Скоро.", "Instagram publishing is not available yet. Coming soon."));
       return;
     }
@@ -23179,7 +23208,7 @@ export function WorkspacePage({
   };
 
   const handlePublishPlatformChange = (nextPlatform: WorkspacePublishPlatform) => {
-    if (nextPlatform === publishPlatform || !publishTargetVideoProjectId || (isInstagramHideEnabled && nextPlatform === "instagram")) {
+    if (nextPlatform === publishPlatform || !publishTargetVideoProjectId || (isInstagramPublishingUnavailable && nextPlatform === "instagram")) {
       return;
     }
 
@@ -24484,27 +24513,42 @@ export function WorkspacePage({
   };
 
   const handleOpenProjectSegmentEditor = async (project: WorkspaceProject) => {
-    if (!project.adId) {
-      setSegmentEditorError("Редактор Shorts доступен только для сохранённого проекта.");
+    const projectId = project.adId;
+    if (!projectId) {
+      setProjectEditError("Редактор Shorts доступен только для сохранённого проекта.");
       return;
     }
 
     if (project.status !== "ready" || !project.videoUrl) {
-      setSegmentEditorError(generatedVideoProjectPreparingTitle);
+      setProjectEditError(generatedVideoProjectPreparingTitle);
       return;
     }
 
-    setActiveTab("studio");
-    setStudioView("create");
-    if (segmentEditorDraft?.projectId && segmentEditorDraft.projectId !== project.adId) {
+    if (segmentEditorDraft?.projectId && segmentEditorDraft.projectId !== projectId) {
       stashCurrentSegmentEditorDraft();
     }
 
-    await ensureSegmentEditorDraftForProject(
-      project.adId,
-      {
-        ...getWorkspaceSegmentEditorProjectOpenOptions(),
-        bypassCache: true,
+    await openWorkspaceProjectEditorAfterSuccessfulLoad(
+      () =>
+        ensureSegmentEditorDraftForProject(
+          projectId,
+          {
+            ...getWorkspaceSegmentEditorProjectOpenOptions(),
+            bypassCache: true,
+            onLoadError: setProjectEditError,
+            openDraft: false,
+            syncRoute: false,
+          },
+        ),
+      (draft) => {
+        setProjectEditError(null);
+        setActiveTab("studio");
+        setStudioView("create");
+        openSegmentEditorWithDraft(draft);
+        syncStudioRouteSection("edit", {
+          projectId,
+          segmentIndex: 0,
+        });
       },
     );
   };
@@ -25867,7 +25911,7 @@ export function WorkspacePage({
           : null;
     const publishResumePlatform: WorkspacePublishPlatform =
       instagramError || connectedPlatform === "instagram"
-        ? isInstagramHideEnabled
+        ? isInstagramPublishingUnavailable
           ? "youtube"
           : "instagram"
         : "youtube";
@@ -25910,7 +25954,7 @@ export function WorkspacePage({
     searchParams.delete("instagram_error");
     searchParams.delete("instagram_connected");
     navigate(localizePath(buildStudioRouteUrl(`?${searchParams.toString()}`, "create")), { replace: true });
-  }, [hasLoadedProjects, isProjectsLoading, isInstagramHideEnabled, locale, location.search, navigate, projects]);
+  }, [hasLoadedProjects, isProjectsLoading, isInstagramPublishingUnavailable, locale, location.search, navigate, projects]);
 
   const isStudioRouteVisible = activeTab === "studio";
   const effectivePublishStatus = normalizePublishJobStatus(publishJobStatus?.status);
@@ -37916,9 +37960,9 @@ export function WorkspacePage({
             ) : null}
 
               <div className={`studio-canvas-content${createMode === "segment-editor" ? " is-segment-editor" : ""}`}>
-                {segmentEditorError ? (
+                {createMode === "segment-editor" && visibleSegmentEditorError ? (
                   <div className="studio-segment-editor__status is-error" role="status" aria-live="polite">
-                    {segmentEditorError}
+                    {visibleSegmentEditorError}
                   </div>
                 ) : null}
                 <div className="studio-canvas-create-layout">
@@ -38627,18 +38671,18 @@ export function WorkspacePage({
                     className={`studio-canvas-preview__placeholder studio-canvas-preview__placeholder--segment-editor${
                       isSegmentEditorLoading ? " is-loading" : ""
                     }`}
-                    role={isSegmentEditorLoading ? "status" : segmentEditorError ? "alert" : undefined}
-                    aria-live={isSegmentEditorLoading || segmentEditorError ? "polite" : undefined}
+                    role={isSegmentEditorLoading ? "status" : visibleSegmentEditorError ? "alert" : undefined}
+                    aria-live={isSegmentEditorLoading || visibleSegmentEditorError ? "polite" : undefined}
                   >
                     {isSegmentEditorLoading ? (
                       <>
                         <span className="studio-canvas-preview__spinner" aria-hidden="true"></span>
                         <strong>{workspaceText(locale, "Загрузка...", "Loading...")}</strong>
                       </>
-                    ) : segmentEditorError ? (
+                    ) : visibleSegmentEditorError ? (
                       <>
                         <strong>{workspaceText(locale, "Редактор не открылся", "Editor did not open")}</strong>
-                        <p>{segmentEditorError}</p>
+                        <p>{visibleSegmentEditorError}</p>
                       </>
                     ) : (
                       <>
@@ -38911,9 +38955,9 @@ export function WorkspacePage({
 
             {studioView === "projects" ? (
               <div className="studio-projects">
-              {projectDeleteError ? (
+              {projectEditError || projectDeleteError ? (
                 <p className="project-action-error" role="alert">
-                  {projectDeleteError}
+                  {projectEditError || projectDeleteError}
                 </p>
               ) : null}
               {isProjectsLoading ? (
@@ -40754,7 +40798,6 @@ export function WorkspacePage({
           plannerStyle={publishPlannerStyle}
           plannerTriggerRef={publishPlannerTriggerRef}
           platform={publishPlatform}
-          isInstagramHideEnabled={isInstagramHideEnabled}
           platforms={["youtube", "instagram"]}
           primaryActionLabel={publishPrimaryActionLabel}
           publishError={publishError}
@@ -41004,9 +41047,9 @@ export function WorkspacePage({
 
                   {!isProjectsLoading && !projectsError && projects.length ? (
                     <div className="account-library account-library--projects">
-                      {projectDeleteError ? (
+                      {projectEditError || projectDeleteError ? (
                         <p className="project-action-error" role="alert">
-                          {projectDeleteError}
+                          {projectEditError || projectDeleteError}
                         </p>
                       ) : null}
                       {accountProjectGroups.flatMap((group: WorkspaceProjectStackGroup<WorkspaceProject>) => {

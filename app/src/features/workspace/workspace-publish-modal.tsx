@@ -7,6 +7,7 @@ import {
   shiftPublishMonth,
 } from "./workspace-publish-helpers";
 import {
+  isWorkspacePublishPlatformAvailable,
   workspaceText,
   type WorkspacePublishBootstrapPayload,
   type WorkspacePublishChannel,
@@ -43,7 +44,6 @@ type WorkspacePublishModalProps = {
   isOpen: boolean;
   isPlannerOpen: boolean;
   locale: Locale;
-  isInstagramHideEnabled: boolean;
   mode: "now" | "schedule";
   onCalendarDaySelect: (nextDate: Date) => void;
   onClose: () => void;
@@ -116,7 +116,6 @@ export function WorkspacePublishModal({
   isOpen,
   isPlannerOpen,
   locale,
-  isInstagramHideEnabled,
   mode,
   onCalendarDaySelect,
   onClose,
@@ -162,6 +161,7 @@ export function WorkspacePublishModal({
     ? workspaceText(locale, "Аккаунт", "Account")
     : workspaceText(locale, "Канал", "Channel");
   const instagramSoonLabel = workspaceText(locale, "Скоро", "Soon");
+  const isInstagramPublishingUnavailable = !isWorkspacePublishPlatformAvailable("instagram");
   const platformOptions: Array<{
     id: WorkspacePublishPlatform;
     eyebrow: string;
@@ -178,11 +178,11 @@ export function WorkspacePublishModal({
     {
       id: "instagram" as const,
       eyebrow: "Instagram",
-      title: isInstagramHideEnabled ? workspaceText(locale, `Instagram Reels (${instagramSoonLabel})`, `Instagram Reels (${instagramSoonLabel})`) : "Instagram Reels",
-      description: isInstagramHideEnabled
+      title: isInstagramPublishingUnavailable ? workspaceText(locale, `Instagram Reels (${instagramSoonLabel})`, `Instagram Reels (${instagramSoonLabel})`) : "Instagram Reels",
+      description: isInstagramPublishingUnavailable
         ? workspaceText(locale, "Instagram скоро будет доступен.", "Instagram is coming soon.")
         : workspaceText(locale, "Публикация в подключённый professional аккаунт.", "Publish to a connected professional account."),
-      isDisabled: isInstagramHideEnabled,
+      isDisabled: isInstagramPublishingUnavailable,
     },
   ].filter((option) => platforms.includes(option.id));
 

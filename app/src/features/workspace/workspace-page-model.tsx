@@ -1019,6 +1019,11 @@ export type WorkspacePublishBootstrapPayload = {
   videoProjectId: number;
 };
 
+export const WORKSPACE_INSTAGRAM_PUBLISHING_ENABLED = false;
+
+export const isWorkspacePublishPlatformAvailable = (platform: WorkspacePublishPlatform) =>
+  platform !== "instagram" || WORKSPACE_INSTAGRAM_PUBLISHING_ENABLED;
+
 export const getPublishBootstrapForPlatform = (
   bootstrap: WorkspacePublishBootstrapPayload | null,
   platform: WorkspacePublishPlatform,
@@ -1263,6 +1268,19 @@ export const isWorkspaceSegmentEditorProjectUnavailableError = (value: string) =
     normalized.includes("project deleted") ||
     normalized.includes("not available for editing")
   );
+};
+
+export const openWorkspaceProjectEditorAfterSuccessfulLoad = async <TDraft,>(
+  loadDraft: () => Promise<TDraft | null | undefined>,
+  openDraft: (draft: TDraft) => void,
+) => {
+  const draft = await loadDraft();
+  if (!draft) {
+    return false;
+  }
+
+  openDraft(draft);
+  return true;
 };
 
 export const isWorkspaceSegmentEditorPreparingError = (value: string) => {
