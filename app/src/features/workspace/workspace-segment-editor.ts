@@ -5161,6 +5161,10 @@ export const isWorkspaceSegmentStaleMeasuredRenderedPhotoDuration = (
   );
   const draftVisualIdentity = getWorkspaceSegmentCurrentVisualIdentityKey(draftSegment);
   const baselineVisualIdentity = getWorkspaceSegmentCurrentVisualIdentityKey(baselineSegment);
+  const draftVoiceoverAssetId = getWorkspaceSegmentVoiceoverAssetIdForInference(draftSegment);
+  const baselineVoiceoverAssetId = getWorkspaceSegmentVoiceoverAssetIdForInference(baselineSegment);
+  const hasChangedVoiceoverAsset =
+    draftVoiceoverAssetId !== null && draftVoiceoverAssetId !== baselineVoiceoverAssetId;
 
   return Boolean(
     (isWorkspaceSegmentHoldableRenderedPhotoVisual(draftSegment) ||
@@ -5170,6 +5174,7 @@ export const isWorkspaceSegmentStaleMeasuredRenderedPhotoDuration = (
       baselineDurationSeconds !== null &&
       Boolean(draftVisualIdentity) &&
       draftVisualIdentity === baselineVisualIdentity &&
+      !hasChangedVoiceoverAsset &&
       !areWorkspaceSegmentDurationValuesEqual(draftDurationSeconds, baselineDurationSeconds)
   );
 };

@@ -7524,14 +7524,15 @@ export function WorkspacePage({
     selectedSegmentReferenceCharacterIds,
   ]);
   useEffect(() => {
-    setSelectedSegmentReferenceScenes((current) =>
-      pruneWorkspaceProjectSceneReferenceSelections(
-        current,
-        projectSceneReferenceOptions,
-        (segmentEditorDraft?.segments ?? []).map((segment) => segment.index),
-      ),
+    const nextSelections = pruneWorkspaceProjectSceneReferenceSelections(
+      selectedSegmentReferenceScenes,
+      projectSceneReferenceOptions,
+      (segmentEditorDraft?.segments ?? []).map((segment) => segment.index),
     );
-  }, [projectSceneReferenceOptions, segmentEditorDraft?.segments]);
+    if (nextSelections !== selectedSegmentReferenceScenes) {
+      setSelectedSegmentReferenceScenes(nextSelections);
+    }
+  }, [projectSceneReferenceOptions, segmentEditorDraft?.segments, selectedSegmentReferenceScenes]);
   useEffect(() => {
     activeSegmentPlaybackIndexRef.current = activeSegment ? activeSegmentIndex : null;
   }, [activeSegment, activeSegmentIndex]);

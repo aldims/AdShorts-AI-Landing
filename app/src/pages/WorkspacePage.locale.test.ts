@@ -704,6 +704,11 @@ describe("WorkspacePage segment visual references payload", () => {
     ];
 
     expect(pruneWorkspaceProjectSceneReferenceSelections({ 1: 0, 2: 1, 4: 0 }, options, [0, 1, 2])).toEqual({ 1: 0 });
+
+    const unchangedSelections = { 1: 0 };
+    expect(
+      pruneWorkspaceProjectSceneReferenceSelections(unchangedSelections, options, [0, 1, 2]),
+    ).toBe(unchangedSelections);
   });
 
   it("uploads a scratch scene video frame without a project or segment binding", () => {
