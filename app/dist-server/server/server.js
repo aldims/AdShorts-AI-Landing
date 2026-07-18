@@ -25,7 +25,7 @@ import { ensureWorkspacePreviewImage, getWorkspacePreviewImageCacheKey, } from "
 import { ensureWorkspaceMediaAssetPlayback, getWorkspaceMediaAssetPlaybackCacheKey, } from "./media-asset-playback.js";
 import { ensureWorkspaceSegmentVideoCache, getWorkspaceSegmentVideoCacheKey, } from "./segment-video-cache.js";
 import { createTelegramOidcSession, getTelegramUserProfile, getTelegramUserProfileFromIdToken, parseTelegramOidcSession, parseTelegramLoginNonce, serializeTelegramLoginNonce, serializeTelegramOidcSession, TELEGRAM_LOGIN_NONCE_COOKIE_NAME, TELEGRAM_LOGIN_NONCE_MAX_AGE_MS, TELEGRAM_OIDC_SESSION_COOKIE_NAME, verifyTelegramLogin, } from "./telegram.js";
-import { createStudioSegmentAiPhotoJob, createStudioProjectCharacter, getStudioSegmentAiVideoPlaybackAsset, createStudioSegmentAiVideoJob, createStudioSegmentInfographicJob, createStudioSegmentImageEditJob, createStudioSegmentPhotoAnimationJob, createStudioSegmentSceneSoundJob, setStudioSegmentSceneSoundSelection, createStudioBatchVoiceoverJob, createStudioProjectVoiceoverJob, createStudioSegmentVoiceoverJob, createStudioSegmentTalkingPhotoJob, createStudioGenerationJob, generateStudioSegmentAiPhoto, generateStudioContentPlanIdeas, getStudioSegmentAiPhotoJobStatus, getStudioSegmentAiVideoJobPosterPath, getStudioSegmentAiVideoJobStatus, getStudioSegmentInfographicJobStatus, getStudioSegmentImageEditJobStatus, getStudioSegmentImageUpscaleJobStatus, getStudioSegmentPhotoAnimationPlaybackAsset, getStudioSegmentPhotoAnimationJobPosterPath, getStudioSegmentPhotoAnimationJobStatus, getStudioSegmentSceneSoundJobFileProxyTarget, getStudioSegmentSceneSoundJobStatus, getStudioBatchVoiceoverJobStatus, getStudioProjectVoiceoverJobFileProxyTarget, getStudioProjectVoiceoverJobStatus, getStudioSegmentVoiceoverJobFileProxyTarget, getStudioSegmentVoiceoverJobStatus, getStudioSegmentTalkingPhotoPlaybackAsset, getStudioSegmentTalkingPhotoJobPosterPath, getStudioSegmentTalkingPhotoJobStatus, getStudioPlaybackAsset, getStudioProjectCharacters, getWorkspaceBootstrap, getStudioGenerationAvailability, getStudioGenerationStatus, getStudioVideoProxyTargetByPath, getStudioVideoProxyTarget, invalidateWorkspaceBootstrapCacheByIdentityFragments, StudioVoiceoverTextLimitError, invalidateWorkspaceBootstrapCache, adaptStudioVoiceoverTextToDuration, improveStudioSegmentAiPhotoPrompt, normalizeStudioMediaSegmentIndexForScope, previewStudioSegmentTalkingPhotoSpeaker, translateStudioTexts, STUDIO_GENERATION_UNAVAILABLE_ERROR_CODE, STUDIO_GENERATION_UNAVAILABLE_MESSAGE, StudioGenerationUnavailableError, WorkspaceCreditLimitError, } from "./studio.js";
+import { createStudioSegmentAiPhotoJob, createStudioProjectCharacter, getStudioSegmentAiVideoPlaybackAsset, createStudioSegmentAiVideoJob, createStudioSegmentInfographicJob, createStudioSegmentImageEditJob, createStudioSegmentPhotoAnimationJob, createStudioSegmentSceneSoundJob, setStudioSegmentSceneSoundSelection, createStudioBatchVoiceoverJob, createStudioProjectVoiceoverJob, createStudioSegmentVoiceoverJob, createStudioSegmentTalkingPhotoJob, createStudioGenerationJob, generateStudioSegmentAiPhoto, generateStudioContentPlanIdeas, getStudioSegmentAiPhotoJobStatus, getStudioSegmentAiVideoJobPosterPath, getStudioSegmentAiVideoJobStatus, getStudioSegmentInfographicJobStatus, getStudioSegmentImageEditJobStatus, getStudioSegmentImageUpscaleJobStatus, getStudioSegmentPhotoAnimationPlaybackAsset, getStudioSegmentPhotoAnimationJobPosterPath, getStudioSegmentPhotoAnimationJobStatus, getStudioSegmentSceneSoundJobFileProxyTarget, getStudioSegmentSceneSoundJobStatus, getStudioBatchVoiceoverJobStatus, getStudioProjectVoiceoverJobFileProxyTarget, getStudioProjectVoiceoverJobStatus, getStudioSegmentVoiceoverJobFileProxyTarget, getStudioSegmentVoiceoverJobStatus, getStudioSegmentTalkingPhotoPlaybackAsset, getStudioSegmentTalkingPhotoJobPosterPath, getStudioSegmentTalkingPhotoJobStatus, getStudioPlaybackAsset, getStudioProjectCharacters, getWorkspaceBootstrap, getStudioGenerationAvailability, getStudioGenerationStatus, getStudioVideoProxyTargetByPath, getStudioVideoProxyTarget, invalidateWorkspaceBootstrapCacheByIdentityFragments, StudioVoiceoverTextLimitError, invalidateWorkspaceBootstrapCache, adaptStudioVoiceoverTextToDuration, improveStudioSegmentAiPhotoPrompt, normalizeStudioMediaSegmentIndexForScope, previewStudioSegmentTalkingPhotoSpeaker, translateStudioTexts, STUDIO_GENERATION_UNAVAILABLE_ERROR_CODE, STUDIO_GENERATION_UNAVAILABLE_MESSAGE, StudioGenerationUnavailableError, WorkspaceCreditLimitError, uploadStudioExtractedSceneSound, } from "./studio.js";
 import { normalizeStudioGenerateMultipartSegmentState } from "./studio-generate-multipart.js";
 import { getStudioVoicePreview, StudioVoicePreviewNotFoundError } from "./voice-preview.js";
 import { normalizeRequiredJsonNonNegativeInteger } from "./request-values.js";
@@ -44,6 +44,7 @@ import { buildAdsflowUrl, fetchUpstreamResponse, postAdsflowJson, UpstreamFetchE
 import { initServerLogging, logServerEvent } from "./logger.js";
 import { resolveAdsflowWebSignalContext, runWithAdsflowWebSignal, setAdsflowWebDeviceCookie, } from "./web-device.js";
 import { verifyVideoProxyToken } from "./video-proxy-token.js";
+import { extractUploadedVideoAudio } from "./uploaded-video-audio.js";
 initServerLogging();
 const app = express();
 const studioSegmentInfographicCohort = new Set(String(env.studioSegmentInfographicCohort ?? "")
@@ -2922,6 +2923,71 @@ app.post("/api/studio/media-upload/complete", async (req, res) => {
         });
     }
 });
+app.post("/api/studio/media-upload/extract-audio", async (req, res) => {
+    const session = await auth.api.getSession({
+        headers: fromNodeHeaders(req.headers),
+    });
+    if (!session?.user) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const sourceAssetId = normalizeRequestPositiveInteger(req.body?.sourceAssetId ?? req.body?.source_asset_id);
+    const projectId = normalizeRequestPositiveInteger(req.body?.projectId ?? req.body?.project_id);
+    const segmentIndex = normalizeRequestNonNegativeInteger(req.body?.segmentIndex ?? req.body?.segment_index);
+    const language = req.body?.language === "en" ? "en" : "ru";
+    const rawFileName = typeof req.body?.fileName === "string" ? req.body.fileName.trim() : "";
+    if (!sourceAssetId || segmentIndex === undefined) {
+        res.status(400).json({ error: "sourceAssetId and segmentIndex are required." });
+        return;
+    }
+    try {
+        const externalUserId = await resolvePreferredExternalUserId(session.user);
+        const upstreamUrl = buildAdsflowUrl(`/api/media/${sourceAssetId}/download`, {
+            admin_token: env.adsflowAdminToken,
+            external_user_id: externalUserId,
+        });
+        const sourceAsset = await ensureWorkspaceMediaAssetPlayback({
+            assetId: sourceAssetId,
+            cacheKey: getWorkspaceMediaAssetPlaybackCacheKey({
+                assetId: sourceAssetId,
+                externalUserId,
+                targetUrl: upstreamUrl,
+            }),
+            upstreamUrl,
+        });
+        const extractedAudio = await extractUploadedVideoAudio(sourceAsset.absolutePath);
+        if (!extractedAudio) {
+            res.json({ data: { asset: null, hasAudio: false } });
+            return;
+        }
+        const sourceBaseName = basename(rawFileName || `segment-${segmentIndex + 1}-video`)
+            .replace(/\.[^.]+$/u, "")
+            .replace(/[^\p{L}\p{N}._ -]+/gu, "-")
+            .trim()
+            .slice(0, 120) || `segment-${segmentIndex + 1}-video`;
+        const asset = await uploadStudioExtractedSceneSound(session.user, {
+            bytes: extractedAudio.bytes,
+            externalUserId,
+            fileName: `${sourceBaseName}-audio.m4a`,
+            language,
+            mimeType: extractedAudio.mimeType,
+            projectId,
+            segmentIndex,
+        });
+        res.json({ data: { asset, hasAudio: true } });
+    }
+    catch (error) {
+        console.error("[studio] Failed to extract uploaded video audio", {
+            error: getServerErrorMessage(error, "Failed to extract uploaded video audio."),
+            projectId: projectId ?? null,
+            segmentIndex,
+            sourceAssetId,
+        });
+        res.status(502).json({
+            error: error instanceof Error ? error.message : "Failed to extract uploaded video audio.",
+        });
+    }
+});
 app.post("/api/studio/media-upload/abort", async (req, res) => {
     const session = await auth.api.getSession({
         headers: fromNodeHeaders(req.headers),
@@ -3929,6 +3995,7 @@ app.post("/api/studio/segment-ai-video/jobs", async (req, res) => {
     const imageDataUrl = typeof req.body?.imageDataUrl === "string" ? req.body.imageDataUrl.trim() : "";
     const imageFileName = typeof req.body?.imageFileName === "string" ? req.body.imageFileName.trim() : "";
     const imageMimeType = typeof req.body?.imageMimeType === "string" ? req.body.imageMimeType.trim() : "";
+    const jobId = typeof req.body?.jobId === "string" ? req.body.jobId.trim() : "";
     const imageAssetId = Number(req.body?.imageAssetId ?? 0);
     const preserveCharacters = req.body?.preserveCharacters === true;
     const characterContinuityMode = typeof req.body?.characterContinuityMode === "string" ? req.body.characterContinuityMode.trim() : "";
@@ -3947,12 +4014,17 @@ app.post("/api/studio/segment-ai-video/jobs", async (req, res) => {
         res.status(400).json({ error: "Segment index is required." });
         return;
     }
+    if (jobId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(jobId)) {
+        res.status(400).json({ error: "A valid AI video job id is required." });
+        return;
+    }
     try {
         const job = await createStudioSegmentAiVideoJob(prompt, session.user, {
             imageAssetId: Number.isFinite(imageAssetId) && imageAssetId > 0 ? imageAssetId : undefined,
             imageDataUrl: imageDataUrl || undefined,
             imageFileName: imageFileName || undefined,
             imageMimeType: imageMimeType || undefined,
+            jobId: jobId || undefined,
             language,
             billingQuality,
             characterContinuityMode,
@@ -3970,7 +4042,14 @@ app.post("/api/studio/segment-ai-video/jobs", async (req, res) => {
     }
     catch (error) {
         console.error("[studio] Failed to create segment AI video job", error);
-        const statusCode = error instanceof WorkspaceCreditLimitError ? 402 : 500;
+        const upstreamStatus = Number(error?.statusCode);
+        const statusCode = error instanceof WorkspaceCreditLimitError
+            ? 402
+            : Number.isInteger(upstreamStatus) && upstreamStatus >= 400 && upstreamStatus < 500
+                ? upstreamStatus
+                : upstreamStatus === 503
+                    ? 503
+                    : 500;
         res.status(statusCode).json({
             error: error instanceof Error ? error.message : "Failed to create segment AI video job.",
         });
@@ -3992,8 +4071,16 @@ app.get("/api/studio/segment-ai-video/jobs/:jobId", async (req, res) => {
         res.json({ data: status });
     }
     catch (error) {
-        console.error("[studio] Failed to fetch segment AI video job status", error);
-        res.status(500).json({
+        const upstreamStatus = Number(error?.statusCode);
+        if (upstreamStatus !== 404) {
+            console.error("[studio] Failed to fetch segment AI video job status", error);
+        }
+        const statusCode = Number.isInteger(upstreamStatus) && upstreamStatus >= 400 && upstreamStatus < 500
+            ? upstreamStatus
+            : upstreamStatus === 503
+                ? 503
+                : 500;
+        res.status(statusCode).json({
             error: error instanceof Error ? error.message : "Failed to fetch segment AI video job status.",
         });
     }

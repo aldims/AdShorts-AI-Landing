@@ -1,5 +1,6 @@
 import { areWorkspaceMediaLibraryUrlsEqual, createWorkspaceMediaLibraryItem, dedupeWorkspaceMediaLibraryPageItems, getWorkspaceMediaLibraryUrlMarker, getWorkspaceImageDownloadName, getWorkspaceProjectDisplayTitle, getWorkspaceVideoDownloadName, normalizeWorkspaceMediaLibraryCreatedAt, sortWorkspaceMediaLibraryItemsNewestFirst, } from "../src/lib/workspaceMediaLibrary.js";
 import { env } from "./env.js";
+import { isWorkspaceNonAiRenderedPhotoVideoAsset } from "../shared/workspace-media-assets.js";
 import { buildWorkspaceMediaAssetRef, isAdsflowMediaAssetPayload, } from "./media-assets.js";
 import { buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
 import { ensureWorkspaceVideoPoster, getWorkspaceVideoPosterCacheKey, } from "./project-posters.js";
@@ -17,7 +18,7 @@ const WORKSPACE_MEDIA_LIBRARY_INDEX_SYNC_MIN_REMAINING_MS = 250;
 const WORKSPACE_MEDIA_LIBRARY_SEGMENT_CONCURRENCY = 6;
 const WORKSPACE_MEDIA_LIBRARY_DEFAULT_LIMIT = 24;
 const WORKSPACE_MEDIA_LIBRARY_MAX_LIMIT = 96;
-const WORKSPACE_MEDIA_LIBRARY_INDEX_SCHEMA_VERSION = "media-v7-segment-library-kind";
+const WORKSPACE_MEDIA_LIBRARY_INDEX_SCHEMA_VERSION = "media-v9-ai-video-provenance";
 const workspaceMediaLibraryCache = new Map();
 const workspaceMediaLibraryInFlight = new Map();
 const workspaceMediaLibraryIndexWarmInFlight = new Set();
@@ -342,6 +343,7 @@ const isWorkspaceDurableAiGeneratedAsset = (asset) => {
 };
 export const getWorkspaceMediaLibraryKindFromDurableAsset = (asset) => {
     if (!asset ||
+        isWorkspaceNonAiRenderedPhotoVideoAsset(asset) ||
         isWorkspaceDurableFinalVideoAsset(asset) ||
         isWorkspaceDurableSourceInputAsset(asset) ||
         isWorkspaceDurableEditorOnlyAsset(asset) ||
@@ -441,6 +443,8 @@ export const buildWorkspaceDurableMediaLibraryItem = (rawAsset) => {
         assetKind: asset.kind,
         assetLifecycle: asset.lifecycle,
         assetMediaType: asset.mediaType,
+        assetRenderedAnimationMode: asset.renderedAnimationMode,
+        assetRenderedViaI2v: asset.renderedViaI2v,
         createdAt: asset.createdAt,
         downloadName: previewKind === "video"
             ? getWorkspaceVideoDownloadName(downloadStem)
@@ -654,6 +658,8 @@ const toWorkspaceMediaIndexStoredItems = (items) => items.map((item) => ({
     assetKind: item.assetKind,
     assetLifecycle: item.assetLifecycle,
     assetMediaType: item.assetMediaType,
+    assetRenderedAnimationMode: item.assetRenderedAnimationMode,
+    assetRenderedViaI2v: item.assetRenderedViaI2v,
     createdAt: item.createdAt,
     kind: item.kind,
     previewKind: item.previewKind,
@@ -685,6 +691,8 @@ const hydrateWorkspaceMediaLibraryIndexEntry = (project, entry) => {
             assetKind: item.assetKind ?? null,
             assetLifecycle: item.assetLifecycle ?? null,
             assetMediaType: item.assetMediaType ?? null,
+            assetRenderedAnimationMode: item.assetRenderedAnimationMode ?? null,
+            assetRenderedViaI2v: item.assetRenderedViaI2v ?? null,
             createdAt: item.createdAt ?? fallbackCreatedAt,
             downloadName: buildWorkspaceMediaLibraryDownloadName(projectTitle, item.segmentListIndex, item.kind),
             downloadUrl,
@@ -735,6 +743,7 @@ export const buildWorkspacePersistedMediaLibraryItems = (project, session) => {
         if (segment.mediaType !== "photo") {
             const hasAiGeneratedCurrentSource = isWorkspaceMediaLibraryAiGeneratedSegmentSource(segment.currentSourceKind, segment.currentAsset);
             const hasAiVideoVariant = hasAiGeneratedCurrentSource &&
+                !isWorkspaceNonAiRenderedPhotoVideoAsset(segment.currentAsset) &&
                 Boolean(currentPreviewUrl || currentPlaybackUrl) &&
                 (!originalPreviewUrl ||
                     !originalPlaybackUrl ||
@@ -756,11 +765,14 @@ export const buildWorkspacePersistedMediaLibraryItems = (project, session) => {
                     const isTalkingPhotoVariant = currentClassifier.includes("talking_photo") ||
                         currentClassifier.includes("talking-photo") ||
                         currentClassifier.includes("talking_avatar");
-                    const isPhotoAnimationVariant = currentClassifier.includes("photo_animation") ||
-                        currentClassifier.includes("photo-animation") ||
-                        originalAssetMediaType === "photo" ||
-                        originalAssetMediaType === "image" ||
-                        originalAssetMimeType.startsWith("image/");
+                    const isExplicitAiVideoVariant = currentClassifier.includes("ai_video") ||
+                        currentClassifier.includes("ai-video");
+                    const isPhotoAnimationVariant = !isExplicitAiVideoVariant &&
+                        (currentClassifier.includes("photo_animation") ||
+                            currentClassifier.includes("photo-animation") ||
+                            originalAssetMediaType === "photo" ||
+                            originalAssetMediaType === "image" ||
+                            originalAssetMimeType.startsWith("image/"));
                     const videoKind = isTalkingPhotoVariant ? "talking_photo" : isPhotoAnimationVariant ? "photo_animation" : "ai_video";
                     const videoSuffix = isTalkingPhotoVariant ? "talking-photo" : isPhotoAnimationVariant ? "animation" : "ai-video";
                     const assetPosterUrl = segment.currentAsset?.assetId
@@ -772,6 +784,8 @@ export const buildWorkspacePersistedMediaLibraryItems = (project, session) => {
                         assetKind: segment.currentAsset?.kind ?? null,
                         assetLifecycle: segment.currentAsset?.lifecycle ?? null,
                         assetMediaType: segment.currentAsset?.mediaType ?? null,
+                        assetRenderedAnimationMode: segment.currentAsset?.renderedAnimationMode ?? null,
+                        assetRenderedViaI2v: segment.currentAsset?.renderedViaI2v ?? null,
                         createdAt: segment.currentAsset?.createdAt ?? fallbackCreatedAt,
                         downloadName: getWorkspaceVideoDownloadName(`${projectTitle}-segment-${segmentListIndex + 1}-${videoSuffix}`),
                         downloadUrl: appendUrlToken(currentPlaybackUrl ?? aiVideoPreviewUrl, "download", `${downloadToken}:${segment.index}:${videoSuffix}`),
@@ -807,6 +821,8 @@ export const buildWorkspacePersistedMediaLibraryItems = (project, session) => {
                 assetKind: segment.originalAsset?.kind ?? null,
                 assetLifecycle: segment.originalAsset?.lifecycle ?? null,
                 assetMediaType: segment.originalAsset?.mediaType ?? null,
+                assetRenderedAnimationMode: segment.originalAsset?.renderedAnimationMode ?? null,
+                assetRenderedViaI2v: segment.originalAsset?.renderedViaI2v ?? null,
                 createdAt: segment.originalAsset?.createdAt ?? fallbackCreatedAt,
                 downloadName: getWorkspaceImageDownloadName(`${projectTitle}-segment-${segmentListIndex + 1}`),
                 downloadUrl: appendUrlToken(originalPhotoDownloadUrl ?? originalPhotoPreviewUrl, "download", `${downloadToken}:${segment.index}:original`),
@@ -827,6 +843,7 @@ export const buildWorkspacePersistedMediaLibraryItems = (project, session) => {
             }));
         }
         const hasAnimatedVariant = isWorkspaceMediaLibraryAiGeneratedSegmentSource(segment.currentSourceKind, segment.currentAsset) &&
+            !isWorkspaceNonAiRenderedPhotoVideoAsset(segment.currentAsset) &&
             Boolean(getWorkspacePhotoAnimationPreviewUrl(segment) ||
                 getWorkspacePhotoAnimationDownloadUrl(segment)) &&
             (!areWorkspaceMediaLibraryUrlsEqual(getWorkspacePhotoCurrentComparisonPreviewUrl(segment), getWorkspacePhotoOriginalComparisonPreviewUrl(segment)) ||
@@ -850,6 +867,8 @@ export const buildWorkspacePersistedMediaLibraryItems = (project, session) => {
                     assetKind: segment.currentAsset?.kind ?? null,
                     assetLifecycle: segment.currentAsset?.lifecycle ?? null,
                     assetMediaType: segment.currentAsset?.mediaType ?? null,
+                    assetRenderedAnimationMode: segment.currentAsset?.renderedAnimationMode ?? null,
+                    assetRenderedViaI2v: segment.currentAsset?.renderedViaI2v ?? null,
                     createdAt: segment.currentAsset?.createdAt ?? fallbackCreatedAt,
                     downloadName: getWorkspaceVideoDownloadName(`${projectTitle}-segment-${segmentListIndex + 1}-animation`),
                     downloadUrl: appendUrlToken(animatedDownloadUrl ?? animatedPreviewUrl, "download", `${downloadToken}:${segment.index}:animation`),

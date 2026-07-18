@@ -1,5 +1,28 @@
 const FALLBACK_WORKSPACE_DOWNLOAD_NAME = "adshorts-video";
-export const isWorkspaceMediaLibraryDisplayItem = (item) => item.kind === "ai_photo" || item.kind === "ai_video";
+export const getWorkspaceMediaLibraryDisplayKind = (item) => {
+    if (item.kind === "ai_photo") {
+        return "ai_photo";
+    }
+    if (item.kind === "ai_video" || item.kind === "photo_animation") {
+        return "ai_video";
+    }
+    return null;
+};
+export const isWorkspaceMediaLibraryDisplayItem = (item) => getWorkspaceMediaLibraryDisplayKind(item) !== null;
+export const isWorkspaceMediaLibraryVisualSelectionItem = (item) => {
+    if (item.kind === "photo_animation" && item.source === "persisted") {
+        const assetKind = String(item.assetKind ?? "").trim().toLowerCase();
+        const renderedAnimationMode = String(item.assetRenderedAnimationMode ?? "").trim().toLowerCase();
+        if (assetKind === "rendered_segment") {
+            return item.assetRenderedViaI2v === true || renderedAnimationMode === "i2v";
+        }
+    }
+    return (item.kind === "ai_photo" ||
+        item.kind === "ai_video" ||
+        item.kind === "photo_animation" ||
+        item.kind === "talking_photo" ||
+        item.kind === "image_edit");
+};
 export const normalizeWorkspaceMediaLibraryCreatedAt = (value) => {
     const timestamp = typeof value === "number"
         ? value
@@ -377,6 +400,10 @@ export const createWorkspaceMediaLibraryItem = (options) => {
         assetMediaType: typeof options.assetMediaType === "string" && options.assetMediaType.trim()
             ? options.assetMediaType.trim()
             : null,
+        assetRenderedAnimationMode: typeof options.assetRenderedAnimationMode === "string" && options.assetRenderedAnimationMode.trim()
+            ? options.assetRenderedAnimationMode.trim()
+            : null,
+        assetRenderedViaI2v: typeof options.assetRenderedViaI2v === "boolean" ? options.assetRenderedViaI2v : null,
         createdAt: normalizeWorkspaceMediaLibraryCreatedAt(options.createdAt),
         dedupeKey,
         downloadName: options.downloadName,

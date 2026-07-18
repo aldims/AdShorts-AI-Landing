@@ -2845,6 +2845,7 @@ const normalizeAdsflowSegmentAiVideoAsset = (jobId, payload) => {
     }
     return {
         assetId: normalizePositiveInteger(payload?.media_asset_id) ?? null,
+        durationSeconds: normalizeStudioSegmentManualDurationSeconds(payload?.duration_seconds ?? payload?.duration) ?? undefined,
         fileName: normalizeGenerationText(payload?.file_name) || `segment-ai-video-${jobId}.mp4`,
         fileSize: Math.max(0, Number(payload?.file_size ?? 0)),
         generateAudio: payload?.generate_audio === true,
@@ -2902,6 +2903,7 @@ const normalizeAdsflowSegmentPhotoAnimationAsset = (jobId, payload) => {
     }
     return {
         assetId: normalizePositiveInteger(payload?.media_asset_id) ?? null,
+        durationSeconds: normalizeStudioSegmentManualDurationSeconds(payload?.duration_seconds ?? payload?.duration) ?? undefined,
         fileName: normalizeGenerationText(payload?.file_name) || `segment-photo-animation-${jobId}.mp4`,
         fileSize: Math.max(0, Number(payload?.file_size ?? 0)),
         generateAudio: payload?.generate_audio === true,
@@ -2917,6 +2919,7 @@ const normalizeAdsflowSegmentTalkingPhotoAsset = (jobId, payload) => {
     }
     return {
         assetId: normalizePositiveInteger(payload?.media_asset_id) ?? null,
+        durationSeconds: normalizeStudioSegmentManualDurationSeconds(payload?.duration_seconds ?? payload?.duration) ?? undefined,
         fileName: normalizeGenerationText(payload?.file_name) || `segment-talking-photo-${jobId}.mp4`,
         fileSize: Math.max(0, Number(payload?.file_size ?? 0)),
         mimeType: normalizeGenerationText(payload?.mime_type) || "video/mp4",
@@ -3798,15 +3801,21 @@ export async function createStudioProjectCharacter(projectId, _user, options) {
     };
 }
 const uploadStudioMediaAsset = async (user, options) => {
-    const normalizedDataUrl = String(options.dataUrl ?? "").trim();
-    if (!normalizedDataUrl) {
-        throw new Error("Uploaded media data URL is required.");
-    }
     const normalizedFileName = String(options.fileName ?? "").trim();
     if (!normalizedFileName) {
         throw new Error("Uploaded media file name is required.");
     }
-    const decoded = decodeBinaryDataUrl(normalizedDataUrl);
+    const normalizedDataUrl = String(options.dataUrl ?? "").trim();
+    const sourceBytes = Buffer.isBuffer(options.bytes) ? options.bytes : null;
+    if (!sourceBytes?.length && !normalizedDataUrl) {
+        throw new Error("Uploaded media bytes or data URL are required.");
+    }
+    const decoded = sourceBytes
+        ? {
+            bytes: sourceBytes,
+            mimeType: normalizeGenerationText(options.mimeType) || "application/octet-stream",
+        }
+        : decodeBinaryDataUrl(normalizedDataUrl);
     if (!decoded.bytes.length) {
         throw new Error("Uploaded media file is empty.");
     }
@@ -3852,7 +3861,7 @@ const uploadStudioMediaAsset = async (user, options) => {
         uploadHeaders.set("content-type", normalizedMimeType);
     }
     const uploadResponse = await fetch(uploadUrl, {
-        body: new Blob([decoded.bytes], { type: normalizedMimeType }),
+        body: new Blob([new Uint8Array(decoded.bytes)], { type: normalizedMimeType }),
         headers: uploadHeaders,
         method: normalizeGenerationText(initPayload.upload?.method) || "PUT",
         signal: AbortSignal.timeout(ADSFLOW_MUTATION_TIMEOUT_MS),
@@ -3875,6 +3884,27 @@ const uploadStudioMediaAsset = async (user, options) => {
         timeoutMs: ADSFLOW_MUTATION_TIMEOUT_MS,
     });
     return assetId;
+};
+export const uploadStudioExtractedSceneSound = async (user, options) => {
+    const assetId = await uploadStudioMediaAsset(user, {
+        bytes: options.bytes,
+        externalUserId: options.externalUserId,
+        fileName: options.fileName,
+        kind: "segment_scene_sound",
+        language: options.language,
+        mediaType: "audio",
+        mimeType: options.mimeType,
+        projectId: options.projectId,
+        role: "segment_scene_sound",
+        segmentIndex: options.segmentIndex,
+    });
+    return {
+        assetId,
+        fileName: options.fileName,
+        fileSize: options.bytes.length,
+        mimeType: options.mimeType,
+        remoteUrl: `/api/workspace/media-assets/${assetId}/playback`,
+    };
 };
 const createDirectWorkspaceReferenceAiPhotoJob = async (prompt, user, options) => {
     const jobId = `${DIRECT_SEGMENT_AI_PHOTO_JOB_PREFIX}${randomUUID()}`;
@@ -4088,7 +4118,7 @@ const fetchAdsflowSegmentAiVideoJobStatus = async (jobId, user) => {
     return fetchAdsflowJson(buildAdsflowUrl(`/api/web/segment-ai-video/jobs/${encodeURIComponent(safeJobId)}`, {
         admin_token: env.adsflowAdminToken ?? "",
         external_user_id: externalUserId,
-    }));
+    }), undefined, { silentStatuses: [404] });
 };
 const fetchAdsflowSegmentPhotoAnimationJobStatus = async (jobId, user) => {
     assertAdsflowConfigured();
@@ -4221,6 +4251,7 @@ const consumeWorkspaceGenerationCredit = async (user, amount = 1, language, opti
     }
     return {
         consumed: {
+            debitEventKey: usageEventKey,
             purchased: Math.max(0, Number(payload.consumed.purchased ?? 0)),
             subscription: Math.max(0, Number(payload.consumed.subscription ?? 0)),
         },
@@ -4233,18 +4264,22 @@ const refundWorkspaceGenerationCredit = async (user, consumed, language, options
     }
     const externalUserId = await resolveStudioExternalUserId(user);
     const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
-    const usageEventKey = normalizeGenerationText(options?.usageEventKey) || `usage:web-credit-refund:${randomUUID()}`;
+    const debitEventKey = normalizeGenerationText(consumed.debitEventKey);
+    if (!debitEventKey) {
+        throw new Error("Consumed web credits are missing their debit event key.");
+    }
     const payloadText = await postAdsflowText("/api/web/credits/refund", {
         admin_token: env.adsflowAdminToken,
         consumed_purchased: Math.max(0, Math.trunc(consumed.purchased || 0)),
         consumed_subscription: Math.max(0, Math.trunc(consumed.subscription || 0)),
+        debit_event_key: debitEventKey,
         external_user_id: externalUserId,
         job_id: options?.jobId,
         language: normalizeStudioLanguage(language),
         project_id: options?.projectId,
         referral_source: "landing_site",
         task_type: options?.taskType,
-        usage_event_key: usageEventKey,
+        usage_event_key: `${debitEventKey}:refund`,
         user_email: user.email ?? undefined,
         user_name: user.name ?? undefined,
     });
@@ -4448,7 +4483,6 @@ export async function createStudioGenerationJob(prompt, user, options) {
     }
     await ensureStudioGenerationWorkersAvailable();
     const creditReservationEventKey = `usage:web-video-generation:${randomUUID()}`;
-    const creditReservationRefundEventKey = `${creditReservationEventKey}:refund`;
     const creditTaskType = options?.isRegeneration && !isScratchSegmentEditorGeneration && normalizedProjectId
         ? "video.edit"
         : "video.generate";
@@ -4797,14 +4831,10 @@ export async function createStudioGenerationJob(prompt, user, options) {
         }
         if (!jobCreated && refundAllowed) {
             try {
-                const refundUsageEventKey = createdJobId
-                    ? `usage:${createdJobId}:refund`
-                    : creditReservationRefundEventKey;
                 await refundWorkspaceGenerationCredit(user, creditReservation.consumed, normalizedLanguage, {
                     jobId: createdJobId,
                     projectId: normalizedProjectId ?? undefined,
                     taskType: creditTaskType,
-                    usageEventKey: refundUsageEventKey,
                 });
             }
             catch (refundError) {
@@ -5640,6 +5670,11 @@ export async function createStudioSegmentAiVideoJob(prompt, user, options) {
     const characterIds = normalizePositiveIntegerList(options?.characterIds);
     const referenceAssetIds = normalizePositiveIntegerList(options?.referenceAssetIds);
     const sceneReferenceAssetIds = normalizePositiveIntegerList(options?.sceneReferenceAssetIds);
+    const imageAssetId = normalizePositiveInteger(options?.imageAssetId);
+    const imageDataUrl = String(options?.imageDataUrl ?? "").trim();
+    const imageFileName = String(options?.imageFileName ?? "").trim();
+    const imageMimeType = String(options?.imageMimeType ?? "").trim();
+    const requestedJobId = String(options?.jobId ?? "").trim() || randomUUID();
     const externalUserId = await resolveStudioExternalUserId(user);
     const subscriptionDetails = await fetchAdsflowSubscriptionDetailsForWebMutation(externalUserId, user);
     const payload = await postAdsflowJson("/api/web/segment-ai-video/jobs", {
@@ -5652,6 +5687,11 @@ export async function createStudioSegmentAiVideoJob(prompt, user, options) {
         character_ids: characterIds,
         character_reference_mode: characterReferenceMode,
         character_prompt: normalizedPrompt,
+        image_asset_id: imageAssetId,
+        image_data_url: imageDataUrl || undefined,
+        image_mime_type: imageMimeType || undefined,
+        image_original_name: imageFileName || undefined,
+        job_id: requestedJobId,
         language: normalizedLanguage,
         preserve_characters: preserveCharacters,
         project_id: normalizedProjectId,
@@ -6788,6 +6828,22 @@ export async function getStudioSegmentTalkingPhotoJobStatus(jobId, user) {
         });
         const asset = payload.asset ? normalizeAdsflowSegmentTalkingPhotoAsset(resolvedJobId, payload.asset) : undefined;
         if (asset) {
+            const speechStartTime = payload.speech_start_time === null || typeof payload.speech_start_time === "undefined"
+                ? null
+                : normalizeNumber(payload.speech_start_time);
+            const speechEndTime = payload.speech_end_time === null || typeof payload.speech_end_time === "undefined"
+                ? null
+                : normalizeNumber(payload.speech_end_time);
+            const speechBoundaryDuration = speechStartTime !== null && speechEndTime !== null && speechEndTime > speechStartTime
+                ? roundStudioTimelineSeconds(speechEndTime - speechStartTime)
+                : null;
+            const explicitSpeechDuration = payload.speech_duration === null || typeof payload.speech_duration === "undefined"
+                ? null
+                : normalizeNumber(payload.speech_duration);
+            const speechDuration = explicitSpeechDuration !== null && explicitSpeechDuration > 0
+                ? roundStudioTimelineSeconds(explicitSpeechDuration)
+                : speechBoundaryDuration;
+            const voiceSourceWindow = normalizeAdsflowVoiceSourceWindow(payload);
             warmStudioGeneratedVideoPlayback("segment-talking-photo", resolvedJobId, user);
             warmStudioGeneratedVideoPoster("segment-talking-photo", resolvedJobId, user);
             return {
@@ -6795,7 +6851,19 @@ export async function getStudioSegmentTalkingPhotoJobStatus(jobId, user) {
                 error: normalizeGenerationText(payload.error) || undefined,
                 jobId: resolvedJobId,
                 profile,
+                speechDuration,
+                speechDurationSource: normalizeGenerationText(payload.speech_duration_source).toLowerCase() === "audio" || speechDuration !== null
+                    ? "audio"
+                    : null,
+                speechEndTime: speechStartTime !== null && speechEndTime !== null
+                    ? roundStudioTimelineSeconds(Math.max(speechStartTime, speechEndTime))
+                    : null,
+                speechStartTime: speechStartTime !== null ? roundStudioTimelineSeconds(Math.max(0, speechStartTime)) : null,
+                speechWords: normalizeSegmentVoiceoverSpeechWords(payload.speech_words),
                 status,
+                voiceSourceDuration: voiceSourceWindow.voiceSourceDuration,
+                voiceSourceEndTime: voiceSourceWindow.voiceSourceEndTime,
+                voiceSourceStartTime: voiceSourceWindow.voiceSourceStartTime,
             };
         }
         if (isStudioGeneratedVideoReadyStatus(status)) {
@@ -7347,9 +7415,9 @@ const refundWaveSpeedSegmentAiPhotoJobCredits = async (jobId, user, context) => 
     if (context.refunded) {
         return { ...context.profile };
     }
-    context.refunded = true;
     try {
         context.profile = await refundWorkspaceGenerationCredit(user, context.consumed, context.language);
+        context.refunded = true;
     }
     catch (error) {
         console.error("[studio] Failed to refund WaveSpeed GPT Image 2 credits", error);
