@@ -9,6 +9,7 @@ import {
   getWorkspaceMediaLibraryResolvedDedupeKey,
   isWorkspaceMediaLibraryDisplayItem,
   isWorkspaceMediaLibraryItemHidden,
+  isWorkspaceMediaLibraryVisualSelectionItem,
   sortWorkspaceMediaLibraryItemsNewestFirst,
   type WorkspaceMediaLibraryItem,
 } from "./workspaceMediaLibrary";
@@ -55,6 +56,29 @@ describe("workspace media library display identity", () => {
       .map((item) => item.kind);
 
     expect(visibleKinds).toEqual(["ai_photo", "ai_video"]);
+  });
+
+  it("makes every generated visual available in the scene visual picker", () => {
+    const selectableKinds = [
+      "ai_photo",
+      "ai_video",
+      "photo_animation",
+      "talking_photo",
+      "image_edit",
+      "character_reference",
+      "scene_reference",
+    ]
+      .map((kind) => createMediaLibraryItem({ kind: kind as WorkspaceMediaLibraryItem["kind"] }))
+      .filter(isWorkspaceMediaLibraryVisualSelectionItem)
+      .map((item) => item.kind);
+
+    expect(selectableKinds).toEqual([
+      "ai_photo",
+      "ai_video",
+      "photo_animation",
+      "talking_photo",
+      "image_edit",
+    ]);
   });
 
   it("deduplicates photo animations by their poster image", () => {

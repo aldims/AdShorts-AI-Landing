@@ -987,6 +987,7 @@ import {
   isWorkspaceMediaLibraryDisplayItem,
   isWorkspaceMediaLibraryItemDurableForStorage,
   isWorkspaceMediaLibraryItemHidden,
+  isWorkspaceMediaLibraryVisualSelectionItem,
   sortWorkspaceMediaLibraryItemsNewestFirst,
   type WorkspaceMediaLibraryItem,
   type WorkspaceMediaLibraryItemKind,
@@ -7752,7 +7753,15 @@ export function WorkspacePage({
       ? segmentAiPhotoModalSegment.customVideo.libraryItemKey ?? null
       : null;
   const hasSegmentAiPhotoModalLibrarySelection = Boolean(segmentAiPhotoModalSelectedLibraryItemKey);
-  const segmentAiPhotoModalLibraryItems = visibleMediaLibraryItems;
+  const segmentAiPhotoModalLibraryItems = useMemo(
+    () =>
+      resolvedMediaLibraryItems.filter(
+        (item) =>
+          isWorkspaceMediaLibraryVisualSelectionItem(item) &&
+          !isWorkspaceMediaLibraryItemHidden(item, hiddenMediaLibraryItemKeySet),
+      ),
+    [hiddenMediaLibraryItemKeySet, resolvedMediaLibraryItems],
+  );
   const filteredSegmentAiPhotoModalLibraryItems = useMemo(() => {
     if (segmentAiPhotoModalLibraryFilter === "photo") {
       return segmentAiPhotoModalLibraryItems.filter((item) => item.kind === "ai_photo" || item.kind === "image_edit");

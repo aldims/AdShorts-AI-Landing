@@ -41,6 +41,15 @@ export const isWorkspaceMediaLibraryDisplayItem = (
   item: Pick<WorkspaceMediaLibraryItem, "kind">,
 ) => item.kind === "ai_photo" || item.kind === "ai_video";
 
+export const isWorkspaceMediaLibraryVisualSelectionItem = (
+  item: Pick<WorkspaceMediaLibraryItem, "kind">,
+) =>
+  item.kind === "ai_photo" ||
+  item.kind === "ai_video" ||
+  item.kind === "photo_animation" ||
+  item.kind === "talking_photo" ||
+  item.kind === "image_edit";
+
 export const normalizeWorkspaceMediaLibraryCreatedAt = (value: number | string | null | undefined) => {
   const timestamp =
     typeof value === "number"
