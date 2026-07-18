@@ -1,0 +1,41 @@
+/* Windows does not render the editor's layered backdrop blur as consistently as
+ * macOS. Keep every settings surface opaque there so controls stay readable
+ * regardless of the timeline content behind the portal. */
+html.platform-windows body.segment-editor-open
+  :is(
+    .studio-segment-editor__timeline-visual-menu,
+    .studio-segment-editor__timeline-text-menu,
+    .studio-voice-selector__menu,
+    .studio-video-selector__menu,
+    .studio-music-selector__menu,
+    .studio-subtitle-selector__menu
+  ) {
+  border-color: rgba(148, 163, 184, 0.3);
+  background:
+    radial-gradient(circle at 50% 0%, rgba(59, 130, 246, 0.16), transparent 44%),
+    linear-gradient(145deg, #18263d 0%, #0d1729 54%, #080e1a 100%);
+  box-shadow:
+    0 28px 70px -20px rgba(0, 0, 0, 0.9),
+    0 0 0 1px rgba(3, 7, 18, 0.86),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* Nested cards retain depth without allowing busy timeline details to show
+ * through them when Windows falls back from backdrop filtering. */
+html.platform-windows body.segment-editor-open
+  :is(
+    .studio-segment-editor__timeline-voice-menu,
+    .studio-segment-editor__timeline-subtitle-menu,
+    .studio-segment-editor__timeline-sound-menu
+  )
+  :is(
+    .studio-voice-selector__language-panel,
+    .studio-voice-selector__bulk-textarea,
+    .studio-segment-editor__timeline-text-menu-textarea,
+    .studio-segment-editor__timeline-sound-menu-status,
+    .studio-segment-editor__timeline-sound-menu-preview
+  ) {
+  background-color: #0a1425;
+}
