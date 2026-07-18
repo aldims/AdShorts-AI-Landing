@@ -1908,7 +1908,7 @@ const isSegmentEditorPreparingUpstreamError = (error: UpstreamHttpError) =>
   normalizeText(error.message).toLowerCase() === SEGMENT_EDITOR_PREPARING_ERROR_MESSAGE.toLowerCase();
 const SEGMENT_EDITOR_VOICEOVER_DURATION_CACHE_TTL_MS = 30 * 60_000;
 const SEGMENT_EDITOR_VOICEOVER_DURATION_FETCH_TIMEOUT_MS = 6_500;
-const SEGMENT_EDITOR_GENERATED_VIDEO_SOURCE_DURATION_SECONDS = 5;
+const SEGMENT_EDITOR_VIDEO_DURATION_EPSILON_SECONDS = 0.075;
 const WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS = 1;
 const WORKSPACE_SEGMENT_EDITOR_MAX_SEGMENTS = 8;
 const projectAccessCache = new Map<string, number>();
@@ -2898,21 +2898,6 @@ const isWorkspaceSegmentEditorGeneratedVideoEntry = (
   entry: AdsflowProjectMediaEntryPayload | null | undefined,
 ) => detectWorkspaceSegmentSourceKind(entry) === "ai_generated" && isProjectMediaEntryVideo(entry);
 
-const normalizeWorkspaceSegmentEditorGeneratedVideoSourceDurationSeconds = (
-  durationSeconds: number | null,
-  currentEntry: AdsflowProjectMediaEntryPayload | null | undefined,
-  originalEntry?: AdsflowProjectMediaEntryPayload | null | undefined,
-) => {
-  if (
-    isWorkspaceSegmentEditorGeneratedVideoEntry(currentEntry) ||
-    isWorkspaceSegmentEditorGeneratedVideoEntry(originalEntry)
-  ) {
-    return Math.max(durationSeconds ?? 0, SEGMENT_EDITOR_GENERATED_VIDEO_SOURCE_DURATION_SECONDS);
-  }
-
-  return durationSeconds;
-};
-
 const getWorkspaceProjectMediaEntryDurationSeconds = (
   entry: AdsflowProjectMediaEntryPayload | null | undefined,
 ) => {
@@ -2924,7 +2909,35 @@ const getWorkspaceProjectMediaEntryDurationSeconds = (
     normalizeManualDurationSeconds(entry.durationSeconds) ??
     normalizeManualDurationSeconds(entry.duration_seconds) ??
     normalizeManualDurationSeconds(entry.duration);
-  return normalizeWorkspaceSegmentEditorGeneratedVideoSourceDurationSeconds(durationSeconds, entry);
+  return durationSeconds;
+};
+
+const resolveWorkspaceSegmentEditorSourceDurationSeconds = (
+  payloadDurationSeconds: number | null,
+  currentEntry: AdsflowProjectMediaEntryPayload | null | undefined,
+  originalEntry: AdsflowProjectMediaEntryPayload | null | undefined,
+  currentAssetDurationSeconds?: number | null,
+  originalAssetDurationSeconds?: number | null,
+) => {
+  const currentMediaDurationSeconds =
+    normalizeManualDurationSeconds(currentAssetDurationSeconds) ??
+    getWorkspaceProjectMediaEntryDurationSeconds(currentEntry);
+  const originalMediaDurationSeconds =
+    normalizeManualDurationSeconds(originalAssetDurationSeconds) ??
+    getWorkspaceProjectMediaEntryDurationSeconds(originalEntry);
+  const mediaDurationSeconds = currentMediaDurationSeconds ?? originalMediaDurationSeconds;
+  const isGeneratedVideo =
+    isWorkspaceSegmentEditorGeneratedVideoEntry(currentEntry) ||
+    isWorkspaceSegmentEditorGeneratedVideoEntry(originalEntry);
+  const shouldUseMeasuredGeneratedVideoDuration =
+    isGeneratedVideo &&
+    mediaDurationSeconds !== null &&
+    (payloadDurationSeconds === null ||
+      payloadDurationSeconds + SEGMENT_EDITOR_VIDEO_DURATION_EPSILON_SECONDS >= mediaDurationSeconds);
+
+  return shouldUseMeasuredGeneratedVideoDuration
+    ? mediaDurationSeconds
+    : payloadDurationSeconds ?? mediaDurationSeconds;
 };
 
 export const buildWorkspaceSegmentEditorSessionFromPayload = (
@@ -3340,12 +3353,12 @@ export const buildWorkspaceSegmentEditorSegment = (
   });
   const durationExtensionSourceDurationSeconds =
     resolvedMediaType === "video"
-      ? normalizeWorkspaceSegmentEditorGeneratedVideoSourceDurationSeconds(
-          getWorkspaceSegmentEditorPayloadSourceDurationSeconds(payload) ??
-            getWorkspaceProjectMediaEntryDurationSeconds(currentEntry) ??
-            getWorkspaceProjectMediaEntryDurationSeconds(originalEntry),
+      ? resolveWorkspaceSegmentEditorSourceDurationSeconds(
+          getWorkspaceSegmentEditorPayloadSourceDurationSeconds(payload),
           currentEntry,
           originalEntry,
+          currentAsset?.durationSeconds,
+          originalAsset?.durationSeconds,
         )
       : null;
   const explicitSceneSound = buildWorkspaceSegmentSceneSoundRef(payload.scene_sound);

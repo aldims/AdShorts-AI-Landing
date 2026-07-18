@@ -108,7 +108,6 @@ const WORKSPACE_SEGMENT_PENDING_VOICEOVER_ESTIMATE_MAX_REFERENCE_RATIO = 2.6;
 const WORKSPACE_SEGMENT_PENDING_VOICEOVER_ESTIMATE_MAX_REFERENCE_EXTRA_SECONDS = 4;
 
 export const WORKSPACE_SEGMENT_AI_EXTENSION_STEP_SECONDS = 5;
-const WORKSPACE_SEGMENT_PERSISTED_SLOT_DEFAULT_DURATION_TOLERANCE_SECONDS = 0.2;
 
 export const normalizeWorkspaceSegmentDurationMode = (value: unknown): WorkspaceSegmentDurationMode =>
   String(value ?? "").trim().toLowerCase() === "manual" ? "manual" : "auto";
@@ -4514,19 +4513,6 @@ const getWorkspaceSegmentMediaAssetVisualDurationSeconds = (segment: WorkspaceSe
     getWorkspaceMediaAssetDurationSeconds(segment.currentAsset) ??
     getWorkspaceMediaAssetDurationSeconds(segment.originalAsset);
   const durationExtensionSourceDurationSeconds = getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment);
-
-  if (isWorkspaceSegmentGeneratedVideoVisual(segment)) {
-    const generatedVideoDurationCandidates = [
-      mediaAssetDuration,
-      durationExtensionSourceDurationSeconds,
-      WORKSPACE_SEGMENT_AI_EXTENSION_STEP_SECONDS,
-    ].filter((value): value is number => value !== null && Number.isFinite(value) && value > 0);
-
-    return generatedVideoDurationCandidates.length > 0
-      ? roundWorkspaceSegmentTimelineSeconds(Math.max(...generatedVideoDurationCandidates))
-      : null;
-  }
-
   return mediaAssetDuration ?? durationExtensionSourceDurationSeconds;
 };
 
@@ -4733,10 +4719,7 @@ export const getWorkspaceSegmentKnownVisualDurationSeconds = (segment: Workspace
       slotDurationSeconds !== null &&
       directMediaAssetDurationSeconds === null &&
       storedSourceDurationSeconds === null &&
-      (hasSourceTimelineVoiceMetadata ||
-        (!hasManualVisualSlot &&
-          slotDurationSeconds + WORKSPACE_SEGMENT_PERSISTED_SLOT_DEFAULT_DURATION_TOLERANCE_SECONDS >=
-            WORKSPACE_SEGMENT_AI_EXTENSION_STEP_SECONDS))
+      (hasSourceTimelineVoiceMetadata || !hasManualVisualSlot)
     ) {
       return roundWorkspaceSegmentTimelineSeconds(slotDurationSeconds);
     }
@@ -4877,8 +4860,8 @@ export const getWorkspaceSegmentVideoVisualDurationSeconds = (
     getWorkspaceMediaAssetDurationSeconds(segment.originalAsset);
   const directVisualDuration =
     getStudioCustomVideoFileDurationSeconds(getWorkspaceSegmentDraftVisualAsset(segment)) ??
-    getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment) ??
-    directMediaAssetVisualDuration;
+    directMediaAssetVisualDuration ??
+    getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment);
   if (directVisualDuration !== null) {
     return roundWorkspaceSegmentTimelineSeconds(directVisualDuration);
   }
@@ -5431,15 +5414,10 @@ const syncWorkspaceSegmentGeneratedVideoDefaultVisualDuration = (
   const knownSourceDurationSeconds =
     getWorkspaceSegmentKnownVisualDurationSeconds(segment) ??
     getWorkspaceSegmentStoredDurationExtensionSourceDurationSeconds(segment);
-  const sourceDurationSeconds = roundWorkspaceSegmentTimelineSeconds(
-    Math.max(
-      knownSourceDurationSeconds ?? 0,
-      WORKSPACE_SEGMENT_AI_EXTENSION_STEP_SECONDS,
-    ),
-  );
-  if (currentSlotDurationSeconds === null) {
+  if (currentSlotDurationSeconds === null || knownSourceDurationSeconds === null) {
     return segment;
   }
+  const sourceDurationSeconds = roundWorkspaceSegmentTimelineSeconds(knownSourceDurationSeconds);
 
   const durationMode = normalizeWorkspaceSegmentDurationMode(segment.durationMode);
   const manualDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(segment.manualDurationSeconds);
@@ -5453,23 +5431,28 @@ const syncWorkspaceSegmentGeneratedVideoDefaultVisualDuration = (
     durationMode === "manual" &&
     durationSyncMode === "visual" &&
     manualDurationSeconds !== null;
+  const shouldRepairSlotToMeasuredVideoDuration =
+    knownSourceDurationSeconds !== null &&
+    currentSlotDurationSeconds > knownSourceDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS;
+  const shouldClearStaleGeneratedVideoSourceDuration =
+    knownSourceDurationSeconds !== null &&
+    storedDurationExtensionSourceDurationSeconds !== null &&
+    storedDurationExtensionSourceDurationSeconds >
+      knownSourceDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS;
+  const shouldRepairMeasuredVideoDurationState =
+    shouldRepairSlotToMeasuredVideoDuration || shouldClearStaleGeneratedVideoSourceDuration;
   if (
     hasWorkspaceSegmentPersistedMediaReference(segment) &&
     directMediaAssetDurationSeconds === null &&
     storedDurationExtensionSourceDurationSeconds === null &&
-    (hasSourceTimelineVoiceMetadata ||
-      (!hasManualVisualSlot &&
-        currentSlotDurationSeconds + WORKSPACE_SEGMENT_PERSISTED_SLOT_DEFAULT_DURATION_TOLERANCE_SECONDS >=
-          WORKSPACE_SEGMENT_AI_EXTENSION_STEP_SECONDS))
+    (hasSourceTimelineVoiceMetadata || !hasManualVisualSlot)
   ) {
     return segment;
   }
 
   if (
-    durationMode === "manual" &&
-    durationSyncMode === "visual" &&
-    manualDurationSeconds !== null &&
-    currentSlotDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS >= WORKSPACE_SEGMENT_AI_EXTENSION_STEP_SECONDS
+    hasManualVisualSlot &&
+    !shouldRepairMeasuredVideoDurationState
   ) {
     return segment;
   }
@@ -5483,14 +5466,19 @@ const syncWorkspaceSegmentGeneratedVideoDefaultVisualDuration = (
     return segment;
   }
 
-  const duration = roundWorkspaceSegmentTimelineSeconds(Math.max(currentSlotDurationSeconds, sourceDurationSeconds));
+  const duration = roundWorkspaceSegmentTimelineSeconds(
+    shouldRepairSlotToMeasuredVideoDuration
+      ? sourceDurationSeconds
+      : Math.max(currentSlotDurationSeconds, sourceDurationSeconds),
+  );
   if (
     normalizeWorkspaceSegmentDurationMode(segment.durationMode) === "manual" &&
     durationSyncMode === "visual" &&
     areWorkspaceSegmentDurationValuesEqual(
       manualDurationSeconds,
       duration,
-    )
+    ) &&
+    !shouldRepairMeasuredVideoDurationState
   ) {
     return segment;
   }
@@ -5499,8 +5487,17 @@ const syncWorkspaceSegmentGeneratedVideoDefaultVisualDuration = (
   return {
     ...segment,
     duration,
+    durationExtensionSourceDurationSeconds: shouldRepairMeasuredVideoDurationState
+      ? null
+      : segment.durationExtensionSourceDurationSeconds,
+    duration_extension_source_duration_seconds: shouldRepairMeasuredVideoDurationState
+      ? null
+      : segment.duration_extension_source_duration_seconds,
     durationMode: "manual",
     durationSyncMode: "visual",
+    durationSyncModeUserSelected: shouldRepairMeasuredVideoDurationState
+      ? false
+      : segment.durationSyncModeUserSelected,
     endTime: roundWorkspaceSegmentTimelineSeconds(startTime + duration),
     manualDurationSeconds: duration,
     startTime,

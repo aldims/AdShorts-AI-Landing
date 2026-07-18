@@ -7746,8 +7746,8 @@ describe("WorkspacePage studio locale defaults", () => {
   });
 
   it("labels the video trim mode with the current video duration, not the AI extension target", () => {
-    const currentVideoDurationSeconds = 5;
-    const aiExtensionTargetSeconds = 10;
+    const currentVideoDurationSeconds = 4.041667;
+    const aiExtensionTargetSeconds = 9.041667;
     const labels = resolveWorkspaceSegmentDurationMenuTrimLabels({
       currentVideoDurationSeconds,
       locale: "ru",
@@ -7756,8 +7756,8 @@ describe("WorkspacePage studio locale defaults", () => {
     });
 
     expect(labels).toEqual({
-      fullDurationLabel: "5с",
-      fullResultDurationLabel: "5с",
+      fullDurationLabel: "4с",
+      fullResultDurationLabel: "4с",
       fullResultHoldsToVoiceover: false,
       voiceoverDurationLabel: "2.4с",
     });

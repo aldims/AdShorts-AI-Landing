@@ -2786,7 +2786,7 @@ describe("workspace segment editor project voiceover timeline", () => {
     }));
   });
 
-  it("normalizes a stale generated-video visual slot before browser measurement", () => {
+  it("does not inflate a generated-video visual slot when its measured duration is not loaded yet", () => {
     const firstSegment = createProjectVoiceoverSegment({
       duration: 11.8,
       durationMode: "manual",
@@ -2826,11 +2826,11 @@ describe("workspace segment editor project voiceover timeline", () => {
     }, { preserveSourceTimelineEnd: false });
 
     expect(normalized.segments[1]).toEqual(expect.objectContaining({
-      duration: 5,
+      duration: 4,
       durationMode: "manual",
       durationSyncMode: "visual",
-      endTime: 16.8,
-      manualDurationSeconds: 5,
+      endTime: 15.8,
+      manualDurationSeconds: 4,
       startTime: 11.8,
     }));
   });
@@ -2871,7 +2871,7 @@ describe("workspace segment editor project voiceover timeline", () => {
     }));
   });
 
-  it("keeps a generated-video visual slot at the default source duration when a blank scene is appended", () => {
+  it("keeps an unmeasured generated-video slot at its existing duration when a blank scene is appended", () => {
     const firstSegment = createProjectVoiceoverSegment({
       duration: 11.7,
       durationMode: "manual",
@@ -2917,29 +2917,29 @@ describe("workspace segment editor project voiceover timeline", () => {
     }, { preserveSourceTimelineEnd: false });
 
     expect(normalized.segments[1]).toEqual(expect.objectContaining({
-      duration: 5,
-      durationMode: "manual",
+      duration: 4.1,
+      durationMode: "auto",
       durationSyncMode: "visual",
-      endTime: 16.7,
-      manualDurationSeconds: 5,
+      endTime: 15.8,
+      manualDurationSeconds: null,
       startTime: 11.7,
     }));
     expect(withInsertedSegment.segments[1]).toEqual(expect.objectContaining({
-      duration: 5,
-      durationMode: "manual",
+      duration: 4.1,
+      durationMode: "auto",
       durationSyncMode: "visual",
-      endTime: 16.7,
-      manualDurationSeconds: 5,
+      endTime: 15.8,
+      manualDurationSeconds: null,
       startTime: 11.7,
     }));
     expect(withInsertedSegment.segments[2]).toEqual(expect.objectContaining({
       duration: 0,
-      endTime: 16.7,
-      startTime: 16.7,
+      endTime: 15.8,
+      startTime: 15.8,
     }));
   });
 
-  it("keeps a generated-video visual slot at its stored source duration when a blank scene is appended", () => {
+  it("repairs a stale generated-video slot to its measured media duration when a blank scene is appended", () => {
     const firstSegment = createProjectVoiceoverSegment({
       duration: 11.7,
       durationMode: "manual",
@@ -3009,27 +3009,29 @@ describe("workspace segment editor project voiceover timeline", () => {
     }, { preserveSourceTimelineEnd: false });
 
     expect(normalized.segments[1]).toEqual(expect.objectContaining({
-      duration: 5,
-      durationExtensionSourceDurationSeconds: 5,
+      duration: 4.1,
+      durationExtensionSourceDurationSeconds: null,
       durationMode: "manual",
       durationSyncMode: "visual",
-      endTime: 16.7,
-      manualDurationSeconds: 5,
+      durationSyncModeUserSelected: false,
+      endTime: 15.8,
+      manualDurationSeconds: 4.1,
       startTime: 11.7,
     }));
     expect(withInsertedSegment.segments[1]).toEqual(expect.objectContaining({
-      duration: 5,
-      durationExtensionSourceDurationSeconds: 5,
+      duration: 4.1,
+      durationExtensionSourceDurationSeconds: null,
       durationMode: "manual",
       durationSyncMode: "visual",
-      endTime: 16.7,
-      manualDurationSeconds: 5,
+      durationSyncModeUserSelected: false,
+      endTime: 15.8,
+      manualDurationSeconds: 4.1,
       startTime: 11.7,
     }));
     expect(withInsertedSegment.segments[2]).toEqual(expect.objectContaining({
       duration: 0,
-      endTime: 16.7,
-      startTime: 16.7,
+      endTime: 15.8,
+      startTime: 15.8,
     }));
   });
 
@@ -4064,7 +4066,7 @@ describe("workspace segment editor project voiceover timeline", () => {
     }));
   });
 
-  it("uses the generated-video source duration over a trimmed media asset duration", () => {
+  it("uses the measured media asset duration over a stale generated-video source duration", () => {
     const segment = createProjectVoiceoverSegment({
       currentAsset: {
         assetId: 5025,
@@ -4096,7 +4098,7 @@ describe("workspace segment editor project voiceover timeline", () => {
       mediaType: "video",
     });
 
-    expect(getWorkspaceSegmentKnownVisualDurationSeconds(segment)).toBe(5);
+    expect(getWorkspaceSegmentKnownVisualDurationSeconds(segment)).toBe(4.1);
   });
 
   it("syncs an auto video scene slot to the measured source video duration", () => {

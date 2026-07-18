@@ -282,7 +282,6 @@ import {
   isWorkspaceSegmentStaleMeasuredRenderedPhotoDuration,
   isWorkspaceSegmentImageFile,
   isWorkspaceSegmentProjectVoiceoverAsset,
-  isWorkspaceSegmentGeneratedVideoVisual,
   isWorkspaceSegmentVoiceoverPlaybackFresh,
   isWorkspaceTalkingPhotoMediaAsset,
   isWorkspaceVideoMediaAsset,
@@ -341,7 +340,6 @@ import {
   syncWorkspaceSegmentMeasuredVideoVisualDuration,
   truncateStudioCustomAssetName,
   waitForWorkspaceSegmentSceneSoundSelectionSync,
-  WORKSPACE_SEGMENT_AI_EXTENSION_STEP_SECONDS,
   WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS,
   WORKSPACE_SEGMENT_EDITOR_MAX_VISUAL_DURATION_SECONDS,
   WORKSPACE_SEGMENT_EDITOR_MIN_SEGMENTS,
@@ -11798,7 +11796,6 @@ export function WorkspacePage({
           return false;
         }
 
-        const slotDurationSeconds = getWorkspaceSegmentCanonicalSlotDurationSeconds(segment);
         const knownVisualDurationSeconds = getWorkspaceSegmentKnownVisualDurationSeconds(segment);
         if (
           !hasWorkspaceSegmentExplicitDraftVisual(segment) &&
@@ -11808,17 +11805,7 @@ export function WorkspacePage({
           return true;
         }
 
-        if (!isWorkspaceSegmentGeneratedVideoVisual(segment)) {
-          return false;
-        }
-
-        return (
-          slotDurationSeconds !== null &&
-          slotDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS < WORKSPACE_SEGMENT_AI_EXTENSION_STEP_SECONDS &&
-          (knownVisualDurationSeconds === null ||
-            knownVisualDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS <
-              WORKSPACE_SEGMENT_AI_EXTENSION_STEP_SECONDS)
-        );
+        return false;
       }),
     );
 
