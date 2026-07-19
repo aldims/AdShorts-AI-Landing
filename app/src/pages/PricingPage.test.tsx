@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { LocaleProvider, type Locale } from "../lib/i18n";
 import { PricingPage } from "./PricingPage";
 
-const renderPricingPage = (locale: Locale = "en") => {
+const renderPricingPage = (locale: Locale = "en", authenticated = false) => {
   const onOpenSignup = vi.fn();
   const onOpenSignin = vi.fn();
   const onLogout = vi.fn();
@@ -17,7 +17,7 @@ const renderPricingPage = (locale: Locale = "en") => {
     <MemoryRouter initialEntries={[locale === "en" ? "/en/pricing" : "/pricing"]}>
       <LocaleProvider locale={locale}>
         <PricingPage
-          session={null}
+          session={authenticated ? { email: "buyer@example.com", name: "Buyer", plan: "free" } : null}
           onOpenSignup={onOpenSignup}
           onOpenSignin={onOpenSignin}
           onLogout={onLogout}
@@ -88,5 +88,22 @@ describe("PricingPage international pricing", () => {
     expect(container.textContent).toContain("4 990 ₽");
     expect(screen.queryByText("International payments are coming soon.")).toBeNull();
     expect(screen.getAllByText("Разовая оплата · Без подписки и автосписаний")).toHaveLength(3);
+  });
+
+  it("records an authenticated Russian pricing page view", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      json: async () => ({ data: { profile: { balance: 0, plan: "free" } } }),
+      ok: true,
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderPricingPage("ru", true);
+
+    await waitFor(() => {
+      const eventBodies = fetchMock.mock.calls
+        .filter(([input]) => String(input) === "/api/client-events")
+        .map(([, init]) => JSON.parse(String((init as RequestInit).body)));
+      expect(eventBodies).toContainEqual(expect.objectContaining({ event: "pricing_page_viewed" }));
+    });
   });
 });
