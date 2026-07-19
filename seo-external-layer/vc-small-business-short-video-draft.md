@@ -1,6 +1,10 @@
 # VC.ru Draft: Short Videos For Small Business
 
-Updated: 2026-05-23
+Updated: 2026-07-19
+
+Status: published on VC.ru
+
+Public URL: https://vc.ru/id5698454/3035242-kak-malomu-biznesu-sozdat-reels-shorts-i-tiktok-bez-semki
 
 ## Recommended Title
 

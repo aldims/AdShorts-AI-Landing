@@ -1,6 +1,6 @@
 # External Placements Tracker
 
-Updated: 2026-07-10
+Updated: 2026-07-19
 
 Goal: maximize organic traffic from Russian-speaking users through relevant directories, media, communities, and editorial mentions.
 
@@ -17,6 +17,7 @@ Use this file as the human-readable status board. Keep `directory-tracker.csv` a
 | NeiroAI | RU AI directory | yes, 2026-06-20 | 2026-07-10 | pending | Submission was confirmed, but no indexed public card was found. Check moderation status before resubmitting. |
 | AiLib | RU AI directory | yes, 2026-06-20 | 2026-07-10 | pending | Submission and queue were confirmed, but no indexed public card was found. Wait for moderation or check the confirmation email. |
 | A2IS | RU software directory | yes, 2026-06-20 | 2026-07-10 | https://a2is.ru/catalog/montazh-video/adshorts-ai | Public URL returns HTTP 200, but fetched HTML has no AdShorts AI mention or direct website `href`. Check the logged-in product card and ask support if the public render remains empty. |
+| VC.ru | RU business media | yes, 2026-07-19 | 2026-07-19 | https://vc.ru/id5698454/3035242-kak-malomu-biznesu-sozdat-reels-shorts-i-tiktok-bez-semki | Published. The useful article is public, has no draft marker, and contains a clickable calculator link through the standard VC.ru redirect. |
 
 ## Ready To Submit
 
@@ -28,7 +29,7 @@ Use this file as the human-readable status board. Keep `directory-tracker.csv` a
 
 | Platform | Type | Target URL | Status | Next action |
 | --- | --- | --- | --- | --- |
-| VC.ru | RU business media | https://adshortsai.com/kalkulyator-stoimosti-shorts/ | Draft ready; useful calculator link moved near the top. | Publish only after owner confirmation. |
+| VC.ru | RU business media | https://adshortsai.com/kalkulyator-stoimosti-shorts/ | Published 2026-07-19 with a clickable calculator link. | Track referral traffic and indexing; do not repeat the same link unnaturally. |
 | Habr | RU tech media | https://adshortsai.com/press/ | Ready, but needs technical angle. | Prepare technical article about video generation pipeline. |
 | Telegram AI/SMM channels | Outreach | https://adshortsai.com/ | Ready. | Build list of 30 channels and send personalized pitches. |
 | VK SMM/creator communities | Outreach | https://adshortsai.com/ | Ready. | Build list of 20 communities and post/pitch according to rules. |
