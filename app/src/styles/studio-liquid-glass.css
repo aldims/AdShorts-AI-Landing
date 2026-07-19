@@ -4063,8 +4063,9 @@
   }
 }
 
-/* Keep long/content-plan prompts visible after the compact responsive rules above. */
-@media (min-width: 641px) and (max-width: 1180px) {
+/* Keep content-plan prompts on the source-aware grid after the later desktop
+   prompt refinements switch the default footer back to flex. */
+@media (min-width: 641px) {
   .studio-canvas-route.has-expanded-prompt:not(.is-segment-editor) {
     --studio-prompt-reserve: 226px !important;
     --studio-prompt-panel-compact-height: 180px !important;
