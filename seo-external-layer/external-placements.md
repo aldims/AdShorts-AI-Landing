@@ -1,6 +1,6 @@
 # External Placements Tracker
 
-Updated: 2026-07-19
+Updated: 2026-07-20
 
 Goal: maximize organic traffic from Russian-speaking users through relevant directories, media, communities, and editorial mentions.
 
@@ -38,7 +38,7 @@ Use this file as the human-readable status board. Keep `directory-tracker.csv` a
 | AdIndex | RU advertising media | https://adshortsai.com/press/ | Queued. | Prepare short PR pitch with numbers. |
 | RB.ru | RU startup media | https://adshortsai.com/press/ | Queued. | Pitch after first user/product metrics. |
 | TenChat | RU professional social | https://adshortsai.com/ | Queued. | Publish 3-post sequence: problem, demo, case. |
-| Dzen | RU content platform | https://adshortsai.com/shorts-guides/ | Two instructional drafts ready. | Publish one at a time only after owner confirmation. |
+| Dzen | RU content platform | https://adshortsai.com/shorts-ne-nabirayut-prosmotry/ | First instructional article published by the owner on 2026-07-20; public URL pending. Second article remains a draft. | Copy the public article URL, verify the link, then track indexing and referral traffic. |
 | Pikabu | RU community | https://adshortsai.com/ | Queued. | Only use a useful demo/story, not direct advertising. |
 | DTF | RU community | https://adshortsai.com/ | Queued. | Prepare demo post around AI creative workflow. |
 
