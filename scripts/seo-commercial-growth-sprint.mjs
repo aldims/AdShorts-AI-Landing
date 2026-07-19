@@ -9,6 +9,12 @@ const dateModified = "2026-06-18";
 const cssVersion = 55;
 const scriptVersion = 8;
 const logoUrl = `${siteOrigin}/logo.png?v=2`;
+const calculatorPage = {
+  slug: "kalkulyator-stoimosti-shorts",
+  h1: "Сколько стоит монтаж Shorts",
+  description: "Рассчитайте цену и время монтажа коротких видео вручную и с AI по своим параметрам.",
+};
+const calculatorCanonical = `${siteOrigin}/${calculatorPage.slug}/`;
 
 const commercialPages = [
   {
@@ -2343,6 +2349,9 @@ const renderGuidesBlock = (locale) => {
   const pages = locale === "en"
     ? [...commercialPages, ...enBuyerGuidePages, ...enYandexExpansionPages]
     : [...ruCommercialPages, ...ruBuyerGuidePages, ...ruYandexExpansionPages];
+  if (locale === "ru") {
+    pages.unshift(calculatorPage);
+  }
   const title = locale === "en" ? "AI generators" : "AI-генераторы";
   const intro = locale === "en"
     ? "High-intent generator, buyer-guide and use-case pages for users who are already looking for a short-form video workflow."
@@ -2400,6 +2409,11 @@ const updateSitemap = async () => {
   const sitemapPath = path.join(rootDir, "sitemap.xml");
   let sitemap = await readFile(sitemapPath, "utf8");
 
+  sitemap = sitemap.replace(
+    new RegExp(`\\s*<url>\\s*<loc>${escapeRegExp(calculatorCanonical)}<\\/loc>[\\s\\S]*?<\\/url>`, "g"),
+    "",
+  );
+
   for (const page of allCommercialPages) {
     const canonical = canonicalFor(page);
     sitemap = sitemap.replace(
@@ -2423,7 +2437,15 @@ const updateSitemap = async () => {
     })
     .join("\n");
 
-  sitemap = sitemap.replace(/\n<\/urlset>\s*$/, `\n${blocks}\n</urlset>\n`);
+  const calculatorBlock = `  <url>
+    <loc>${calculatorCanonical}</loc>
+    <xhtml:link rel="alternate" hreflang="ru" href="${calculatorCanonical}" />
+    <lastmod>2026-07-15</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.70</priority>
+  </url>`;
+
+  sitemap = sitemap.replace(/\n<\/urlset>\s*$/, `\n${calculatorBlock}\n${blocks}\n</urlset>\n`);
   await writeFile(sitemapPath, sitemap, "utf8");
 };
 

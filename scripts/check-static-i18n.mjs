@@ -6,7 +6,10 @@ const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const excludedDirs = new Set([".git", ".codex-tmp", "app", "logs", "node_modules", "tmp"]);
 const siteOrigin = "https://adshortsai.com";
 const requiredLocales = ["ru", "en"];
-const allowedSingleLocaleFiles = new Set(["offer/index.html"]);
+const allowedSingleLocaleFiles = new Set([
+  "offer/index.html",
+  "kalkulyator-stoimosti-shorts/index.html",
+]);
 const latestAssetVersions = {
   css: 55,
   script: 8,

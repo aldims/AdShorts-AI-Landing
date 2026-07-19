@@ -47,6 +47,7 @@ const criticalPages = [
   "en/contact/index.html",
   "shorts-guides/index.html",
   "shorts-ne-nabirayut-prosmotry/index.html",
+  "kalkulyator-stoimosti-shorts/index.html",
 ];
 
 const organicSprintPages = [
@@ -322,6 +323,7 @@ for (const requiredUrl of [
   `${siteOrigin}/data-deletion.html`,
   `${siteOrigin}/en/data-deletion/`,
   `${siteOrigin}/offer/`,
+  `${siteOrigin}/kalkulyator-stoimosti-shorts/`,
 ]) {
   assert(sitemapUrls.includes(requiredUrl), `sitemap.xml: missing ${requiredUrl}`);
 }
@@ -384,6 +386,15 @@ assert(/<!-- seo-commercial-growth:start -->/i.test(englishGuides), "en/shorts-g
 const russianGuides = await readRootFile("shorts-guides/index.html");
 assert(/href="#ai-generators"/i.test(russianGuides), "shorts-guides/index.html: missing AI generators nav link");
 assert(/<!-- seo-commercial-growth:start -->/i.test(russianGuides), "shorts-guides/index.html: missing commercial growth section");
+assert(/href="\.\.\/kalkulyator-stoimosti-shorts\/"/i.test(russianGuides), "shorts-guides/index.html: missing Shorts cost calculator link");
+
+const calculatorHtml = await readRootFile("kalkulyator-stoimosti-shorts/index.html");
+const calculatorJs = await readRootFile("kalkulyator-stoimosti-shorts/calculator.js");
+assert(/<title>Сколько стоит монтаж Shorts:/i.test(calculatorHtml), "calculator: title must answer the Shorts editing cost query");
+for (const id of ["shorts-calculator", "manual-time", "manual-cost", "ai-time", "ai-cost", "share-result"]) {
+  assert(new RegExp(`id=["']${id}["']`).test(calculatorHtml), `calculator: missing #${id}`);
+}
+assert(/URLSearchParams/.test(calculatorJs), "calculator: share state must use URLSearchParams");
 
 const deployProduction = await readRootFile("deploy-production.sh");
 assert(/node scripts\/seo-commercial-growth-sprint\.mjs/.test(deployProduction), "deploy-production.sh: must run commercial growth sprint before SEO metadata export");
@@ -415,6 +426,7 @@ assert(/check_status "\$PROD_URL\/nonexistent-yandex-test-404\/" "404"/.test(dep
 assert(/check_status "\$PROD_URL\/zzzzzzzzz999" "404"/.test(deployProduction), "deploy-production.sh: missing smoke check for arbitrary referral-like slug 404");
 assert(/check_status "\$PROD_URL\/en\/zzzzzzzzz999" "404"/.test(deployProduction), "deploy-production.sh: missing smoke check for arbitrary English referral-like slug 404");
 assert(/check_status "\$PROD_URL\/contacts\/" "200"/.test(deployProduction), "deploy-production.sh: missing contacts trust page smoke check");
+assert(/check_status "\$PROD_URL\/kalkulyator-stoimosti-shorts\/" "200"/.test(deployProduction), "deploy-production.sh: missing calculator smoke check");
 assert(/check_status "\$PROD_URL\/studio\/welcome-idea-flow\.webp" "200"/.test(deployProduction), "deploy-production.sh: missing Studio welcome asset smoke check");
 assert(/check_status "\$PROD_URL\/studio\/welcome-scene-filmstrip-v2\.webp" "200"/.test(deployProduction), "deploy-production.sh: missing Studio scene asset smoke check");
 assert(/check_status "\$PROD_URL\/studio\/feature-icons\/ai-media\.webp" "200"/.test(deployProduction), "deploy-production.sh: missing Studio feature icon smoke check");
