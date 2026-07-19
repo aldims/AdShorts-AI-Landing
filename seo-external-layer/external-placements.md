@@ -38,7 +38,7 @@ Use this file as the human-readable status board. Keep `directory-tracker.csv` a
 | AdIndex | RU advertising media | https://adshortsai.com/press/ | Queued. | Prepare short PR pitch with numbers. |
 | RB.ru | RU startup media | https://adshortsai.com/press/ | Queued. | Pitch after first user/product metrics. |
 | TenChat | RU professional social | https://adshortsai.com/ | Queued. | Publish 3-post sequence: problem, demo, case. |
-| Dzen | RU content platform | https://adshortsai.com/shorts-ne-nabirayut-prosmotry/ | First instructional article published by the owner on 2026-07-20; public URL pending. Second article remains a draft. | Copy the public article URL, verify the link, then track indexing and referral traffic. |
+| Dzen | RU content platform | https://adshortsai.com/shorts-ne-nabirayut-prosmotry/ | First instructional article published on 2026-07-20: https://dzen.ru/a/al02wgzbJRU4zRXi. The target page returns HTTP 200; automated article checks currently receive a Yandex authentication redirect. Second article remains a draft. | Verify the article and link in a logged-out browser, then track indexing and referral traffic. |
 | Pikabu | RU community | https://adshortsai.com/ | Queued. | Only use a useful demo/story, not direct advertising. |
 | DTF | RU community | https://adshortsai.com/ | Queued. | Prepare demo post around AI creative workflow. |
 

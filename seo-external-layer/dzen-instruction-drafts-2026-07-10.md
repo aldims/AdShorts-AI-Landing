@@ -6,7 +6,8 @@ Do not publish without owner confirmation. Add one relevant screenshot or video 
 
 ## Пакет публикации материала 1
 
-- Статус: опубликовано владельцем 2026-07-20; публичный URL нужно добавить после копирования из карточки статьи.
+- Статус: опубликовано владельцем 2026-07-20.
+- Публичный URL: `https://dzen.ru/a/al02wgzbJRU4zRXi`.
 - Обложка: `seo-external-layer/assets/dzen-shorts-low-views-cover-2026-07-19.png` (1672x941, 16:9).
 - Рубрика: видео, продвижение или маркетинг — выбрать наиболее близкую из доступных в редакторе.
 - Ссылка: только `https://adshortsai.com/shorts-ne-nabirayut-prosmotry/` в контекстном абзаце ближе к концу.
