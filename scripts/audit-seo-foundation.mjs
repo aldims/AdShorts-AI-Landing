@@ -187,6 +187,7 @@ for (const id of ["shorts-calculator", "manual-time", "manual-cost", "ai-time", 
 }
 assert(/calculator\.css\?v=\d+/.test(calculatorHtml), "calculator: dedicated responsive styles are missing");
 assert(/@media \(max-width: 520px\)/.test(calculatorCss), "calculator: mobile layout is missing");
+assert(/::-webkit-inner-spin-button/.test(calculatorCss) && /appearance:\s*textfield/.test(calculatorCss), "calculator: native number spinners must remain hidden");
 assert(/new URLSearchParams\(window\.location\.search\)/.test(calculatorJs), "calculator: shared URL state is missing");
 assert(/window\.history\.replaceState/.test(calculatorJs), "calculator: URL result update is missing");
 assert(!/\b(?:fetch|XMLHttpRequest)\b/.test(calculatorJs), "calculator: calculation must remain client-side without data submission");

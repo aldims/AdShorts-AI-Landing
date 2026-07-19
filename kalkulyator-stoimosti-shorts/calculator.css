@@ -179,6 +179,8 @@ body::after {
 .calculator-input input {
   width: 100%;
   min-width: 0;
+  appearance: textfield;
+  -moz-appearance: textfield;
   padding: 7px 0 6px;
   border: 0;
   border-bottom: 1px solid var(--calculator-line-strong);
@@ -191,6 +193,12 @@ body::after {
   font-variant-numeric: tabular-nums;
   line-height: 1.2;
   transition: border-color 160ms ease;
+}
+
+.calculator-input input::-webkit-inner-spin-button,
+.calculator-input input::-webkit-outer-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
 }
 
 .calculator-input input:focus {
