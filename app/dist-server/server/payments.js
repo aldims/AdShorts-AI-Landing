@@ -5,6 +5,7 @@ import { addCurrentAdsflowWebDeviceToBody, getCurrentAdsflowWebSignalHeaders, } 
 export const checkoutProductIds = ["start", "pro", "ultra", "package_10", "package_50", "package_100"];
 export const checkoutAttributionSources = ["pricing_site", "pricing_addons_web", "first_free_video_offer"];
 export const checkoutOfferVariants = ["plans_redirect_v1", "start_direct_v1"];
+export const checkoutClientChannel = "web";
 export class CheckoutConfigError extends Error {
 }
 export class CheckoutProductUnavailableError extends Error {
@@ -582,6 +583,7 @@ const buildDynamicCheckoutUrl = async (productId, user, checkoutContext, options
         user_id: resolvedCheckoutContext.userId,
         plan_code: productId,
         ts: String(Math.floor(Date.now() / 1000)),
+        client_channel: checkoutClientChannel,
         source,
         origin_screen: originScreen,
     };

@@ -10,6 +10,7 @@ import {
 export const checkoutProductIds = ["start", "pro", "ultra", "package_10", "package_50", "package_100"] as const;
 export const checkoutAttributionSources = ["pricing_site", "pricing_addons_web", "first_free_video_offer"] as const;
 export const checkoutOfferVariants = ["plans_redirect_v1", "start_direct_v1"] as const;
+export const checkoutClientChannel = "web" as const;
 
 export type CheckoutProductId = (typeof checkoutProductIds)[number];
 export type CheckoutAttributionSource = (typeof checkoutAttributionSources)[number];
@@ -828,6 +829,7 @@ const buildDynamicCheckoutUrl = async (
     user_id: resolvedCheckoutContext.userId,
     plan_code: productId,
     ts: String(Math.floor(Date.now() / 1000)),
+    client_channel: checkoutClientChannel,
     source,
     origin_screen: originScreen,
   };
