@@ -424,24 +424,11 @@ export function PricingPage({
   const [checkoutResult, setCheckoutResult] = useState<CheckoutResultState | null>(null);
   const [isAgencyModalOpen, setIsAgencyModalOpen] = useState(false);
   const paymentSuccessEventKeyRef = useRef<string | null>(null);
-  const pricingPageViewTrackedRef = useRef(false);
   const verifiedWorkspaceProfile = isWorkspaceProfileVerified ? workspaceProfile : null;
   const currentPlanLabel = String(verifiedWorkspaceProfile?.plan ?? "").trim().toUpperCase() || null;
   const accountPlanLabel = currentPlanLabel ?? "…";
   const isStartPlanUsed = Boolean(verifiedWorkspaceProfile?.startPlanUsed || currentPlanLabel === "START");
   const canPurchaseAddonCredits = currentPlanLabel === "PRO" || currentPlanLabel === "ULTRA";
-
-  useEffect(() => {
-    if (!session || isInternationalPricing || pricingPageViewTrackedRef.current) {
-      return;
-    }
-    pricingPageViewTrackedRef.current = true;
-    logClientEvent("pricing_page_viewed", {
-      lang: locale,
-      path: `${location.pathname}${location.search}${location.hash}`,
-      source: "pricing_site",
-    });
-  }, [isInternationalPricing, locale, location.hash, location.pathname, location.search, session]);
   const getPlanCheckoutRestriction = (productId: PlanCheckoutProductId): PlanCheckoutRestriction | null => {
     if (currentPlanLabel === "ULTRA" && productId === "ultra") {
       return "current";

@@ -207,7 +207,7 @@ import {
   notifyInternationalPaymentsWaitlistSubmission,
   parseInternationalPaymentsWaitlistSubmission,
 } from "./international-payments-waitlist.js";
-import { isTrackedWebFunnelEvent } from "./first-video-offer.js";
+import { isTrackedFirstVideoOfferEvent } from "./first-video-offer.js";
 import {
   ProductFeedbackValidationError,
   appendProductFeedbackSubmission,
@@ -3471,7 +3471,7 @@ app.post("/api/client-events", async (req, res) => {
     source: "client",
   });
 
-  if (session?.user && isTrackedWebFunnelEvent(eventName)) {
+  if (session?.user && isTrackedFirstVideoOfferEvent(eventName)) {
     try {
       const externalUserId = await resolvePreferredExternalUserId(session.user);
       await postAdsflowJson(
@@ -3488,12 +3488,12 @@ app.post("/api/client-events", async (req, res) => {
         },
         upstreamPolicies.adsflowMetadata,
         {
-          endpoint: "client-events.web-funnel",
+          endpoint: "client-events.first-video-offer",
           projectId: typeof payload.projectId === "number" ? payload.projectId : externalUserId,
         },
       );
     } catch (error) {
-      console.warn("[client-events] Failed to persist web funnel event", {
+      console.warn("[client-events] Failed to persist first-video offer event", {
         eventName,
         error: error instanceof Error ? error.message : String(error),
       });
