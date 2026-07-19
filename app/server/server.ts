@@ -1521,17 +1521,6 @@ app.get("/api/auth/telegram/config", (req, res) => {
     return;
   }
 
-  if (authProviderStatus.telegramWidgetEnabled && env.telegramBotToken) {
-    res.json({
-      botId: env.telegramBotId,
-      botUsername: env.telegramBotUsername ?? "",
-      clientId: env.telegramBotId,
-      flow: "widget",
-      requestAccess: ["write"],
-    });
-    return;
-  }
-
   if (!authProviderStatus.telegramOidcEnabled || !env.telegramClientSecret) {
     res.status(404).json({ error: "Telegram login not configured." });
     return;

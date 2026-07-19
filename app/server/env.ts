@@ -212,7 +212,8 @@ export const env = {
 export const authProviderStatus = {
   googleEnabled: Boolean(env.googleClientId && env.googleClientSecret),
   telegramOidcEnabled: Boolean(env.telegramBotId && env.telegramClientSecret),
-  telegramWidgetEnabled: Boolean(env.telegramBotId && env.telegramBotToken),
-  telegramEnabled: Boolean((env.telegramBotId && env.telegramClientSecret) || (env.telegramBotId && env.telegramBotToken)),
+  // The bot-token widget uses Telegram's archived iframe login flow. Only
+  // expose Telegram sign-in when the current OIDC configuration is complete.
+  telegramEnabled: Boolean(env.telegramBotId && env.telegramClientSecret),
   smtpConfigured: Boolean(env.smtpHost && env.smtpUser && env.smtpPass),
 };

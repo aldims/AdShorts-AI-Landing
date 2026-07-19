@@ -87,21 +87,12 @@ describe("AuthModal", () => {
     await waitFor(() => expect(screen.getByText("Telegram")).toBeTruthy());
   });
 
-  it("uses the Telegram widget signed payload without the server OIDC exchange", async () => {
-    const telegramAuth = vi.fn((_options, callback) => {
-      callback({
-        auth_date: 1_700_000_000,
-        first_name: "Telegram",
-        hash: "signed-hash",
-        id: 12345,
-        username: "telegram_user",
-      });
-    });
-    vi.stubGlobal("Telegram", {
-      Login: {
-        auth: telegramAuth,
-      },
-    });
+  it("opens the current Telegram OIDC flow instead of the deprecated widget", async () => {
+    const popup = {
+      closed: false,
+      focus: vi.fn(),
+    } as unknown as Window;
+    const openSpy = vi.spyOn(window, "open").mockReturnValue(popup);
     vi.mocked(fetch).mockImplementation(async (input) => {
       const url = String(input);
       if (url === "/api/auth/status") {
@@ -119,20 +110,15 @@ describe("AuthModal", () => {
       if (url.startsWith("/api/auth/telegram/config")) {
         return {
           json: async () => ({
+            authorizationUrl: "https://oauth.telegram.org/auth?client_id=123",
             botId: "123",
             botUsername: "AuthBot",
             clientId: "123",
-            flow: "widget",
+            flow: "code",
+            nonce: "nonce",
             requestAccess: ["write"],
           }),
           ok: true,
-        } as Response;
-      }
-
-      if (url === "/api/auth/telegram/callback") {
-        return {
-          json: async () => ({ error: "test-stop" }),
-          ok: false,
         } as Response;
       }
 
@@ -148,17 +134,13 @@ describe("AuthModal", () => {
     await waitFor(() => expect(telegramButton.disabled).toBe(false));
 
     fireEvent.click(telegramButton);
-    await waitFor(() => expect(telegramAuth).toHaveBeenCalledWith(expect.objectContaining({ bot_id: "123" }), expect.any(Function)));
     await waitFor(() =>
-      expect(vi.mocked(fetch)).toHaveBeenCalledWith(
-        "/api/auth/telegram/callback",
-        expect.objectContaining({
-          body: expect.stringContaining("signed-hash"),
-          method: "POST",
-        }),
+      expect(openSpy).toHaveBeenCalledWith(
+        "https://oauth.telegram.org/auth?client_id=123",
+        "telegram_oidc_login",
+        expect.any(String),
       ),
     );
-    expect(await screen.findByText("test-stop")).toBeTruthy();
   });
 
   it("uses an email code instead of a password", async () => {
