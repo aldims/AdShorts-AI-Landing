@@ -46462,9 +46462,6 @@ html, body {
 }
 
 .studio-canvas-prompt.has-expanded-prompt .studio-canvas-prompt__textarea {
-  min-height: 58px;
-  max-height: 74px;
-  line-height: 1.4;
   overflow-y: auto;
   scrollbar-gutter: stable;
 }
@@ -46530,11 +46527,6 @@ html, body {
   .studio-canvas-route.has-expanded-prompt:not(.is-segment-editor) {
     --studio-prompt-reserve: 314px;
     --studio-prompt-panel-source-height: 274px;
-  }
-
-  .studio-canvas-prompt.has-expanded-prompt .studio-canvas-prompt__textarea {
-    min-height: 58px;
-    max-height: 70px;
   }
 }
 
