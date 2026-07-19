@@ -231,12 +231,12 @@ export const shouldNotifyStudioGenerationError = (
   generationUiSource !== "bootstrap" &&
   !isStudioGenerationUserFacing(isGenerating, generationUiSource);
 
-export const shouldUseWorkspaceStudioExpandedPromptLayout = (options: {
+export const shouldUseWorkspaceStudioExpandedPromptLayout = (_options: {
   hasComposerSourceIdea: boolean;
   topicInput: string;
 }) => {
-  // Prompt text scrolls inside the textarea; only auxiliary source metadata needs more panel space.
-  return options.hasComposerSourceIdea;
+  // Replacing prompt text must never move or resize the studio canvas.
+  return false;
 };
 
 export type StudioGenerationJob = {

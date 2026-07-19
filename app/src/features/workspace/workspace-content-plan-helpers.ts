@@ -68,7 +68,6 @@ export type WorkspaceContentPlanComposerSource = {
   ideaId: string;
   planId: string;
   prompt: string;
-  title: string;
 };
 
 export type WorkspaceContentPlanIdeaMutation = {

@@ -10660,8 +10660,8 @@ export function WorkspacePage({
   const studioPromptInnerClassName = `studio-canvas-prompt__inner${
     hasStudioPromptAuxiliaryContent || shouldShowFirstVideoSuccessOffer ? "" : " studio-canvas-prompt__inner--compact"
   }${shouldUseExpandedStudioPrompt ? " studio-canvas-prompt__inner--expanded" : ""}${
-    composerSourceIdea ? " studio-canvas-prompt__inner--with-source" : ""
-  }${shouldShowFirstVideoSuccessOffer ? " studio-canvas-prompt__inner--first-video-success" : ""}`;
+    shouldShowFirstVideoSuccessOffer ? " studio-canvas-prompt__inner--first-video-success" : ""
+  }`;
 
   const handleFirstVideoOfferComparePlans = () => {
     writePricingEntryIntent({
@@ -23470,7 +23470,6 @@ export function WorkspacePage({
       ideaId: idea.id,
       planId: plan.id,
       prompt: nextPrompt,
-      title: idea.title,
     });
   };
 
@@ -37896,8 +37895,6 @@ export function WorkspacePage({
       <div
         className={`route-page studio-canvas-route${isSegmentEditorPageActive ? " is-segment-editor" : ""}${
           shouldUseExpandedStudioPrompt ? " has-expanded-prompt" : ""
-        }${
-          composerSourceIdea ? " has-composer-source" : ""
         }`}
         hidden={!isStudioRouteVisible}
       >
@@ -38750,8 +38747,6 @@ export function WorkspacePage({
                 <div
                   className={`studio-canvas-prompt${shouldShowStudioWelcomeCard ? " has-welcome-card" : ""}${
                     shouldUseExpandedStudioPrompt ? " has-expanded-prompt" : ""
-                  }${
-                    composerSourceIdea ? " has-composer-source" : ""
                   }`}
                 >
                   <div
@@ -38779,20 +38774,6 @@ export function WorkspacePage({
                   <div className="studio-canvas-prompt__editor-layout">
                     <div className="studio-canvas-prompt__editor-pane">
                       <>
-                          {composerSourceIdea ? (
-                            <div className="studio-canvas-prompt__head">
-                              <div className="studio-canvas-prompt__source">
-                                <span className="studio-canvas-prompt__source-label">{workspaceText(locale, "Из контент-плана", "From content plan")}</span>
-                                <strong>{composerSourceIdea.title}</strong>
-                                <button type="button" onClick={handleClearComposerSourceIdea}>
-                                  {workspaceText(locale, "Сбросить", "Reset")}
-                                </button>
-                              </div>
-                              <div className="studio-canvas-prompt__topbar">
-                                {studioIdeaPromptActions}
-                              </div>
-                            </div>
-                          ) : null}
                           {segmentEditorError ? <p className="studio-canvas-prompt__notice is-error">{segmentEditorError}</p> : null}
                           {hasAppliedSegmentEditorSession ? (
                             <p className="studio-canvas-prompt__notice">
@@ -38803,7 +38784,7 @@ export function WorkspacePage({
                               )}
                           </p>
                         ) : null}
-                        <div className={`studio-canvas-prompt__input-row${!composerSourceIdea ? " studio-canvas-prompt__input-row--idea" : ""}`}>
+                        <div className="studio-canvas-prompt__input-row studio-canvas-prompt__input-row--idea">
                           <div className="studio-canvas-prompt__input-main">
                             <textarea
                               ref={promptTextareaRef}
@@ -38814,11 +38795,9 @@ export function WorkspacePage({
                               rows={1}
                               />
                           </div>
-                          {!composerSourceIdea ? (
-                            <div className="studio-canvas-prompt__topbar">
-                              {studioIdeaPromptActions}
-                            </div>
-                          ) : null}
+                          <div className="studio-canvas-prompt__topbar">
+                            {studioIdeaPromptActions}
+                          </div>
                         </div>
                             <div className="studio-canvas-prompt__footer" ref={promptFooterRef}>
                             <div className="studio-canvas-prompt__chips" ref={promptChipsRef}>

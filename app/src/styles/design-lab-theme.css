@@ -21149,8 +21149,7 @@ textarea {
 
   transition:
     background 0.22s ease,
-    box-shadow 0.22s ease,
-    transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+    box-shadow 0.22s ease;
   cursor: pointer;
 }
 
@@ -21165,7 +21164,6 @@ textarea {
     0 1px 0 0 rgba(255, 255, 255, 0.14) inset,
     0 -1px 0 0 rgba(0, 0, 0, 0.12) inset,
     0 6px 20px rgba(0, 0, 0, 0.25);
-  transform: translateY(-1px);
 }
 
 .studio-content-plan__idea.is-selected {
@@ -21180,7 +21178,6 @@ textarea {
     0 -1px 0 0 rgba(0, 0, 0, 0.1) inset,
     0 0 0 1px rgba(130, 90, 255, 0.28),
     0 6px 24px rgba(110, 70, 255, 0.18);
-  transform: translateY(-1px);
 }
 
 .studio-content-plan__idea.is-used {
@@ -25114,14 +25111,6 @@ body .studio-canvas-route:not(.is-segment-editor):has(.studio-canvas-prompt__inn
   overflow: visible;
 }
 
-.studio-canvas-prompt__head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  min-width: 0;
-}
-
 .studio-canvas-prompt__input-row {
   display: flex;
   align-items: flex-start;
@@ -25222,49 +25211,6 @@ body .studio-canvas-route:not(.is-segment-editor):has(.studio-canvas-prompt__inn
 
 .studio-canvas-prompt__textarea:focus {
   outline: none;
-}
-
-/* ── Source (из контент-плана) ── */
-.studio-canvas-prompt__source {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  flex-wrap: wrap;
-}
-
-.studio-canvas-prompt__source-label {
-  display: inline-flex;
-  padding: 4px 9px;
-  border-radius: 999px;
-  color: rgba(220, 255, 190, 0.9);
-  font-size: 0.66rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  background: rgba(140, 220, 80, 0.14);
-  border: 1px solid rgba(140, 220, 80, 0.2);
-}
-
-.studio-canvas-prompt__source strong {
-  color: rgba(255, 255, 255, 0.88);
-  font-size: 0.82rem;
-  font-weight: 600;
-}
-
-.studio-canvas-prompt__source button {
-  padding: 0;
-  color: rgba(255, 255, 255, 0.45);
-  font: inherit;
-  font-size: 0.8rem;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  transition: color 0.18s ease;
-}
-
-.studio-canvas-prompt__source button:hover {
-  color: rgba(255, 255, 255, 0.82);
 }
 
 /* ── Notice ── */
@@ -35559,7 +35505,6 @@ html.platform-windows .studio-voice-selector__menu {
     gap: 8px;
   }
 
-  .studio-canvas-prompt__head,
   .studio-canvas-prompt__input-row {
     gap: 10px;
   }
@@ -35592,10 +35537,6 @@ html.platform-windows .studio-voice-selector__menu {
 
   .studio-canvas-prompt__input-row {
     align-items: stretch;
-  }
-
-  .studio-canvas-prompt__source {
-    gap: 8px;
   }
 
   .studio-canvas-prompt__footer {
@@ -46441,24 +46382,6 @@ html, body {
 
 .studio-canvas-prompt.has-expanded-prompt .studio-canvas-prompt__editor-pane {
   justify-content: space-between;
-}
-
-.studio-canvas-prompt.has-composer-source .studio-canvas-prompt__head {
-  align-items: center;
-}
-
-.studio-canvas-prompt.has-composer-source .studio-canvas-prompt__source {
-  flex: 1 1 auto;
-  flex-wrap: nowrap;
-  overflow: hidden;
-}
-
-.studio-canvas-prompt.has-composer-source .studio-canvas-prompt__source strong {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .studio-canvas-prompt.has-expanded-prompt .studio-canvas-prompt__textarea {

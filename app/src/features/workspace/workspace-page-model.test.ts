@@ -467,13 +467,13 @@ describe("studio prompt layout", () => {
     ).toBe(false);
   });
 
-  it("expands only when content-plan source metadata is visible", () => {
+  it("keeps the composer stable when an idea is selected from the content plan", () => {
     expect(
       shouldUseWorkspaceStudioExpandedPromptLayout({
         hasComposerSourceIdea: true,
         topicInput: "Короткая идея",
       }),
-    ).toBe(true);
+    ).toBe(false);
   });
 });
 
