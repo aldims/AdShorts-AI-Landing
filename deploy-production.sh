@@ -69,9 +69,12 @@ node scripts/seo-yandex-growth-sprint.mjs
 node scripts/generate-static-press-pages.mjs
 node scripts/generate-static-contact-pages.mjs
 node scripts/update-static-language-switchers.mjs
-node scripts/export-seo-url-metadata.mjs
 node scripts/generate-static-landing.mjs --check
 node scripts/check-static-i18n.mjs
+node scripts/normalize-seo-structured-data.mjs
+node scripts/apply-seo-index-policy.mjs
+node scripts/export-seo-url-metadata.mjs
+node scripts/analyze-seo-exports.test.mjs
 node scripts/audit-seo-foundation.mjs
 
 echo "[production] prepare remote directories"

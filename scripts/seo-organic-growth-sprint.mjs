@@ -4,7 +4,9 @@ import path from "node:path";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const siteOrigin = "https://adshortsai.com";
-const dateModified = "2026-06-17";
+const indexPolicy = JSON.parse(await readFile(path.join(rootDir, "seo-index-policy.json"), "utf8"));
+const indexByPath = new Map(indexPolicy.index.map((entry) => [entry.url, entry]));
+const indexPaths = new Set(indexPolicy.index.map((entry) => entry.url));
 
 const priorityRoutes = [
   "/en/faceless-youtube-shorts/",
@@ -13,6 +15,10 @@ const priorityRoutes = [
   "/en/youtube-shorts-for-lawyers/",
   "/kak-ubrat-tryasku-v-shorts/",
   "/shorts-ne-nabirayut-prosmotry/",
+  "/shorts-ne-prohodyat-moderaciyu/",
+  "/shorts-nizkoe-kachestvo-video/",
+  "/gromkost-golosa-i-muzyki-v-shorts/",
+  "/ozvuchka-dlya-shorts-kak-vybrat-golos/",
   "/shorts-dlya-kliniki/",
   "/kak-chasto-vykladyvat-shorts/",
   "/kak-sdelat-seriyu-shorts/",
@@ -57,9 +63,29 @@ const priorityRoutes = [
   "/kak-zagruzit-shorts/",
   "/shorts-ne-otobrazhayutsya-na-kanale/",
   "/shorts-net-zvuka/",
-];
+].filter((route) => indexPaths.has(route));
 
 const metaOverrides = {
+  "/shorts-ne-prohodyat-moderaciyu/": {
+    title: "Ролик Shorts не прошёл модерацию: причины и что исправить",
+    description:
+      "Что означает ошибка модерации Shorts: проверьте музыку, чужие материалы, формулировки и ограничения, затем исправьте ролик перед повторной публикацией.",
+  },
+  "/shorts-nizkoe-kachestvo-video/": {
+    title: "Почему Shorts в плохом качестве: причины и настройки экспорта",
+    description:
+      "Почему YouTube Shorts выглядит размыто: проверьте исходник, разрешение 1080x1920, битрейт, повторное сжатие и обработку после загрузки.",
+  },
+  "/gromkost-golosa-i-muzyki-v-shorts/": {
+    title: "Как понизить громкость музыки в Shorts и сохранить голос",
+    description:
+      "Как уменьшить громкость музыки в Shorts: настройте баланс с голосом, проверьте ролик на динамике телефона и исключите резкие скачки уровня.",
+  },
+  "/ozvuchka-dlya-shorts-kak-vybrat-golos/": {
+    title: "Нейросеть для Shorts озвучки: голос, темп и паузы",
+    description:
+      "Нейросеть для Shorts озвучки: как выбрать голос, темп, паузы и субтитры, чтобы ролик звучал естественно и удерживал зрителя.",
+  },
   "/en/faceless-youtube-shorts/": {
     title: "Faceless YouTube Shorts: Formats, Hooks and Retention",
     description:
@@ -299,7 +325,7 @@ const hasJsonLdType = (html, typeName) => {
   return false;
 };
 
-const updateArticleJsonLd = (html, locale, { headline, description }) =>
+const updateArticleJsonLd = (html, locale, { headline, description, dateModified }) =>
   html.replace(/\n?\s*<script\s+type="application\/ld\+json">\s*([\s\S]*?)\s*<\/script>/gi, (match, rawJson) => {
     try {
       const data = JSON.parse(rawJson);
@@ -321,7 +347,7 @@ const updateArticleJsonLd = (html, locale, { headline, description }) =>
 const classifyPage = (route) => {
   const slug = route.toLowerCase();
 
-  if (/upload|zagruzh|format|bitreyt|black|chern|copyright|music|muzyka|phone|telefon|background|fon|shake|tryask|audio|zvuk/.test(slug)) {
+  if (/upload|zagruzh|format|bitreyt|black|chern|copyright|music|muzyka|phone|telefon|background|fon|shake|tryask|audio|zvuk|moderac|quality|kachestv|gromkost|ozvuch/.test(slug)) {
     return "production";
   }
 
@@ -643,19 +669,6 @@ const renderBreadcrumbJsonLd = ({ locale, h1, canonical }) => {
   };
 };
 
-const renderFaqJsonLd = (faq) => ({
-  "@context": "https://schema.org",
-  "@type": "FAQPage",
-  mainEntity: faq.map(([question, answer]) => ({
-    "@type": "Question",
-    name: question,
-    acceptedAnswer: {
-      "@type": "Answer",
-      text: answer,
-    },
-  })),
-});
-
 const addJsonLdBlock = (html, name, data) => {
   const cleaned = stripBlock(html, name);
   const block = `    <!-- ${name}:start -->
@@ -681,6 +694,7 @@ const processPage = async (route) => {
   const locale = route.startsWith("/en/") ? "en" : "ru";
   const canonical = routeToCanonical(route);
   const category = classifyPage(route);
+  const dateModified = indexByPath.get(route)?.contentModified ?? indexPolicy.baselineDate;
   let html = await readFile(filePath, "utf8");
   const h1 = extractTagText(html, "h1");
   const currentCanonical = extractCanonical(html);
@@ -701,6 +715,7 @@ const processPage = async (route) => {
   html = updateArticleJsonLd(html, locale, {
     headline: meta?.title ?? extractTitle(html),
     description: meta?.description ?? extractMetaDescription(html),
+    dateModified,
   });
 
   if (!hasJsonLdType(html, "BreadcrumbList")) {
@@ -708,50 +723,27 @@ const processPage = async (route) => {
   }
 
   const faq = getFaq({ locale, h1, category });
-  html = addJsonLdBlock(html, "seo-sprint-faq-jsonld", renderFaqJsonLd(faq));
+  html = stripBlock(html, "seo-sprint-faq-jsonld");
   html = stripBlock(html, "seo-sprint-faq");
   html = stripBlock(html, "seo-index-boost");
   html = stripBlock(html, "seo-action-plan");
-  html = addBeforeReadAlso(html, renderBoostBlock({ locale, h1, category, canonical }));
-  html = addBeforeReadAlso(html, renderActionPlanBlock({ locale, category }));
+  html = html.replace(/\n[ \t]*\n(?:[ \t]*\n)+/g, "\n\n");
   html = addBeforeReadAlso(html, renderFaqBlock({ locale, faq }));
+  html = html.replace(/\n[ \t]*\n(?:[ \t]*\n)+/g, "\n\n");
 
   await writeFile(filePath, html);
   return path.relative(rootDir, filePath);
-};
-
-const updateSitemapLastmod = async (routes) => {
-  const sitemapPath = path.join(rootDir, "sitemap.xml");
-  let sitemap = await readFile(sitemapPath, "utf8");
-  let updated = 0;
-
-  for (const route of routes) {
-    const canonical = routeToCanonical(route);
-    const pattern = new RegExp(`(<loc>${escapeRegExp(canonical)}<\\/loc>[\\s\\S]*?<lastmod>)([^<]+)(<\\/lastmod>)`);
-    if (!pattern.test(sitemap)) {
-      throw new Error(`sitemap.xml: missing lastmod block for ${canonical}`);
-    }
-    sitemap = sitemap.replace(pattern, (_match, before, current, after) => {
-      if (current === dateModified) return `${before}${current}${after}`;
-      updated += 1;
-      return `${before}${dateModified}${after}`;
-    });
-  }
-
-  await writeFile(sitemapPath, sitemap);
-  return updated;
 };
 
 const changed = [];
 for (const route of priorityRoutes) {
   changed.push(await processPage(route));
 }
-const updatedSitemapLastmods = await updateSitemapLastmod(priorityRoutes);
 
 console.log(
   [
     `SEO organic growth sprint updated ${changed.length} priority pages.`,
-    `Updated ${updatedSitemapLastmods} sitemap lastmod values to ${dateModified}.`,
+    "Run apply-seo-index-policy.mjs to update sitemap and index controls.",
     ...changed.map((file) => `- ${file}`),
   ].join("\n"),
 );

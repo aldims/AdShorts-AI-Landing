@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://adshortsai.com/schemas/seo-index-policy.schema.json",
+  "type": "object",
+  "required": ["schemaVersion", "siteOrigin", "reviewDate", "default", "index", "redirect", "hubs", "singleLocale"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "siteOrigin": { "type": "string", "format": "uri" },
+    "baselineDate": { "type": "string", "format": "date" },
+    "reviewDate": { "type": "string", "format": "date" },
+    "default": {
+      "type": "object",
+      "required": ["status", "robots", "reason"],
+      "properties": {
+        "status": { "const": "noindex" },
+        "robots": { "const": "noindex, follow" },
+        "reason": { "type": "string", "minLength": 1 }
+      }
+    },
+    "index": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["url", "reason"],
+        "properties": {
+          "url": { "type": "string", "pattern": "^/" },
+          "reason": { "type": "string", "minLength": 1 },
+          "contentModified": { "type": "string", "format": "date" }
+        }
+      }
+    },
+    "redirect": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["url", "target", "reason", "reviewDate"],
+        "properties": {
+          "url": { "type": "string", "pattern": "^/" },
+          "target": { "type": "string", "pattern": "^/" },
+          "reason": { "type": "string", "minLength": 1 },
+          "reviewDate": { "type": "string", "format": "date" }
+        }
+      }
+    },
+    "hubs": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^/" }
+    },
+    "singleLocale": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^/" }
+    }
+  }
+}

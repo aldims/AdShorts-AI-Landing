@@ -1,0 +1,49 @@
+{
+  "generatedAt": "2026-07-10",
+  "deployAutomatically": false,
+  "note": "Review and deploy separately after explicit owner approval. SEO-only deploy excludes this file.",
+  "redirects": [
+    {
+      "url": "/neyroset-dlya-sozdaniya-shorts/",
+      "target": "/neyroset-dlya-shorts/",
+      "reason": "Дублирующий коммерческий интент",
+      "reviewDate": "2026-08-10",
+      "statusCode": 301
+    },
+    {
+      "url": "/shorts-bez-lica/",
+      "target": "/generator-shorts-bez-lica/",
+      "reason": "Консолидация faceless-кластера",
+      "reviewDate": "2026-08-10",
+      "statusCode": 301
+    },
+    {
+      "url": "/generator-video-bez-lica-dlya-youtube-shorts/",
+      "target": "/generator-shorts-bez-lica/",
+      "reason": "Консолидация faceless-кластера",
+      "reviewDate": "2026-08-10",
+      "statusCode": 301
+    },
+    {
+      "url": "/en/faceless-youtube-shorts/",
+      "target": "/en/faceless-youtube-shorts-generator/",
+      "reason": "Consolidate faceless search intent",
+      "reviewDate": "2026-08-10",
+      "statusCode": 301
+    },
+    {
+      "url": "/en/faceless-video-generator-for-youtube-shorts/",
+      "target": "/en/faceless-youtube-shorts-generator/",
+      "reason": "Consolidate faceless search intent",
+      "reviewDate": "2026-08-10",
+      "statusCode": 301
+    },
+    {
+      "url": "/en/best-faceless-youtube-shorts-generator/",
+      "target": "/en/faceless-youtube-shorts-generator/",
+      "reason": "Consolidate faceless search intent without a competitor comparison page",
+      "reviewDate": "2026-08-10",
+      "statusCode": 301
+    }
+  ]
+}

@@ -5,16 +5,12 @@ import { fileURLToPath } from "node:url";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const siteOrigin = "https://adshortsai.com";
-const dateModified = "2026-06-18";
+const indexPolicy = JSON.parse(await readFile(path.join(rootDir, "seo-index-policy.json"), "utf8"));
+const indexPaths = new Set(indexPolicy.index.map((entry) => entry.url));
+const dateModified = "2026-07-10";
 const cssVersion = 55;
 const scriptVersion = 8;
 const logoUrl = `${siteOrigin}/logo.png?v=2`;
-const calculatorPage = {
-  slug: "kalkulyator-stoimosti-shorts",
-  h1: "Сколько стоит монтаж Shorts",
-  description: "Рассчитайте цену и время монтажа коротких видео вручную и с AI по своим параметрам.",
-};
-const calculatorCanonical = `${siteOrigin}/${calculatorPage.slug}/`;
 
 const commercialPages = [
   {
@@ -1910,6 +1906,17 @@ const escapeHtml = (value) =>
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
 
+const publicCopy = (value, locale) => String(value)
+  .replace(/production[- ]workflow/gi, locale === "en" ? "creation process" : "процесс создания")
+  .replace(/production/gi, locale === "en" ? "creation" : "создание")
+  .replace(/workflow/gi, locale === "en" ? "process" : "процесс")
+  .replace(/short-form/gi, locale === "en" ? "vertical video" : "коротких видео")
+  .replace(/content pillars?/gi, locale === "en" ? "topics" : "темы")
+  .replace(/контент-пиллар(?:ы|ов|ами)?/gi, "темы")
+  .replace(/search intent/gi, locale === "en" ? "viewer question" : "вопрос зрителя")
+  .replace(/поисков(?:ый|ого|ому|ым) интент/gi, "вопрос пользователя")
+  .replace(/topic cluster/gi, "related topics");
+
 const escapeRegExp = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const renderJsonLd = (data) => JSON.stringify(data, null, 6).replace(/^/gm, "    ");
@@ -1939,6 +1946,7 @@ const alternateEn = (page) => `${siteOrigin}/en/${page.locale === "en" ? page.sl
 const renderHead = (page) => {
   const canonical = canonicalFor(page);
   const prefix = assetPrefix(page);
+  const cleanDescription = publicCopy(page.description, page.locale);
   const softwareApplication = {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
@@ -1948,19 +1956,19 @@ const renderHead = (page) => {
     logo: logoUrl,
     applicationCategory: "MultimediaApplication",
     operatingSystem: "Web",
-    description: page.description,
+    description: cleanDescription,
     offers: {
       "@type": "Offer",
       price: "0",
-      priceCurrency: "USD",
-      url: canonical,
+      priceCurrency: page.locale === "en" ? "USD" : "RUB",
+      url: page.locale === "en" ? `${siteOrigin}/en/pricing/` : `${siteOrigin}/pricing/`,
     },
   };
   const webPage = {
     "@context": "https://schema.org",
     "@type": "WebPage",
     name: page.h1,
-    description: page.description,
+    description: cleanDescription,
     inLanguage: page.locale,
     url: canonical,
     dateModified,
@@ -1994,19 +2002,6 @@ const renderHead = (page) => {
       },
     ],
   };
-  const faq = {
-    "@context": "https://schema.org",
-    "@type": "FAQPage",
-    mainEntity: page.faq.map(([question, answer]) => ({
-      "@type": "Question",
-      name: question,
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: answer,
-      },
-    })),
-  };
-
   return `  <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -2014,19 +2009,19 @@ const renderHead = (page) => {
     <link rel="alternate" hreflang="ru" href="${alternateRu(page)}" />
     <link rel="alternate" hreflang="en" href="${alternateEn(page)}" />
     <link rel="alternate" hreflang="x-default" href="${alternateRu(page)}" />
-    <title>${escapeHtml(page.title)}</title>
-    <meta name="description" content="${escapeHtml(page.description)}" />
+    <title>${escapeHtml(publicCopy(page.title, page.locale))}</title>
+    <meta name="description" content="${escapeHtml(cleanDescription)}" />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="${canonical}" />
-    <meta property="og:title" content="${escapeHtml(page.title)}" />
-    <meta property="og:description" content="${escapeHtml(page.description)}" />
+    <meta property="og:title" content="${escapeHtml(publicCopy(page.title, page.locale))}" />
+    <meta property="og:description" content="${escapeHtml(cleanDescription)}" />
     <meta property="og:image" content="${logoUrl}" />
     <meta property="og:image:width" content="512" />
     <meta property="og:image:height" content="512" />
     <meta property="og:site_name" content="AdShorts AI" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="${escapeHtml(page.title)}" />
-    <meta name="twitter:description" content="${escapeHtml(page.description)}" />
+    <meta name="twitter:title" content="${escapeHtml(publicCopy(page.title, page.locale))}" />
+    <meta name="twitter:description" content="${escapeHtml(cleanDescription)}" />
     <meta name="twitter:image" content="${logoUrl}" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -2047,6 +2042,9 @@ const renderHead = (page) => {
       .commercial-snapshot__item { min-width: 0; padding: 18px 20px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--card); }
       .commercial-snapshot__item strong { display: block; margin-bottom: 8px; color: var(--text); }
       .commercial-snapshot__item p { margin: 0; font-size: .94rem; }
+      .commercial-example { margin: 34px 0; }
+      .commercial-example video { display: block; width: min(100%, 420px); aspect-ratio: 9 / 16; margin: 18px auto 0; border: 1px solid var(--border); border-radius: var(--radius-sm); background: #05070f; object-fit: cover; }
+      .commercial-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
       @media (max-width: 760px) { .commercial-snapshot { grid-template-columns: 1fr; } }
     </style>
     <script defer src="${prefix}script.js?v=${scriptVersion}"></script>
@@ -2059,9 +2057,6 @@ ${renderJsonLd(webPage)}
     </script>
     <script type="application/ld+json">
 ${renderJsonLd(breadcrumb)}
-    </script>
-    <script type="application/ld+json">
-${renderJsonLd(faq)}
     </script>
   </head>`;
 };
@@ -2111,52 +2106,6 @@ const renderRelated = (items) =>
     .map(([href, label]) => `              <li><a href="${escapeHtml(href)}">${escapeHtml(label)}</a></li>`)
     .join("\n");
 
-const priorityGrowthLinks = {
-  ru: [
-    ["../servis-dlya-sozdaniya-shorts/", "сервис для создания Shorts"],
-    ["../avtomaticheskoe-sozdanie-shorts/", "автоматическое создание Shorts"],
-    ["../neyroset-dlya-sozdaniya-shorts/", "нейросеть для создания Shorts"],
-    ["../ai-ozvuchka-dlya-shorts/", "AI-озвучка для Shorts"],
-    ["../shorts-dlya-prodazh/", "Shorts для продаж"],
-    ["../ai-generator-shorts/", "AI-генератор Shorts"],
-    ["../generator-youtube-shorts/", "генератор YouTube Shorts"],
-    ["../ai-generator-shorts-dlya-malogo-biznesa/", "Shorts для малого бизнеса"],
-    ["../ai-generator-video-dlya-socsetey/", "AI-видео для соцсетей"],
-    ["../ai-video-maker-dlya-reels-tiktok-i-shorts/", "AI video maker для Reels, TikTok и Shorts"],
-    ["../ai-generator-shorts-dlya-avtorov-youtube/", "Shorts для авторов YouTube"],
-    ["../kak-sdelat-shorts-na-youtube/", "как сделать Shorts на YouTube"],
-    ["../kak-sdelat-huk-v-shorts/", "как сделать хук"],
-    ["../kak-podnyat-uderzhanie-v-shorts/", "как поднять удержание"],
-    ["../cta-v-shorts/", "CTA в Shorts"],
-  ],
-  en: [
-    ["../shorts-creation-service/", "Shorts creation service"],
-    ["../automatic-shorts-creation/", "automatic Shorts creation"],
-    ["../ai-tool-for-creating-shorts/", "AI tool for creating Shorts"],
-    ["../ai-voiceover-for-shorts/", "AI voiceover for Shorts"],
-    ["../shorts-for-sales/", "Shorts for sales"],
-    ["../ai-shorts-generator/", "AI Shorts generator"],
-    ["../youtube-shorts-generator/", "YouTube Shorts generator"],
-    ["../ai-shorts-generator-for-small-business/", "AI Shorts for small business"],
-    ["../ai-video-generator-for-social-media/", "AI video for social media"],
-    ["../ai-video-maker-for-reels-tiktok-and-shorts/", "AI video maker for Reels, TikTok and Shorts"],
-    ["../ai-shorts-generator-for-youtube-creators/", "AI Shorts for YouTube creators"],
-    ["../how-to-make-shorts-on-youtube/", "how to make YouTube Shorts"],
-    ["../how-to-create-a-hook-in-shorts/", "how to create a hook"],
-    ["../how-to-increase-retention-in-shorts/", "increase Shorts retention"],
-    ["../cta-in-youtube-shorts/", "CTA in Shorts"],
-  ],
-};
-
-const renderPriorityGrowthLinks = (page) => {
-  const currentHref = `../${page.slug}/`;
-  return priorityGrowthLinks[page.locale]
-    .filter(([href]) => href !== currentHref)
-    .slice(0, 12)
-    .map(([href, label]) => `              <li><a href="${escapeHtml(href)}">${escapeHtml(label)}</a></li>`)
-    .join("\n");
-};
-
 const renderPage = (page) => {
   const prefix = assetPrefix(page);
   const guidesHref = page.locale === "en" ? "../shorts-guides/#ai-generators" : "../shorts-guides/#ai-generators";
@@ -2164,6 +2113,8 @@ const renderPage = (page) => {
   const examplesHref = page.locale === "en" ? "../examples/" : "../examples/";
   const pricingHref = page.locale === "en" ? "../pricing/" : "../pricing/";
   const footerHomeHref = page.locale === "en" ? "../../en/" : "../";
+  const videoHref = page.locale === "en" ? "../../1en.mp4?v=2" : "../1ru.mp4?v=2";
+  const copy = (value) => escapeHtml(publicCopy(value, page.locale));
   const footerLinks = page.locale === "en"
     ? {
         back: "All AI generator pages",
@@ -2174,24 +2125,20 @@ const renderPage = (page) => {
         outputText: "9:16 short-form video draft with script, voice and subtitles.",
         metric: "Next metric",
         metricText: "Compare first-second retention, average view duration and CTA clicks.",
-        priorityTitle: "High-intent pages in this cluster",
-        priorityText:
-          "Google is slower to index new pages when they look isolated. These internal routes connect the main generator, business and retention pages into one crawlable topic cluster.",
-        validationTitle: "Validate the page with one real video test",
-        validationText:
-          "A commercial generator page is stronger when it points to a concrete outcome. Before creating more variants, use this page to run one clean production test and keep the result measurable.",
-        validationItems: [
-          "Start from one audience, one short-form promise and one CTA source.",
-          "Generate a 9:16 draft, then adjust the hook, subtitles and final frame before publishing.",
-          "Compare retention, clicks and inquiries before deciding whether to scale the format.",
-        ],
         who: "Who this is for",
-        workflow: "How the workflow works",
+        workflow: "How it works",
         why: "Why use AdShorts AI for this",
-        loopTitle: "Build this into an organic traffic loop",
-        loopText:
-          "Treat this page as a production workflow, not a one-off tool page. Pick one search intent, create a short video for it, publish the cleanest version, then improve the next draft from retention and click data.",
-        loopEnd: `Start with <a href="${studioHref}?source=${escapeHtml(page.ctaSource)}">AdShorts AI Studio</a>, then compare the result with <a href="${examplesHref}">real examples</a> and the current <a href="${pricingHref}">pricing</a>.`,
+        exampleTitle: "A real video example",
+        exampleText: "This video was created with the same studio. Use it to evaluate pacing, captions and the 9:16 result before starting.",
+        limitations: "When this tool is not the right fit",
+        limitationItems: [
+          "Complex brand shoots that require actors, custom locations or precise art direction.",
+          "Videos with claims that cannot be checked by the person publishing them.",
+          "Projects that need frame-by-frame compositing in a professional editor.",
+        ],
+        actionTitle: "Create the first draft",
+        actionText: "Start with one clear topic. Review the script, voice, captions and final frame before export.",
+        pricing: "View pricing",
         faq: "FAQ",
         readAlso: "Read also",
         contact: "Contact:",
@@ -2211,24 +2158,20 @@ const renderPage = (page) => {
         outputText: "9:16 черновик короткого видео со сценарием, голосом и субтитрами.",
         metric: "Следующая метрика",
         metricText: "Сравните удержание в первые секунды, среднюю длительность просмотра и клики по CTA.",
-        priorityTitle: "Приоритетные страницы этого кластера",
-        priorityText:
-          "Google медленнее индексирует новые страницы, если они выглядят изолированными. Эти внутренние маршруты связывают генераторы, бизнес-страницы и гайды по удержанию в один понятный кластер.",
-        validationTitle: "Проверьте страницу одним реальным видео-тестом",
-        validationText:
-          "Коммерческая страница генератора сильнее, когда ведет к конкретному результату. Перед созданием новых вариантов запустите один чистый production-тест и оставьте его измеримым.",
-        validationItems: [
-          "Начните с одной аудитории, одного обещания для short-form видео и одного CTA-источника.",
-          "Сгенерируйте 9:16 черновик, затем поправьте хук, субтитры и финальный кадр перед публикацией.",
-          "Сравните удержание, клики и заявки до решения масштабировать формат.",
-        ],
         who: "Кому это подходит",
-        workflow: "Как работает workflow",
+        workflow: "Как это работает",
         why: "Почему AdShorts AI подходит для этого",
-        loopTitle: "Встройте это в цикл органического роста",
-        loopText:
-          "Относитесь к этой странице как к production-workflow, а не как к разовому инструменту. Выберите один поисковый интент, создайте под него короткое видео, опубликуйте чистую версию и улучшайте следующий черновик по данным удержания и кликов.",
-        loopEnd: `Начните в <a href="${studioHref}?source=${escapeHtml(page.ctaSource)}">студии AdShorts AI</a>, затем сравните результат с <a href="${examplesHref}">примерами</a> и актуальными <a href="${pricingHref}">тарифами</a>.`,
+        exampleTitle: "Пример готового видео",
+        exampleText: "Видео создано в этой же студии. По нему можно оценить темп, субтитры и результат 9:16 до начала работы.",
+        limitations: "Когда инструмент не подойдёт",
+        limitationItems: [
+          "Сложная брендовая съёмка с актёрами, локациями и точной арт-дирекцией.",
+          "Видео с утверждениями, которые автор публикации не может проверить.",
+          "Проекты, где нужен покадровый композитинг в профессиональном редакторе.",
+        ],
+        actionTitle: "Создайте первый черновик",
+        actionText: "Начните с одной понятной темы. Перед экспортом проверьте сценарий, голос, субтитры и финальный кадр.",
+        pricing: "Посмотреть тарифы",
         faq: "FAQ",
         readAlso: "Читайте также",
         contact: "Контакты:",
@@ -2249,8 +2192,8 @@ ${renderHeader(page)}
       <section class="section">
         <div class="container article">
           <a href="${guidesHref}" class="article-back">${footerLinks.back}</a>
-          <h1>${escapeHtml(page.h1)}</h1>
-          <p class="lead">${escapeHtml(page.lead)}</p>
+          <h1>${copy(page.h1)}</h1>
+          <p class="lead">${copy(page.lead)}</p>
 
           <div class="cta cta--center">
             <a class="btn btn--primary btn--lg" href="${studioHref}?source=${escapeHtml(page.ctaSource)}">${footerLinks.cta}</a>
@@ -2263,63 +2206,50 @@ ${renderHeader(page)}
             <div class="commercial-snapshot__item"><strong>${footerLinks.metric}</strong><p>${footerLinks.metricText}</p></div>
           </div>
 
-          <section class="article-index-boost article-index-boost--priority" aria-labelledby="priority-growth-links">
-            <h2 id="priority-growth-links">${footerLinks.priorityTitle}</h2>
-            <p>
-              ${footerLinks.priorityText}
-            </p>
-            <ul>
-${renderPriorityGrowthLinks(page)}
-            </ul>
-          </section>
-
-          <section class="article-index-boost article-index-boost--validation" aria-labelledby="commercial-validation-plan">
-            <h2 id="commercial-validation-plan">${footerLinks.validationTitle}</h2>
-            <p>
-              ${footerLinks.validationText}
-            </p>
-            <ol>
-${renderList(footerLinks.validationItems)}
-            </ol>
-          </section>
-
           <h2>${footerLinks.who}</h2>
           <ul>
-${renderList(page.useCases)}
+${renderList(page.useCases.map((item) => publicCopy(item, page.locale)))}
           </ul>
 
           <h2>${footerLinks.workflow}</h2>
           <ol>
-${renderList(page.workflow)}
+${renderList(page.workflow.map((item) => publicCopy(item, page.locale)))}
           </ol>
 
           <h2>${footerLinks.why}</h2>
           <ul>
-${renderList(page.differentiators)}
+${renderList(page.differentiators.map((item) => publicCopy(item, page.locale)))}
           </ul>
 
-          <section class="article-index-boost" aria-labelledby="commercial-next-steps">
-            <h2 id="commercial-next-steps">${footerLinks.loopTitle}</h2>
-            <p>
-              ${footerLinks.loopText}
-            </p>
-            <ul>
-${renderRelated(page.related)}
-            </ul>
-            <p>
-              ${footerLinks.loopEnd}
-            </p>
+          <section class="commercial-example" aria-labelledby="commercial-example">
+            <h2 id="commercial-example">${footerLinks.exampleTitle}</h2>
+            <p>${footerLinks.exampleText}</p>
+            <video controls preload="metadata" playsinline src="${videoHref}"></video>
+          </section>
+
+          <h2>${footerLinks.limitations}</h2>
+          <ul>
+${renderList(footerLinks.limitationItems)}
+          </ul>
+
+          <section class="cta cta--center" aria-labelledby="commercial-action">
+            <h2 id="commercial-action">${footerLinks.actionTitle}</h2>
+            <p>${footerLinks.actionText}</p>
+            <div class="commercial-actions">
+              <a class="btn btn--primary btn--lg" href="${studioHref}?source=${escapeHtml(page.ctaSource)}">${footerLinks.cta}</a>
+              <a class="btn btn--ghost btn--lg" href="${pricingHref}">${footerLinks.pricing}</a>
+            </div>
           </section>
 
           <section class="article-faq" aria-labelledby="commercial-faq">
             <h2 id="commercial-faq">${footerLinks.faq}</h2>
-${page.faq.map(([question, answer]) => `            <h3>${escapeHtml(question)}</h3>
-            <p>${escapeHtml(answer)}</p>`).join("\n")}
+${page.faq.map(([question, answer]) => `            <h3>${copy(question)}</h3>
+            <p>${copy(answer)}</p>`).join("\n")}
           </section>
 
           <h2>${footerLinks.readAlso}</h2>
           <ul>
-${renderRelated(page.related)}
+${renderRelated(page.related.slice(0, 4).map(([href, label]) => [href, publicCopy(label, page.locale)]))}
           </ul>
         </div>
       </section>
@@ -2346,16 +2276,24 @@ ${renderRelated(page.related)}
 };
 
 const renderGuidesBlock = (locale) => {
-  const pages = locale === "en"
+  const commercialHubPages = locale === "en"
     ? [...commercialPages, ...enBuyerGuidePages, ...enYandexExpansionPages]
     : [...ruCommercialPages, ...ruBuyerGuidePages, ...ruYandexExpansionPages];
-  if (locale === "ru") {
-    pages.unshift(calculatorPage);
+  const pages = commercialHubPages.filter((page) => {
+    const pathname = locale === "en" ? `/en/${page.slug}/` : `/${page.slug}/`;
+    return indexPaths.has(pathname);
+  });
+  if (locale === "ru" && indexPaths.has("/kalkulyator-stoimosti-shorts/")) {
+    pages.unshift({
+      slug: "kalkulyator-stoimosti-shorts",
+      h1: "Сколько стоит монтаж Shorts",
+      description: "Рассчитайте цену и время монтажа коротких видео вручную и с AI по своим параметрам.",
+    });
   }
   const title = locale === "en" ? "AI generators" : "AI-генераторы";
   const intro = locale === "en"
-    ? "High-intent generator, buyer-guide and use-case pages for users who are already looking for a short-form video workflow."
-    : "Коммерческие страницы, buyer-guide материалы и use case страницы для пользователей, которые уже ищут workflow создания short-form видео.";
+    ? "Product pages and practical guides for creating vertical videos with AI."
+    : "Инструменты и практические материалы для создания вертикальных видео с AI.";
 
   return `          <!-- seo-commercial-growth:start -->
           <div class="section-header guide-section" id="ai-generators">
@@ -2405,50 +2343,6 @@ const updateGuidesIndex = async (locale) => {
   await writeFile(guidesPath, html, "utf8");
 };
 
-const updateSitemap = async () => {
-  const sitemapPath = path.join(rootDir, "sitemap.xml");
-  let sitemap = await readFile(sitemapPath, "utf8");
-
-  sitemap = sitemap.replace(
-    new RegExp(`\\s*<url>\\s*<loc>${escapeRegExp(calculatorCanonical)}<\\/loc>[\\s\\S]*?<\\/url>`, "g"),
-    "",
-  );
-
-  for (const page of allCommercialPages) {
-    const canonical = canonicalFor(page);
-    sitemap = sitemap.replace(
-      new RegExp(`\\s*<url>\\s*<loc>${escapeRegExp(canonical)}<\\/loc>[\\s\\S]*?<\\/url>`, "g"),
-      "",
-    );
-  }
-
-  const blocks = allCommercialPages
-    .map((page) => {
-      const canonical = canonicalFor(page);
-      return `  <url>
-    <loc>${canonical}</loc>
-    <xhtml:link rel="alternate" hreflang="ru" href="${alternateRu(page)}" />
-    <xhtml:link rel="alternate" hreflang="en" href="${alternateEn(page)}" />
-    <xhtml:link rel="alternate" hreflang="x-default" href="${alternateRu(page)}" />
-    <lastmod>${dateModified}</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.74</priority>
-  </url>`;
-    })
-    .join("\n");
-
-  const calculatorBlock = `  <url>
-    <loc>${calculatorCanonical}</loc>
-    <xhtml:link rel="alternate" hreflang="ru" href="${calculatorCanonical}" />
-    <lastmod>2026-07-15</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.70</priority>
-  </url>`;
-
-  sitemap = sitemap.replace(/\n<\/urlset>\s*$/, `\n${calculatorBlock}\n${blocks}\n</urlset>\n`);
-  await writeFile(sitemapPath, sitemap, "utf8");
-};
-
 for (const page of allCommercialPages) {
   const dir = page.locale === "en" ? path.join(rootDir, "en", page.slug) : path.join(rootDir, page.slug);
   await mkdir(dir, { recursive: true });
@@ -2457,8 +2351,7 @@ for (const page of allCommercialPages) {
 
 await updateGuidesIndex("en");
 await updateGuidesIndex("ru");
-await updateSitemap();
 
 console.log(
-  `Generated ${allCommercialPages.length} commercial SEO pages, updated guides indexes and sitemap lastmod ${dateModified}.`,
+  `Generated ${allCommercialPages.length} commercial SEO pages and updated guides indexes. Run apply-seo-index-policy.mjs to update index controls and sitemap.`,
 );
