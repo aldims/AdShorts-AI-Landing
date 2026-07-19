@@ -39526,23 +39526,23 @@ export function WorkspacePage({
                           },
                           {
                             icon: "/studio/feature-icons/photo-animation.webp",
-                            label: workspaceText(locale, "Анимация фото", "Photo animation"),
+                            label: workspaceText(locale, "AI анимация фото", "AI photo animation"),
                           },
                           {
                             icon: "/studio/feature-icons/character-lipsync.webp",
-                            label: workspaceText(locale, "Персонажи и липсинк", "Characters and lip sync"),
+                            label: workspaceText(locale, "AI персонажи и липсинк", "AI characters and lip sync"),
                           },
                           {
                             icon: "/studio/feature-icons/infographic.webp",
-                            label: workspaceText(locale, "Инфографика", "Infographics"),
+                            label: workspaceText(locale, "AI инфографика", "AI infographics"),
                           },
                           {
                             icon: "/studio/feature-icons/photo-editor.webp",
-                            label: workspaceText(locale, "Редактор фото", "Photo editor"),
+                            label: workspaceText(locale, "AI редактор фото", "AI photo editor"),
                           },
                           {
                             icon: "/studio/feature-icons/voice-subtitles.webp",
-                            label: workspaceText(locale, "Озвучка и субтитры", "Voiceover and captions"),
+                            label: workspaceText(locale, "AI продление видео", "AI video extension"),
                           },
                         ].map((feature) => (
                           <span key={feature.label}>
