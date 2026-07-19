@@ -505,8 +505,15 @@ describe("studio idea empty state", () => {
     expect(shouldShowWorkspaceStudioIdeaEmptyState({ ...emptyStudio, hasTopicInput: true })).toBe(true);
   });
 
-  it("hides when an idea is controlled by the content-plan source", () => {
-    expect(shouldShowWorkspaceStudioIdeaEmptyState({ ...emptyStudio, hasComposerSourceIdea: true })).toBe(false);
+  it("remains visible when an idea is selected from the content plan", () => {
+    expect(
+      shouldShowWorkspaceStudioIdeaEmptyState({
+        ...emptyStudio,
+        hasComposerSourceIdea: true,
+        hasTopicInput: true,
+        isContentPlanVisible: true,
+      }),
+    ).toBe(true);
   });
 
   it("rotates through diverse suggestion packs and wraps safely", () => {

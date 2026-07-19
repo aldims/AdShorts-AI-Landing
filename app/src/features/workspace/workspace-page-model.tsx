@@ -1602,8 +1602,7 @@ export const shouldShowWorkspaceStudioIdeaEmptyState = (options: {
   options.isCreateView &&
   options.createMode === "default" &&
   !options.isPreviewStageVisible &&
-  !options.isWelcomeVisible &&
-  !options.hasComposerSourceIdea;
+  !options.isWelcomeVisible;
 
 export type WorkspaceStudioIdeaSuggestion = {
   category: string;
