@@ -24,14 +24,22 @@
     subscription: 0,
   };
   const output = {
+    resultScenario: document.getElementById('result-scenario'),
+    savingsHighlight: document.getElementById('savings-highlight'),
+    savingsCaption: document.getElementById('savings-caption'),
     manualTime: document.getElementById('manual-time'),
     manualCost: document.getElementById('manual-cost'),
     aiTime: document.getElementById('ai-time'),
     aiCost: document.getElementById('ai-cost'),
+    manualUnitCost: document.getElementById('manual-unit-cost'),
+    aiUnitCost: document.getElementById('ai-unit-cost'),
     savedTime: document.getElementById('saved-time'),
+    savedTimeLabel: document.getElementById('saved-time-label'),
     savedCost: document.getElementById('saved-cost'),
-    manualTimeLabel: document.getElementById('manual-time-label'),
-    aiTimeLabel: document.getElementById('ai-time-label'),
+    savedPercent: document.getElementById('saved-percent'),
+    savedPercentLabel: document.getElementById('saved-percent-label'),
+    manualCostLabel: document.getElementById('manual-cost-label'),
+    aiCostLabel: document.getElementById('ai-cost-label'),
     manualBar: document.getElementById('manual-bar'),
     aiBar: document.getElementById('ai-bar'),
     shareStatus: document.getElementById('share-status'),
@@ -58,6 +66,15 @@
 
   const formatMoney = (value) => `${currency.format(Math.round(value))} ₽`;
 
+  const pluralizeVideos = (value) => {
+    const integer = Math.round(value);
+    const mod10 = integer % 10;
+    const mod100 = integer % 100;
+    if (mod10 === 1 && mod100 !== 11) return `${integer} ролик`;
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${integer} ролика`;
+    return `${integer} роликов`;
+  };
+
   const updateUrl = (values) => {
     const url = new URL(window.location.href);
     for (const [key, value] of Object.entries(values)) url.searchParams.set(key, String(value));
@@ -72,20 +89,53 @@
     const aiCost = aiTime * values.hourlyRate + values.subscription;
     const savedTime = manualTime - aiTime;
     const savedCost = manualCost - aiCost;
-    const maxTime = Math.max(manualTime, aiTime, 1);
+    const savedPercent = manualCost > 0 ? savedCost / manualCost * 100 : 0;
+    const maxCost = Math.max(manualCost, aiCost, 1);
 
+    output.resultScenario.textContent = pluralizeVideos(values.videos);
     output.manualTime.textContent = formatHours(manualTime);
     output.manualCost.textContent = formatMoney(manualCost);
     output.aiTime.textContent = formatHours(aiTime);
     output.aiCost.textContent = formatMoney(aiCost);
-    output.savedTime.textContent = savedTime >= 0 ? formatHours(savedTime) : `−${formatHours(Math.abs(savedTime))}`;
-    output.savedCost.textContent = savedCost >= 0 ? formatMoney(savedCost) : `−${formatMoney(Math.abs(savedCost))}`;
-    output.manualTimeLabel.textContent = formatHours(manualTime);
-    output.aiTimeLabel.textContent = formatHours(aiTime);
-    output.manualBar.style.width = `${manualTime / maxTime * 100}%`;
-    output.aiBar.style.width = `${aiTime / maxTime * 100}%`;
+    output.manualUnitCost.textContent = formatMoney(manualCost / values.videos);
+    output.aiUnitCost.textContent = formatMoney(aiCost / values.videos);
+    output.savedTime.textContent = formatHours(Math.abs(savedTime));
+    output.savedTimeLabel.textContent = savedTime > 0
+      ? 'меньше работы'
+      : savedTime < 0 ? 'больше работы' : 'разницы по времени';
+    output.savedPercent.textContent = manualCost > 0
+      ? `${currency.format(Math.abs(Math.round(savedPercent)))}%`
+      : '—';
+    output.manualCostLabel.textContent = formatMoney(manualCost);
+    output.aiCostLabel.textContent = formatMoney(aiCost);
+    output.manualBar.style.width = `${manualCost / maxCost * 100}%`;
+    output.aiBar.style.width = `${aiCost / maxCost * 100}%`;
+
+    output.savingsHighlight.classList.remove('is-negative', 'is-neutral');
+    if (savedCost > 0) {
+      output.savingsCaption.textContent = 'Экономия бюджета';
+      output.savedCost.textContent = formatMoney(savedCost);
+      output.savedPercentLabel.textContent = 'экономии бюджета';
+    } else if (savedCost < 0) {
+      output.savingsHighlight.classList.add('is-negative');
+      output.savingsCaption.textContent = 'AI дороже на';
+      output.savedCost.textContent = formatMoney(Math.abs(savedCost));
+      output.savedPercentLabel.textContent = manualCost > 0 ? 'выше ручного бюджета' : 'нет базы для сравнения';
+    } else {
+      output.savingsHighlight.classList.add('is-neutral');
+      output.savingsCaption.textContent = 'Бюджет одинаковый';
+      output.savedCost.textContent = formatMoney(0);
+      output.savedPercentLabel.textContent = manualCost > 0 ? 'разницы в бюджете' : 'нет расходов';
+    }
+
     output.shareStatus.textContent = '';
     updateUrl(values);
+  };
+
+  const normalizeFields = () => {
+    const values = readValues();
+    for (const [key, field] of Object.entries(fields)) field.value = String(values[key]);
+    calculate();
   };
 
   const applyUrl = () => {
@@ -97,6 +147,7 @@
   };
 
   const shareButton = document.getElementById('share-result');
+  const resetButton = document.getElementById('reset-calculator');
   shareButton?.addEventListener('click', async () => {
     try {
       await navigator.clipboard.writeText(window.location.href);
@@ -106,7 +157,14 @@
     }
   });
 
+  resetButton?.addEventListener('click', () => {
+    for (const [key, field] of Object.entries(fields)) field.value = String(defaults[key]);
+    calculate();
+    fields.videos.focus();
+  });
+
   form.addEventListener('input', calculate);
+  form.addEventListener('change', normalizeFields);
   applyUrl();
   calculate();
 })();

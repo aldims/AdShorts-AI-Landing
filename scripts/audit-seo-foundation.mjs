@@ -180,10 +180,13 @@ assert(redirectManifest.redirects.length === policy.redirect.length, "seo-redire
 
 const calculatorHtml = await readRootFile("kalkulyator-stoimosti-shorts/index.html");
 const calculatorJs = await readRootFile("kalkulyator-stoimosti-shorts/calculator.js");
+const calculatorCss = await readRootFile("kalkulyator-stoimosti-shorts/calculator.css");
 assert(/<title>Сколько стоит монтаж Shorts:/i.test(calculatorHtml), "calculator: title must answer the validated price query");
-for (const id of ["shorts-calculator", "manual-time", "manual-cost", "ai-time", "ai-cost", "share-result"]) {
+for (const id of ["shorts-calculator", "manual-time", "manual-cost", "ai-time", "ai-cost", "manual-unit-cost", "ai-unit-cost", "saved-percent", "reset-calculator", "share-result"]) {
   assert(new RegExp(`id=["']${id}["']`).test(calculatorHtml), `calculator: missing #${id}`);
 }
+assert(/calculator\.css\?v=\d+/.test(calculatorHtml), "calculator: dedicated responsive styles are missing");
+assert(/@media \(max-width: 520px\)/.test(calculatorCss), "calculator: mobile layout is missing");
 assert(/new URLSearchParams\(window\.location\.search\)/.test(calculatorJs), "calculator: shared URL state is missing");
 assert(/window\.history\.replaceState/.test(calculatorJs), "calculator: URL result update is missing");
 assert(!/\b(?:fetch|XMLHttpRequest)\b/.test(calculatorJs), "calculator: calculation must remain client-side without data submission");
