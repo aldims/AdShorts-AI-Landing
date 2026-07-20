@@ -363,6 +363,7 @@ const buildScenarios = () => {
     { width: 1280, height: 600, zoom: 1, fontScale: 1, type: "height" },
     { width: 1440, height: 720, zoom: 1, fontScale: 1, type: "height" },
     { width: 1920, height: 800, zoom: 1, fontScale: 1, type: "height" },
+    { width: 1920, height: 980, zoom: 1.25, fontScale: 1, type: "scene-fit" },
   );
 
   if (quickMode) {
@@ -599,13 +600,21 @@ const openAndMeasureSceneVisualPanel = async (page) => {
       ".studio-segment-editor__layout.is-visual-panel-open .studio-segment-editor__prompt-column",
     );
     const promptPanel = promptColumn?.querySelector(".studio-segment-editor__prompt-panel");
-    if (!main || !promptColumn || !promptPanel) {
+    const preview = document.querySelector(
+      ".studio-segment-editor__layout.is-visual-panel-open .studio-segment-editor__carousel",
+    );
+    const timeline = document.querySelector(".studio-segment-editor__timeline");
+    if (!main || !promptColumn || !promptPanel || !preview || !timeline) {
       return { error: "opened visual panel is missing from the scene editor" };
     }
 
     const mainRect = main.getBoundingClientRect();
     const promptColumnRect = promptColumn.getBoundingClientRect();
     const promptPanelRect = promptPanel.getBoundingClientRect();
+    const previewRect = preview.getBoundingClientRect();
+    const timelineRect = timeline.getBoundingClientRect();
+    const documentElement = document.documentElement;
+    const body = document.body;
     const mainStyle = window.getComputedStyle(main);
     const contentTop = mainRect.top + (Number.parseFloat(mainStyle.paddingTop) || 0);
     const visibleHeight = Math.max(
@@ -615,12 +624,25 @@ const openAndMeasureSceneVisualPanel = async (page) => {
 
     return {
       error: null,
+      documentClientHeight: documentElement.clientHeight,
+      documentScrollHeight: Math.max(documentElement.scrollHeight, body?.scrollHeight ?? 0),
+      mainClientHeight: Math.round(main.clientHeight),
+      mainScrollHeight: Math.round(main.scrollHeight),
       mainScrollTop: Math.round(main.scrollTop),
       panelHeight: Math.round(promptPanelRect.height),
       panelWidth: Math.round(promptPanelRect.width),
+      panelRight: Math.round(promptPanelRect.right),
       promptBottom: Math.round(promptColumnRect.bottom),
       promptTop: Math.round(promptColumnRect.top),
+      previewBottom: Math.round(previewRect.bottom),
+      previewHeight: Math.round(previewRect.height),
+      previewRight: Math.round(previewRect.right),
+      previewWidth: Math.round(previewRect.width),
+      timelineBottom: Math.round(timelineRect.bottom),
+      timelineTop: Math.round(timelineRect.top),
       visibleHeight: Math.round(visibleHeight),
+      viewportHeight: document.documentElement.clientHeight,
+      viewportWidth: document.documentElement.clientWidth,
     };
   });
 };
@@ -660,9 +682,9 @@ const auditRoute = async ({ browser, baseUrl, route, surface, scenario, sampleSt
     const auditsSceneVisualPanel =
       expectsScenesMode &&
       scenario.fontScale === 1 &&
-      scenario.height === defaultViewportHeight &&
       scenario.width === 1920 &&
-      scenario.zoom === 1.75;
+      ((scenario.height === defaultViewportHeight && scenario.zoom === 1.75) ||
+        scenario.type === "scene-fit");
     const scenesModeReady = expectsScenesMode
       ? await page
           .waitForSelector(".studio-canvas-main.is-segment-editor", { state: "visible", timeout: 5_000 })
@@ -726,6 +748,33 @@ const auditRoute = async ({ browser, baseUrl, route, surface, scenario, sampleSt
         `scene visual panel is not reachable: ${sceneVisualPanel.panelWidth}x${sceneVisualPanel.panelHeight}, ` +
           `${sceneVisualPanel.visibleHeight}px visible`,
       );
+    }
+
+    if (sceneVisualPanel && scenario.type === "scene-fit") {
+      if (
+        sceneVisualPanel.documentScrollHeight > sceneVisualPanel.documentClientHeight + 1 ||
+        sceneVisualPanel.mainScrollHeight > sceneVisualPanel.mainClientHeight + 1
+      ) {
+        failures.push(
+          `scene editor scrolls at 1920x980/125%: document ${sceneVisualPanel.documentScrollHeight}/${sceneVisualPanel.documentClientHeight}, ` +
+            `workspace ${sceneVisualPanel.mainScrollHeight}/${sceneVisualPanel.mainClientHeight}`,
+        );
+      }
+
+      if (
+        sceneVisualPanel.panelRight > sceneVisualPanel.viewportWidth + 1 ||
+        sceneVisualPanel.promptBottom > sceneVisualPanel.viewportHeight + 1 ||
+        sceneVisualPanel.previewRight > sceneVisualPanel.viewportWidth + 1 ||
+        sceneVisualPanel.timelineBottom > sceneVisualPanel.viewportHeight + 1
+      ) {
+        failures.push("scene editor content leaves the viewport at 1920x980/125%");
+      }
+
+      if (sceneVisualPanel.previewWidth < 200 || sceneVisualPanel.previewHeight < 350) {
+        failures.push(
+          `scene preview is undersized at 1920x980/125%: ${sceneVisualPanel.previewWidth}x${sceneVisualPanel.previewHeight}`,
+        );
+      }
     }
 
     if (

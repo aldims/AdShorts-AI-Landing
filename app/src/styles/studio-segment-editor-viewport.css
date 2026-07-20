@@ -144,6 +144,27 @@
   }
 }
 
+/* Browser zoom reduces the CSS viewport even on a large desktop display. Keep
+ * the visual tools and 9:16 preview balanced at common 125% zoom widths instead
+ * of letting the tools consume the 68vw desktop maximum. */
+@media (min-width: 1181px) and (max-width: 1680px) {
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__layout.is-visual-panel-open {
+    --studio-segment-editor-panel-width: clamp(720px, 56vw, 900px) !important;
+  }
+}
+
+/* Compact-height desktops still have room for the full editor, but only when
+ * the timeline tracks, action row and preview share the available height. */
+@media (min-width: 1181px) and (min-height: 601px) and (max-height: 860px) {
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__layout {
+    --studio-segment-editor-adaptive-gap: 10px;
+    --studio-segment-editor-preview-inset: 6px;
+    --studio-segment-editor-submit-height: 44px;
+    --studio-segment-editor-adaptive-visual-track-height: clamp(50px, 6.8dvh, 56px);
+    --studio-segment-editor-adaptive-scene-track-height: clamp(32px, 4.2dvh, 35px);
+  }
+}
+
 /* Mobile scene editor: a focused preview, persistent actions and a touch-first timeline. */
 @media (max-width: 640px),
   (min-width: 641px) and (max-width: 1180px) and (max-height: 760px),
