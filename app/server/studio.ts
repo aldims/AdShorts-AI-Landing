@@ -43,6 +43,7 @@ import {
   isSupportedLocale,
   type Locale,
 } from "../shared/locales.js";
+import { detectStudioVideoLanguage } from "../shared/studio-video-language.js";
 import {
   ensureWorkspaceProjectPlayback,
   getWorkspaceProjectPlaybackCacheKey,
@@ -1634,7 +1635,12 @@ const normalizeStudioLanguage = (value: string | null | undefined): Locale => {
 export const resolveStudioGenerationLanguage = (
   prompt: string,
   requestedLanguage?: string | null,
-): Locale => normalizeStudioLanguage(requestedLanguage);
+): Locale => {
+  const normalizedRequestedLanguage = String(requestedLanguage ?? "").trim().toLowerCase();
+  return isSupportedLocale(normalizedRequestedLanguage)
+    ? normalizedRequestedLanguage
+    : detectStudioVideoLanguage(prompt, DEFAULT_LOCALE);
+};
 
 const getStudioVoiceLanguage = (voiceId: string | null | undefined): Locale | null => {
   const canonicalVoiceId = getCanonicalStudioVoiceId(voiceId);
@@ -6779,7 +6785,7 @@ export async function createStudioGenerationJob(
     throw new Error("Prompt is required.");
   }
 
-  const requestedLanguage = normalizeStudioLanguage(options?.language);
+  const requestedLanguage = String(options?.language ?? "").trim().toLowerCase() || null;
   const normalizedLanguage = resolveStudioGenerationLanguage(normalizedPrompt, requestedLanguage);
   const requestedVoiceEnabled = options?.voiceEnabled !== false;
   const normalizedVoiceId = requestedVoiceEnabled ? normalizeStudioVoiceIdForLanguage(options?.voiceId, normalizedLanguage) : undefined;

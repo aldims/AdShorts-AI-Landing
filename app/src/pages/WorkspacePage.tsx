@@ -1091,6 +1091,7 @@ import {
 } from "../../shared/studio-credit-costs";
 import { type ExamplePrefillStudioSettings } from "../../shared/example-prefill";
 import { DEFAULT_STUDIO_VOICE_ID } from "../../shared/locales";
+import { resolveStudioVideoLanguage } from "../../shared/studio-video-language";
 import type {
   WorkspaceReferenceKind,
   WorkspaceSavedReference,
@@ -1870,7 +1871,6 @@ export function WorkspacePage({
     return [editHideSearchParam, hideEditSearchParam].some(isTruthyFlagEnabled);
   }, [location.search]);
   const isInstagramPublishingUnavailable = !isWorkspacePublishPlatformAvailable("instagram");
-  const previousRouteLocaleLanguageRef = useRef<StudioLanguage>(routeLocaleLanguage);
   const routeStudioState = useMemo(() => getStudioRouteState(location.search), [location.search]);
   const initialExamplePrefillRef = useRef(readExamplePrefillIntent());
   const initialStudioEntryIntentRef = useRef(readStudioEntryIntent());
@@ -1882,6 +1882,9 @@ export function WorkspacePage({
     language: StudioLanguage;
     voiceId: StudioVoiceOption["id"];
   } | null>(null);
+  const manuallySelectedStudioCreateLanguageRef = useRef<StudioLanguage | null>(
+    normalizeStudioLanguageValue(initialExamplePrefillRef.current?.settings?.language),
+  );
   const examplePrefillInitialStudioState = resolveWorkspaceExamplePrefillInitialStudioState({
     prefillSettings: initialExamplePrefillRef.current?.settings ?? null,
     routeDefaults: routeStudioDefaults,
@@ -1944,6 +1947,20 @@ export function WorkspacePage({
   const [contentPlanQueryInput, setContentPlanQueryInput] = useState("");
   const [hasEditedContentPlanQueryInput, setHasEditedContentPlanQueryInput] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState<StudioLanguage>(initialStudioCreateSettings.language);
+  useEffect(() => {
+    if (createMode !== "default" || studioView !== "create") {
+      return;
+    }
+
+    const nextLanguage = resolveStudioVideoLanguage({
+      interfaceLanguage: routeLocaleLanguage,
+      manuallySelectedLanguage: manuallySelectedStudioCreateLanguageRef.current,
+      text: topicInput,
+    });
+    setSelectedLanguage((currentLanguage) =>
+      currentLanguage === nextLanguage ? currentLanguage : nextLanguage,
+    );
+  }, [createMode, routeLocaleLanguage, studioView, topicInput]);
   const [subtitleStyleOptions, setSubtitleStyleOptions] = useState<StudioSubtitleStyleOption[]>([
     fallbackStudioSubtitleStyleOption,
   ]);
@@ -2151,24 +2168,6 @@ export function WorkspacePage({
     restoreStoredStudioCreateSettings();
   }, [activeTab, createMode, location.pathname, location.search, routeStudioState.section, session.email, studioView]);
 
-  useEffect(() => {
-    const previousRouteLanguage = previousRouteLocaleLanguageRef.current;
-    previousRouteLocaleLanguageRef.current = routeLocaleLanguage;
-
-    setSelectedLanguage((current) => (current === previousRouteLanguage ? routeLocaleLanguage : current));
-    setSelectedVoiceId((currentVoiceId) => {
-      const currentVoiceLanguage = getStudioLanguageForVoiceId(currentVoiceId, previousRouteLanguage);
-      if (currentVoiceLanguage !== previousRouteLanguage && currentVoiceLanguage) {
-        return currentVoiceId;
-      }
-
-      return resolveStudioVoiceIdForLanguage(
-        routeLocaleLanguage,
-        selectedVoiceIdByLanguageRef.current[routeLocaleLanguage],
-        routeStudioDefaults.voiceId,
-      );
-    });
-  }, [routeLocaleLanguage, routeStudioDefaults.voiceId]);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
   const [studioPreviewPosterUrl, setStudioPreviewPosterUrl] = useState<string | null>(null);
   const [failedStudioVideoUrls, setFailedStudioVideoUrls] = useState<string[]>([]);
@@ -3173,6 +3172,12 @@ export function WorkspacePage({
 
     setSegmentEditorError(null);
     setIsStudioIdeaPromptImproving(true);
+    const promptLanguage = resolveStudioVideoLanguage({
+      interfaceLanguage: routeLocaleLanguage,
+      manuallySelectedLanguage: manuallySelectedStudioCreateLanguageRef.current,
+      text: sourcePrompt,
+    });
+    setSelectedLanguage(promptLanguage);
     const runId = studioIdeaPromptImproveRunRef.current + 1;
     studioIdeaPromptImproveRunRef.current = runId;
 
@@ -3183,7 +3188,7 @@ export function WorkspacePage({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          language: selectedLanguage,
+          language: promptLanguage,
           mode: "studio_idea",
           prompt: sourcePrompt,
         } satisfies WorkspaceStudioPromptImproveRequest),
@@ -3222,10 +3227,12 @@ export function WorkspacePage({
     [session.email],
   );
   const clearStudioPromptInput = useCallback(() => {
+    manuallySelectedStudioCreateLanguageRef.current = null;
     setTopicInput("");
+    setSelectedLanguage(routeLocaleLanguage);
     setComposerSourceIdea(null);
     setSelectedContentPlanIdeaId(null);
-  }, []);
+  }, [routeLocaleLanguage]);
 
   useEffect(() => {
     const previousActiveTab = previousActiveTabRef.current;
@@ -6304,6 +6311,7 @@ export function WorkspacePage({
     }
 
     if (nextLanguage || requestedVoiceLanguage) {
+      manuallySelectedStudioCreateLanguageRef.current = nextLanguage ? effectiveLanguage : null;
       setSelectedLanguage(effectiveLanguage);
     }
 
@@ -11194,6 +11202,11 @@ export function WorkspacePage({
     setIsVoiceoverEnabled(true);
     selectedVoiceIdByLanguageRef.current[voiceLanguage] = voiceId;
     setSelectedVoiceId(voiceId);
+  };
+
+  const handleStudioCreateLanguageSelect = (language: StudioLanguage) => {
+    manuallySelectedStudioCreateLanguageRef.current = language;
+    setSelectedLanguage(language);
   };
 
   const handleVideoModeSelect = (videoMode: StudioVideoMode) => {
@@ -23845,7 +23858,15 @@ export function WorkspacePage({
     });
     preserveExamplePrefillRef.current = false;
     const safeTopic = nextTopic.trim();
-    const effectiveLanguage = normalizeStudioLanguageValue(options?.language) ?? selectedLanguage;
+    const effectiveLanguage =
+      normalizeStudioLanguageValue(options?.language) ??
+      (isSegmentEditorGeneration
+        ? selectedLanguage
+        : resolveStudioVideoLanguage({
+            interfaceLanguage: routeLocaleLanguage,
+            manuallySelectedLanguage: manuallySelectedStudioCreateLanguageRef.current,
+            text: safeTopic,
+          }));
     const effectiveVoiceRequest = resolveWorkspaceGenerationVoiceRequest({
       currentLanguage: selectedLanguage,
       currentVoiceEnabled: isVoiceoverEnabled,
@@ -24062,6 +24083,7 @@ export function WorkspacePage({
     selectedVideoModeExplicitlyChangedRef.current = false;
 
     flushSync(() => {
+      manuallySelectedStudioCreateLanguageRef.current = null;
       if (isSegmentEditorGeneration) {
         stashCurrentSegmentEditorDraft();
         segmentEditorRouteRestoreKeyRef.current = null;
@@ -38878,7 +38900,7 @@ export function WorkspacePage({
                                 <StudioLanguageSelectorChip
                                   key={chip}
                                   selectedLanguage={selectedLanguage}
-                                  onSelect={setSelectedLanguage}
+                                  onSelect={handleStudioCreateLanguageSelect}
                                 />
                                   ) : (
                                     <span className="studio-canvas-prompt__chip" key={chip}>

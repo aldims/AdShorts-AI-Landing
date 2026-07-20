@@ -14,6 +14,16 @@ import {
 } from "./studio.js";
 
 describe("studio generation language resolution", () => {
+  it("detects the prompt language when no language was requested", () => {
+    expect(resolveStudioGenerationLanguage("Механизм реакции кошачьей нервной системы")).toBe("ru");
+    expect(resolveStudioGenerationLanguage("How a cat's nervous system reacts")).toBe("en");
+  });
+
+  it("uses the server default for unclear prompts without a requested language", () => {
+    expect(resolveStudioGenerationLanguage("AI")).toBe("ru");
+    expect(resolveStudioGenerationLanguage("42?!")).toBe("ru");
+  });
+
   it("keeps the requested English language even for Cyrillic prompts", () => {
     expect(
       resolveStudioGenerationLanguage(
