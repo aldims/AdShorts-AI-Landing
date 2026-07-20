@@ -364,6 +364,7 @@ const buildScenarios = () => {
     { width: 1440, height: 720, zoom: 1, fontScale: 1, type: "height" },
     { width: 1920, height: 800, zoom: 1, fontScale: 1, type: "height" },
     { width: 1920, height: 980, zoom: 1.25, fontScale: 1, type: "scene-fit" },
+    { width: 850, height: 434, zoom: 1, fontScale: 1, type: "scene-embedded" },
   );
 
   if (quickMode) {
@@ -553,6 +554,8 @@ const evaluateLayout = async (page) =>
           }
         : null,
       sceneMainScrollTop: sceneMain ? Math.round(sceneMain.scrollTop) : null,
+      sceneMainClientHeight: sceneMain ? Math.round(sceneMain.clientHeight) : null,
+      sceneMainScrollHeight: sceneMain ? Math.round(sceneMain.scrollHeight) : null,
       sceneLayout: sceneLayoutRect
         ? {
             top: Math.round(sceneLayoutRect.top),
@@ -679,12 +682,20 @@ const auditRoute = async ({ browser, baseUrl, route, surface, scenario, sampleSt
     await page.waitForTimeout(180);
 
     const expectsScenesMode = surface === "app" && route.includes("mode=scenes");
+    const expectsCompactLandscapeSceneEditor =
+      expectsScenesMode &&
+      effectiveWidth >= 641 &&
+      effectiveHeight >= 400 &&
+      effectiveHeight <= 600 &&
+      effectiveWidth > effectiveHeight;
+    const minimumScenePreviewWidth = expectsCompactLandscapeSceneEditor ? 80 : 160;
+    const minimumScenePreviewHeight = expectsCompactLandscapeSceneEditor ? 145 : 280;
     const auditsSceneVisualPanel =
       expectsScenesMode &&
       scenario.fontScale === 1 &&
-      scenario.width === 1920 &&
-      ((scenario.height === defaultViewportHeight && scenario.zoom === 1.75) ||
-        scenario.type === "scene-fit");
+      ((scenario.width === 1920 && scenario.height === defaultViewportHeight && scenario.zoom === 1.75) ||
+        scenario.type === "scene-fit" ||
+        scenario.type === "scene-embedded");
     const scenesModeReady = expectsScenesMode
       ? await page
           .waitForSelector(".studio-canvas-main.is-segment-editor", { state: "visible", timeout: 5_000 })
@@ -728,8 +739,10 @@ const auditRoute = async ({ browser, baseUrl, route, surface, scenario, sampleSt
 
     if (
       expectsScenesMode &&
+      scenario.type !== "scene-embedded" &&
       metrics.scenePreview &&
-      (metrics.scenePreview.width < 160 || metrics.scenePreview.height < 280)
+      (metrics.scenePreview.width < minimumScenePreviewWidth ||
+        metrics.scenePreview.height < minimumScenePreviewHeight)
     ) {
       failures.push(
         `scene preview too small: ${metrics.scenePreview.width}x${metrics.scenePreview.height}`,
@@ -773,6 +786,33 @@ const auditRoute = async ({ browser, baseUrl, route, surface, scenario, sampleSt
       if (sceneVisualPanel.previewWidth < 200 || sceneVisualPanel.previewHeight < 350) {
         failures.push(
           `scene preview is undersized at 1920x980/125%: ${sceneVisualPanel.previewWidth}x${sceneVisualPanel.previewHeight}`,
+        );
+      }
+    }
+
+    if (sceneVisualPanel && scenario.type === "scene-embedded") {
+      if (
+        metrics.sceneMainScrollHeight > metrics.sceneMainClientHeight + 1 ||
+        sceneVisualPanel.mainScrollHeight > sceneVisualPanel.mainClientHeight + 1
+      ) {
+        failures.push(
+          `embedded scene editor scrolls: closed ${metrics.sceneMainScrollHeight}/${metrics.sceneMainClientHeight}, ` +
+            `open ${sceneVisualPanel.mainScrollHeight}/${sceneVisualPanel.mainClientHeight}`,
+        );
+      }
+
+      if (
+        sceneVisualPanel.panelRight > sceneVisualPanel.viewportWidth + 1 ||
+        sceneVisualPanel.promptBottom > sceneVisualPanel.viewportHeight + 1 ||
+        sceneVisualPanel.previewRight > sceneVisualPanel.viewportWidth + 1 ||
+        sceneVisualPanel.timelineBottom > sceneVisualPanel.viewportHeight + 1
+      ) {
+        failures.push("embedded scene editor content leaves the viewport");
+      }
+
+      if (sceneVisualPanel.previewWidth < 80 || sceneVisualPanel.previewHeight < 145) {
+        failures.push(
+          `embedded scene preview is undersized: ${sceneVisualPanel.previewWidth}x${sceneVisualPanel.previewHeight}`,
         );
       }
     }
