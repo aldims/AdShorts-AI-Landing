@@ -190,6 +190,7 @@ import {
   type LocalExampleGoal,
 } from "./local-examples.js";
 import { normalizeExamplePrefillStudioSettings } from "../shared/example-prefill.js";
+import { isInfographicTemplateId } from "../shared/infographic-templates.js";
 import { buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
 import { purgeAdminAccountData } from "./admin-account-purge.js";
 import {
@@ -4372,6 +4373,7 @@ app.post("/api/studio/segment-infographic/jobs", async (req, res) => {
 
   const text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
   const stylePrompt = typeof req.body?.stylePrompt === "string" ? req.body.stylePrompt.trim() : "";
+  const templateId = typeof req.body?.templateId === "string" ? req.body.templateId.trim() : "";
   const idempotencyKey = typeof req.body?.idempotencyKey === "string" ? req.body.idempotencyKey.trim() : "";
   const language = typeof req.body?.language === "string" ? req.body.language.trim() : "";
   const projectId = Number(req.body?.projectId ?? 0);
@@ -4385,6 +4387,10 @@ app.post("/api/studio/segment-infographic/jobs", async (req, res) => {
   }
   if (Array.from(stylePrompt).length > 300) {
     res.status(400).json({ error: "Infographic style must not exceed 300 characters." });
+    return;
+  }
+  if (templateId && !isInfographicTemplateId(templateId)) {
+    res.status(400).json({ error: "Unknown infographic template." });
     return;
   }
   if (!sourceMediaAssetId) {
@@ -4417,6 +4423,7 @@ app.post("/api/studio/segment-infographic/jobs", async (req, res) => {
       segmentIndex,
       sourceMediaAssetId,
       stylePrompt: stylePrompt || undefined,
+      templateId: templateId || undefined,
     });
     res.json({ data: job });
   } catch (error) {

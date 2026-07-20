@@ -954,6 +954,7 @@ import {
 import { WorkspaceSegmentInfographicOverlay } from "../features/workspace/workspace-infographic-overlay";
 import { WorkspaceInfographicStyleDisclosure } from "../features/workspace/workspace-infographic-style-disclosure";
 import {
+  getWorkspaceInfographicTemplateByStylePrompt,
   isWorkspaceInfographicTemplateStylePrompt,
   WorkspaceInfographicTemplatePicker,
 } from "../features/workspace/workspace-infographic-template-picker";
@@ -20282,10 +20283,13 @@ export function WorkspacePage({
       stylePrompt: request.stylePrompt ?? "",
       text: request.text,
     };
+    const templateFingerprint = request.templateId
+      ? { ...fingerprint, templateId: request.templateId }
+      : fingerprint;
     return JSON.stringify(
       request.draftId
-        ? { ...fingerprint, draftId: request.draftId }
-        : fingerprint,
+        ? { ...templateFingerprint, draftId: request.draftId }
+        : templateFingerprint,
     );
   };
 
@@ -20304,6 +20308,7 @@ export function WorkspacePage({
       segmentIndex: job.segmentIndex,
       sourceMediaAssetId: job.sourceMediaAssetId,
       ...(job.stylePrompt ? { stylePrompt: job.stylePrompt } : {}),
+      ...(job.templateId ? { templateId: job.templateId } : {}),
       text: job.text,
     });
     if (expectedFingerprint !== job.requestFingerprint) {
@@ -20527,6 +20532,7 @@ export function WorkspacePage({
     const targetSegment = currentDraft.segments.find((segment) => segment.index === targetSegmentIndex) ?? null;
     const text = String(targetSegment?.infographicTextDraft ?? "").trim();
     const stylePrompt = String(targetSegment?.infographicStylePromptDraft ?? "").trim();
+    const selectedTemplate = getWorkspaceInfographicTemplateByStylePrompt(stylePrompt);
     if (!targetSegment || !text) {
       setSegmentEditorVideoError("Введите текст инфографики.");
       return;
@@ -20602,6 +20608,7 @@ export function WorkspacePage({
         segmentIndex: targetSegmentIndex,
         sourceMediaAssetId,
         ...(stylePrompt ? { stylePrompt } : {}),
+        ...(selectedTemplate ? { templateId: selectedTemplate.id } : {}),
         text,
       };
       let response: Response | null = null;
@@ -20651,6 +20658,7 @@ export function WorkspacePage({
         sourceVisualIdentity,
         status: payload.data.status,
         stylePrompt,
+        templateId: selectedTemplate?.id,
         text,
       };
       applyWorkspaceProfile(payload.data.profile);

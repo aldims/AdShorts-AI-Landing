@@ -1,16 +1,14 @@
 import { useId } from "react";
 
-export type WorkspaceInfographicTemplateId =
-  | "focus"
-  | "compare"
-  | "steps"
-  | "cards"
-  | "editorial";
+import type { InfographicTemplateId } from "../../../shared/infographic-templates";
+
+export type WorkspaceInfographicTemplateId = InfographicTemplateId;
 
 export type WorkspaceInfographicTemplate = {
   descriptionEn: string;
   descriptionRu: string;
   id: WorkspaceInfographicTemplateId;
+  imageSrc: string;
   stylePrompt: string;
   titleEn: string;
   titleRu: string;
@@ -23,6 +21,7 @@ export const WORKSPACE_INFOGRAPHIC_TEMPLATES: readonly WorkspaceInfographicTempl
     titleEn: "Focus",
     descriptionRu: "Одна сильная мысль",
     descriptionEn: "One strong message",
+    imageSrc: "/infographic-templates/focus.png",
     stylePrompt: "Focus template: one oversized key figure or headline, a compact supporting caption and one clean accent shape. Use only the supplied text. Sample 2–3 high-contrast colors from the source scene, preserve readability and keep the background transparent.",
   },
   {
@@ -31,6 +30,7 @@ export const WORKSPACE_INFOGRAPHIC_TEMPLATES: readonly WorkspaceInfographicTempl
     titleEn: "Compare",
     descriptionRu: "Два факта рядом",
     descriptionEn: "Two facts side by side",
+    imageSrc: "/infographic-templates/compare.png",
     stylePrompt: "Comparison template: split the supplied text into two balanced columns or before/after blocks with a clear divider. Use only the supplied text. Sample 2–3 high-contrast colors from the source scene, preserve readability and keep the background transparent.",
   },
   {
@@ -39,6 +39,7 @@ export const WORKSPACE_INFOGRAPHIC_TEMPLATES: readonly WorkspaceInfographicTempl
     titleEn: "Steps",
     descriptionRu: "Процесс по порядку",
     descriptionEn: "A sequence in order",
+    imageSrc: "/infographic-templates/steps.png",
     stylePrompt: "Steps template: arrange the supplied text as a concise numbered sequence connected by a clean line; keep each step visually distinct. Use only the supplied text. Sample 2–3 high-contrast colors from the source scene and keep the background transparent.",
   },
   {
@@ -47,6 +48,7 @@ export const WORKSPACE_INFOGRAPHIC_TEMPLATES: readonly WorkspaceInfographicTempl
     titleEn: "Cards",
     descriptionRu: "Несколько тезисов",
     descriptionEn: "Several key points",
+    imageSrc: "/infographic-templates/cards.png",
     stylePrompt: "Cards template: split the supplied text into compact modular cards with a strong information hierarchy and restrained icons or markers. Use only the supplied text. Sample 2–3 high-contrast colors from the source scene and keep the background transparent.",
   },
   {
@@ -55,6 +57,7 @@ export const WORKSPACE_INFOGRAPHIC_TEMPLATES: readonly WorkspaceInfographicTempl
     titleEn: "Editorial",
     descriptionRu: "Заголовок и детали",
     descriptionEn: "Headline and details",
+    imageSrc: "/infographic-templates/editorial.png",
     stylePrompt: "Editorial template: create an elegant magazine-style headline, a small kicker and restrained rules or brackets from the supplied text. Use only the supplied text. Sample 2–3 high-contrast colors from the source scene, preserve readability and keep the background transparent.",
   },
 ] as const;
@@ -118,10 +121,13 @@ export const WorkspaceInfographicTemplatePicker = ({
                 data-template={template.id}
                 aria-hidden="true"
               >
-                <i className="studio-infographic-template__shape studio-infographic-template__shape--1" />
-                <i className="studio-infographic-template__shape studio-infographic-template__shape--2" />
-                <i className="studio-infographic-template__shape studio-infographic-template__shape--3" />
-                <i className="studio-infographic-template__shape studio-infographic-template__shape--4" />
+                <img
+                  alt=""
+                  decoding="async"
+                  draggable={false}
+                  loading="lazy"
+                  src={template.imageSrc}
+                />
               </span>
               <span className="studio-infographic-template__copy">
                 <strong>{title}</strong>

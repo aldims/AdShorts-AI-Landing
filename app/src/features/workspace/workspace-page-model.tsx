@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { ExamplePrefillStudioSettings } from "../../../shared/example-prefill";
+import type { InfographicTemplateId } from "../../../shared/infographic-templates";
 import type { StudioSegmentVisualQuality } from "../../../shared/studio-credit-costs";
 import type { WorkspaceMediaAssetRef } from "../../../shared/workspace-media-assets";
 import type { WorkspaceReferenceKind, WorkspaceSavedReference } from "../../../shared/workspace-references";
@@ -576,6 +577,7 @@ export type WorkspaceSegmentInfographicRequest = {
   segmentIndex: number;
   sourceMediaAssetId: number;
   stylePrompt?: string;
+  templateId?: InfographicTemplateId;
   text: string;
 };
 

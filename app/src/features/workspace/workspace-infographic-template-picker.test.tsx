@@ -23,6 +23,10 @@ describe("WorkspaceInfographicTemplatePicker", () => {
     expect(screen.getAllByRole("button")).toHaveLength(5);
     expect(screen.getByText("Подстроится под цвета сцены")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Акцент. Одна сильная мысль" })).toBeTruthy();
+    expect(document.querySelectorAll(".studio-infographic-template__preview img")).toHaveLength(5);
+    expect(document.querySelector<HTMLImageElement>('[data-template="focus"] img')?.src).toContain(
+      "/infographic-templates/focus.png",
+    );
   });
 
   it("applies the selected template prompt and restores its selected state", () => {
@@ -49,6 +53,7 @@ describe("WorkspaceInfographicTemplatePicker", () => {
       expect(Array.from(template.stylePrompt).length).toBeLessThanOrEqual(300);
       expect(template.stylePrompt).toContain("source scene");
       expect(template.stylePrompt).toContain("supplied text");
+      expect(template.imageSrc).toBe(`/infographic-templates/${template.id}.png`);
     });
   });
 });

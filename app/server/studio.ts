@@ -35,6 +35,7 @@ import {
   normalizeExamplePrefillStudioSettings,
   type ExamplePrefillStudioSettings,
 } from "../shared/example-prefill.js";
+import { isInfographicTemplateId } from "../shared/infographic-templates.js";
 import {
   DEFAULT_LOCALE,
   DEFAULT_STUDIO_VOICE_ID,
@@ -7547,12 +7548,14 @@ export async function createStudioSegmentInfographicJob(
     segmentIndex: number;
     sourceMediaAssetId: number;
     stylePrompt?: string;
+    templateId?: string;
   },
 ): Promise<StudioSegmentAiPhotoJob> {
   assertAdsflowConfigured();
 
   const normalizedText = String(text ?? "").trim();
   const normalizedStylePrompt = String(options.stylePrompt ?? "").trim();
+  const normalizedTemplateId = String(options.templateId ?? "").trim();
   const normalizedIdempotencyKey = String(options.idempotencyKey ?? "").trim();
   const sourceMediaAssetId = normalizePositiveInteger(options.sourceMediaAssetId);
   const segmentIndex = normalizeNonNegativeInteger(options.segmentIndex);
@@ -7564,6 +7567,9 @@ export async function createStudioSegmentInfographicJob(
   }
   if (Array.from(normalizedStylePrompt).length > 300) {
     throw new Error("Infographic style must not exceed 300 characters.");
+  }
+  if (normalizedTemplateId && !isInfographicTemplateId(normalizedTemplateId)) {
+    throw new Error("Unknown infographic template.");
   }
   if (!sourceMediaAssetId) {
     throw new Error("Source media asset id is required.");
@@ -7595,6 +7601,7 @@ export async function createStudioSegmentInfographicJob(
       segment_index: segmentIndex,
       source_media_asset_id: sourceMediaAssetId,
       style_prompt: normalizedStylePrompt || undefined,
+      template_id: normalizedTemplateId || undefined,
       text: normalizedText,
       user_email: user.email ?? undefined,
       user_name: user.name ?? undefined,

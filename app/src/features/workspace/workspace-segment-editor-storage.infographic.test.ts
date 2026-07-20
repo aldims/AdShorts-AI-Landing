@@ -43,6 +43,7 @@ const buildJob = (
   sourceVisualIdentity: "asset:55",
   status: "queued",
   stylePrompt: "",
+  templateId: "focus",
   text: "Рост 42%",
   ...overrides,
 });

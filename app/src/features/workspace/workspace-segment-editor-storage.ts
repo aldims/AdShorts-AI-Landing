@@ -27,6 +27,10 @@ import {
   truncateWorkspaceSegmentInfographicText,
   type WorkspaceSegmentInfographicHistory,
 } from "./workspace-infographic-helpers";
+import {
+  isInfographicTemplateId,
+  type InfographicTemplateId,
+} from "../../../shared/infographic-templates";
 import type { WorkspaceSegmentTimelineRedoSnapshot } from "./workspace-page-model";
 import type {
   StudioCustomMusicFile,
@@ -142,6 +146,7 @@ export type StoredWorkspaceSegmentInfographicJob = {
   sourceVisualIdentity: string;
   status: string;
   stylePrompt: string;
+  templateId?: InfographicTemplateId;
   text: string;
 };
 
@@ -1789,6 +1794,9 @@ const normalizeStoredWorkspaceSegmentInfographicJob = (
   sourceVisualIdentity: String(value.sourceVisualIdentity ?? "").trim(),
   status: String(value.status ?? "queued").trim() || "queued",
   stylePrompt: truncateWorkspaceSegmentInfographicText(value.stylePrompt, 300),
+  templateId: isInfographicTemplateId(value.templateId)
+    ? value.templateId
+    : undefined,
   text: truncateWorkspaceSegmentInfographicText(String(value.text ?? "").trim(), 160),
 });
 
