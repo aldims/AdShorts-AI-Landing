@@ -4,6 +4,28 @@
   padding-top: var(--studio-header-reserve) !important;
 }
 
+/* Tool labels are grid children, so their intrinsic text width must not widen
+ * the button at compact desktop zoom levels. Keep the accessible full label
+ * while constraining the rendered copy to the space actually available. */
+#app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button,
+#app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-button-content,
+#app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-label {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+}
+
+#app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-label strong,
+#app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-label small {
+  display: block !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
 #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-history-button,
 #app .studio-canvas-main.is-segment-editor
   .studio-segment-editor__timeline-row--visual
@@ -157,7 +179,10 @@
  * the timeline tracks, action row and preview share the available height. */
 @media (min-width: 1181px) and (min-height: 601px) and (max-height: 860px) {
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__layout {
-    --studio-segment-editor-layout-height: calc(100dvh - var(--studio-header-reserve)) !important;
+    --studio-segment-editor-viewport-inset: clamp(6px, 1dvh, 8px);
+    --studio-segment-editor-layout-height: calc(
+      100dvh - var(--studio-header-reserve) - var(--studio-segment-editor-viewport-inset)
+    ) !important;
     --studio-segment-editor-adaptive-gap: 10px;
     --studio-segment-editor-preview-inset: 6px;
     --studio-segment-editor-submit-height: 44px;

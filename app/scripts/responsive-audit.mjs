@@ -366,6 +366,7 @@ const buildScenarios = () => {
     { width: 1920, height: 980, zoom: 1.25, fontScale: 1, type: "scene-fit" },
     { width: 850, height: 434, zoom: 1, fontScale: 1, type: "scene-embedded" },
     { width: 1352, height: 690, zoom: 1, fontScale: 1, type: "scene-compact-desktop" },
+    { width: 1342, height: 755, zoom: 1, fontScale: 1, type: "scene-compact-desktop" },
   );
 
   if (quickMode) {
@@ -674,6 +675,26 @@ const openAndMeasureSceneVisualPanel = async (page) => {
       0,
       Math.min(promptColumnRect.bottom, mainRect.bottom) - Math.max(promptColumnRect.top, contentTop),
     );
+    const promptTextEscapes = Array.from(
+      promptColumn.querySelectorAll(".studio-segment-editor__prompt-submenu-button"),
+    ).flatMap((button) => {
+      const buttonRect = button.getBoundingClientRect();
+      return Array.from(
+        button.querySelectorAll(
+          ".studio-segment-editor__prompt-tool-label strong, .studio-segment-editor__prompt-tool-label small",
+        ),
+      )
+        .filter((label) => {
+          const labelRect = label.getBoundingClientRect();
+          return (
+            labelRect.left < buttonRect.left - 1 ||
+            labelRect.right > buttonRect.right + 1 ||
+            labelRect.top < buttonRect.top - 1 ||
+            labelRect.bottom > buttonRect.bottom + 1
+          );
+        })
+        .map((label) => label.textContent?.trim() || "unnamed label");
+    });
 
     return {
       error: null,
@@ -693,6 +714,7 @@ const openAndMeasureSceneVisualPanel = async (page) => {
       promptTop: Math.round(promptColumnRect.top),
       promptVisualHeight: Math.round(promptVisualPanelRect.height),
       promptVisualWidth: Math.round(promptVisualPanelRect.width),
+      promptTextEscapes,
       previewBottom: Math.round(previewRect.bottom),
       previewHeight: Math.round(previewRect.height),
       previewTop: Math.round(previewRect.top),
@@ -796,7 +818,8 @@ const auditRoute = async ({ browser, baseUrl, route, surface, scenario, sampleSt
       scenario.fontScale === 1 &&
       ((scenario.width === 1920 && scenario.height === defaultViewportHeight && scenario.zoom === 1.75) ||
         scenario.type === "scene-fit" ||
-        scenario.type === "scene-embedded");
+        scenario.type === "scene-embedded" ||
+        scenario.type === "scene-compact-desktop");
     const scenesModeReady = expectsScenesMode
       ? await page
           .waitForSelector(".studio-canvas-main.is-segment-editor", { state: "visible", timeout: 5_000 })
@@ -915,6 +938,17 @@ const auditRoute = async ({ browser, baseUrl, route, surface, scenario, sampleSt
           `scene preview is undersized at 1920x980/125%: ${sceneVisualPanel.previewWidth}x${sceneVisualPanel.previewHeight}`,
         );
       }
+
+      const timelineInset = sceneVisualPanel.viewportHeight - sceneVisualPanel.timelineBottom;
+      if (timelineInset < 5 || timelineInset > 10) {
+        failures.push(`scene editor timeline inset is unsafe at 1920x980/125%: ${timelineInset}px`);
+      }
+
+      if (sceneVisualPanel.promptTextEscapes.length > 0) {
+        failures.push(
+          `scene prompt text escapes its buttons at 1920x980/125%: ${sceneVisualPanel.promptTextEscapes.join(", ")}`,
+        );
+      }
     }
 
     if (sceneVisualPanel && scenario.type === "scene-embedded") {
@@ -982,15 +1016,28 @@ const auditRoute = async ({ browser, baseUrl, route, surface, scenario, sampleSt
     }
 
     if (sceneVisualPanel && scenario.type === "scene-compact-desktop") {
+      const layoutInset = metrics.sceneLayout
+        ? metrics.clientHeight - metrics.sceneLayout.bottom
+        : Number.NaN;
+      const timelineInset = metrics.sceneTimeline
+        ? metrics.clientHeight - metrics.sceneTimeline.bottom
+        : Number.NaN;
       if (
         !metrics.sceneLayout ||
         !metrics.sceneTimeline ||
-        Math.abs(metrics.sceneLayout.bottom - metrics.clientHeight) > 1 ||
-        Math.abs(metrics.sceneTimeline.bottom - metrics.clientHeight) > 1
+        layoutInset < 5 ||
+        layoutInset > 10 ||
+        timelineInset < 5 ||
+        timelineInset > 10
       ) {
         failures.push(
-          `compact desktop timeline does not fill the viewport: layout ${metrics.sceneLayout?.bottom}, ` +
-            `timeline ${metrics.sceneTimeline?.bottom}, viewport ${metrics.clientHeight}`,
+          `compact desktop timeline inset is unsafe: layout ${layoutInset}px, timeline ${timelineInset}px`,
+        );
+      }
+
+      if (sceneVisualPanel.promptTextEscapes.length > 0) {
+        failures.push(
+          `compact prompt text escapes its buttons: ${sceneVisualPanel.promptTextEscapes.join(", ")}`,
         );
       }
 
