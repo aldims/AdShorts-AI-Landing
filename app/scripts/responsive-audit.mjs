@@ -614,7 +614,11 @@ const openAndMeasureSceneVisualPanel = async (page) => {
     const preview = document.querySelector(
       ".studio-segment-editor__layout.is-visual-panel-open .studio-segment-editor__carousel",
     );
+    const submitRow = document.querySelector(
+      ".studio-segment-editor__layout.is-visual-panel-open .studio-segment-editor__timeline-submit-row",
+    );
     const timeline = document.querySelector(".studio-segment-editor__timeline");
+    const header = document.querySelector(".site-header--workspace .site-header__inner");
     if (
       !main ||
       !promptColumn ||
@@ -623,6 +627,7 @@ const openAndMeasureSceneVisualPanel = async (page) => {
       !promptField ||
       !promptActionRow ||
       !preview ||
+      !submitRow ||
       !timeline
     ) {
       return { error: "opened visual panel is missing from the scene editor" };
@@ -635,7 +640,9 @@ const openAndMeasureSceneVisualPanel = async (page) => {
     const promptFieldRect = promptField.getBoundingClientRect();
     const promptActionRowRect = promptActionRow.getBoundingClientRect();
     const previewRect = preview.getBoundingClientRect();
+    const submitRowRect = submitRow.getBoundingClientRect();
     const timelineRect = timeline.getBoundingClientRect();
+    const headerRect = header?.getBoundingClientRect() ?? null;
     const documentElement = document.documentElement;
     const body = document.body;
     const mainStyle = window.getComputedStyle(main);
@@ -655,15 +662,24 @@ const openAndMeasureSceneVisualPanel = async (page) => {
       panelHeight: Math.round(promptPanelRect.height),
       panelWidth: Math.round(promptPanelRect.width),
       panelRight: Math.round(promptPanelRect.right),
+      headerHeight: headerRect ? Math.round(headerRect.height) : null,
       promptActionWidth: Math.round(promptActionRowRect.width),
       promptBottom: Math.round(promptColumnRect.bottom),
+      promptFieldHeight: Math.round(promptFieldRect.height),
       promptFieldWidth: Math.round(promptFieldRect.width),
       promptTop: Math.round(promptColumnRect.top),
+      promptVisualHeight: Math.round(promptVisualPanelRect.height),
       promptVisualWidth: Math.round(promptVisualPanelRect.width),
       previewBottom: Math.round(previewRect.bottom),
       previewHeight: Math.round(previewRect.height),
+      previewTop: Math.round(previewRect.top),
       previewRight: Math.round(previewRect.right),
       previewWidth: Math.round(previewRect.width),
+      submitBottom: Math.round(submitRowRect.bottom),
+      submitHeight: Math.round(submitRowRect.height),
+      submitLeft: Math.round(submitRowRect.left),
+      submitRight: Math.round(submitRowRect.right),
+      submitTop: Math.round(submitRowRect.top),
       timelineBottom: Math.round(timelineRect.bottom),
       timelineTop: Math.round(timelineRect.top),
       visibleHeight: Math.round(visibleHeight),
@@ -901,6 +917,30 @@ const auditRoute = async ({ browser, baseUrl, route, surface, scenario, sampleSt
       if (sceneVisualPanel.previewWidth < 80 || sceneVisualPanel.previewHeight < 145) {
         failures.push(
           `embedded scene preview is undersized: ${sceneVisualPanel.previewWidth}x${sceneVisualPanel.previewHeight}`,
+        );
+      }
+
+      if (
+        sceneVisualPanel.headerHeight === null ||
+        sceneVisualPanel.headerHeight > 44 ||
+        sceneVisualPanel.promptVisualHeight < 125 ||
+        sceneVisualPanel.promptFieldHeight < 80
+      ) {
+        failures.push(
+          `embedded scene workspace is not using the compact composition: header ${sceneVisualPanel.headerHeight}px, ` +
+            `prompt ${sceneVisualPanel.promptVisualHeight}px, field ${sceneVisualPanel.promptFieldHeight}px`,
+        );
+      }
+
+      if (
+        sceneVisualPanel.submitTop < sceneVisualPanel.previewBottom + 6 ||
+        sceneVisualPanel.submitBottom > sceneVisualPanel.timelineTop - 6 ||
+        sceneVisualPanel.submitHeight > 28 ||
+        sceneVisualPanel.submitRight > sceneVisualPanel.viewportWidth - 8
+      ) {
+        failures.push(
+          `embedded scene actions are not below the preview: preview ${sceneVisualPanel.previewTop}-${sceneVisualPanel.previewBottom}, ` +
+            `actions ${sceneVisualPanel.submitTop}-${sceneVisualPanel.submitBottom}, timeline ${sceneVisualPanel.timelineTop}`,
         );
       }
 
