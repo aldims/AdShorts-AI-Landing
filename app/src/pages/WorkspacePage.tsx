@@ -2651,6 +2651,7 @@ export function WorkspacePage({
   const promptChipsRef = useRef<HTMLDivElement | null>(null);
   const promptSubmitRef = useRef<HTMLDivElement | null>(null);
   const promptTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const segmentEditorPromptColumnRef = useRef<HTMLDivElement | null>(null);
   const segmentAiPhotoModalPanelRef = useRef<HTMLFormElement | null>(null);
   const segmentAiPhotoModalFileInputRef = useRef<HTMLInputElement | null>(null);
   const segmentAiPhotoModalLibraryBodyRef = useRef<HTMLDivElement | null>(null);
@@ -10816,6 +10817,43 @@ export function WorkspacePage({
     return () => {
       window.removeEventListener("pointerdown", handlePointerDown, true);
     };
+  }, [createMode, isSegmentEditorVisualPanelOpen]);
+
+  useLayoutEffect(() => {
+    if (createMode !== "segment-editor" || !isSegmentEditorVisualPanelOpen || typeof window === "undefined") {
+      return;
+    }
+
+    const promptColumn = segmentEditorPromptColumnRef.current;
+    const segmentEditorLayout = promptColumn?.closest<HTMLElement>(".studio-segment-editor__layout");
+    const scrollContainer = promptColumn?.closest<HTMLElement>(".studio-canvas-main.is-segment-editor");
+    if (!promptColumn || !segmentEditorLayout || !scrollContainer) {
+      return;
+    }
+
+    const layoutStyle = window.getComputedStyle(segmentEditorLayout);
+    if (layoutStyle.display !== "flex" || layoutStyle.flexDirection !== "column") {
+      return;
+    }
+
+    const promptRect = promptColumn.getBoundingClientRect();
+    const scrollContainerRect = scrollContainer.getBoundingClientRect();
+    const scrollContainerStyle = window.getComputedStyle(scrollContainer);
+    const contentTop = scrollContainerRect.top + (Number.parseFloat(scrollContainerStyle.paddingTop) || 0) + 8;
+    const visibleHeight = Math.max(
+      0,
+      Math.min(promptRect.bottom, scrollContainerRect.bottom) - Math.max(promptRect.top, contentTop),
+    );
+    const requiredVisibleHeight = Math.min(promptRect.height, 160);
+    if (visibleHeight >= requiredVisibleHeight) {
+      return;
+    }
+
+    scrollContainer.scrollTo({
+      behavior: "auto",
+      left: 0,
+      top: Math.max(0, scrollContainer.scrollTop + promptRect.top - contentTop),
+    });
   }, [createMode, isSegmentEditorVisualPanelOpen]);
 
   useEffect(() => {
@@ -38030,6 +38068,7 @@ export function WorkspacePage({
                         }`}
                       >
                       <div
+                        ref={segmentEditorPromptColumnRef}
                         className="studio-segment-editor__prompt-column"
                         aria-hidden={!isSegmentEditorVisualPanelOpen}
                       >

@@ -365,6 +365,10 @@ const buildScenarios = () => {
     { width: 1920, height: 800, zoom: 1, fontScale: 1, type: "height" },
   );
 
+  if (quickMode) {
+    scenarios.push({ width: 1920, height: defaultViewportHeight, zoom: 1.75, fontScale: 1, type: "zoom" });
+  }
+
   return scenarios;
 };
 
@@ -573,6 +577,54 @@ const evaluateLayout = async (page) =>
     };
   });
 
+const openAndMeasureSceneVisualPanel = async (page) => {
+  const addVisualButton = page.locator(
+    'button[aria-label^="Добавить визуал в сцену"], button[aria-label^="Add visual to scene"]',
+  );
+  const addVisualButtonCount = await addVisualButton.count();
+  if (addVisualButtonCount !== 1) {
+    return { error: `expected one add-visual button, found ${addVisualButtonCount}` };
+  }
+
+  await addVisualButton.click();
+  await page.waitForSelector(
+    ".studio-segment-editor__layout.is-visual-panel-open .studio-segment-editor__prompt-column",
+    { state: "visible", timeout: 2_000 },
+  );
+  await page.waitForTimeout(80);
+
+  return page.evaluate(() => {
+    const main = document.querySelector(".studio-canvas-main.is-segment-editor");
+    const promptColumn = document.querySelector(
+      ".studio-segment-editor__layout.is-visual-panel-open .studio-segment-editor__prompt-column",
+    );
+    const promptPanel = promptColumn?.querySelector(".studio-segment-editor__prompt-panel");
+    if (!main || !promptColumn || !promptPanel) {
+      return { error: "opened visual panel is missing from the scene editor" };
+    }
+
+    const mainRect = main.getBoundingClientRect();
+    const promptColumnRect = promptColumn.getBoundingClientRect();
+    const promptPanelRect = promptPanel.getBoundingClientRect();
+    const mainStyle = window.getComputedStyle(main);
+    const contentTop = mainRect.top + (Number.parseFloat(mainStyle.paddingTop) || 0);
+    const visibleHeight = Math.max(
+      0,
+      Math.min(promptColumnRect.bottom, mainRect.bottom) - Math.max(promptColumnRect.top, contentTop),
+    );
+
+    return {
+      error: null,
+      mainScrollTop: Math.round(main.scrollTop),
+      panelHeight: Math.round(promptPanelRect.height),
+      panelWidth: Math.round(promptPanelRect.width),
+      promptBottom: Math.round(promptColumnRect.bottom),
+      promptTop: Math.round(promptColumnRect.top),
+      visibleHeight: Math.round(visibleHeight),
+    };
+  });
+};
+
 const auditRoute = async ({ browser, baseUrl, route, surface, scenario, sampleState }) => {
   const effectiveWidth = Math.max(320, Math.round(scenario.width / scenario.zoom));
   const effectiveHeight = Math.max(320, Math.round(scenario.height / scenario.zoom));
@@ -605,6 +657,12 @@ const auditRoute = async ({ browser, baseUrl, route, surface, scenario, sampleSt
     await page.waitForTimeout(180);
 
     const expectsScenesMode = surface === "app" && route.includes("mode=scenes");
+    const auditsSceneVisualPanel =
+      expectsScenesMode &&
+      scenario.fontScale === 1 &&
+      scenario.height === defaultViewportHeight &&
+      scenario.width === 1920 &&
+      scenario.zoom === 1.75;
     const scenesModeReady = expectsScenesMode
       ? await page
           .waitForSelector(".studio-canvas-main.is-segment-editor", { state: "visible", timeout: 5_000 })
@@ -614,6 +672,7 @@ const auditRoute = async ({ browser, baseUrl, route, surface, scenario, sampleSt
 
     const metrics = await evaluateLayout(page);
     const failures = [];
+    const sceneVisualPanel = auditsSceneVisualPanel ? await openAndMeasureSceneVisualPanel(page) : null;
 
     if (!scenesModeReady) {
       failures.push("scenes mode did not render");
@@ -655,6 +714,20 @@ const auditRoute = async ({ browser, baseUrl, route, surface, scenario, sampleSt
       );
     }
 
+    if (sceneVisualPanel?.error) {
+      failures.push(`scene visual panel: ${sceneVisualPanel.error}`);
+    } else if (
+      sceneVisualPanel &&
+      (sceneVisualPanel.panelHeight < 160 ||
+        sceneVisualPanel.panelWidth < 320 ||
+        sceneVisualPanel.visibleHeight < Math.min(160, sceneVisualPanel.panelHeight))
+    ) {
+      failures.push(
+        `scene visual panel is not reachable: ${sceneVisualPanel.panelWidth}x${sceneVisualPanel.panelHeight}, ` +
+          `${sceneVisualPanel.visibleHeight}px visible`,
+      );
+    }
+
     if (
       expectsScenesMode &&
       metrics.scenePreview &&
@@ -688,7 +761,7 @@ const auditRoute = async ({ browser, baseUrl, route, surface, scenario, sampleSt
         ok: false,
         label,
         failures,
-        metrics,
+        metrics: { ...metrics, sceneVisualPanel },
         screenshotPath,
       };
     }
@@ -718,7 +791,7 @@ const auditRoute = async ({ browser, baseUrl, route, surface, scenario, sampleSt
       sampleState.count += 1;
     }
 
-    return { ok: true, label, metrics };
+    return { ok: true, label, metrics: { ...metrics, sceneVisualPanel } };
   } catch (error) {
     const screenshotPath = path.join(
       artifactDir,
