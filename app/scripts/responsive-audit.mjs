@@ -365,6 +365,7 @@ const buildScenarios = () => {
     { width: 1920, height: 800, zoom: 1, fontScale: 1, type: "height" },
     { width: 1920, height: 980, zoom: 1.25, fontScale: 1, type: "scene-fit" },
     { width: 850, height: 434, zoom: 1, fontScale: 1, type: "scene-embedded" },
+    { width: 1352, height: 690, zoom: 1, fontScale: 1, type: "scene-compact-desktop" },
   );
 
   if (quickMode) {
@@ -509,6 +510,12 @@ const evaluateLayout = async (page) =>
 
     const activeSceneCard = document.querySelector(".studio-segment-editor__card.is-active");
     const activeSceneCardRect = activeSceneCard?.getBoundingClientRect();
+    const sceneCardCopyRect = activeSceneCard
+      ?.querySelector(".studio-segment-editor__card-copy")
+      ?.getBoundingClientRect();
+    const sceneBrandAddRect = activeSceneCard
+      ?.querySelector(".studio-segment-editor__brand-add")
+      ?.getBoundingClientRect();
     const sceneTimelineRect = document
       .querySelector(".studio-segment-editor__timeline")
       ?.getBoundingClientRect();
@@ -541,6 +548,22 @@ const evaluateLayout = async (page) =>
             height: Math.round(activeSceneCardRect.height),
             top: Math.round(activeSceneCardRect.top),
             bottom: Math.round(activeSceneCardRect.bottom),
+          }
+        : null,
+      sceneCardCopy: sceneCardCopyRect
+        ? {
+            left: Math.round(sceneCardCopyRect.left),
+            right: Math.round(sceneCardCopyRect.right),
+            top: Math.round(sceneCardCopyRect.top),
+            bottom: Math.round(sceneCardCopyRect.bottom),
+          }
+        : null,
+      sceneBrandAdd: sceneBrandAddRect
+        ? {
+            left: Math.round(sceneBrandAddRect.left),
+            right: Math.round(sceneBrandAddRect.right),
+            top: Math.round(sceneBrandAddRect.top),
+            bottom: Math.round(sceneBrandAddRect.bottom),
           }
         : null,
       sceneTimeline: sceneTimelineRect
@@ -953,6 +976,32 @@ const auditRoute = async ({ browser, baseUrl, route, surface, scenario, sampleSt
         if (Math.abs(compositionCenter - metrics.clientWidth / 2) > 36) {
           failures.push(
             `embedded preview/actions group is off-center: ${Math.round(compositionCenter)} vs ${Math.round(metrics.clientWidth / 2)}`,
+          );
+        }
+      }
+    }
+
+    if (sceneVisualPanel && scenario.type === "scene-compact-desktop") {
+      if (
+        !metrics.sceneLayout ||
+        !metrics.sceneTimeline ||
+        Math.abs(metrics.sceneLayout.bottom - metrics.clientHeight) > 1 ||
+        Math.abs(metrics.sceneTimeline.bottom - metrics.clientHeight) > 1
+      ) {
+        failures.push(
+          `compact desktop timeline does not fill the viewport: layout ${metrics.sceneLayout?.bottom}, ` +
+            `timeline ${metrics.sceneTimeline?.bottom}, viewport ${metrics.clientHeight}`,
+        );
+      }
+
+      if (metrics.sceneCardCopy && metrics.sceneBrandAdd) {
+        const overlapWidth = Math.min(metrics.sceneCardCopy.right, metrics.sceneBrandAdd.right) -
+          Math.max(metrics.sceneCardCopy.left, metrics.sceneBrandAdd.left);
+        const overlapHeight = Math.min(metrics.sceneCardCopy.bottom, metrics.sceneBrandAdd.bottom) -
+          Math.max(metrics.sceneCardCopy.top, metrics.sceneBrandAdd.top);
+        if (overlapWidth > 0 && overlapHeight > 0) {
+          failures.push(
+            `compact preview footer overlaps branding: ${overlapWidth}x${overlapHeight}px`,
           );
         }
       }
