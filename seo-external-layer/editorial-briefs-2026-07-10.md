@@ -48,11 +48,11 @@ https://adshortsai.com/kalkulyator-stoimosti-shorts/
 
 ## Habr
 
-Status: engineering fact pack prepared on 2026-07-20; nothing submitted. Source: `seo-external-layer/habr-video-pipeline-fact-pack-2026-07-20.md`.
+Status: full technical article draft prepared on 2026-07-20; nothing submitted. Sources: `seo-external-layer/habr-video-pipeline-fact-pack-2026-07-20.md` and `seo-external-layer/habr-video-pipeline-article-draft-2026-07-20.md`.
 
 ### Working title
 
-Как синхронизировать сценарий, озвучку, субтитры и рендер в генераторе коротких видео
+Как не подмешать устаревшую озвучку в новый рендер: контракты и инвалидация в видеопайплайне
 
 ### Technical angle
 
@@ -69,7 +69,7 @@ Proposed structure:
 7. Наблюдаемость: какие события и идентификаторы нужны для диагностики расхождений.
 8. Ошибки, которые встречались в реальном пайплайне, и архитектурные выводы без раскрытия пользовательских данных или секретов.
 
-### Evidence required before writing
+### Evidence used for the draft
 
 - Actual state types and ownership boundaries from the codebase.
 - Real invalidation rules for generated assets.

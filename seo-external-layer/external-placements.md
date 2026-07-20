@@ -25,7 +25,7 @@ Use this file as the human-readable status board. Keep `directory-tracker.csv` a
 | Platform | Type | Target URL | Status | Next action |
 | --- | --- | --- | --- | --- |
 | VC.ru | RU business media | https://adshortsai.com/kalkulyator-stoimosti-shorts/ | Published under Marketing on 2026-07-19 with a clickable calculator link. | Track referral traffic and indexing; do not repeat the same link unnaturally. |
-| Habr | RU tech media | https://adshortsai.com/ | Engineering fact pack prepared on 2026-07-20; nothing submitted. | Add a real anonymized incident and verified operating data, rewrite in the owner's voice, then request explicit approval before Sandbox submission. |
+| Habr | RU tech media | https://adshortsai.com/ | Full technical article draft prepared on 2026-07-20 from the verified fact pack; nothing submitted. | Review formatting and available hubs in the Habr editor, then request explicit approval before Sandbox submission or publication. |
 | Telegram AI/SMM channels | Outreach | https://adshortsai.com/ | Ready. | Build list of 30 channels and send personalized pitches. |
 | VK SMM/creator communities | Outreach | https://adshortsai.com/ | Ready. | Build list of 20 communities and post/pitch according to rules. |
 | Cossa | RU marketing media | https://adshortsai.com/kalkulyator-stoimosti-shorts/ | Editorial brief ready. | Send only after owner confirmation. |
