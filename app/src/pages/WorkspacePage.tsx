@@ -942,7 +942,6 @@ import {
   getWorkspaceSegmentInfographicCharacterCount,
   getWorkspaceSegmentInfographicStatusFailureAction,
   isWorkspaceSegmentInfographicJobResultContextValid,
-  isWorkspaceSegmentInfographicStale,
   pushWorkspaceSegmentInfographicHistory,
   redoWorkspaceSegmentInfographicHistory,
   shouldUploadWorkspaceSegmentInfographicSourceAsset,
@@ -954,6 +953,10 @@ import {
 } from "../features/workspace/workspace-infographic-helpers";
 import { WorkspaceSegmentInfographicOverlay } from "../features/workspace/workspace-infographic-overlay";
 import { WorkspaceInfographicStyleDisclosure } from "../features/workspace/workspace-infographic-style-disclosure";
+import {
+  isWorkspaceInfographicTemplateStylePrompt,
+  WorkspaceInfographicTemplatePicker,
+} from "../features/workspace/workspace-infographic-template-picker";
 import type { WorkspaceMediaAssetRef } from "../../shared/workspace-media-assets";
 import { clearExamplePrefillIntent, readExamplePrefillIntent } from "../lib/example-prefill";
 import { logClientEvent } from "../lib/client-log";
@@ -37327,6 +37330,19 @@ export function WorkspacePage({
                     </div>
                   ) : isPromptInfographicMode ? (
                     <div className="studio-segment-editor__infographic-form">
+                      <WorkspaceInfographicTemplatePicker
+                        locale={locale}
+                        value={activeSegmentInfographicStylePrompt}
+                        onChange={(value) => {
+                          setSegmentEditorVideoError(null);
+                          if (activeSegment) {
+                            updateSegmentEditorDraftSegmentByIndex(activeSegment.index, (segment) => ({
+                              ...segment,
+                              infographicStylePromptDraft: value,
+                            }));
+                          }
+                        }}
+                      />
                       <label className="studio-segment-editor__infographic-field studio-segment-editor__infographic-text-field">
                         <span>
                           <strong>{workspaceText(locale, "Текст инфографики", "Infographic text")}</strong>
@@ -37353,7 +37369,8 @@ export function WorkspacePage({
                       </label>
                       <WorkspaceInfographicStyleDisclosure
                         key={`infographic-style:${activeSegment?.index ?? "none"}`}
-                        label={workspaceText(locale, "Стиль инфографики — необязательно", "Infographic style — optional")}
+                        autoExpand={!isWorkspaceInfographicTemplateStylePrompt(activeSegmentInfographicStylePrompt)}
+                        label={workspaceText(locale, "Точная настройка — необязательно", "Fine-tuning — optional")}
                         maxCharacters={WORKSPACE_SEGMENT_INFOGRAPHIC_STYLE_MAX_CHARS}
                         placeholder={workspaceText(locale, "Например: минимализм, белый текст, голубые акценты", "For example: minimal, white text, blue accents")}
                         value={activeSegmentInfographicStylePrompt}
@@ -37367,50 +37384,6 @@ export function WorkspacePage({
                           }
                         }}
                       />
-                      {activeSegment?.infographic &&
-                      isWorkspaceSegmentInfographicStale(
-                        activeSegment.infographic,
-                        getWorkspaceSegmentInfographicSourceVisualIdentity(
-                          getWorkspaceSegmentSceneSoundVisualAssetId(activeSegment),
-                        ),
-                      ) &&
-                      activeSegment.infographicSourceWarningDismissedForIdentity !==
-                        getWorkspaceSegmentInfographicSourceVisualIdentity(
-                          getWorkspaceSegmentSceneSoundVisualAssetId(activeSegment),
-                        ) ? (
-                        <div className="studio-segment-editor__infographic-stale" role="status">
-                          <div>
-                            <strong>{workspaceText(locale, "Создана для предыдущего визуала", "Created for the previous visual")}</strong>
-                            <span>{workspaceText(locale, "Можно оставить слой или создать новый под текущую сцену.", "Keep the layer or create a new one for this shot.")}</span>
-                          </div>
-                          <div className="studio-segment-editor__infographic-stale-actions">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (!activeSegment) return;
-                                const identity = getWorkspaceSegmentInfographicSourceVisualIdentity(
-                                  getWorkspaceSegmentSceneSoundVisualAssetId(activeSegment),
-                                );
-                                updateSegmentEditorDraftSegmentByIndex(activeSegment.index, (segment) => ({
-                                  ...segment,
-                                  infographicSourceWarningDismissedForIdentity: identity,
-                                }));
-                              }}
-                            >
-                              {workspaceText(locale, "Оставить", "Keep")}
-                            </button>
-                            <button
-                              type="button"
-                              disabled={isSegmentInfographicCurrentSegment || !activeSegmentInfographicText.trim()}
-                              onClick={() => {
-                                if (activeSegment) void handleSegmentEditorInfographicGenerate(activeSegment.index);
-                              }}
-                            >
-                              {workspaceText(locale, "Создать заново · 2 ⚡", "Create again · 2 ⚡")}
-                            </button>
-                          </div>
-                        </div>
-                      ) : null}
                     </div>
                   ) : (
                     <>
@@ -40335,9 +40308,20 @@ export function WorkspacePage({
                                 }}
                               />
                             </label>
+                            <WorkspaceInfographicTemplatePicker
+                              locale={locale}
+                              value={segmentAiPhotoModalSegment.infographicStylePromptDraft}
+                              onChange={(value) => {
+                                updateSegmentEditorDraftSegmentByIndex(segmentAiPhotoModalSegment.index, (segment) => ({
+                                  ...segment,
+                                  infographicStylePromptDraft: value,
+                                }));
+                              }}
+                            />
                             <WorkspaceInfographicStyleDisclosure
                               key={`infographic-modal-style:${segmentAiPhotoModalSegment.index}`}
-                              label={workspaceText(locale, "Стиль инфографики — необязательно", "Infographic style — optional")}
+                              autoExpand={!isWorkspaceInfographicTemplateStylePrompt(segmentAiPhotoModalSegment.infographicStylePromptDraft)}
+                              label={workspaceText(locale, "Точная настройка — необязательно", "Fine-tuning — optional")}
                               maxCharacters={WORKSPACE_SEGMENT_INFOGRAPHIC_STYLE_MAX_CHARS}
                               placeholder={workspaceText(locale, "Например: минимализм, белый текст, голубые акценты", "For example: minimal, white text, blue accents")}
                               textareaClassName="studio-ai-photo-modal__textarea"

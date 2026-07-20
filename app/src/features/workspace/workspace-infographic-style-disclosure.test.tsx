@@ -5,8 +5,9 @@ import { describe, expect, it, vi } from "vitest";
 
 import { WorkspaceInfographicStyleDisclosure } from "./workspace-infographic-style-disclosure";
 
-const renderDisclosure = (value = "", onChange = vi.fn()) => render(
+const renderDisclosure = (value = "", onChange = vi.fn(), autoExpand = true) => render(
   <WorkspaceInfographicStyleDisclosure
+    autoExpand={autoExpand}
     label="Стиль инфографики — необязательно"
     maxCharacters={3}
     onChange={onChange}
@@ -32,5 +33,11 @@ describe("WorkspaceInfographicStyleDisclosure", () => {
       target: { value: "абвг" },
     });
     expect(onChange).toHaveBeenCalledWith("абв");
+  });
+
+  it("keeps a generated template prompt collapsed when auto expand is disabled", () => {
+    const view = renderDisclosure("template prompt", vi.fn(), false);
+
+    expect(view.container.querySelector("details")?.hasAttribute("open")).toBe(false);
   });
 });

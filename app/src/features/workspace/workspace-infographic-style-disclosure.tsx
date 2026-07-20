@@ -6,6 +6,7 @@ import {
 } from "./workspace-infographic-helpers";
 
 export type WorkspaceInfographicStyleDisclosureProps = {
+  autoExpand?: boolean;
   label: string;
   maxCharacters: number;
   onChange: (value: string) => void;
@@ -15,6 +16,7 @@ export type WorkspaceInfographicStyleDisclosureProps = {
 };
 
 export const WorkspaceInfographicStyleDisclosure = ({
+  autoExpand = true,
   label,
   maxCharacters,
   onChange,
@@ -23,13 +25,13 @@ export const WorkspaceInfographicStyleDisclosure = ({
   value,
 }: WorkspaceInfographicStyleDisclosureProps) => {
   const textareaId = useId();
-  const [isOpen, setIsOpen] = useState(Boolean(value.trim()));
+  const [isOpen, setIsOpen] = useState(autoExpand && Boolean(value.trim()));
 
   useEffect(() => {
     if (value.trim()) {
-      setIsOpen(true);
+      setIsOpen(autoExpand);
     }
-  }, [value]);
+  }, [autoExpand, value]);
 
   return (
     <details
