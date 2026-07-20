@@ -194,6 +194,26 @@ const pricingMessages = defineMessages({
     ru: "Выберите свой тариф",
     en: "Pricing",
   },
+  paymentResultBalance: {
+    ru: "Баланс",
+    en: "Balance",
+  },
+  paymentResultClose: {
+    ru: "Закрыть результат оплаты",
+    en: "Close payment result",
+  },
+  paymentResultCredited: {
+    ru: "Начислено",
+    en: "Credited",
+  },
+  paymentResultOpenStudio: {
+    ru: "Открыть студию",
+    en: "Open studio",
+  },
+  paymentResultPlan: {
+    ru: "Тариф",
+    en: "Plan",
+  },
   signIn: {
     ru: "Войти",
     en: "Sign in",
@@ -240,50 +260,50 @@ const pricingPlanCopy: LocalizedPlanCopy[] = [
   {
     checkoutProductId: "start",
     name: "START",
-    audience: { ru: "Разовый пакет для первого запуска", en: "Ideal for the first launch" },
-    audienceLines: { ru: ["Разовый пакет для", "первого запуска"], en: ["Ideal for the first", "launch"] },
-    price: { ru: "390 ₽", en: "Coming soon" },
-    billing: { ru: "/ 50 кредитов", en: "/ international checkout" },
+    audience: { ru: "Разовый пакет для первого запуска", en: "One-time pack for your first launch" },
+    audienceLines: { ru: ["Разовый пакет для", "первого запуска"], en: ["One-time pack for", "your first launch"] },
+    price: { ru: "390 ₽", en: "390 ₽" },
+    billing: { ru: "/ 50 кредитов", en: "/ 50 credits" },
     credits: { ru: "До 5 Shorts", en: "Up to 5 Shorts" },
-    subnote: { ru: "≈ 78 ₽ за Shorts", en: "Try the studio for free today" },
+    subnote: { ru: "≈ 78 ₽ за Shorts", en: "≈ 78 ₽ per Short" },
     features: {
       ru: ["Без водяного знака"],
-      en: ["Full Shorts creation access", "No watermark", "Studio editing", "YouTube publishing tools"],
+      en: ["No watermark"],
     },
-    ctaLabel: { ru: "Оплатить START", en: "Try free now" },
+    ctaLabel: { ru: "Оплатить START", en: "Buy START" },
   },
   {
     checkoutProductId: "pro",
     name: "PRO",
-    audience: { ru: "Для регулярного создания Shorts", en: "Ideal for a regular content flow" },
-    audienceLines: { ru: ["Для регулярного", "создания Shorts"], en: ["Ideal for a regular", "content flow"] },
-    price: { ru: "1 490 ₽", en: "Coming soon" },
-    billing: { ru: "/ 250 кредитов", en: "/ international checkout" },
+    audience: { ru: "Для регулярного создания Shorts", en: "For creating Shorts regularly" },
+    audienceLines: { ru: ["Для регулярного", "создания Shorts"], en: ["For creating Shorts", "regularly"] },
+    price: { ru: "1 490 ₽", en: "1 490 ₽" },
+    billing: { ru: "/ 250 кредитов", en: "/ 250 credits" },
     credits: { ru: "До 25 Shorts", en: "Up to 25 Shorts" },
-    subnote: { ru: "≈ 60 ₽ за Shorts", en: "Regular-use tier preview" },
+    subnote: { ru: "≈ 60 ₽ за Shorts", en: "≈ 60 ₽ per Short" },
     features: {
       ru: ["Без водяного знака", "Приоритетная генерация", "Можно докупать пакеты"],
-      en: ["Everything in START", "Priority generation", "Credit top-ups when checkout launches", "Built for regular content"],
+      en: ["No watermark", "Priority generation", "Add-on packs available"],
     },
     badge: { ru: "Самый популярный", en: "Most popular" },
     featured: true,
-    ctaLabel: { ru: "Оплатить PRO", en: "Try free now" },
+    ctaLabel: { ru: "Оплатить PRO", en: "Buy PRO" },
   },
   {
     checkoutProductId: "ultra",
     name: "ULTRA",
-    audience: { ru: "Для максимального объёма", en: "Ideal for maximum volume" },
-    audienceLines: { ru: ["Для максимального", "объёма"], en: ["Ideal for maximum", "volume"] },
-    price: { ru: "4 990 ₽", en: "Coming soon" },
-    billing: { ru: "/ 1000 кредитов", en: "/ international checkout" },
+    audience: { ru: "Для максимального объёма", en: "For maximum volume" },
+    audienceLines: { ru: ["Для максимального", "объёма"], en: ["For maximum", "volume"] },
+    price: { ru: "4 990 ₽", en: "4 990 ₽" },
+    billing: { ru: "/ 1000 кредитов", en: "/ 1000 credits" },
     credits: { ru: "До 100 Shorts", en: "Up to 100 Shorts" },
-    subnote: { ru: "≈ 50 ₽ за Shorts", en: "Highest-limit tier preview" },
+    subnote: { ru: "≈ 50 ₽ за Shorts", en: "≈ 50 ₽ per Short" },
     features: {
       ru: ["Без водяного знака", "Максимальный приоритет", "Можно докупать пакеты", "Ранний доступ к новым функциям"],
-      en: ["Everything in PRO", "Maximum priority", "Early access to new features", "Best limits for active use"],
+      en: ["No watermark", "Maximum priority", "Add-on packs available", "Early access to new features"],
     },
     badge: { ru: "Лучшая выгода", en: "Best value" },
-    ctaLabel: { ru: "Оплатить ULTRA", en: "Try free now" },
+    ctaLabel: { ru: "Оплатить ULTRA", en: "Buy ULTRA" },
   },
 ];
 
@@ -299,21 +319,21 @@ const pricingPackCopy: LocalizedPackCopy[] = [
     checkoutProductId: "package_10",
     name: "Pack 100",
     credits: { ru: "100 кредитов", en: "100 credits" },
-    price: { ru: "690 ₽", en: "Coming soon" },
+    price: { ru: "690 ₽", en: "690 ₽" },
     subnote: { ru: "До 10 Shorts", en: "Up to 10 Shorts" },
   },
   {
     checkoutProductId: "package_50",
     name: "Pack 500",
     credits: { ru: "500 кредитов", en: "500 credits" },
-    price: { ru: "2 750 ₽", en: "Coming soon" },
+    price: { ru: "2 750 ₽", en: "2 750 ₽" },
     subnote: { ru: "До 50 Shorts", en: "Up to 50 Shorts" },
   },
   {
     checkoutProductId: "package_100",
     name: "Pack 1000",
     credits: { ru: "1000 кредитов", en: "1000 credits" },
-    price: { ru: "4 990 ₽", en: "Coming soon" },
+    price: { ru: "4 990 ₽", en: "4 990 ₽" },
     subnote: { ru: "До 100 Shorts", en: "Up to 100 Shorts" },
     badge: { ru: "Выгодно", en: "Good value" },
   },
@@ -328,17 +348,17 @@ const pricingFaqCopy: Array<{ question: Record<Locale, string>; answer: Record<L
     },
   },
   {
-    question: { ru: "Срок действия тарифа", en: "Feature access period" },
+    question: { ru: "Срок действия тарифа", en: "Plan validity" },
     answer: {
       ru: "START — разовый пакет без срока действия. PRO и ULTRA активны 30 дней. Неиспользованные кредиты сохраняются и не сгорают.",
-      en: "International paid plans are not live yet. The limits above show the upcoming plan structure, and the free studio is available now.",
+      en: "START is a one-time pack with no expiration date. PRO and ULTRA are active for 30 days. Unused credits remain available and do not expire.",
     },
   },
   {
     question: { ru: "Что включено в оплату", en: "What payment includes" },
     answer: {
       ru: "Все видео идут без водяного знака. Автопродления нет, повторная оплата только вручную.",
-      en: "When international payments launch, plan access will be manual without auto-renewal. For now, you can test the creation flow for free.",
+      en: "All videos come without a watermark. There is no auto-renewal; every repeat payment is made manually.",
     },
   },
 ];
@@ -411,7 +431,7 @@ export function PricingPage({
   const location = useLocation();
   const navigate = useNavigate();
   const { locale, localizePath, t } = useLocale();
-  const isInternationalPricing = locale === "en";
+  const showInternationalCheckoutNotice = locale === "en";
   const routeState = location.state as PricingRouteState;
   const shouldUseStudioNavigation = Boolean(session && routeState?.fromStudio);
   const pricingPlans = getPricingPlans(locale);
@@ -491,11 +511,6 @@ export function PricingPage({
   };
 
   const requestCheckout = async (productId: CheckoutProductId) => {
-    if (isInternationalPricing) {
-      openPrimaryFlow();
-      return;
-    }
-
     const planRestriction =
       productId === "start" || productId === "pro" || productId === "ultra"
         ? getPlanCheckoutRestriction(productId)
@@ -596,11 +611,6 @@ export function PricingPage({
   };
 
   const handlePlanCheckout = (productId: PlanCheckoutProductId) => {
-    if (isInternationalPricing) {
-      openPrimaryFlow();
-      return;
-    }
-
     if (!session) {
       if (typeof window !== "undefined") {
         window.sessionStorage.setItem(PENDING_CHECKOUT_STORAGE_KEY, productId);
@@ -613,11 +623,6 @@ export function PricingPage({
   };
 
   const handleAddonPackAction = (pack: PricingPack) => {
-    if (isInternationalPricing) {
-      openPrimaryFlow();
-      return;
-    }
-
     if (!session) {
       if (typeof window !== "undefined") {
         window.sessionStorage.setItem(PENDING_CHECKOUT_STORAGE_KEY, "pro");
@@ -636,11 +641,6 @@ export function PricingPage({
   };
 
   const handleAddonUpgradeAction = () => {
-    if (isInternationalPricing) {
-      openPrimaryFlow();
-      return;
-    }
-
     setActivePlanId("pro");
     handlePlanCheckout("pro");
   };
@@ -671,11 +671,6 @@ export function PricingPage({
       return;
     }
 
-    if (isInternationalPricing) {
-      window.sessionStorage.removeItem(PENDING_CHECKOUT_STORAGE_KEY);
-      return;
-    }
-
     const pendingCheckoutProductId = window.sessionStorage.getItem(PENDING_CHECKOUT_STORAGE_KEY);
     if (
       pendingCheckoutProductId !== "start" &&
@@ -699,7 +694,7 @@ export function PricingPage({
     }
 
     void requestCheckout(pendingCheckoutProductId);
-  }, [isInternationalPricing, isStartPlanUsed, session]);
+  }, [isStartPlanUsed, session]);
 
   useEffect(() => {
     if (getPlanCheckoutRestriction(activePlanId)) {
@@ -738,7 +733,7 @@ export function PricingPage({
 
   useEffect(() => {
     const productId = readPaymentReturnProductId(location.search);
-    if (!session || !productId || isInternationalPricing) {
+    if (!session || !productId) {
       return;
     }
 
@@ -794,7 +789,7 @@ export function PricingPage({
     return () => {
       controller.abort();
     };
-  }, [isInternationalPricing, location.search, navigate, onWorkspaceProfileChange, session]);
+  }, [location.search, navigate, onWorkspaceProfileChange, session]);
 
   const checkoutResultTitle = checkoutResult
     ? checkoutResult.status === "success"
@@ -839,7 +834,7 @@ export function PricingPage({
     : "";
 
   return (
-    <div className={`route-page pricing-page${isInternationalPricing ? " pricing-page--international" : ""}`}>
+    <div className={`route-page pricing-page${showInternationalCheckoutNotice ? " pricing-page--international" : ""}`}>
       <header className={`site-header${shouldUseStudioNavigation ? " site-header--workspace" : ""}`} id="top">
         <div className="container site-header__inner">
           <Link className="brand" to={localizePath("/")} aria-label="AdShorts AI">
@@ -881,15 +876,12 @@ export function PricingPage({
           <div className="container">
             <div className="pricing-max-hero__heading">
               <h1>{t(pricingMessages.heroHeading)}</h1>
-              {isInternationalPricing ? (
-                <InternationalPaymentsWaitlist defaultEmail={session?.email} />
-              ) : null}
-              {!isInternationalPricing && checkoutError ? (
+              {checkoutError ? (
                 <p className="pricing-max-hero__status" role="alert">
                   {checkoutError}
                 </p>
               ) : null}
-              {!isInternationalPricing && checkoutResult ? (
+              {checkoutResult ? (
                 <div
                   className={`pricing-payment-result pricing-payment-result--${checkoutResult.status}`}
                   id="payment-result"
@@ -898,7 +890,7 @@ export function PricingPage({
                   <button
                     className="pricing-payment-result__close"
                     type="button"
-                    aria-label="Закрыть результат оплаты"
+                    aria-label={t(pricingMessages.paymentResultClose)}
                     onClick={handleDismissPaymentResult}
                   >
                     <span aria-hidden="true">×</span>
@@ -912,22 +904,22 @@ export function PricingPage({
                     <p>{checkoutResultDescription}</p>
                     <dl className="pricing-payment-result__facts">
                       <div>
-                        <dt>Тариф</dt>
+                        <dt>{t(pricingMessages.paymentResultPlan)}</dt>
                         <dd>{checkoutResultPlanLabel}</dd>
                       </div>
                       <div>
-                        <dt>Начислено</dt>
+                        <dt>{t(pricingMessages.paymentResultCredited)}</dt>
                         <dd>{checkoutResultAddedCredits}</dd>
                       </div>
                       <div>
-                        <dt>Баланс</dt>
+                        <dt>{t(pricingMessages.paymentResultBalance)}</dt>
                         <dd>{checkoutResultBalance}</dd>
                       </div>
                     </dl>
                   </div>
                   <div className="pricing-payment-result__actions">
                     <button className="btn pricing-payment-result__primary route-button" type="button" onClick={onOpenWorkspace}>
-                      Открыть студию
+                      {t(pricingMessages.paymentResultOpenStudio)}
                     </button>
                   </div>
                 </div>
@@ -936,8 +928,7 @@ export function PricingPage({
           </div>
         </section>
 
-        {!isInternationalPricing ? (
-          <>
+        <>
             <section className="section pricing-max-plans" id="plans">
               <div className="container">
                 <div className="pricing-max-grid" onMouseLeave={() => setActivePlanId(defaultActivePlanId)}>
@@ -1130,6 +1121,14 @@ export function PricingPage({
               </div>
             </section>
 
+            {showInternationalCheckoutNotice ? (
+              <section className="section pricing-max-international">
+                <div className="container pricing-max-international__frame">
+                  <InternationalPaymentsWaitlist defaultEmail={session?.email} />
+                </div>
+              </section>
+            ) : null}
+
             <section className="section pricing-max-faq">
               <div className="container pricing-max-faq__frame">
                 <div className="pricing-max-faq__lead">
@@ -1146,8 +1145,7 @@ export function PricingPage({
                 </div>
               </div>
             </section>
-          </>
-        ) : null}
+        </>
       </main>
 
       <AgencyContactModal

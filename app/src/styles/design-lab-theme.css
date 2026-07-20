@@ -41203,6 +41203,23 @@ html, body {
   margin-top: 24px !important;
 }
 
+/* ── International checkout notice ── */
+.pricing-max-international {
+  padding-top: 80px !important;
+  padding-bottom: 80px !important;
+  border-top: 1px solid rgba(255,255,255,0.05) !important;
+  background: transparent !important;
+}
+
+.pricing-max-international__frame {
+  display: grid;
+  justify-items: center;
+}
+
+.pricing-max-international .pricing-max-international-hero {
+  margin-top: 0;
+}
+
 /* ── FAQ section ── */
 .pricing-max-faq {
   background: transparent !important;
@@ -41310,6 +41327,11 @@ html, body {
   .pricing-max-international-waitlist__submit {
     width: 100% !important;
     min-width: 0;
+  }
+
+  .pricing-max-international {
+    padding-top: 56px !important;
+    padding-bottom: 56px !important;
   }
 }
 

@@ -5,6 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { LocaleProvider, type Locale } from "../lib/i18n";
+import { PENDING_CHECKOUT_STORAGE_KEY } from "../lib/payment-return";
 import { PricingPage } from "./PricingPage";
 
 const renderPricingPage = (locale: Locale = "en") => {
@@ -37,28 +38,40 @@ const renderPricingPage = (locale: Locale = "en") => {
 
 describe("PricingPage international pricing", () => {
   afterEach(() => {
+    window.sessionStorage.clear();
     vi.unstubAllGlobals();
   });
 
-  it("replaces ruble checkout pricing with an email waitlist in English", async () => {
+  it("shows the Russian plan structure and ruble checkout on the English page", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       json: async () => ({ data: { ok: true } }),
       ok: true,
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const { container } = renderPricingPage("en");
+    const { container, onOpenSignup, onOpenWorkspace } = renderPricingPage("en");
 
     expect(screen.getByRole("heading", { name: "Pricing" })).toBeTruthy();
+    expect(screen.getByText("390 ₽")).toBeTruthy();
+    expect(screen.getByText("1 490 ₽")).toBeTruthy();
+    expect(screen.getByText("4 990 ₽")).toBeTruthy();
+    expect(screen.getByText("/ 50 credits")).toBeTruthy();
+    expect(screen.getByText("How plans work")).toBeTruthy();
+    expect(screen.getByText("Plan validity")).toBeTruthy();
+    expect(screen.getByText("Add-on packs")).toBeTruthy();
+    expect(screen.queryByText("Coming soon")).toBeNull();
+
     expect(screen.getByText("International payments are coming soon.")).toBeTruthy();
     expect(screen.getByText(/You can try AdShorts AI for free now/i)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Join waitlist" })).toBeTruthy();
-    expect(container.textContent).not.toContain("₽");
-    expect(screen.queryByText("START")).toBeNull();
-    expect(screen.queryByText("Coming soon")).toBeNull();
-    expect(screen.queryByText("How plans work")).toBeNull();
-    expect(screen.queryByText("Buy pack")).toBeNull();
-    expect(screen.queryByText("Opening checkout...")).toBeNull();
+    const internationalNotice = screen.getByRole("note");
+    const plansFaqHeading = screen.getByRole("heading", { name: "How plans work" });
+    expect(internationalNotice.compareDocumentPosition(plansFaqHeading) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "Buy START" }));
+    expect(onOpenSignup).toHaveBeenCalledOnce();
+    expect(onOpenWorkspace).not.toHaveBeenCalled();
+    expect(window.sessionStorage.getItem(PENDING_CHECKOUT_STORAGE_KEY)).toBe("start");
 
     fireEvent.change(screen.getByLabelText("Email for international payments waitlist"), {
       target: { value: "buyer@example.com" },
@@ -78,6 +91,7 @@ describe("PricingPage international pricing", () => {
       );
     });
     expect(screen.getByText("You're on the list. We'll email you when international payments open.")).toBeTruthy();
+    expect(container.querySelector(".pricing-max-international + .pricing-max-faq")).toBeTruthy();
   });
 
   it("keeps ruble prices on the Russian pricing page", () => {
