@@ -18,12 +18,7 @@ Use this file as the human-readable status board. Keep `directory-tracker.csv` a
 | AiLib | RU AI directory | yes, 2026-06-20 | 2026-07-10 | pending | Submission and queue were confirmed, but no indexed public card was found. Wait for moderation or check the confirmation email. |
 | A2IS | RU software directory | yes, 2026-06-20 | 2026-07-10 | https://a2is.ru/catalog/montazh-video/adshorts-ai | Public URL returns HTTP 200, but fetched HTML has no AdShorts AI mention or direct website `href`. Check the logged-in product card and ask support if the public render remains empty. |
 | VC.ru | RU business media | yes, 2026-07-19 | 2026-07-19 | https://vc.ru/marketing/3035242-kak-malomu-biznesu-sozdat-reels-shorts-i-tiktok-bez-semki | Published under Marketing. The useful article is public, has no draft marker, and contains a clickable calculator link through the standard VC.ru redirect. |
-
-## Ready To Submit
-
-| Platform | Type | Target URL | Current blocker | Next action |
-| --- | --- | --- | --- | --- |
-| OnReport | RU software directory/media | https://adshortsai.com/press/ | Editorial pitch, no obvious self-serve form. | Send prepared pitch after confirmation. |
+| OnReport | RU software directory/media | yes, 2026-07-20 | 2026-07-20 | pending | Free editorial/catalog request sent through the official feedback bot with homepage and examples links. Wait for the reply; provide assets if accepted and decline paid promotion for this sprint. |
 
 ## Content And Community Placements
 

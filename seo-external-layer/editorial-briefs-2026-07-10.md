@@ -1,10 +1,12 @@
 # Editorial Briefs: OnReport, Cossa, Habr
 
-Updated: 2026-07-10
+Updated: 2026-07-20
 
 Do not send or publish without owner confirmation. These are free editorial pitches. Do not promise traffic, rankings, user results, ratings, or unsupported product metrics.
 
 ## OnReport
+
+Status: sent on 2026-07-20 through the official feedback bot; free editorial/catalog placement requested, reply pending.
 
 ### Subject
 
