@@ -48,6 +48,8 @@ https://adshortsai.com/kalkulyator-stoimosti-shorts/
 
 ## Habr
 
+Status: engineering fact pack prepared on 2026-07-20; nothing submitted. Source: `seo-external-layer/habr-video-pipeline-fact-pack-2026-07-20.md`.
+
 ### Working title
 
 Как синхронизировать сценарий, озвучку, субтитры и рендер в генераторе коротких видео
@@ -76,4 +78,4 @@ Proposed structure:
 
 ### Product mention
 
-One short disclosure at the end is enough: the architecture is used in the AdShorts AI web service. Link to the technical press page or homepage only after owner confirmation.
+One short disclosure at the end is enough: the architecture is used in the AdShorts AI web service. Use the homepage once and only after owner confirmation.
