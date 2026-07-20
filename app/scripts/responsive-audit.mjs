@@ -535,6 +535,8 @@ const evaluateLayout = async (page) =>
       overlaps: overlaps.slice(0, 6),
       scenePreview: activeSceneCardRect
         ? {
+            left: Math.round(activeSceneCardRect.left),
+            right: Math.round(activeSceneCardRect.right),
             width: Math.round(activeSceneCardRect.width),
             height: Math.round(activeSceneCardRect.height),
             top: Math.round(activeSceneCardRect.top),
@@ -549,6 +551,9 @@ const evaluateLayout = async (page) =>
         : null,
       sceneSubmit: sceneSubmitRect
         ? {
+            left: Math.round(sceneSubmitRect.left),
+            right: Math.round(sceneSubmitRect.right),
+            width: Math.round(sceneSubmitRect.width),
             top: Math.round(sceneSubmitRect.top),
             bottom: Math.round(sceneSubmitRect.bottom),
           }
@@ -597,23 +602,38 @@ const openAndMeasureSceneVisualPanel = async (page) => {
   );
   await page.waitForTimeout(80);
 
-  return page.evaluate(() => {
+  const openedMetrics = await page.evaluate(() => {
     const main = document.querySelector(".studio-canvas-main.is-segment-editor");
     const promptColumn = document.querySelector(
       ".studio-segment-editor__layout.is-visual-panel-open .studio-segment-editor__prompt-column",
     );
     const promptPanel = promptColumn?.querySelector(".studio-segment-editor__prompt-panel");
+    const promptVisualPanel = promptColumn?.querySelector(".studio-segment-editor__prompt-visual-panel");
+    const promptField = promptColumn?.querySelector(".studio-segment-editor__prompt-field");
+    const promptActionRow = promptColumn?.querySelector(".studio-segment-editor__prompt-action-row");
     const preview = document.querySelector(
       ".studio-segment-editor__layout.is-visual-panel-open .studio-segment-editor__carousel",
     );
     const timeline = document.querySelector(".studio-segment-editor__timeline");
-    if (!main || !promptColumn || !promptPanel || !preview || !timeline) {
+    if (
+      !main ||
+      !promptColumn ||
+      !promptPanel ||
+      !promptVisualPanel ||
+      !promptField ||
+      !promptActionRow ||
+      !preview ||
+      !timeline
+    ) {
       return { error: "opened visual panel is missing from the scene editor" };
     }
 
     const mainRect = main.getBoundingClientRect();
     const promptColumnRect = promptColumn.getBoundingClientRect();
     const promptPanelRect = promptPanel.getBoundingClientRect();
+    const promptVisualPanelRect = promptVisualPanel.getBoundingClientRect();
+    const promptFieldRect = promptField.getBoundingClientRect();
+    const promptActionRowRect = promptActionRow.getBoundingClientRect();
     const previewRect = preview.getBoundingClientRect();
     const timelineRect = timeline.getBoundingClientRect();
     const documentElement = document.documentElement;
@@ -635,8 +655,11 @@ const openAndMeasureSceneVisualPanel = async (page) => {
       panelHeight: Math.round(promptPanelRect.height),
       panelWidth: Math.round(promptPanelRect.width),
       panelRight: Math.round(promptPanelRect.right),
+      promptActionWidth: Math.round(promptActionRowRect.width),
       promptBottom: Math.round(promptColumnRect.bottom),
+      promptFieldWidth: Math.round(promptFieldRect.width),
       promptTop: Math.round(promptColumnRect.top),
+      promptVisualWidth: Math.round(promptVisualPanelRect.width),
       previewBottom: Math.round(previewRect.bottom),
       previewHeight: Math.round(previewRect.height),
       previewRight: Math.round(previewRect.right),
@@ -648,6 +671,45 @@ const openAndMeasureSceneVisualPanel = async (page) => {
       viewportWidth: document.documentElement.clientWidth,
     };
   });
+
+  if (openedMetrics.error) {
+    return openedMetrics;
+  }
+
+  const activeTimelineVisual = page.locator(
+    'button[aria-pressed="true"][aria-label^="Открыть визуал сцены"], ' +
+      'button[aria-pressed="true"][aria-label^="Open scene"]',
+  );
+  const activeTimelineVisualCount = await activeTimelineVisual.count();
+  if (activeTimelineVisualCount !== 1) {
+    return {
+      ...openedMetrics,
+      error: `expected one active timeline visual, found ${activeTimelineVisualCount}`,
+    };
+  }
+
+  await activeTimelineVisual.click();
+  await page.waitForSelector(".studio-segment-editor__layout.is-visual-panel-closed", {
+    state: "visible",
+    timeout: 2_000,
+  });
+  await page.waitForTimeout(80);
+
+  const closedMetrics = await page.evaluate(() => {
+    const previewContainer = document.querySelector(".studio-canvas-preview.is-segment-editor");
+    const activeCard = document.querySelector(".studio-segment-editor__card.is-active");
+    const header = document.querySelector("header");
+    const activeCardRect = activeCard?.getBoundingClientRect();
+    const headerRect = header?.getBoundingClientRect();
+
+    return {
+      closedCardTop: activeCardRect ? Math.round(activeCardRect.top) : null,
+      closedHeaderBottom: headerRect ? Math.round(headerRect.bottom) : null,
+      closedPreviewScrollTop: previewContainer ? Math.round(previewContainer.scrollTop) : null,
+    };
+  });
+
+  return { ...openedMetrics, ...closedMetrics };
 };
 
 const auditRoute = async ({ browser, baseUrl, route, surface, scenario, sampleState }) => {
@@ -763,6 +825,32 @@ const auditRoute = async ({ browser, baseUrl, route, surface, scenario, sampleSt
       );
     }
 
+    if (
+      sceneVisualPanel &&
+      (sceneVisualPanel.promptVisualWidth < sceneVisualPanel.panelWidth - 32 ||
+        sceneVisualPanel.promptFieldWidth < sceneVisualPanel.panelWidth - 48 ||
+        sceneVisualPanel.promptActionWidth < sceneVisualPanel.panelWidth - 48)
+    ) {
+      failures.push(
+        `scene prompt controls collapse horizontally: panel ${sceneVisualPanel.panelWidth}px, ` +
+          `workspace ${sceneVisualPanel.promptVisualWidth}px, field ${sceneVisualPanel.promptFieldWidth}px, ` +
+          `actions ${sceneVisualPanel.promptActionWidth}px`,
+      );
+    }
+
+    if (
+      sceneVisualPanel &&
+      (sceneVisualPanel.closedPreviewScrollTop !== 0 ||
+        (typeof sceneVisualPanel.closedCardTop === "number" &&
+          typeof sceneVisualPanel.closedHeaderBottom === "number" &&
+          sceneVisualPanel.closedCardTop < sceneVisualPanel.closedHeaderBottom))
+    ) {
+      failures.push(
+        `scene preview shifts after closing the visual panel: scroll ${sceneVisualPanel.closedPreviewScrollTop}, ` +
+          `card/header ${sceneVisualPanel.closedCardTop}/${sceneVisualPanel.closedHeaderBottom}`,
+      );
+    }
+
     if (sceneVisualPanel && scenario.type === "scene-fit") {
       if (
         sceneVisualPanel.documentScrollHeight > sceneVisualPanel.documentClientHeight + 1 ||
@@ -814,6 +902,19 @@ const auditRoute = async ({ browser, baseUrl, route, surface, scenario, sampleSt
         failures.push(
           `embedded scene preview is undersized: ${sceneVisualPanel.previewWidth}x${sceneVisualPanel.previewHeight}`,
         );
+      }
+
+      if (metrics.scenePreview && metrics.sceneSubmit) {
+        const compositionGap = metrics.sceneSubmit.left - metrics.scenePreview.right;
+        const compositionCenter = (metrics.scenePreview.left + metrics.sceneSubmit.right) / 2;
+        if (compositionGap < 8 || compositionGap > 48) {
+          failures.push(`embedded preview/actions gap is unbalanced: ${compositionGap}px`);
+        }
+        if (Math.abs(compositionCenter - metrics.clientWidth / 2) > 36) {
+          failures.push(
+            `embedded preview/actions group is off-center: ${Math.round(compositionCenter)} vs ${Math.round(metrics.clientWidth / 2)}`,
+          );
+        }
       }
     }
 
