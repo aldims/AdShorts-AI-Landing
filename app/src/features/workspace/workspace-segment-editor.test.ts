@@ -844,6 +844,26 @@ it("resets scene duration to pending voiceover estimate after a global voice cha
   }));
 });
 
+it("clears both stored scene voice aliases when applying a global voice to all scenes", () => {
+  const previousVoiceType = DEFAULT_STUDIO_VOICE_ID.ru;
+  const nextVoiceType = "Vika";
+  const segment = createProjectVoiceoverSegment({
+    voiceType: previousVoiceType,
+    voice_type: previousVoiceType,
+  });
+  const draft = createProjectVoiceoverDraft([segment]);
+
+  const updatedDraft = applyWorkspaceSegmentEditorGlobalVoiceToSegments(draft, nextVoiceType);
+
+  expect(updatedDraft.voiceType).toBe(nextVoiceType);
+  expect(updatedDraft.segments[0]).toEqual(expect.objectContaining({
+    voiceType: null,
+    voice_type: null,
+    voiceoverVoiceType: null,
+  }));
+  expect(getWorkspaceSegmentEffectiveVoiceId(updatedDraft.segments[0], updatedDraft)).toBe(nextVoiceType);
+});
+
 it("infers the project voice from uniform scene voiceovers when the stored project voice is stale", () => {
   const firstSegment = createProjectVoiceoverSegment({
     index: 0,

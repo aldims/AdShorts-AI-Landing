@@ -6445,6 +6445,7 @@ export const applyWorkspaceSegmentEditorGlobalVoiceToSegments = (
           voiceLanguage: null,
           voice_language: null,
           voiceType: null,
+          voice_type: null,
         }, {
           resetTimelineToEstimatedVoiceover: true,
           session: draft,
