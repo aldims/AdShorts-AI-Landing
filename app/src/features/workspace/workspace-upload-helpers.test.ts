@@ -6,6 +6,7 @@ import {
   createStudioDurableGeneratedVisualAsset,
   ensureStudioDurableGeneratedVisualAsset,
   ensureStudioUploadedAssetIdWithInlineFallback,
+  extractStudioUploadedVideoReferenceFrame,
   extractStudioUploadedVideoAudio,
   resolveWorkspaceVideoReferenceFrameTime,
 } from "./workspace-upload-helpers";
@@ -356,6 +357,59 @@ describe("extractStudioUploadedVideoAudio", () => {
       segmentIndex: 0,
       sourceAssetId: 982,
     })).resolves.toBeNull();
+  });
+});
+
+describe("extractStudioUploadedVideoReferenceFrame", () => {
+  it("requests a durable decoded frame for a scene video asset", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      data: {
+        asset: {
+          assetId: 10434,
+          fileName: "segment-1-reference-frame.jpg",
+          fileSize: 76190,
+          mimeType: "image/jpeg",
+          remoteUrl: "/api/workspace/media-assets/10434",
+        },
+        durationSeconds: 4.041667,
+        seekTimeSeconds: 3.791667,
+        sourceAssetId: 10433,
+      },
+    }), {
+      headers: { "Content-Type": "application/json" },
+      status: 200,
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const asset = await extractStudioUploadedVideoReferenceFrame({
+      fileName: "segment-1-reference-frame.jpg",
+      language: "ru",
+      projectId: null,
+      referenceKind: "scene",
+      sourceAssetId: 10433,
+      sourceSegmentIndex: 0,
+    });
+
+    expect(asset).toMatchObject({
+      assetId: 10434,
+      mimeType: "image/jpeg",
+      remoteUrl: "/api/workspace/media-assets/10434",
+      source: "media-library",
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/studio/media-upload/extract-reference-frame",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          fileName: "segment-1-reference-frame.jpg",
+          language: "ru",
+          persistAsWorkspaceReference: false,
+          referenceKind: "scene",
+          sourceAssetId: 10433,
+          sourceSegmentIndex: 0,
+        }),
+      }),
+    );
   });
 });
 

@@ -82,6 +82,7 @@ import {
   getWorkspaceSegmentCurrentVideoSourceAsset,
   getWorkspaceSegmentInfographicSourceAsset,
   getWorkspaceSegmentInfographicSourceIdentity,
+  getWorkspaceSegmentSceneReferenceVideoAssetId,
   getWorkspaceSegmentSceneSoundVisualAssetId,
   isWorkspaceSegmentInfographicJobSourceCurrent,
   isWorkspaceSegmentReadyVisualSelectionTab,
@@ -1193,6 +1194,24 @@ describe("workspace segment editor scene sound preview", () => {
     });
 
     expect(getWorkspaceSegmentSceneSoundVisualAssetId(segment)).toBe(4984);
+  });
+
+  it("uses the current generated video asset for server-side scene frame extraction", () => {
+    const segment = createProjectVoiceoverSegment({
+      aiVideoAsset: {
+        assetId: 10433,
+        fileName: "segment-1-ai-video.mp4",
+        fileSize: 1024,
+        mimeType: "video/mp4",
+        remoteUrl: "/api/workspace/media-assets/10433/playback",
+        source: "media-library",
+      },
+      currentAsset: { assetId: 10432, mediaType: "photo" } as any,
+      mediaType: "video",
+      videoAction: "photo_animation",
+    });
+
+    expect(getWorkspaceSegmentSceneReferenceVideoAssetId(segment)).toBe(10433);
   });
 
   it("keeps regular audio scene sound assets on an audio element", () => {

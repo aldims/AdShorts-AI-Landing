@@ -21,6 +21,7 @@ export type WorkspaceReferenceVisualOption = {
   sourceProjectId: number | null;
   sourceSegmentIndex: number | null;
   subtitle: string;
+  videoAssetId?: number | null;
   videoPosterReferenceUrl?: string | null;
   videoReferenceUrl?: string | null;
 };

@@ -53,6 +53,7 @@ import {
   ensureStudioUploadedAssetId,
   ensureStudioUploadedAssetIdWithInlineFallback,
   extractStudioUploadedVideoAudio,
+  extractStudioUploadedVideoReferenceFrame,
   extractWorkspaceVideoFrameDataUrl,
   readFileAsDataUrl,
   resolveStudioCustomAssetDataUrl,
@@ -415,6 +416,7 @@ import {
   getWorkspaceSegmentPromptSceneModeForTab,
   getWorkspaceSegmentCurrentVideoSourceAsset,
   getWorkspaceSegmentSceneReferenceAssetId,
+  getWorkspaceSegmentSceneReferenceVideoAssetId,
   getWorkspaceSegmentSceneSoundVisualAssetId,
   getWorkspaceSegmentSceneSoundVisualJobSource,
   getWorkspaceSegmentSceneSoundSourceVisualIdentity,
@@ -7007,6 +7009,9 @@ export function WorkspacePage({
           previewKind: mediaSurface.previewKind,
           referenceKey: mediaIdentityKey,
           segment,
+          videoAssetId: mediaSurface.previewKind === "video"
+            ? getWorkspaceSegmentSceneReferenceVideoAssetId(segment) ?? null
+            : null,
           videoPosterReferenceUrl,
           videoReferenceUrl,
         };
@@ -7027,6 +7032,7 @@ export function WorkspacePage({
         sourceProjectId: segmentEditorDraft?.projectId ?? null,
         sourceSegmentIndex: option.segment.index,
         subtitle: workspaceText(locale, "Из текущего проекта", "From current project"),
+        videoAssetId: option.videoAssetId,
         videoPosterReferenceUrl: option.videoPosterReferenceUrl,
         videoReferenceUrl: option.videoReferenceUrl,
       })),
@@ -7071,6 +7077,7 @@ export function WorkspacePage({
         sourceProjectId: segmentEditorDraft?.projectId ?? null,
         sourceSegmentIndex: option.segment.index,
         subtitle: workspaceText(locale, "Выбрать как персонажа без сохранения", "Use as a character without saving"),
+        videoAssetId: option.videoAssetId,
         videoPosterReferenceUrl: option.videoPosterReferenceUrl,
         videoReferenceUrl: option.videoReferenceUrl,
       })),
@@ -7188,15 +7195,16 @@ export function WorkspacePage({
     }
 
     const videoReferenceUrl = option.videoReferenceUrl?.trim();
-    const shouldUseVideoFrame = option.previewKind === "video" && Boolean(videoReferenceUrl);
-    if (option.previewKind === "video" && !videoReferenceUrl) {
+    const videoAssetId = getPositiveWorkspaceMediaAssetId(option.videoAssetId);
+    const shouldUseVideoFrame = option.previewKind === "video" && Boolean(videoReferenceUrl || videoAssetId);
+    if (option.previewKind === "video" && !shouldUseVideoFrame) {
       return null;
     }
     if (option.assetId && !shouldUseVideoFrame) {
       return option.assetId;
     }
 
-    if (!shouldUseVideoFrame || !videoReferenceUrl || !segmentEditorDraft || !option.segment) {
+    if (!shouldUseVideoFrame || !segmentEditorDraft || !option.segment) {
       return null;
     }
 
@@ -7216,6 +7224,45 @@ export function WorkspacePage({
     }
 
     const frameFileName = `segment-${option.displayNumber ?? option.segment.index + 1}-reference-frame.jpg`;
+    const hasUploadProjectIdOverride = Object.prototype.hasOwnProperty.call(options ?? {}, "uploadProjectId");
+    const hasUploadSegmentIndexOverride = Object.prototype.hasOwnProperty.call(options ?? {}, "uploadSegmentIndex");
+    const uploadProjectId = hasUploadProjectIdOverride
+      ? buildWorkspaceReferenceGenerationMediaScope(options?.uploadProjectId).projectId
+      : defaultFrameUploadScope.projectId;
+    const uploadKind = options?.uploadKind ?? defaultFrameUploadScope.kind;
+    const uploadRole = options?.uploadRole ?? defaultFrameUploadScope.role;
+    const uploadSegmentIndex = hasUploadSegmentIndexOverride
+      ? options?.uploadSegmentIndex
+      : defaultFrameUploadScope.segmentIndex;
+
+    if (videoAssetId) {
+      const durableFrameAsset = await extractStudioUploadedVideoReferenceFrame({
+        fileName: frameFileName,
+        language: selectedLanguage,
+        persistAsWorkspaceReference: uploadKind === "workspace_reference_source",
+        projectId: uploadProjectId,
+        referenceKind,
+        sourceAssetId: videoAssetId,
+        sourceSegmentIndex: option.segment.index,
+      });
+      const durableFrameAssetId = getPositiveWorkspaceMediaAssetId(durableFrameAsset.assetId);
+      if (!durableFrameAssetId) {
+        throw new Error(
+          workspaceText(
+            locale,
+            "Не удалось сохранить кадр видео для референса.",
+            "Could not save the video frame for the reference.",
+          ),
+        );
+      }
+      segmentReferenceFrameAssetIdsRef.current.set(cacheKey, durableFrameAssetId);
+      return durableFrameAssetId;
+    }
+
+    if (!videoReferenceUrl) {
+      return null;
+    }
+
     let frameAsset: StudioCustomVideoFile;
     try {
       frameAsset = {
@@ -7253,22 +7300,15 @@ export function WorkspacePage({
       }
     }
 
-    const hasUploadProjectIdOverride = Object.prototype.hasOwnProperty.call(options ?? {}, "uploadProjectId");
-    const hasUploadSegmentIndexOverride = Object.prototype.hasOwnProperty.call(options ?? {}, "uploadSegmentIndex");
-    const uploadProjectId = hasUploadProjectIdOverride
-      ? buildWorkspaceReferenceGenerationMediaScope(options?.uploadProjectId).projectId
-      : defaultFrameUploadScope.projectId;
     const assetId = await ensureStudioUploadedAssetId(frameAsset, {
       fallbackFileName: frameAsset.fileName,
       fallbackMimeType: frameAsset.mimeType,
-      kind: options?.uploadKind ?? defaultFrameUploadScope.kind,
+      kind: uploadKind,
       language: selectedLanguage,
       mediaType: "photo",
       projectId: uploadProjectId,
-      role: options?.uploadRole ?? defaultFrameUploadScope.role,
-      segmentIndex: hasUploadSegmentIndexOverride
-        ? options?.uploadSegmentIndex
-        : defaultFrameUploadScope.segmentIndex,
+      role: uploadRole,
+      segmentIndex: uploadSegmentIndex,
     });
     if (!assetId) {
       throw new Error(

@@ -683,9 +683,15 @@ describe("WorkspacePage segment visual references payload", () => {
         previewKind: "video",
         videoReferenceUrl: "/api/media/904/download",
       }),
+      createSceneReferenceOption(5, {
+        assetId: null,
+        previewKind: "video",
+        videoAssetId: 905,
+        videoReferenceUrl: null,
+      }),
     ];
 
-    expect(getWorkspaceProjectSceneReferenceOptionsForTarget(options, 1).map((option) => option.sourceSegmentIndex)).toEqual([0, 4]);
+    expect(getWorkspaceProjectSceneReferenceOptionsForTarget(options, 1).map((option) => option.sourceSegmentIndex)).toEqual([0, 4, 5]);
   });
 
   it("resolves a separate selected source for each target scene", () => {

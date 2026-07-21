@@ -246,7 +246,7 @@ export const canUseWorkspaceProjectSceneReference = (
   option.sourceSegmentIndex >= 0 &&
   (
     option.previewKind === "video"
-      ? option.videoReferenceUrl?.trim()
+      ? option.videoAssetId || option.videoReferenceUrl?.trim()
       : option.assetId
   ),
 );

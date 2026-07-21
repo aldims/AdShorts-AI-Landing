@@ -376,6 +376,19 @@ export const getWorkspaceSegmentSceneReferenceAssetId = (
     : undefined);
 };
 
+export const getWorkspaceSegmentSceneReferenceVideoAssetId = (
+  segment: WorkspaceSegmentEditorDraftSegment | null | undefined,
+) => {
+  if (!segment || getWorkspaceSegmentSelectedVisualPreviewKind(segment) !== "video") {
+    return undefined;
+  }
+
+  return (
+    getPositiveWorkspaceMediaAssetId(getWorkspaceSegmentCurrentVideoSourceAsset(segment)?.assetId) ??
+    getWorkspaceSegmentSceneSoundVisualAssetId(segment)
+  );
+};
+
 export const normalizeWorkspaceProjectCharacter = (value: unknown): WorkspaceProjectCharacter | null => {
   if (!value || typeof value !== "object") {
     return null;

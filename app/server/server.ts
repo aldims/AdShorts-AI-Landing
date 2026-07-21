@@ -128,6 +128,7 @@ import {
   getStudioSegmentAiVideoJobStatus,
   getStudioSegmentInfographicJobStatus,
   getStudioSegmentImageEditJobStatus,
+  uploadStudioExtractedVideoReferenceFrame,
   getStudioSegmentImageUpscaleJobStatus,
   getStudioSegmentPhotoAnimationPlaybackAsset,
   getStudioSegmentPhotoAnimationJobPosterPath,
@@ -191,6 +192,10 @@ import {
 } from "./local-examples.js";
 import { normalizeExamplePrefillStudioSettings } from "../shared/example-prefill.js";
 import { isInfographicTemplateId } from "../shared/infographic-templates.js";
+import {
+  WORKSPACE_SEGMENT_REFERENCE_FRAME_END_OFFSET_SECONDS,
+  WORKSPACE_SEGMENT_REFERENCE_FRAME_SEEK_SECONDS,
+} from "../shared/workspace-reference-frames.js";
 import { buildExternalUserId, resolveExternalUserIdentity } from "./external-user.js";
 import { purgeAdminAccountData } from "./admin-account-purge.js";
 import {
@@ -224,6 +229,7 @@ import {
 } from "./web-device.js";
 import { verifyVideoProxyToken } from "./video-proxy-token.js";
 import { extractUploadedVideoAudio } from "./uploaded-video-audio.js";
+import { extractUploadedVideoReferenceFrame } from "./uploaded-video-frame.js";
 
 initServerLogging();
 
@@ -3758,6 +3764,123 @@ app.post("/api/studio/media-upload/extract-audio", async (req, res) => {
     });
     res.status(502).json({
       error: error instanceof Error ? error.message : "Failed to extract uploaded video audio.",
+    });
+  }
+});
+
+app.post("/api/studio/media-upload/extract-reference-frame", async (req, res) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+
+  if (!session?.user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const sourceAssetId = normalizeRequestPositiveInteger(req.body?.sourceAssetId ?? req.body?.source_asset_id);
+  const projectId = normalizeRequestPositiveInteger(req.body?.projectId ?? req.body?.project_id);
+  const sourceSegmentIndex = normalizeRequestNonNegativeInteger(
+    req.body?.sourceSegmentIndex ?? req.body?.source_segment_index,
+  );
+  const language = req.body?.language === "en" ? "en" : "ru";
+  const referenceKind = req.body?.referenceKind === "character" || req.body?.referenceKind === "scene"
+    ? req.body.referenceKind
+    : null;
+  const persistAsWorkspaceReference = req.body?.persistAsWorkspaceReference === true;
+  const rawFileName = typeof req.body?.fileName === "string" ? req.body.fileName.trim() : "";
+
+  if (!sourceAssetId || !referenceKind) {
+    res.status(400).json({ error: "sourceAssetId and referenceKind are required." });
+    return;
+  }
+  if (referenceKind === "character" && !persistAsWorkspaceReference && sourceSegmentIndex === undefined) {
+    res.status(400).json({ error: "sourceSegmentIndex is required for a segment character reference." });
+    return;
+  }
+
+  const uploadScope = referenceKind === "scene"
+    ? {
+        kind: "workspace_reference_source" as const,
+        role: "scene_reference_source" as const,
+        segmentIndex: undefined,
+      }
+    : persistAsWorkspaceReference
+      ? {
+          kind: "workspace_reference_source" as const,
+          role: "character_reference_source" as const,
+          segmentIndex: undefined,
+        }
+      : {
+          kind: "segment_source" as const,
+          role: "segment_source" as const,
+          segmentIndex: sourceSegmentIndex,
+        };
+
+  try {
+    const externalUserId = await resolvePreferredExternalUserId(session.user);
+    const upstreamUrl = buildAdsflowUrl(`/api/media/${sourceAssetId}/download`, {
+      admin_token: env.adsflowAdminToken,
+      external_user_id: externalUserId,
+    });
+    const sourceAsset = await ensureWorkspaceMediaAssetPlayback({
+      assetId: sourceAssetId,
+      cacheKey: getWorkspaceMediaAssetPlaybackCacheKey({
+        assetId: sourceAssetId,
+        externalUserId,
+        targetUrl: upstreamUrl,
+      }),
+      upstreamUrl,
+    });
+    const extractedFrame = await extractUploadedVideoReferenceFrame(
+      sourceAsset.absolutePath,
+      referenceKind === "scene"
+        ? { seekFromEndSeconds: WORKSPACE_SEGMENT_REFERENCE_FRAME_END_OFFSET_SECONDS }
+        : { seekSeconds: WORKSPACE_SEGMENT_REFERENCE_FRAME_SEEK_SECONDS },
+    );
+    const fallbackBaseName = `segment-${(sourceSegmentIndex ?? 0) + 1}-reference-frame`;
+    const sourceBaseName = basename(rawFileName || fallbackBaseName)
+      .replace(/\.[^.]+$/u, "")
+      .replace(/[^\p{L}\p{N}._ -]+/gu, "-")
+      .trim()
+      .slice(0, 120) || fallbackBaseName;
+    const asset = await uploadStudioExtractedVideoReferenceFrame(session.user, {
+      bytes: extractedFrame.bytes,
+      externalUserId,
+      fileName: `${sourceBaseName}.jpg`,
+      kind: uploadScope.kind,
+      language,
+      projectId,
+      role: uploadScope.role,
+      segmentIndex: uploadScope.segmentIndex,
+    });
+
+    console.info("[studio] Extracted durable video reference frame", {
+      durationSeconds: extractedFrame.durationSeconds,
+      referenceAssetId: asset.assetId,
+      referenceKind,
+      seekTimeSeconds: extractedFrame.seekTimeSeconds,
+      sourceAssetId,
+      sourceSegmentIndex: sourceSegmentIndex ?? null,
+    });
+    res.json({
+      data: {
+        asset,
+        durationSeconds: extractedFrame.durationSeconds,
+        seekTimeSeconds: extractedFrame.seekTimeSeconds,
+        sourceAssetId,
+      },
+    });
+  } catch (error) {
+    console.error("[studio] Failed to extract durable video reference frame", {
+      error: getServerErrorMessage(error, "Failed to extract video reference frame."),
+      projectId: projectId ?? null,
+      referenceKind,
+      sourceAssetId,
+      sourceSegmentIndex: sourceSegmentIndex ?? null,
+    });
+    res.status(502).json({
+      error: error instanceof Error ? error.message : "Failed to extract video reference frame.",
     });
   }
 });

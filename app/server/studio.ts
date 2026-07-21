@@ -6031,6 +6031,41 @@ export const uploadStudioExtractedSceneSound = async (
   };
 };
 
+export const uploadStudioExtractedVideoReferenceFrame = async (
+  user: StudioUser,
+  options: {
+    bytes: Buffer;
+    externalUserId: string;
+    fileName: string;
+    kind: "segment_source" | "workspace_reference_source";
+    language: "en" | "ru";
+    projectId?: number | null;
+    role: "character_reference_source" | "scene_reference_source" | "segment_source";
+    segmentIndex?: number | null;
+  },
+) => {
+  const assetId = await uploadStudioMediaAsset(user, {
+    bytes: options.bytes,
+    externalUserId: options.externalUserId,
+    fileName: options.fileName,
+    kind: options.kind,
+    language: options.language,
+    mediaType: "photo",
+    mimeType: "image/jpeg",
+    projectId: options.projectId,
+    role: options.role,
+    segmentIndex: options.segmentIndex,
+  });
+
+  return {
+    assetId,
+    fileName: options.fileName,
+    fileSize: options.bytes.length,
+    mimeType: "image/jpeg" as const,
+    remoteUrl: `/api/workspace/media-assets/${assetId}`,
+  };
+};
+
 const createDirectWorkspaceReferenceAiPhotoJob = async (
   prompt: string,
   user: StudioUser,

@@ -4,6 +4,14 @@ import type {
   StudioCustomVideoFile,
   StudioLanguage,
 } from "./workspace-types";
+import {
+  WORKSPACE_SEGMENT_REFERENCE_FRAME_END_OFFSET_SECONDS,
+  WORKSPACE_SEGMENT_REFERENCE_FRAME_LATEST_DECODABLE_OFFSET_SECONDS,
+  WORKSPACE_SEGMENT_REFERENCE_FRAME_MAX_SIDE,
+  WORKSPACE_SEGMENT_REFERENCE_FRAME_SEEK_SECONDS,
+} from "../../../shared/workspace-reference-frames";
+
+export { WORKSPACE_SEGMENT_REFERENCE_FRAME_END_OFFSET_SECONDS };
 
 export const readFileAsDataUrl = (file: File) =>
   new Promise<string>((resolve, reject) => {
@@ -179,6 +187,22 @@ type StudioExtractedVideoAudioResponse = {
       remoteUrl?: string | null;
     } | null;
     hasAudio?: boolean;
+  } | null;
+  error?: string;
+};
+
+type StudioExtractedVideoReferenceFrameResponse = {
+  data?: {
+    asset?: {
+      assetId?: number | string | null;
+      fileName?: string | null;
+      fileSize?: number | string | null;
+      mimeType?: string | null;
+      remoteUrl?: string | null;
+    } | null;
+    durationSeconds?: number | null;
+    seekTimeSeconds?: number | null;
+    sourceAssetId?: number | null;
   } | null;
   error?: string;
 };
@@ -401,6 +425,53 @@ export const extractStudioUploadedVideoAudio = async (options: {
   };
 };
 
+export const extractStudioUploadedVideoReferenceFrame = async (options: {
+  fileName: string;
+  language: StudioLanguage;
+  persistAsWorkspaceReference?: boolean;
+  projectId?: number | null;
+  referenceKind: "character" | "scene";
+  sourceAssetId: number;
+  sourceSegmentIndex?: number | null;
+}): Promise<StudioCustomVideoFile> => {
+  const response = await fetch("/api/studio/media-upload/extract-reference-frame", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      fileName: options.fileName,
+      language: options.language,
+      persistAsWorkspaceReference: options.persistAsWorkspaceReference === true,
+      projectId: options.projectId ?? undefined,
+      referenceKind: options.referenceKind,
+      sourceAssetId: options.sourceAssetId,
+      sourceSegmentIndex: options.sourceSegmentIndex ?? undefined,
+    }),
+  });
+  const payload = (await response.json().catch(() => null)) as StudioExtractedVideoReferenceFrameResponse | null;
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.error ?? "Не удалось подготовить кадр видео для референса.");
+  }
+
+  const assetId = Number(payload.data.asset?.assetId);
+  if (!Number.isFinite(assetId) || assetId <= 0) {
+    throw new Error("Сервер не вернул кадр видео для референса.");
+  }
+
+  const normalizedAssetId = Math.trunc(assetId);
+  return {
+    assetId: normalizedAssetId,
+    fileName: String(payload.data.asset?.fileName ?? "").trim() || options.fileName,
+    fileSize: Math.max(0, Number(payload.data.asset?.fileSize ?? 0) || 0),
+    mimeType: String(payload.data.asset?.mimeType ?? "").trim() || "image/jpeg",
+    remoteUrl:
+      String(payload.data.asset?.remoteUrl ?? "").trim() ||
+      `/api/workspace/media-assets/${normalizedAssetId}`,
+    source: "media-library",
+  };
+};
+
 const uploadStudioMediaFileToStorage = async (
   file: File,
   options: {
@@ -557,9 +628,6 @@ export const ensureStudioUploadedAssetIdWithInlineFallback = async (
 export const WORKSPACE_SEGMENT_REFERENCE_FRAME_MIME_TYPE = "image/jpeg";
 const WORKSPACE_SEGMENT_REFERENCE_FRAME_QUALITY = 0.92;
 export const WORKSPACE_SEGMENT_REFERENCE_CHARACTER_LIMIT = 3;
-const WORKSPACE_SEGMENT_REFERENCE_FRAME_MAX_SIDE = 1280;
-const WORKSPACE_SEGMENT_REFERENCE_FRAME_SEEK_SECONDS = 0.25;
-export const WORKSPACE_SEGMENT_REFERENCE_FRAME_END_OFFSET_SECONDS = 0.25;
 
 export const resolveWorkspaceVideoReferenceFrameTime = (
   durationSeconds: number,
@@ -573,7 +641,10 @@ export const resolveWorkspaceVideoReferenceFrameTime = (
     return 0;
   }
 
-  const latestDecodableTime = Math.max(0, duration - 0.05);
+  const latestDecodableTime = Math.max(
+    0,
+    duration - WORKSPACE_SEGMENT_REFERENCE_FRAME_LATEST_DECODABLE_OFFSET_SECONDS,
+  );
   const requestedTime = options.seekFromEndSeconds === undefined
     ? Math.max(0, options.seekSeconds ?? WORKSPACE_SEGMENT_REFERENCE_FRAME_SEEK_SECONDS)
     : Math.max(0, duration - Math.max(0, options.seekFromEndSeconds));
@@ -601,6 +672,8 @@ export const extractWorkspaceVideoFrameDataUrl = async (
     let metadataTimeoutId: number | null = null;
     let seekTimeoutId: number | null = null;
     let loadedDataHandler: (() => void) | null = null;
+    let videoFrameCallbackId: number | null = null;
+    let animationFrameId: number | null = null;
 
     const clearTimers = () => {
       if (metadataTimeoutId !== null) {
@@ -610,6 +683,14 @@ export const extractWorkspaceVideoFrameDataUrl = async (
       if (seekTimeoutId !== null) {
         window.clearTimeout(seekTimeoutId);
         seekTimeoutId = null;
+      }
+      if (videoFrameCallbackId !== null && typeof video.cancelVideoFrameCallback === "function") {
+        video.cancelVideoFrameCallback(videoFrameCallbackId);
+        videoFrameCallbackId = null;
+      }
+      if (animationFrameId !== null) {
+        window.cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
       }
     };
     const cleanup = () => {
@@ -683,6 +764,33 @@ export const extractWorkspaceVideoFrameDataUrl = async (
         fail(new Error("Видео не вернуло кадр для референса."));
       }, 15_000);
     };
+    const captureDecodedFrame = () => {
+      if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+        if (!loadedDataHandler) {
+          loadedDataHandler = () => {
+            loadedDataHandler = null;
+            captureDecodedFrame();
+          };
+          video.addEventListener("loadeddata", loadedDataHandler, { once: true });
+        }
+        return;
+      }
+
+      if (typeof video.requestVideoFrameCallback === "function") {
+        videoFrameCallbackId = video.requestVideoFrameCallback(() => {
+          videoFrameCallbackId = null;
+          captureFrame();
+        });
+        return;
+      }
+
+      animationFrameId = window.requestAnimationFrame(() => {
+        animationFrameId = window.requestAnimationFrame(() => {
+          animationFrameId = null;
+          captureFrame();
+        });
+      });
+    };
 
     video.crossOrigin = "anonymous";
     video.muted = true;
@@ -691,11 +799,7 @@ export const extractWorkspaceVideoFrameDataUrl = async (
     video.preload = "auto";
     video.onerror = () => fail(new Error("Не удалось загрузить видео для референса."));
     video.onseeked = () => {
-      if (seekTimeoutId !== null) {
-        window.clearTimeout(seekTimeoutId);
-        seekTimeoutId = null;
-      }
-      captureFrame();
+      captureDecodedFrame();
     };
     video.onloadedmetadata = () => {
       if (metadataTimeoutId !== null) {
@@ -707,11 +811,14 @@ export const extractWorkspaceVideoFrameDataUrl = async (
       const targetTime = resolveWorkspaceVideoReferenceFrameTime(duration, options);
       if (targetTime <= 0.02) {
         if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-          captureFrame();
+          captureDecodedFrame();
           return;
         }
 
-        loadedDataHandler = captureFrame;
+        loadedDataHandler = () => {
+          loadedDataHandler = null;
+          captureDecodedFrame();
+        };
         video.addEventListener("loadeddata", loadedDataHandler, { once: true });
         scheduleSeekTimeout();
         return;
@@ -722,7 +829,7 @@ export const extractWorkspaceVideoFrameDataUrl = async (
         video.currentTime = targetTime;
       } catch {
         if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-          captureFrame();
+          captureDecodedFrame();
           return;
         }
         fail(new Error("Не удалось перейти к кадру видео."));
