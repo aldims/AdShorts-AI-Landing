@@ -22947,14 +22947,18 @@ body.studio-video-fullscreen-open .studio-canvas-preview::after {
 }
 
 @container (max-width: 340px) {
+  .studio-canvas-preview__player-shell {
+    --studio-inline-control-size: clamp(30px, 15cqw, 34px);
+  }
+
   .studio-canvas-preview__generated-actions {
     gap: 4px;
   }
 
   .studio-canvas-preview__quick-action--expanded {
-    flex: 0 0 clamp(28px, 13.5cqw, 30px);
-    width: clamp(28px, 13.5cqw, 30px);
-    height: clamp(28px, 13.5cqw, 30px);
+    flex: 0 0 var(--studio-inline-control-size);
+    width: var(--studio-inline-control-size);
+    height: var(--studio-inline-control-size);
     padding: 0;
     border-radius: 50%;
   }
@@ -22970,9 +22974,9 @@ body.studio-video-fullscreen-open .studio-canvas-preview::after {
   }
 
   .studio-canvas-preview__generated-actions--expanded > .studio-canvas-preview__quick-action:not(.studio-canvas-preview__quick-action--expanded) {
-    flex-basis: clamp(28px, 13.5cqw, 30px);
-    width: clamp(28px, 13.5cqw, 30px);
-    height: clamp(28px, 13.5cqw, 30px);
+    flex-basis: var(--studio-inline-control-size);
+    width: var(--studio-inline-control-size);
+    height: var(--studio-inline-control-size);
   }
 
   .studio-canvas-preview__player-shell .studio-video-modal__player-controls {
@@ -22985,14 +22989,14 @@ body.studio-video-fullscreen-open .studio-canvas-preview::after {
   }
 
   .studio-canvas-preview__player-shell .studio-video-modal__control-btn {
-    flex: 0 0 clamp(30px, 15cqw, 34px);
-    width: clamp(30px, 15cqw, 34px);
-    height: clamp(30px, 15cqw, 34px);
+    flex: 0 0 var(--studio-inline-control-size);
+    width: var(--studio-inline-control-size);
+    height: var(--studio-inline-control-size);
     border-radius: clamp(10px, 4.5cqw, 12px);
   }
 
   .studio-canvas-preview__player-shell .studio-video-modal__control-btn--fullscreen {
-    flex-basis: clamp(30px, 15cqw, 34px);
+    flex-basis: var(--studio-inline-control-size);
   }
 
   .studio-canvas-preview__player-shell .studio-video-modal__control-btn svg {
@@ -23021,8 +23025,8 @@ body.studio-video-fullscreen-open .studio-canvas-preview::after {
   }
 }
 
-/* Closing the current preview is a primary escape action. Keep its target
-   reachable even when container queries compact the secondary actions. */
+/* Closing the current preview is a primary escape action. Keep its target at
+   44px on regular cards; compact queries below scale the whole action group. */
 .studio-canvas-preview__generated-actions .studio-canvas-preview__quick-action--close {
   flex-basis: 44px;
   width: 44px;
@@ -23044,9 +23048,9 @@ body.studio-video-fullscreen-open .studio-canvas-preview::after {
     > .studio-canvas-preview__quick-action.studio-canvas-preview__quick-action--close:not(
       .studio-canvas-preview__quick-action--expanded
     ) {
-    flex-basis: clamp(34px, 17cqw, 44px);
-    width: clamp(34px, 17cqw, 44px);
-    height: clamp(34px, 17cqw, 44px);
+    flex-basis: var(--studio-inline-control-size);
+    width: var(--studio-inline-control-size);
+    height: var(--studio-inline-control-size);
   }
 }
 
@@ -23054,6 +23058,10 @@ body.studio-video-fullscreen-open .studio-canvas-preview::after {
    Scale its chrome from the preview container itself so fixed-size controls do
    not outgrow the 9:16 card. Fullscreen playback keeps the regular controls. */
 @container (max-width: 180px) {
+  .studio-canvas-preview__player-shell {
+    --studio-inline-control-size: clamp(16px, 18cqw, 28px);
+  }
+
   .studio-canvas-preview__floating-actions {
     top: clamp(5px, 4cqw, 8px);
     right: clamp(5px, 4cqw, 8px);
@@ -23070,9 +23078,9 @@ body.studio-video-fullscreen-open .studio-canvas-preview::after {
   .studio-canvas-preview__quick-action--expanded,
   .studio-canvas-preview__generated-actions--expanded
     > .studio-canvas-preview__quick-action:not(.studio-canvas-preview__quick-action--close) {
-    flex-basis: clamp(16px, 18cqw, 28px);
-    width: clamp(16px, 18cqw, 28px);
-    height: clamp(16px, 18cqw, 28px);
+    flex-basis: var(--studio-inline-control-size);
+    width: var(--studio-inline-control-size);
+    height: var(--studio-inline-control-size);
   }
 
   .studio-canvas-preview__generated-actions .studio-canvas-preview__quick-action--close,
@@ -23080,9 +23088,9 @@ body.studio-video-fullscreen-open .studio-canvas-preview::after {
     > .studio-canvas-preview__quick-action.studio-canvas-preview__quick-action--close:not(
       .studio-canvas-preview__quick-action--expanded
     ) {
-    flex-basis: clamp(20px, 21cqw, 32px);
-    width: clamp(20px, 21cqw, 32px);
-    height: clamp(20px, 21cqw, 32px);
+    flex-basis: var(--studio-inline-control-size);
+    width: var(--studio-inline-control-size);
+    height: var(--studio-inline-control-size);
   }
 
   .studio-canvas-preview__quick-action svg,
@@ -23110,9 +23118,9 @@ body.studio-video-fullscreen-open .studio-canvas-preview::after {
   .studio-canvas-preview__player-shell
     .studio-video-modal__player:not(.is-fullscreen)
     .studio-video-modal__control-btn--fullscreen {
-    flex-basis: clamp(16px, 18cqw, 28px);
-    width: clamp(16px, 18cqw, 28px);
-    height: clamp(16px, 18cqw, 28px);
+    flex-basis: var(--studio-inline-control-size);
+    width: var(--studio-inline-control-size);
+    height: var(--studio-inline-control-size);
     border-radius: clamp(7px, 5cqw, 9px);
   }
 

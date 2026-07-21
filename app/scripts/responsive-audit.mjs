@@ -1253,16 +1253,13 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
         const auditsTinyIdeaViewport = scenario.type === "idea-compact";
         const minimumCompactPreviewHeight = effectiveHeight <= 400 ? 130 : auditsTinyIdeaViewport ? 150 : 220;
         const expectedPreviewActionSize = auditsRegularIdeaControls
-          ? Math.min(30, Math.max(28, metrics.studioPreview.width * 0.135))
-          : null;
-        const expectedPreviewCloseSize = auditsRegularIdeaControls
-          ? Math.min(44, Math.max(34, metrics.studioPreview.width * 0.17))
+          ? Math.min(34, Math.max(30, metrics.studioPreview.width * 0.15))
           : null;
         const expectedPlayerControlSize = auditsRegularIdeaControls
           ? Math.min(34, Math.max(30, metrics.studioPreview.width * 0.15))
           : null;
         const maximumPreviewActionSize = auditsRegularIdeaControls
-          ? (expectedPreviewCloseSize ?? 44) + 1
+          ? (expectedPreviewActionSize ?? 34) + 1
           : metrics.studioPreview.width <= 100 ? 21 : 32;
         const maximumPlayerControlSize = auditsRegularIdeaControls
           ? (expectedPlayerControlSize ?? 34) + 1
@@ -1316,13 +1313,12 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
         }
 
         if (auditsRegularIdeaControls) {
-          const mismatchedPreviewAction = metrics.studioPreviewActions.find((rect, index) => {
-            const expectedSize = index < 3 ? expectedPreviewActionSize : expectedPreviewCloseSize;
-            return (
-              expectedSize !== null &&
-              (Math.abs(rect.width - expectedSize) > 1.25 || Math.abs(rect.height - expectedSize) > 1.25)
-            );
-          });
+          const mismatchedPreviewAction = metrics.studioPreviewActions.find(
+            (rect) =>
+              expectedPreviewActionSize !== null &&
+              (Math.abs(rect.width - expectedPreviewActionSize) > 1.25 ||
+                Math.abs(rect.height - expectedPreviewActionSize) > 1.25),
+          );
           if (mismatchedPreviewAction) {
             failures.push(
               `regular preview action is not proportional: ` +
@@ -1446,7 +1442,7 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
       if (!metrics.studioPreview || !metrics.studioComposer || !metrics.studioPreviewClose) {
         failures.push("legacy project preview, composer or close action is missing at 1229x692");
       } else {
-        const expectedLaptopCloseSize = Math.min(44, Math.max(34, metrics.studioPreview.width * 0.17));
+        const expectedLaptopCloseSize = Math.min(34, Math.max(30, metrics.studioPreview.width * 0.15));
         if (metrics.studioPreview.bottom > metrics.studioComposer.top - 8) {
           failures.push(
             `legacy preview overlaps its composer at 1229x692: ` +
