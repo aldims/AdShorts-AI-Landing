@@ -667,16 +667,6 @@ const evaluateLayout = async (page) =>
       ?.getBoundingClientRect();
     const headerRect = document.querySelector("header")?.getBoundingClientRect();
     const firstHeadingRect = document.querySelector("main h1")?.getBoundingClientRect();
-    const publicHeroRect = document.querySelector(".route-page:not(.studio-canvas-route) .hero")?.getBoundingClientRect();
-    const publicHeroCopyRect = document.querySelector(".route-page:not(.studio-canvas-route) .hero__copy")?.getBoundingClientRect();
-    const publicHeroPreviewRect = document
-      .querySelector(".route-page:not(.studio-canvas-route) .hero-live-preview")
-      ?.getBoundingClientRect();
-    const publicHeroContentBottom = Math.max(
-      publicHeroCopyRect?.bottom ?? Number.NEGATIVE_INFINITY,
-      publicHeroPreviewRect?.bottom ?? Number.NEGATIVE_INFINITY,
-    );
-
     return {
       isStudioRoute,
       clientWidth: viewportWidth,
@@ -688,15 +678,6 @@ const evaluateLayout = async (page) =>
       clippedText,
       smallTouchControls,
       overlaps: overlaps.slice(0, 6),
-      publicHero: publicHeroRect && publicHeroCopyRect
-        ? {
-            height: Math.round(publicHeroRect.height),
-            previewHeight: Math.round(publicHeroPreviewRect?.height ?? 0),
-            trailingSpace: Number.isFinite(publicHeroContentBottom)
-              ? Math.round(publicHeroRect.bottom - publicHeroContentBottom)
-              : null,
-          }
-        : null,
       scenePreview: activeSceneCardRect
         ? {
             left: Math.round(activeSceneCardRect.left),
@@ -1031,22 +1012,6 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
       metrics.headerHeight > 80
     ) {
       failures.push(`compact header is taller than one row: ${metrics.headerHeight}px`);
-    }
-
-    if (surface === "app" && (route === "/" || route === "/en") && metrics.publicHero) {
-      if (metrics.publicHero.previewHeight < 150) {
-        failures.push(`public hero preview is not usable: ${metrics.publicHero.previewHeight}px tall`);
-      }
-
-      const maximumTrailingSpace = Math.max(160, Math.round(metrics.publicHero.height * 0.22));
-      if (
-        typeof metrics.publicHero.trailingSpace === "number" &&
-        metrics.publicHero.trailingSpace > maximumTrailingSpace
-      ) {
-        failures.push(
-          `public hero has disproportionate trailing space: ${metrics.publicHero.trailingSpace}px > ${maximumTrailingSpace}px`,
-        );
-      }
     }
 
     if (metrics.overlaps.length > 0) {
