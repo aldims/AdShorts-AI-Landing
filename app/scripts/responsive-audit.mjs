@@ -10,32 +10,80 @@ import { chromium } from "playwright";
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const appRoot = path.resolve(scriptDir, "..");
 const repoRoot = path.resolve(appRoot, "..");
-const artifactDir = path.join(repoRoot, ".codex-tmp", "responsive-audit");
 const quickMode = process.env.RESPONSIVE_AUDIT_QUICK === "1";
 const scenesOnly = process.env.RESPONSIVE_AUDIT_SCENES_ONLY === "1";
+const requestedScope = process.env.RESPONSIVE_AUDIT_SCOPE ?? "all";
+const auditScope = scenesOnly ? "app" : requestedScope;
+const supportedScopes = new Set(["all", "app", "static"]);
 
-const widths = quickMode
-  ? [320, 390, 768, 1280, 1920]
-  : [320, 360, 390, 480, 640, 768, 1024, 1280, 1440, 1920];
-const zooms = quickMode ? [1, 1.5, 2] : [1, 1.25, 1.5, 1.75, 2];
-const fontScales = quickMode ? [1, 1.5] : [1, 1.25, 1.5];
-const defaultViewportHeight = 900;
+if (!supportedScopes.has(auditScope)) {
+  throw new Error(`Unsupported RESPONSIVE_AUDIT_SCOPE: ${auditScope}. Use all, app, or static.`);
+}
+
+const auditsApp = auditScope === "all" || auditScope === "app";
+const auditsStatic = auditScope === "all" || auditScope === "static";
+const artifactDir = path.join(repoRoot, ".codex-tmp", "responsive-audit", auditScope);
+const requestedConcurrency = Number.parseInt(process.env.RESPONSIVE_AUDIT_CONCURRENCY ?? "", 10);
+const auditConcurrency = Number.isFinite(requestedConcurrency) && requestedConcurrency > 0
+  ? requestedConcurrency
+  : quickMode
+    ? 4
+    : 3;
+
+const popularViewports = [
+  [320, 568],
+  [360, 800],
+  [375, 812],
+  [390, 844],
+  [412, 915],
+  [430, 932],
+  [768, 1024],
+  [820, 1180],
+  [1024, 768],
+  [1280, 720],
+  [1366, 768],
+  [1440, 900],
+  [1536, 864],
+  [1920, 1080],
+  [2560, 1440],
+];
+const zooms = [1, 1.25, 1.5, 1.75, 2];
+const fontScales = [1, 1.25, 1.5];
 
 const appRoutes = scenesOnly
   ? ["/app/studio?mode=scenes", "/en/app/studio?mode=scenes"]
   : quickMode
-    ? ["/", "/pricing", "/examples", "/app/studio", "/app/studio?mode=scenes", "/app/projects"]
+    ? [
+        "/",
+        "/en",
+        "/pricing",
+        "/en/pricing",
+        "/examples",
+        "/en/examples",
+        "/app",
+        "/en/app",
+        "/app/studio",
+        "/en/app/studio",
+        "/app/studio?mode=scenes",
+        "/en/app/studio?mode=scenes",
+        "/app/projects",
+        "/en/app/projects",
+      ]
     : [
-      "/",
-      "/pricing",
-      "/examples",
-      "/en",
-      "/en/pricing",
-      "/en/examples",
-      "/app/studio",
-      "/app/studio?mode=scenes",
-      "/en/app/studio?mode=scenes",
-      "/app/projects",
+        "/",
+        "/pricing",
+        "/examples",
+        "/en",
+        "/en/pricing",
+        "/en/examples",
+        "/app",
+        "/en/app",
+        "/app/studio",
+        "/en/app/studio",
+        "/app/studio?mode=scenes",
+        "/en/app/studio?mode=scenes",
+        "/app/projects",
+        "/en/app/projects",
       ];
 
 const staticRoutes = scenesOnly
@@ -347,31 +395,50 @@ const installAppMocks = async (page) => {
 };
 
 const buildScenarios = () => {
+  if (quickMode) {
+    return [
+      { width: 320, height: 568, zoom: 1, fontScale: 1, type: "viewport" },
+      { width: 390, height: 844, zoom: 1, fontScale: 1, type: "viewport" },
+      { width: 768, height: 1024, zoom: 1, fontScale: 1, type: "viewport" },
+      { width: 820, height: 1180, zoom: 1, fontScale: 1, type: "viewport" },
+      { width: 1024, height: 768, zoom: 1, fontScale: 1, type: "viewport" },
+      { width: 1280, height: 720, zoom: 1, fontScale: 1, type: "viewport" },
+      { width: 1440, height: 900, zoom: 1, fontScale: 1, type: "viewport" },
+      { width: 1920, height: 1080, zoom: 1, fontScale: 1, type: "viewport" },
+      { width: 844, height: 390, zoom: 1, fontScale: 1, type: "landscape" },
+      { width: 1280, height: 720, zoom: 1.5, fontScale: 1, type: "zoom" },
+      { width: 1280, height: 720, zoom: 1.75, fontScale: 1, type: "zoom" },
+      { width: 1280, height: 720, zoom: 2, fontScale: 1, type: "zoom" },
+      { width: 1440, height: 900, zoom: 1.25, fontScale: 1, type: "zoom" },
+      { width: 1920, height: 1080, zoom: 1.75, fontScale: 1, type: "zoom" },
+      { width: 390, height: 844, zoom: 1, fontScale: 1.5, type: "font" },
+      { width: 1024, height: 768, zoom: 1, fontScale: 1.5, type: "font" },
+      { width: 1920, height: 980, zoom: 1.25, fontScale: 1, type: "scene-fit" },
+      { width: 850, height: 434, zoom: 1, fontScale: 1, type: "scene-embedded" },
+      { width: 1352, height: 690, zoom: 1, fontScale: 1, type: "scene-compact-desktop" },
+    ];
+  }
+
   const scenarios = [];
 
-  for (const width of widths) {
+  for (const [width, height] of popularViewports) {
     for (const zoom of zooms) {
-      scenarios.push({ width, height: defaultViewportHeight, zoom, fontScale: 1, type: "zoom" });
+      scenarios.push({ width, height, zoom, fontScale: 1, type: "zoom" });
     }
 
     for (const fontScale of fontScales.filter((value) => value !== 1)) {
-      scenarios.push({ width, height: defaultViewportHeight, zoom: 1, fontScale, type: "font" });
+      scenarios.push({ width, height, zoom: 1, fontScale, type: "font" });
     }
   }
 
   scenarios.push(
-    { width: 1280, height: 600, zoom: 1, fontScale: 1, type: "height" },
-    { width: 1440, height: 720, zoom: 1, fontScale: 1, type: "height" },
-    { width: 1920, height: 800, zoom: 1, fontScale: 1, type: "height" },
+    { width: 844, height: 390, zoom: 1, fontScale: 1, type: "landscape" },
+    { width: 932, height: 430, zoom: 1, fontScale: 1, type: "landscape" },
     { width: 1920, height: 980, zoom: 1.25, fontScale: 1, type: "scene-fit" },
     { width: 850, height: 434, zoom: 1, fontScale: 1, type: "scene-embedded" },
     { width: 1352, height: 690, zoom: 1, fontScale: 1, type: "scene-compact-desktop" },
     { width: 1342, height: 755, zoom: 1, fontScale: 1, type: "scene-compact-desktop" },
   );
-
-  if (quickMode) {
-    scenarios.push({ width: 1920, height: defaultViewportHeight, zoom: 1.75, fontScale: 1, type: "zoom" });
-  }
 
   return scenarios;
 };
@@ -486,6 +553,61 @@ const evaluateLayout = async (page) =>
         bottom: Math.round(rect.bottom),
       }));
 
+    const isStudioRoute = Boolean(document.querySelector(".studio-canvas-route"));
+    const clippedText = isStudioRoute
+      ? []
+      : visibleElements
+          .filter(({ element, rect }) => {
+            if (!element.matches("main h1, main h2, main h3, main p, main button, header button, header a[href]")) {
+              return false;
+            }
+            if (!element.textContent?.trim() || element.closest("[aria-hidden='true']")) return false;
+            const style = window.getComputedStyle(element);
+            if (style.textOverflow === "ellipsis" || style.webkitLineClamp !== "none") return false;
+            const clipsX = style.overflowX === "hidden" || style.overflowX === "clip";
+            const clipsY = style.overflowY === "hidden" || style.overflowY === "clip";
+            return (
+              (clipsX && element.scrollWidth > element.clientWidth + 1) ||
+              (clipsY && element.scrollHeight > element.clientHeight + 1) ||
+              rect.width < 1 ||
+              rect.height < 1
+            );
+          })
+          .slice(0, 8)
+          .map(({ element }) => ({
+            selector:
+              element.id ||
+              element.className?.toString?.().trim?.().replace(/\s+/g, ".") ||
+              element.tagName.toLowerCase(),
+            clientWidth: element.clientWidth,
+            scrollWidth: element.scrollWidth,
+            clientHeight: element.clientHeight,
+            scrollHeight: element.scrollHeight,
+          }));
+
+    const smallTouchControls = isStudioRoute || viewportWidth > 640
+      ? []
+      : Array.from(
+          document.querySelectorAll(
+            "header a[href], header button, main a.btn, main button:not([tabindex='-1']), main input, main select, main textarea",
+          ),
+        )
+          .map((element) => ({ element, rect: element.getBoundingClientRect() }))
+          .filter(({ element, rect }) => {
+            if (!isVisible(element, rect) || element.closest("[aria-hidden='true']")) return false;
+            if (rect.bottom <= 0 || rect.top >= viewportHeight) return false;
+            return rect.width < 44 || rect.height < 44;
+          })
+          .slice(0, 8)
+          .map(({ element, rect }) => ({
+            selector:
+              element.id ||
+              element.className?.toString?.().trim?.().replace(/\s+/g, ".") ||
+              element.tagName.toLowerCase(),
+            width: Math.round(rect.width),
+            height: Math.round(rect.height),
+          }));
+
     const headerControls = Array.from(document.querySelectorAll("header a[href], header button"))
       .map((element) => ({ element, rect: element.getBoundingClientRect(), style: window.getComputedStyle(element) }))
       .filter(({ element, rect, style }) => isVisible(element, rect) && !element.closest("[hidden], [aria-hidden='true']"));
@@ -532,15 +654,36 @@ const evaluateLayout = async (page) =>
       ?.getBoundingClientRect();
     const headerRect = document.querySelector("header")?.getBoundingClientRect();
     const firstHeadingRect = document.querySelector("main h1")?.getBoundingClientRect();
+    const publicHeroRect = document.querySelector(".route-page:not(.studio-canvas-route) .hero")?.getBoundingClientRect();
+    const publicHeroCopyRect = document.querySelector(".route-page:not(.studio-canvas-route) .hero__copy")?.getBoundingClientRect();
+    const publicHeroPreviewRect = document
+      .querySelector(".route-page:not(.studio-canvas-route) .hero-live-preview")
+      ?.getBoundingClientRect();
+    const publicHeroContentBottom = Math.max(
+      publicHeroCopyRect?.bottom ?? Number.NEGATIVE_INFINITY,
+      publicHeroPreviewRect?.bottom ?? Number.NEGATIVE_INFINITY,
+    );
 
     return {
+      isStudioRoute,
       clientWidth: viewportWidth,
       clientHeight: viewportHeight,
       scrollWidth,
       scrollHeight,
       offenders,
       badControls,
+      clippedText,
+      smallTouchControls,
       overlaps: overlaps.slice(0, 6),
+      publicHero: publicHeroRect && publicHeroCopyRect
+        ? {
+            height: Math.round(publicHeroRect.height),
+            previewHeight: Math.round(publicHeroPreviewRect?.height ?? 0),
+            trailingSpace: Number.isFinite(publicHeroContentBottom)
+              ? Math.round(publicHeroRect.bottom - publicHeroContentBottom)
+              : null,
+          }
+        : null,
       scenePreview: activeSceneCardRect
         ? {
             left: Math.round(activeSceneCardRect.left),
@@ -600,6 +743,7 @@ const evaluateLayout = async (page) =>
             height: Math.round(scenePreviewColumnRect.height),
           }
         : null,
+      headerHeight: headerRect ? Math.round(headerRect.height) : null,
       headerBottom: headerRect ? Math.round(headerRect.bottom) : null,
       firstHeading: firstHeadingRect
         ? {
@@ -779,6 +923,7 @@ const auditRoute = async ({ browser, baseUrl, route, surface, scenario, sampleSt
   const page = await browser.newPage({
     viewport: { width: effectiveWidth, height: effectiveHeight },
     deviceScaleFactor: scenario.fontScale,
+    reducedMotion: "reduce",
   });
   const runtimeErrors = [];
   page.on("pageerror", (error) => {
@@ -799,9 +944,15 @@ const auditRoute = async ({ browser, baseUrl, route, surface, scenario, sampleSt
     await page.waitForFunction(() => document.readyState !== "loading", null, { timeout: 5_000 }).catch(() => undefined);
     await page.waitForSelector("body", { timeout: 5_000 }).catch(() => undefined);
     await page.addStyleTag({
-      content: `html{font-size:${scenario.fontScale * 100}% !important;} body{max-width:100%;}`,
+      content: `
+        html{font-size:${scenario.fontScale * 100}% !important;}
+        body{max-width:100%;}
+        *,*::before,*::after{animation-delay:0ms!important;animation-duration:0.01ms!important;transition-delay:0ms!important;transition-duration:0.01ms!important;}
+        [data-reveal]{filter:none!important;opacity:1!important;transform:none!important;}
+      `,
     });
     await page.waitForLoadState("load", { timeout: 3_000 }).catch(() => undefined);
+    await page.evaluate(() => document.fonts?.ready).catch(() => undefined);
     await page.waitForTimeout(180);
 
     const expectsScenesMode = surface === "app" && route.includes("mode=scenes");
@@ -809,14 +960,14 @@ const auditRoute = async ({ browser, baseUrl, route, surface, scenario, sampleSt
       expectsScenesMode &&
       effectiveWidth >= 641 &&
       effectiveHeight >= 400 &&
-      effectiveHeight <= 600 &&
+      effectiveHeight <= 760 &&
       effectiveWidth > effectiveHeight;
     const minimumScenePreviewWidth = expectsCompactLandscapeSceneEditor ? 80 : 160;
     const minimumScenePreviewHeight = expectsCompactLandscapeSceneEditor ? 145 : 280;
     const auditsSceneVisualPanel =
       expectsScenesMode &&
       scenario.fontScale === 1 &&
-      ((scenario.width === 1920 && scenario.height === defaultViewportHeight && scenario.zoom === 1.75) ||
+      ((scenario.width === 1920 && scenario.zoom === 1.75) ||
         scenario.type === "scene-fit" ||
         scenario.type === "scene-embedded" ||
         scenario.type === "scene-compact-desktop");
@@ -845,6 +996,44 @@ const auditRoute = async ({ browser, baseUrl, route, surface, scenario, sampleSt
 
     if (metrics.badControls.length > 0) {
       failures.push(`controls outside viewport: ${metrics.badControls.map((item) => item.selector).join(", ")}`);
+    }
+
+    if (metrics.clippedText.length > 0) {
+      failures.push(`important text is clipped: ${metrics.clippedText.map((item) => item.selector).join(", ")}`);
+    }
+
+    if (metrics.smallTouchControls.length > 0) {
+      failures.push(
+        `touch targets below 44px: ${metrics.smallTouchControls
+          .map((item) => `${item.selector} ${item.width}x${item.height}`)
+          .join(", ")}`,
+      );
+    }
+
+    if (
+      surface === "app" &&
+      !metrics.isStudioRoute &&
+      metrics.clientWidth <= 960 &&
+      typeof metrics.headerHeight === "number" &&
+      metrics.headerHeight > 80
+    ) {
+      failures.push(`compact header is taller than one row: ${metrics.headerHeight}px`);
+    }
+
+    if (surface === "app" && (route === "/" || route === "/en") && metrics.publicHero) {
+      if (metrics.publicHero.previewHeight < 150) {
+        failures.push(`public hero preview is not usable: ${metrics.publicHero.previewHeight}px tall`);
+      }
+
+      const maximumTrailingSpace = Math.max(160, Math.round(metrics.publicHero.height * 0.22));
+      if (
+        typeof metrics.publicHero.trailingSpace === "number" &&
+        metrics.publicHero.trailingSpace > maximumTrailingSpace
+      ) {
+        failures.push(
+          `public hero has disproportionate trailing space: ${metrics.publicHero.trailingSpace}px > ${maximumTrailingSpace}px`,
+        );
+      }
     }
 
     if (metrics.overlaps.length > 0) {
@@ -989,15 +1178,19 @@ const auditRoute = async ({ browser, baseUrl, route, surface, scenario, sampleSt
         );
       }
 
+      const embeddedActionsAreBelowPreview =
+        sceneVisualPanel.submitTop >= sceneVisualPanel.previewBottom + 6;
+      const embeddedActionsAreBesidePreview =
+        sceneVisualPanel.submitLeft >= sceneVisualPanel.previewRight + 6;
       if (
-        sceneVisualPanel.submitTop < sceneVisualPanel.previewBottom + 6 ||
+        (!embeddedActionsAreBelowPreview && !embeddedActionsAreBesidePreview) ||
         sceneVisualPanel.submitBottom > sceneVisualPanel.timelineTop - 6 ||
-        sceneVisualPanel.submitHeight > 28 ||
         sceneVisualPanel.submitRight > sceneVisualPanel.viewportWidth - 8
       ) {
         failures.push(
-          `embedded scene actions are not below the preview: preview ${sceneVisualPanel.previewTop}-${sceneVisualPanel.previewBottom}, ` +
-            `actions ${sceneVisualPanel.submitTop}-${sceneVisualPanel.submitBottom}, timeline ${sceneVisualPanel.timelineTop}`,
+          `embedded scene actions collide with the preview: preview x${sceneVisualPanel.previewRight}, ` +
+            `y${sceneVisualPanel.previewTop}-${sceneVisualPanel.previewBottom}; actions x${sceneVisualPanel.submitLeft}-${sceneVisualPanel.submitRight}, ` +
+            `y${sceneVisualPanel.submitTop}-${sceneVisualPanel.submitBottom}; timeline ${sceneVisualPanel.timelineTop}`,
         );
       }
 
@@ -1095,18 +1288,21 @@ const auditRoute = async ({ browser, baseUrl, route, surface, scenario, sampleSt
     const isCanonicalSample =
       scenario.zoom === 1 &&
       scenario.fontScale === 1 &&
-      scenario.height === defaultViewportHeight &&
-      (scenario.width === 320 || scenario.width === 768 || scenario.width === 1920);
+      ((scenario.width === 390 && scenario.height === 844) ||
+        (scenario.width === 768 && scenario.height === 1024) ||
+        (scenario.width === 1440 && scenario.height === 900) ||
+        (scenario.width === 1920 && scenario.height === 1080));
     const shouldAlwaysCaptureScenesSample = surface === "app" && route.includes("mode=scenes");
+    const shouldCaptureWorkspaceSample =
+      surface === "app" && route.includes("/app") && scenario.width === 390 && scenario.height === 844;
     const isScenesStressSample =
       shouldAlwaysCaptureScenesSample &&
       scenario.fontScale === 1 &&
-      scenario.height === defaultViewportHeight &&
-      ((scenario.width === 1280 && scenario.zoom === 1.5) ||
-        (scenario.width === 1920 && scenario.zoom === 2));
+      ((scenario.width === 1280 && scenario.height === 720 && scenario.zoom === 1.5) ||
+        (scenario.width === 1920 && scenario.height === 1080 && scenario.zoom === 2));
     if (
       (isCanonicalSample || isScenesStressSample) &&
-      (shouldAlwaysCaptureScenesSample || sampleState.count < 8)
+      (shouldAlwaysCaptureScenesSample || shouldCaptureWorkspaceSample || sampleState.count < 24)
     ) {
       if (route === "/" || route === "/en") {
         await page.waitForTimeout(800);
@@ -1144,12 +1340,14 @@ const run = async () => {
   await rm(artifactDir, { recursive: true, force: true });
   await mkdir(artifactDir, { recursive: true });
 
-  const appPort = await getFreePort();
-  const staticPort = await getFreePort();
-  const appBaseUrl = `http://127.0.0.1:${appPort}`;
-  const staticBaseUrl = `http://127.0.0.1:${staticPort}`;
-  const appServer = startProcess("npm", ["run", "dev:web", "--", "--port", String(appPort), "--strictPort"], appRoot, "vite");
-  const staticServer = await startStaticServer(staticPort);
+  const appPort = auditsApp ? await getFreePort() : null;
+  const staticPort = auditsStatic ? await getFreePort() : null;
+  const appBaseUrl = appPort === null ? null : `http://127.0.0.1:${appPort}`;
+  const staticBaseUrl = staticPort === null ? null : `http://127.0.0.1:${staticPort}`;
+  const appServer = appPort === null
+    ? null
+    : startProcess("npm", ["run", "dev:web", "--", "--port", String(appPort), "--strictPort"], appRoot, "vite");
+  const staticServer = staticPort === null ? null : await startStaticServer(staticPort);
   const scenarios = buildScenarios();
   const sampleState = { count: 0 };
   const failures = [];
@@ -1166,47 +1364,59 @@ const run = async () => {
   });
 
   try {
-    await Promise.all([waitForUrl(appBaseUrl, "Vite"), waitForUrl(staticBaseUrl, "static server")]);
+    await Promise.all([
+      ...(appBaseUrl ? [waitForUrl(appBaseUrl, "Vite")] : []),
+      ...(staticBaseUrl ? [waitForUrl(staticBaseUrl, "static server")] : []),
+    ]);
     browser = await chromium.launch();
 
     const surfaces = [
-      { surface: "app", baseUrl: appBaseUrl, routes: appRoutes },
-      { surface: "static", baseUrl: staticBaseUrl, routes: staticRoutes },
+      ...(appBaseUrl ? [{ surface: "app", baseUrl: appBaseUrl, routes: appRoutes }] : []),
+      ...(staticBaseUrl ? [{ surface: "static", baseUrl: staticBaseUrl, routes: staticRoutes }] : []),
     ];
 
     for (const entry of surfaces) {
       for (const route of entry.routes) {
-        for (const scenario of scenarios) {
-          const result = await auditRoute({ browser, ...entry, route, scenario, sampleState });
-          checked += 1;
+        let scenarioIndex = 0;
+        const workerCount = Math.min(auditConcurrency, scenarios.length);
+        await Promise.all(
+          Array.from({ length: workerCount }, async () => {
+            while (scenarioIndex < scenarios.length) {
+              const scenario = scenarios[scenarioIndex];
+              scenarioIndex += 1;
+              const result = await auditRoute({ browser, ...entry, route, scenario, sampleState });
+              checked += 1;
 
-          if (!result.ok) {
-            failures.push(result);
-            console.error(`FAIL ${result.label}`);
-            console.error(`  ${result.failures.join("; ")}`);
-            if (result.metrics?.offenders?.length) {
-              console.error(`  offenders: ${result.metrics.offenders.map((item) => item.selector).join(", ")}`);
+              if (!result.ok) {
+                failures.push(result);
+                console.error(`FAIL ${result.label}`);
+                console.error(`  ${result.failures.join("; ")}`);
+                if (result.metrics?.offenders?.length) {
+                  console.error(`  offenders: ${result.metrics.offenders.map((item) => item.selector).join(", ")}`);
+                }
+                if (result.metrics?.scenePreview) {
+                  console.error(
+                    `  scene geometry: ${JSON.stringify({
+                      mainScrollTop: result.metrics.sceneMainScrollTop,
+                      layout: result.metrics.sceneLayout,
+                      previewColumn: result.metrics.scenePreviewColumn,
+                      preview: result.metrics.scenePreview,
+                      submit: result.metrics.sceneSubmit,
+                      timeline: result.metrics.sceneTimeline,
+                    })}`,
+                  );
+                }
+                if (result.screenshotPath) console.error(`  screenshot: ${result.screenshotPath}`);
+              }
             }
-            if (result.metrics?.scenePreview) {
-              console.error(
-                `  scene geometry: ${JSON.stringify({
-                  mainScrollTop: result.metrics.sceneMainScrollTop,
-                  layout: result.metrics.sceneLayout,
-                  previewColumn: result.metrics.scenePreviewColumn,
-                  preview: result.metrics.scenePreview,
-                  submit: result.metrics.sceneSubmit,
-                  timeline: result.metrics.sceneTimeline,
-                })}`,
-              );
-            }
-            if (result.screenshotPath) console.error(`  screenshot: ${result.screenshotPath}`);
-          }
-        }
+          }),
+        );
       }
     }
 
     const auditMode = scenesOnly ? "scenes" : quickMode ? "quick" : "full";
     console.log(`Responsive audit checked ${checked} scenarios (${auditMode} mode).`);
+    console.log(`Scope: ${auditScope}.`);
     console.log(`Screenshots: ${artifactDir}`);
 
     if (failures.length > 0) {

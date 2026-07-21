@@ -52,6 +52,11 @@ npm ci --no-audit --no-fund
 echo "[production] build release"
 npm run build
 
+if [ "${RUN_RESPONSIVE_AUDIT:-1}" = "1" ]; then
+  echo "[production] full app responsive gate"
+  npm run audit:responsive:app
+fi
+
 if [ "${RUN_TESTS:-0}" = "1" ]; then
   echo "[production] tests"
   ADSFLOW_API_BASE_URL="${ADSFLOW_API_BASE_URL:-https://api.adshortsai.com}" \

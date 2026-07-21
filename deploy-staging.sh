@@ -22,6 +22,11 @@ echo "[staging] build"
 cd "$APP_DIR"
 npm run build
 
+if [ "${RUN_RESPONSIVE_AUDIT:-1}" = "1" ]; then
+  echo "[staging] app responsive gate"
+  npm run audit:responsive:app:quick
+fi
+
 if [ "${RUN_TESTS:-0}" = "1" ]; then
   echo "[staging] tests"
   npm test
