@@ -492,6 +492,8 @@ const buildScenarios = () => {
       { width: 390, height: 844, zoom: 1, fontScale: 1.5, type: "font" },
       { width: 1024, height: 768, zoom: 1, fontScale: 1.5, type: "font" },
       { width: 1229, height: 692, zoom: 1, fontScale: 1, type: "laptop-125" },
+      { width: 1180, height: 499, zoom: 1, fontScale: 1, type: "scene-breakpoint-lower" },
+      { width: 1181, height: 499, zoom: 1, fontScale: 1, type: "scene-breakpoint-upper" },
       { width: 1920, height: 980, zoom: 1.25, fontScale: 1, type: "scene-fit" },
       { width: 850, height: 434, zoom: 1, fontScale: 1, type: "scene-embedded" },
       { width: 1352, height: 690, zoom: 1, fontScale: 1, type: "scene-compact-desktop" },
@@ -514,6 +516,8 @@ const buildScenarios = () => {
     { width: 844, height: 390, zoom: 1, fontScale: 1, type: "landscape" },
     { width: 932, height: 430, zoom: 1, fontScale: 1, type: "landscape" },
     { width: 1229, height: 692, zoom: 1, fontScale: 1, type: "laptop-125" },
+    { width: 1180, height: 499, zoom: 1, fontScale: 1, type: "scene-breakpoint-lower" },
+    { width: 1181, height: 499, zoom: 1, fontScale: 1, type: "scene-breakpoint-upper" },
     { width: 1920, height: 980, zoom: 1.25, fontScale: 1, type: "scene-fit" },
     { width: 850, height: 434, zoom: 1, fontScale: 1, type: "scene-embedded" },
     { width: 1352, height: 690, zoom: 1, fontScale: 1, type: "scene-compact-desktop" },
@@ -1103,6 +1107,8 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
       ((scenario.width === 1920 && scenario.zoom === 1.75) ||
         scenario.type === "scene-fit" ||
         scenario.type === "scene-embedded" ||
+        scenario.type === "scene-breakpoint-lower" ||
+        scenario.type === "scene-breakpoint-upper" ||
         scenario.type === "scene-compact-desktop" ||
         scenario.type === "laptop-125");
     const scenesModeReady = expectsScenesMode
@@ -1273,6 +1279,30 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
     ) {
       failures.push(
         `scene preview too small: ${metrics.scenePreview.width}x${metrics.scenePreview.height}`,
+      );
+    }
+
+    if (
+      expectsScenesMode &&
+      metrics.scenePreview &&
+      metrics.scenePreviewColumn &&
+      (metrics.scenePreview.top < metrics.scenePreviewColumn.top - 1 ||
+        metrics.scenePreview.bottom > metrics.scenePreviewColumn.bottom + 1)
+    ) {
+      failures.push(
+        `scene preview escapes its grid row: preview ${metrics.scenePreview.top}-${metrics.scenePreview.bottom}, ` +
+          `column ${metrics.scenePreviewColumn.top}-${metrics.scenePreviewColumn.bottom}`,
+      );
+    }
+
+    if (
+      expectsScenesMode &&
+      metrics.scenePreview &&
+      metrics.sceneTimeline &&
+      metrics.scenePreview.bottom > metrics.sceneTimeline.top - 1
+    ) {
+      failures.push(
+        `scene preview overlaps timeline: ${metrics.scenePreview.bottom} > ${metrics.sceneTimeline.top - 1}`,
       );
     }
 
