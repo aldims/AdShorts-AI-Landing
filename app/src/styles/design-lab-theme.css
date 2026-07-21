@@ -22949,7 +22949,8 @@ body.studio-video-fullscreen-open .studio-canvas-preview::after {
 @container (max-width: 340px) {
   .studio-canvas-preview__player-shell {
     --studio-inline-control-size: clamp(30px, 15cqw, 34px);
-    --studio-preview-action-size: clamp(26px, 13cqw, 30px);
+    --studio-preview-action-icon-size: clamp(7px, 3.33cqw, 9.33px);
+    --studio-preview-action-size: clamp(17.33px, 8.67cqw, 20px);
   }
 
   .studio-canvas-preview__generated-actions {
@@ -22965,9 +22966,9 @@ body.studio-video-fullscreen-open .studio-canvas-preview::after {
   }
 
   .studio-canvas-preview__quick-action--expanded svg {
-    flex-basis: clamp(10px, 5cqw, 14px);
-    width: clamp(10px, 5cqw, 14px);
-    height: clamp(10px, 5cqw, 14px);
+    flex-basis: var(--studio-preview-action-icon-size);
+    width: var(--studio-preview-action-icon-size);
+    height: var(--studio-preview-action-icon-size);
   }
 
   .studio-canvas-preview__quick-action--expanded span {
@@ -22978,6 +22979,13 @@ body.studio-video-fullscreen-open .studio-canvas-preview::after {
     flex-basis: var(--studio-preview-action-size);
     width: var(--studio-preview-action-size);
     height: var(--studio-preview-action-size);
+  }
+
+  .studio-canvas-preview__generated-actions--expanded
+    > .studio-canvas-preview__quick-action:not(.studio-canvas-preview__quick-action--expanded)
+    svg {
+    width: var(--studio-preview-action-icon-size);
+    height: var(--studio-preview-action-icon-size);
   }
 
   .studio-canvas-preview__player-shell .studio-video-modal__player-controls {
@@ -23061,7 +23069,8 @@ body.studio-video-fullscreen-open .studio-canvas-preview::after {
 @container (max-width: 180px) {
   .studio-canvas-preview__player-shell {
     --studio-inline-control-size: clamp(16px, 18cqw, 28px);
-    --studio-preview-action-size: clamp(14px, 16cqw, 24px);
+    --studio-preview-action-icon-size: clamp(5.33px, 6cqw, 9.33px);
+    --studio-preview-action-size: clamp(9.33px, 10.67cqw, 16px);
   }
 
   .studio-canvas-preview__floating-actions {
@@ -23096,9 +23105,12 @@ body.studio-video-fullscreen-open .studio-canvas-preview::after {
   }
 
   .studio-canvas-preview__quick-action svg,
-  .studio-canvas-preview__quick-action--expanded svg {
-    width: clamp(8px, 9cqw, 14px);
-    height: clamp(8px, 9cqw, 14px);
+  .studio-canvas-preview__quick-action--expanded svg,
+  .studio-canvas-preview__generated-actions--expanded
+    > .studio-canvas-preview__quick-action:not(.studio-canvas-preview__quick-action--expanded)
+    svg {
+    width: var(--studio-preview-action-icon-size);
+    height: var(--studio-preview-action-icon-size);
   }
 
   .studio-canvas-preview__player-shell

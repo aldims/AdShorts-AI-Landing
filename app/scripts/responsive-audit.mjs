@@ -757,12 +757,18 @@ const evaluateLayout = async (page) =>
     const studioPreviewCloseRect = document
       .querySelector('.studio-canvas-preview.has-video-preview [aria-label="Закрыть видео"], .studio-canvas-preview.has-video-preview [aria-label="Close video"]')
       ?.getBoundingClientRect();
-    const studioPreviewActionRects = Array.from(
+    const studioPreviewActionElements = Array.from(
       document.querySelectorAll(
         ".studio-canvas-preview.has-video-preview .studio-canvas-preview__floating-actions button, " +
           ".studio-canvas-preview.has-video-preview .studio-canvas-preview__floating-actions a",
       ),
-    ).map((element) => element.getBoundingClientRect());
+    );
+    const studioPreviewActionRects = studioPreviewActionElements.map((element) =>
+      element.getBoundingClientRect(),
+    );
+    const studioPreviewActionIconRects = studioPreviewActionElements
+      .map((element) => element.querySelector("svg")?.getBoundingClientRect())
+      .filter(Boolean);
     const studioPreviewControlRects = Array.from(
       document.querySelectorAll(
         ".studio-canvas-preview.has-video-preview .studio-video-modal__control-btn",
@@ -895,6 +901,10 @@ const evaluateLayout = async (page) =>
         right: Math.round(rect.right),
         bottom: Math.round(rect.bottom),
         left: Math.round(rect.left),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+      })),
+      studioPreviewActionIcons: studioPreviewActionIconRects.map((rect) => ({
         width: Math.round(rect.width),
         height: Math.round(rect.height),
       })),
@@ -1253,13 +1263,16 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
         const auditsTinyIdeaViewport = scenario.type === "idea-compact";
         const minimumCompactPreviewHeight = effectiveHeight <= 400 ? 130 : auditsTinyIdeaViewport ? 150 : 220;
         const expectedPreviewActionSize = auditsRegularIdeaControls
-          ? Math.min(30, Math.max(26, metrics.studioPreview.width * 0.13))
+          ? Math.min(20, Math.max(17.33, metrics.studioPreview.width * 0.0867))
+          : null;
+        const expectedPreviewActionIconSize = auditsRegularIdeaControls
+          ? Math.min(9.33, Math.max(7, metrics.studioPreview.width * 0.0333))
           : null;
         const expectedPlayerControlSize = auditsRegularIdeaControls
           ? Math.min(34, Math.max(30, metrics.studioPreview.width * 0.15))
           : null;
         const maximumPreviewActionSize = auditsRegularIdeaControls
-          ? (expectedPreviewActionSize ?? 30) + 1
+          ? (expectedPreviewActionSize ?? 20) + 1
           : metrics.studioPreview.width <= 100 ? 21 : 32;
         const maximumPlayerControlSize = auditsRegularIdeaControls
           ? (expectedPlayerControlSize ?? 34) + 1
@@ -1323,6 +1336,23 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
             failures.push(
               `regular preview action is not proportional: ` +
                 `${mismatchedPreviewAction.width}x${mismatchedPreviewAction.height}`,
+            );
+          }
+
+          const mismatchedPreviewActionIcon = metrics.studioPreviewActionIcons.find(
+            (rect) =>
+              expectedPreviewActionIconSize !== null &&
+              (Math.abs(rect.width - expectedPreviewActionIconSize) > 1.25 ||
+                Math.abs(rect.height - expectedPreviewActionIconSize) > 1.25),
+          );
+          if (
+            metrics.studioPreviewActionIcons.length !== metrics.studioPreviewActions.length ||
+            mismatchedPreviewActionIcon
+          ) {
+            failures.push(
+              `regular preview action icons are not uniform: ` +
+                `${mismatchedPreviewActionIcon?.width ?? metrics.studioPreviewActionIcons.length}x` +
+                `${mismatchedPreviewActionIcon?.height ?? metrics.studioPreviewActions.length}`,
             );
           }
         }
@@ -1442,7 +1472,7 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
       if (!metrics.studioPreview || !metrics.studioComposer || !metrics.studioPreviewClose) {
         failures.push("legacy project preview, composer or close action is missing at 1229x692");
       } else {
-        const expectedLaptopCloseSize = Math.min(30, Math.max(26, metrics.studioPreview.width * 0.13));
+        const expectedLaptopCloseSize = Math.min(20, Math.max(17.33, metrics.studioPreview.width * 0.0867));
         if (metrics.studioPreview.bottom > metrics.studioComposer.top - 8) {
           failures.push(
             `legacy preview overlaps its composer at 1229x692: ` +
