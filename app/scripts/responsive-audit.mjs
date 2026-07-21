@@ -42,6 +42,16 @@ const auditConcurrency = Number.isFinite(requestedConcurrency) && requestedConcu
   : quickMode
     ? 4
     : 3;
+const requestedAuditTimeoutMs = Number.parseInt(process.env.RESPONSIVE_AUDIT_TIMEOUT_MS ?? "", 10);
+const auditTimeoutMs = Number.isFinite(requestedAuditTimeoutMs) && requestedAuditTimeoutMs > 0
+  ? requestedAuditTimeoutMs
+  : quickMode
+    ? 8 * 60_000
+    : 20 * 60_000;
+const requestedProgressEvery = Number.parseInt(process.env.RESPONSIVE_AUDIT_PROGRESS_EVERY ?? "", 10);
+const progressEvery = Number.isFinite(requestedProgressEvery) && requestedProgressEvery > 0
+  ? requestedProgressEvery
+  : 50;
 
 const popularViewports = [
   [320, 568],
@@ -236,6 +246,7 @@ const waitForUrl = async (url, label) => {
 const startProcess = (command, args, cwd, label) => {
   const child = spawn(command, args, {
     cwd,
+    detached: process.platform !== "win32",
     env: { ...process.env, BROWSER: "none", FORCE_COLOR: "0" },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -259,7 +270,20 @@ const startProcess = (command, args, cwd, label) => {
 
 const stopProcess = async (child) => {
   if (!child || child.killed) return;
-  child.kill("SIGTERM");
+
+  const signalProcess = (signal) => {
+    try {
+      if (process.platform === "win32") {
+        child.kill(signal);
+      } else {
+        process.kill(-child.pid, signal);
+      }
+    } catch (error) {
+      if (error?.code !== "ESRCH") throw error;
+    }
+  };
+
+  signalProcess("SIGTERM");
   await new Promise((resolve) => {
     const timeout = setTimeout(resolve, 2_000);
     child.once("exit", () => {
@@ -267,6 +291,10 @@ const stopProcess = async (child) => {
       resolve();
     });
   });
+
+  if (child.exitCode === null && child.signalCode === null) {
+    signalProcess("SIGKILL");
+  }
 };
 
 const startStaticServer = (port) =>
@@ -919,6 +947,8 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
     deviceScaleFactor: scenario.fontScale,
     reducedMotion: "reduce",
   });
+  page.setDefaultTimeout(5_000);
+  page.setDefaultNavigationTimeout(20_000);
   const runtimeErrors = [];
   page.on("pageerror", (error) => {
     runtimeErrors.push(error instanceof Error ? error.message : String(error));
@@ -946,7 +976,14 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
       `,
     });
     await page.waitForLoadState("load", { timeout: 3_000 }).catch(() => undefined);
-    await page.evaluate(() => document.fonts?.ready).catch(() => undefined);
+    await page
+      .evaluate(() =>
+        Promise.race([
+          document.fonts?.ready ?? Promise.resolve(),
+          new Promise((resolve) => window.setTimeout(resolve, 2_000)),
+        ]),
+      )
+      .catch(() => undefined);
     await page.waitForTimeout(180);
 
     const expectsScenesMode = surface === "app" && route.includes("mode=scenes");
@@ -1337,11 +1374,27 @@ const run = async () => {
     await stopStaticServer(staticServer);
   };
 
-  process.once("SIGINT", () => {
-    void shutdown().finally(() => process.exit(130));
+  let isShuttingDown = false;
+  const handleSignal = (exitCode) => {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+    void (async () => {
+      if (activeBrowser) await activeBrowser.close().catch(() => undefined);
+      await shutdown();
+    })().finally(() => process.exit(exitCode));
+  };
+
+  process.once("SIGINT", () => handleSignal(130));
+  process.once("SIGTERM", () => handleSignal(143));
+
+  let auditTimeout = null;
+  const timeoutPromise = new Promise((_, reject) => {
+    auditTimeout = setTimeout(() => {
+      reject(new Error(`Responsive audit timed out after ${Math.round(auditTimeoutMs / 1000)} seconds.`));
+    }, auditTimeoutMs);
   });
 
-  try {
+  const executeAudit = async () => {
     await Promise.all([
       ...(appBaseUrl ? [waitForUrl(appBaseUrl, "Vite")] : []),
       ...(staticBaseUrl ? [waitForUrl(staticBaseUrl, "static server")] : []),
@@ -1350,6 +1403,14 @@ const run = async () => {
       ...(appBaseUrl ? [{ surface: "app", baseUrl: appBaseUrl, routes: appRoutes }] : []),
       ...(staticBaseUrl ? [{ surface: "static", baseUrl: staticBaseUrl, routes: staticRoutes }] : []),
     ];
+    const expectedChecks = requestedBrowserNames.length * scenarios.length * surfaces.reduce(
+      (total, entry) => total + entry.routes.length,
+      0,
+    );
+    console.log(
+      `Responsive audit starting ${expectedChecks} checks with concurrency ${auditConcurrency} ` +
+        `and timeout ${Math.round(auditTimeoutMs / 1000)}s.`,
+    );
 
     for (const browserName of requestedBrowserNames) {
       const browserType = browserTypes[browserName];
@@ -1375,6 +1436,9 @@ const run = async () => {
                     sampleState,
                   });
                   checked += 1;
+                  if (checked % progressEvery === 0 || checked === expectedChecks) {
+                    console.log(`Responsive audit progress: ${checked}/${expectedChecks} checks.`);
+                  }
 
                   if (!result.ok) {
                     failures.push(result);
@@ -1421,7 +1485,12 @@ const run = async () => {
     }
 
     console.log("Responsive audit passed.");
+  };
+
+  try {
+    await Promise.race([executeAudit(), timeoutPromise]);
   } finally {
+    if (auditTimeout) clearTimeout(auditTimeout);
     if (activeBrowser) await activeBrowser.close().catch(() => undefined);
     await shutdown();
   }
