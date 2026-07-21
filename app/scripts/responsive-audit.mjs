@@ -454,6 +454,7 @@ const buildScenarios = () => {
       { width: 1920, height: 1080, zoom: 1.75, fontScale: 1, type: "zoom" },
       { width: 390, height: 844, zoom: 1, fontScale: 1.5, type: "font" },
       { width: 1024, height: 768, zoom: 1, fontScale: 1.5, type: "font" },
+      { width: 1229, height: 692, zoom: 1, fontScale: 1, type: "laptop-125" },
       { width: 1920, height: 980, zoom: 1.25, fontScale: 1, type: "scene-fit" },
       { width: 850, height: 434, zoom: 1, fontScale: 1, type: "scene-embedded" },
       { width: 1352, height: 690, zoom: 1, fontScale: 1, type: "scene-compact-desktop" },
@@ -475,6 +476,7 @@ const buildScenarios = () => {
   scenarios.push(
     { width: 844, height: 390, zoom: 1, fontScale: 1, type: "landscape" },
     { width: 932, height: 430, zoom: 1, fontScale: 1, type: "landscape" },
+    { width: 1229, height: 692, zoom: 1, fontScale: 1, type: "laptop-125" },
     { width: 1920, height: 980, zoom: 1.25, fontScale: 1, type: "scene-fit" },
     { width: 850, height: 434, zoom: 1, fontScale: 1, type: "scene-embedded" },
     { width: 1352, height: 690, zoom: 1, fontScale: 1, type: "scene-compact-desktop" },
@@ -693,6 +695,15 @@ const evaluateLayout = async (page) =>
     const scenePreviewColumnRect = document
       .querySelector(".studio-segment-editor__preview-column")
       ?.getBoundingClientRect();
+    const studioIdeaEmptyStateRect = document
+      .querySelector(".studio-idea-empty-state")
+      ?.getBoundingClientRect();
+    const studioComposerRect = document
+      .querySelector(".studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt")
+      ?.getBoundingClientRect();
+    const studioWelcomeRect = document
+      .querySelector(".studio-welcome-card.studio-canvas-welcome")
+      ?.getBoundingClientRect();
     const headerRect = document.querySelector("header")?.getBoundingClientRect();
     const firstHeadingRect = document.querySelector("main h1")?.getBoundingClientRect();
     return {
@@ -763,6 +774,30 @@ const evaluateLayout = async (page) =>
             top: Math.round(scenePreviewColumnRect.top),
             bottom: Math.round(scenePreviewColumnRect.bottom),
             height: Math.round(scenePreviewColumnRect.height),
+          }
+        : null,
+      studioIdeaEmptyState: studioIdeaEmptyStateRect
+        ? {
+            top: Math.round(studioIdeaEmptyStateRect.top),
+            bottom: Math.round(studioIdeaEmptyStateRect.bottom),
+            height: Math.round(studioIdeaEmptyStateRect.height),
+          }
+        : null,
+      studioComposer: studioComposerRect
+        ? {
+            top: Math.round(studioComposerRect.top),
+            bottom: Math.round(studioComposerRect.bottom),
+            height: Math.round(studioComposerRect.height),
+          }
+        : null,
+      studioWelcome: studioWelcomeRect
+        ? {
+            top: Math.round(studioWelcomeRect.top),
+            right: Math.round(studioWelcomeRect.right),
+            bottom: Math.round(studioWelcomeRect.bottom),
+            left: Math.round(studioWelcomeRect.left),
+            width: Math.round(studioWelcomeRect.width),
+            height: Math.round(studioWelcomeRect.height),
           }
         : null,
       headerHeight: headerRect ? Math.round(headerRect.height) : null,
@@ -1001,7 +1036,8 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
       ((scenario.width === 1920 && scenario.zoom === 1.75) ||
         scenario.type === "scene-fit" ||
         scenario.type === "scene-embedded" ||
-        scenario.type === "scene-compact-desktop");
+        scenario.type === "scene-compact-desktop" ||
+        scenario.type === "laptop-125");
     const scenesModeReady = expectsScenesMode
       ? await page
           .waitForSelector(".studio-canvas-main.is-segment-editor", { state: "visible", timeout: 10_000 })
@@ -1010,6 +1046,19 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
       : true;
 
     const metrics = await evaluateLayout(page);
+    let laptopIdeaMetrics = null;
+    const auditsLaptopIdea =
+      surface === "app" &&
+      route.includes("/app/studio") &&
+      !expectsScenesMode &&
+      scenario.type === "laptop-125";
+    if (auditsLaptopIdea) {
+      if (metrics.studioWelcome) {
+        await page.locator(".studio-welcome-card__close").click();
+        await page.waitForTimeout(80);
+      }
+      laptopIdeaMetrics = await evaluateLayout(page);
+    }
     const failures = [];
     const sceneVisualPanel = auditsSceneVisualPanel ? await openAndMeasureSceneVisualPanel(page) : null;
 
@@ -1053,6 +1102,36 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
 
     if (metrics.overlaps.length > 0) {
       failures.push(`header overlaps: ${metrics.overlaps.map((item) => `${item.a}/${item.b}`).join(", ")}`);
+    }
+
+    if (auditsLaptopIdea) {
+      if (metrics.studioWelcome) {
+        if (
+          metrics.studioWelcome.top < (metrics.headerBottom ?? 0) + 8 ||
+          metrics.studioWelcome.right > metrics.clientWidth - 8 ||
+          metrics.studioWelcome.bottom > metrics.clientHeight - 8 ||
+          metrics.studioWelcome.left < 8
+        ) {
+          failures.push(
+            `welcome panel leaves the usable viewport at 1229x692: ` +
+              `${metrics.studioWelcome.left},${metrics.studioWelcome.top} to ` +
+              `${metrics.studioWelcome.right},${metrics.studioWelcome.bottom}`,
+          );
+        }
+      }
+
+      if (!laptopIdeaMetrics?.studioIdeaEmptyState || !laptopIdeaMetrics.studioComposer) {
+        failures.push("idea mode did not expose its empty state and composer at 1229x692");
+      } else if (
+        laptopIdeaMetrics.studioIdeaEmptyState.bottom >
+        laptopIdeaMetrics.studioComposer.top - 8
+      ) {
+        failures.push(
+          `idea mode overlaps its composer at 1229x692: ` +
+            `${laptopIdeaMetrics.studioIdeaEmptyState.bottom} > ` +
+            `${laptopIdeaMetrics.studioComposer.top - 8}`,
+        );
+      }
     }
 
     if (
@@ -1262,6 +1341,45 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
       }
     }
 
+    if (sceneVisualPanel && scenario.type === "laptop-125") {
+      if (
+        sceneVisualPanel.documentScrollHeight > sceneVisualPanel.documentClientHeight + 1 ||
+        sceneVisualPanel.mainScrollHeight > sceneVisualPanel.mainClientHeight + 1
+      ) {
+        failures.push(
+          `scene editor scrolls at 1229x692: document ` +
+            `${sceneVisualPanel.documentScrollHeight}/${sceneVisualPanel.documentClientHeight}, workspace ` +
+            `${sceneVisualPanel.mainScrollHeight}/${sceneVisualPanel.mainClientHeight}`,
+        );
+      }
+
+      if (sceneVisualPanel.previewWidth < 185 || sceneVisualPanel.previewHeight < 328) {
+        failures.push(
+          `scene preview is undersized at 1229x692: ` +
+            `${sceneVisualPanel.previewWidth}x${sceneVisualPanel.previewHeight}`,
+        );
+      }
+
+      const previewLeft = sceneVisualPanel.previewRight - sceneVisualPanel.previewWidth;
+      if (sceneVisualPanel.panelWidth < 540 || sceneVisualPanel.panelRight > previewLeft - 8) {
+        failures.push(
+          `scene tools and preview do not fit side by side at 1229x692: panel ` +
+            `${sceneVisualPanel.panelWidth}px/right ${sceneVisualPanel.panelRight}, ` +
+            `preview ${previewLeft}-${sceneVisualPanel.previewRight}`,
+        );
+      }
+
+      if (
+        sceneVisualPanel.promptBottom > sceneVisualPanel.timelineTop - 44 ||
+        sceneVisualPanel.timelineBottom > sceneVisualPanel.viewportHeight - 5
+      ) {
+        failures.push(
+          `scene compact surfaces leave their rows at 1229x692: prompt ${sceneVisualPanel.promptBottom}, ` +
+            `timeline ${sceneVisualPanel.timelineTop}-${sceneVisualPanel.timelineBottom}`,
+        );
+      }
+    }
+
     if (
       expectsScenesMode &&
       metrics.scenePreview &&
@@ -1314,9 +1432,12 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
       shouldAlwaysCaptureScenesSample &&
       scenario.fontScale === 1 &&
       ((scenario.width === 1280 && scenario.height === 720 && scenario.zoom === 1.5) ||
-        (scenario.width === 1920 && scenario.height === 1080 && scenario.zoom === 2));
+        (scenario.width === 1920 && scenario.height === 1080 && scenario.zoom === 2) ||
+        scenario.type === "laptop-125");
+    const isLaptop125Sample =
+      surface === "app" && route.includes("/app/studio") && scenario.type === "laptop-125";
     if (
-      (isCanonicalSample || isScenesStressSample) &&
+      (isCanonicalSample || isScenesStressSample || isLaptop125Sample) &&
       (shouldAlwaysCaptureScenesSample || shouldCaptureWorkspaceSample || sampleState.count < 24)
     ) {
       if (route === "/" || route === "/en") {
