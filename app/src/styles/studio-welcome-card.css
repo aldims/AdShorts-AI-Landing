@@ -325,7 +325,9 @@
     0 48px 140px rgba(0, 0, 0, 0.72),
     0 0 90px rgba(64, 65, 169, 0.1);
   color: #f6f8ff;
+  overscroll-behavior: contain;
   pointer-events: auto;
+  scrollbar-gutter: stable;
   scrollbar-width: thin;
   scrollbar-color: rgba(130, 108, 255, 0.46) transparent;
   animation: studio-welcome-card-enter 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
@@ -1087,6 +1089,29 @@
     min-height: 39px;
   }
 
+}
+
+@media (max-width: 879px), (max-height: 790px) {
+  .studio-welcome-inline {
+    bottom: 0;
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
+    background:
+      linear-gradient(180deg, rgba(2, 6, 14, 0.18), rgba(2, 5, 12, 0.78)),
+      rgba(2, 5, 12, 0.38);
+    -webkit-backdrop-filter: blur(10px) saturate(0.82);
+    backdrop-filter: blur(10px) saturate(0.82);
+    pointer-events: auto;
+  }
+
+  .studio-welcome-card.studio-canvas-welcome {
+    max-height: 100%;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.12),
+      inset 1px 0 0 rgba(122, 159, 255, 0.08),
+      0 0 0 1px rgba(93, 112, 198, 0.08),
+      0 32px 100px rgba(0, 0, 0, 0.84),
+      0 0 90px rgba(64, 65, 169, 0.14);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
