@@ -70,6 +70,9 @@ export const getWorkspaceInfographicTemplateByStylePrompt = (value: string | nul
 export const isWorkspaceInfographicTemplateStylePrompt = (value: string | null | undefined) =>
   Boolean(getWorkspaceInfographicTemplateByStylePrompt(value));
 
+export const getWorkspaceInfographicCustomStylePrompt = (value: string | null | undefined) =>
+  isWorkspaceInfographicTemplateStylePrompt(value) ? "" : String(value ?? "");
+
 export type WorkspaceInfographicTemplatePickerProps = {
   disabled?: boolean;
   locale: string;

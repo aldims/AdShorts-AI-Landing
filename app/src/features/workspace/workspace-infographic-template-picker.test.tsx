@@ -4,6 +4,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  getWorkspaceInfographicCustomStylePrompt,
   getWorkspaceInfographicTemplateByStylePrompt,
   isWorkspaceInfographicTemplateStylePrompt,
   WORKSPACE_INFOGRAPHIC_TEMPLATES,
@@ -55,5 +56,10 @@ describe("WorkspaceInfographicTemplatePicker", () => {
       expect(template.stylePrompt).toContain("supplied text");
       expect(template.imageSrc).toBe(`/infographic-templates/${template.id}.png`);
     });
+  });
+
+  it("removes a stored template prompt while template selection is unavailable", () => {
+    expect(getWorkspaceInfographicCustomStylePrompt(WORKSPACE_INFOGRAPHIC_TEMPLATES[0].stylePrompt)).toBe("");
+    expect(getWorkspaceInfographicCustomStylePrompt("custom minimal style")).toBe("custom minimal style");
   });
 });

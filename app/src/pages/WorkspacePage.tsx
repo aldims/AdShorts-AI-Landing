@@ -956,11 +956,7 @@ import {
 } from "../features/workspace/workspace-infographic-helpers";
 import { WorkspaceSegmentInfographicOverlay } from "../features/workspace/workspace-infographic-overlay";
 import { WorkspaceInfographicStyleDisclosure } from "../features/workspace/workspace-infographic-style-disclosure";
-import {
-  getWorkspaceInfographicTemplateByStylePrompt,
-  isWorkspaceInfographicTemplateStylePrompt,
-  WorkspaceInfographicTemplatePicker,
-} from "../features/workspace/workspace-infographic-template-picker";
+import { getWorkspaceInfographicCustomStylePrompt } from "../features/workspace/workspace-infographic-template-picker";
 import type { WorkspaceMediaAssetRef } from "../../shared/workspace-media-assets";
 import { clearExamplePrefillIntent, readExamplePrefillIntent } from "../lib/example-prefill";
 import { logClientEvent } from "../lib/client-log";
@@ -7852,6 +7848,9 @@ export function WorkspacePage({
     typeof segmentAiPhotoModalSegmentIndex === "number"
       ? segmentEditorDraft?.segments.find((segment) => segment.index === segmentAiPhotoModalSegmentIndex) ?? null
       : null;
+  const segmentAiPhotoModalInfographicStylePrompt = getWorkspaceInfographicCustomStylePrompt(
+    segmentAiPhotoModalSegment?.infographicStylePromptDraft,
+  );
   const segmentAiPhotoModalCustomFileName = segmentAiPhotoModalSegment?.customVideo?.fileName?.trim() || "";
   const hasSegmentAiPhotoModalCustomFile = Boolean(segmentAiPhotoModalCustomFileName);
   const segmentAiPhotoModalCustomFileLabel = segmentAiPhotoModalCustomFileName
@@ -20588,8 +20587,9 @@ export function WorkspacePage({
     }
     const targetSegment = currentDraft.segments.find((segment) => segment.index === targetSegmentIndex) ?? null;
     const text = String(targetSegment?.infographicTextDraft ?? "").trim();
-    const stylePrompt = String(targetSegment?.infographicStylePromptDraft ?? "").trim();
-    const selectedTemplate = getWorkspaceInfographicTemplateByStylePrompt(stylePrompt);
+    const stylePrompt = getWorkspaceInfographicCustomStylePrompt(
+      targetSegment?.infographicStylePromptDraft,
+    ).trim();
     if (!targetSegment || !text) {
       setSegmentEditorVideoError("Введите текст инфографики.");
       return;
@@ -20666,7 +20666,6 @@ export function WorkspacePage({
         segmentIndex: targetSegmentIndex,
         sourceMediaAssetId,
         ...(stylePrompt ? { stylePrompt } : {}),
-        ...(selectedTemplate ? { templateId: selectedTemplate.id } : {}),
         text,
       };
       let response: Response | null = null;
@@ -20717,7 +20716,6 @@ export function WorkspacePage({
         sourceVisualIdentity,
         status: payload.data.status,
         stylePrompt,
-        templateId: selectedTemplate?.id,
         text,
       };
       applyWorkspaceProfile(payload.data.profile);
@@ -36064,7 +36062,9 @@ export function WorkspacePage({
       ? segmentAiPhotoModalPrompt
       : segmentAiVideoModalPrompt;
   const activeSegmentInfographicText = activeSegment?.infographicTextDraft ?? "";
-  const activeSegmentInfographicStylePrompt = activeSegment?.infographicStylePromptDraft ?? "";
+  const activeSegmentInfographicStylePrompt = getWorkspaceInfographicCustomStylePrompt(
+    activeSegment?.infographicStylePromptDraft,
+  );
   const promptVisualRichEditorValue = canPromptUseVisualReferences
     ? normalizeWorkspacePromptRichEditorValue(promptVisualTextareaValue)
     : promptVisualTextareaValue;
@@ -37406,19 +37406,6 @@ export function WorkspacePage({
                     </div>
                   ) : isPromptInfographicMode ? (
                     <div className="studio-segment-editor__infographic-form">
-                      <WorkspaceInfographicTemplatePicker
-                        locale={locale}
-                        value={activeSegmentInfographicStylePrompt}
-                        onChange={(value) => {
-                          setSegmentEditorVideoError(null);
-                          if (activeSegment) {
-                            updateSegmentEditorDraftSegmentByIndex(activeSegment.index, (segment) => ({
-                              ...segment,
-                              infographicStylePromptDraft: value,
-                            }));
-                          }
-                        }}
-                      />
                       <label className="studio-segment-editor__infographic-field studio-segment-editor__infographic-text-field">
                         <span>
                           <strong>{workspaceText(locale, "Текст инфографики", "Infographic text")}</strong>
@@ -37445,7 +37432,6 @@ export function WorkspacePage({
                       </label>
                       <WorkspaceInfographicStyleDisclosure
                         key={`infographic-style:${activeSegment?.index ?? "none"}`}
-                        autoExpand={!isWorkspaceInfographicTemplateStylePrompt(activeSegmentInfographicStylePrompt)}
                         label={workspaceText(locale, "Точная настройка — необязательно", "Fine-tuning — optional")}
                         maxCharacters={WORKSPACE_SEGMENT_INFOGRAPHIC_STYLE_MAX_CHARS}
                         placeholder={workspaceText(locale, "Например: минимализм, белый текст, голубые акценты", "For example: minimal, white text, blue accents")}
@@ -40385,24 +40371,13 @@ export function WorkspacePage({
                                 }}
                               />
                             </label>
-                            <WorkspaceInfographicTemplatePicker
-                              locale={locale}
-                              value={segmentAiPhotoModalSegment.infographicStylePromptDraft}
-                              onChange={(value) => {
-                                updateSegmentEditorDraftSegmentByIndex(segmentAiPhotoModalSegment.index, (segment) => ({
-                                  ...segment,
-                                  infographicStylePromptDraft: value,
-                                }));
-                              }}
-                            />
                             <WorkspaceInfographicStyleDisclosure
                               key={`infographic-modal-style:${segmentAiPhotoModalSegment.index}`}
-                              autoExpand={!isWorkspaceInfographicTemplateStylePrompt(segmentAiPhotoModalSegment.infographicStylePromptDraft)}
                               label={workspaceText(locale, "Точная настройка — необязательно", "Fine-tuning — optional")}
                               maxCharacters={WORKSPACE_SEGMENT_INFOGRAPHIC_STYLE_MAX_CHARS}
                               placeholder={workspaceText(locale, "Например: минимализм, белый текст, голубые акценты", "For example: minimal, white text, blue accents")}
                               textareaClassName="studio-ai-photo-modal__textarea"
-                              value={segmentAiPhotoModalSegment.infographicStylePromptDraft}
+                              value={segmentAiPhotoModalInfographicStylePrompt}
                               onChange={(value) => {
                                 updateSegmentEditorDraftSegmentByIndex(segmentAiPhotoModalSegment.index, (segment) => ({
                                   ...segment,
