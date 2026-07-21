@@ -22952,17 +22952,17 @@ body.studio-video-fullscreen-open .studio-canvas-preview::after {
   }
 
   .studio-canvas-preview__quick-action--expanded {
-    flex: 0 0 28px;
-    width: 28px;
-    height: 28px;
+    flex: 0 0 clamp(28px, 15cqw, 32px);
+    width: clamp(28px, 15cqw, 32px);
+    height: clamp(28px, 15cqw, 32px);
     padding: 0;
     border-radius: 50%;
   }
 
   .studio-canvas-preview__quick-action--expanded svg {
-    flex-basis: 10px;
-    width: 10px;
-    height: 10px;
+    flex-basis: clamp(10px, 5cqw, 14px);
+    width: clamp(10px, 5cqw, 14px);
+    height: clamp(10px, 5cqw, 14px);
   }
 
   .studio-canvas-preview__quick-action--expanded span {
@@ -22970,9 +22970,9 @@ body.studio-video-fullscreen-open .studio-canvas-preview::after {
   }
 
   .studio-canvas-preview__generated-actions--expanded > .studio-canvas-preview__quick-action:not(.studio-canvas-preview__quick-action--expanded) {
-    flex-basis: 28px;
-    width: 28px;
-    height: 28px;
+    flex-basis: clamp(28px, 15cqw, 32px);
+    width: clamp(28px, 15cqw, 32px);
+    height: clamp(28px, 15cqw, 32px);
   }
 
   .studio-canvas-preview__player-shell .studio-video-modal__player-controls {
@@ -22985,14 +22985,14 @@ body.studio-video-fullscreen-open .studio-canvas-preview::after {
   }
 
   .studio-canvas-preview__player-shell .studio-video-modal__control-btn {
-    flex: 0 0 32px;
-    width: 32px;
-    height: 32px;
-    border-radius: 10px;
+    flex: 0 0 clamp(32px, 16cqw, 36px);
+    width: clamp(32px, 16cqw, 36px);
+    height: clamp(32px, 16cqw, 36px);
+    border-radius: clamp(10px, 4.5cqw, 12px);
   }
 
   .studio-canvas-preview__player-shell .studio-video-modal__control-btn--fullscreen {
-    flex-basis: 32px;
+    flex-basis: clamp(32px, 16cqw, 36px);
   }
 
   .studio-canvas-preview__player-shell .studio-video-modal__control-btn svg {
@@ -23017,13 +23017,13 @@ body.studio-video-fullscreen-open .studio-canvas-preview::after {
   }
 
   .studio-canvas-preview__player-shell .studio-video-modal__control-btn {
-    flex-basis: 30px;
-    width: 30px;
-    height: 30px;
+    flex-basis: clamp(32px, 18cqw, 36px);
+    width: clamp(32px, 18cqw, 36px);
+    height: clamp(32px, 18cqw, 36px);
   }
 
   .studio-canvas-preview__player-shell .studio-video-modal__control-btn--fullscreen {
-    flex-basis: 30px;
+    flex-basis: clamp(32px, 18cqw, 36px);
   }
 
   .studio-canvas-preview__player-shell .studio-video-modal__time {

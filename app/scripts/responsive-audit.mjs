@@ -492,6 +492,7 @@ const buildScenarios = () => {
       { width: 390, height: 844, zoom: 1, fontScale: 1.5, type: "font" },
       { width: 1024, height: 768, zoom: 1, fontScale: 1.5, type: "font" },
       { width: 1229, height: 692, zoom: 1, fontScale: 1, type: "laptop-125" },
+      { width: 1208, height: 615, zoom: 1, fontScale: 1, type: "idea-controls" },
       { width: 1002, height: 424, zoom: 1, fontScale: 1, type: "idea-compact" },
       { width: 983, height: 388, zoom: 1, fontScale: 1, type: "idea-compact" },
       { width: 1180, height: 499, zoom: 1, fontScale: 1, type: "scene-breakpoint-lower" },
@@ -518,6 +519,7 @@ const buildScenarios = () => {
     { width: 844, height: 390, zoom: 1, fontScale: 1, type: "landscape" },
     { width: 932, height: 430, zoom: 1, fontScale: 1, type: "landscape" },
     { width: 1229, height: 692, zoom: 1, fontScale: 1, type: "laptop-125" },
+    { width: 1208, height: 615, zoom: 1, fontScale: 1, type: "idea-controls" },
     { width: 1002, height: 424, zoom: 1, fontScale: 1, type: "idea-compact" },
     { width: 983, height: 388, zoom: 1, fontScale: 1, type: "idea-compact" },
     { width: 1180, height: 499, zoom: 1, fontScale: 1, type: "scene-breakpoint-lower" },
@@ -1153,7 +1155,8 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
     const auditsCompactLegacyProject =
       surface === "app" &&
       route.includes("audit=legacy-project") &&
-      (scenario.type === "idea-compact" ||
+      (scenario.type === "idea-controls" ||
+        scenario.type === "idea-compact" ||
         scenario.type === "scene-breakpoint-lower" ||
         scenario.type === "scene-breakpoint-upper");
     const expectsCompactLandscapeSceneEditor =
@@ -1213,10 +1216,12 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
       ) {
         failures.push("compact legacy project is missing preview, composer or player controls");
       } else {
+        const auditsRegularIdeaControls = scenario.type === "idea-controls";
         const auditsTinyIdeaViewport = scenario.type === "idea-compact";
         const minimumCompactPreviewHeight = effectiveHeight <= 400 ? 130 : auditsTinyIdeaViewport ? 150 : 220;
-        const maximumPreviewActionSize = metrics.studioPreview.width <= 100 ? 21 : 32;
-        const maximumPlayerControlSize = metrics.studioPreview.width <= 100 ? 18 : 28;
+        const maximumPreviewActionSize = auditsRegularIdeaControls ? 44 : metrics.studioPreview.width <= 100 ? 21 : 32;
+        const maximumPlayerControlSize = auditsRegularIdeaControls ? 36 : metrics.studioPreview.width <= 100 ? 18 : 28;
+        const maximumPlayerPanelHeight = auditsRegularIdeaControls ? 72 : 48;
 
         if (metrics.studioPreview.bottom > metrics.studioComposer.top - 6) {
           failures.push(
@@ -1262,13 +1267,28 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
           );
         }
 
+        if (
+          auditsRegularIdeaControls &&
+          metrics.studioPreviewActions.some((rect, index) => index < 3 && (rect.width < 30 || rect.height < 30))
+        ) {
+          failures.push("regular preview actions remain undersized below 30px");
+        }
+
         const oversizedPlayerControl = metrics.studioPreviewControlButtons.find(
           (rect) => rect.width > maximumPlayerControlSize || rect.height > maximumPlayerControlSize,
         );
-        if (oversizedPlayerControl || metrics.studioPreviewControls.height > 48) {
+        const undersizedPlayerControl = auditsRegularIdeaControls
+          ? metrics.studioPreviewControlButtons.find((rect) => rect.width < 34 || rect.height < 34)
+          : null;
+        if (
+          oversizedPlayerControl ||
+          undersizedPlayerControl ||
+          metrics.studioPreviewControls.height > maximumPlayerPanelHeight
+        ) {
           failures.push(
             `compact player controls do not scale with the video card: ` +
-              `${oversizedPlayerControl?.width ?? "panel"}x${oversizedPlayerControl?.height ?? metrics.studioPreviewControls.height}`,
+              `${oversizedPlayerControl?.width ?? undersizedPlayerControl?.width ?? "panel"}x` +
+              `${oversizedPlayerControl?.height ?? undersizedPlayerControl?.height ?? metrics.studioPreviewControls.height}`,
           );
         }
       }
