@@ -409,6 +409,8 @@ import {
   getWorkspacePhotoAnimationUploadSourceAsset,
   getWorkspaceSegmentAiPhotoPromptPrefill,
   getWorkspaceSegmentImageEditSource,
+  getWorkspaceSegmentInfographicSourceAsset,
+  getWorkspaceSegmentInfographicSourceIdentity,
   getWorkspaceSegmentPhotoToolUnavailableReason,
   getWorkspaceSegmentPromptSceneModeForTab,
   getWorkspaceSegmentCurrentVideoSourceAsset,
@@ -421,6 +423,7 @@ import {
   isWorkspaceSegmentReadyVisualSelectionTab,
   isWorkspaceSegmentAiVideoReady,
   isWorkspaceSegmentImageEditReady,
+  isWorkspaceSegmentInfographicJobSourceCurrent,
   isWorkspaceSegmentVisualModalTabAllowed,
   normalizeWorkspaceSegmentAiVideoPrompt,
   normalizeWorkspaceSegmentImageEditPrompt,
@@ -20466,10 +20469,11 @@ export function WorkspacePage({
             ? activeDraft?.segments.find((segment) => segment.index === job.segmentIndex) ?? null
             : null;
           if (
-            activeTargetSegment &&
-            getWorkspaceSegmentInfographicSourceVisualIdentity(
-              getWorkspaceSegmentSceneSoundVisualAssetId(activeTargetSegment),
-            ) === job.sourceVisualIdentity
+            isWorkspaceSegmentInfographicJobSourceCurrent(
+              activeTargetSegment,
+              job.sourceVisualIdentity,
+              job.sourceClientVisualIdentity,
+            )
           ) {
             captureSegmentEditorInfographicHistory(job.segmentIndex);
           }
@@ -20479,10 +20483,12 @@ export function WorkspacePage({
             projectId: job.projectId,
             segmentIndex: job.segmentIndex,
             updater: (segment) => {
-              const currentSourceVisualIdentity = getWorkspaceSegmentInfographicSourceVisualIdentity(
-                getWorkspaceSegmentSceneSoundVisualAssetId(segment),
+              const isCurrentSource = isWorkspaceSegmentInfographicJobSourceCurrent(
+                segment,
+                job.sourceVisualIdentity,
+                job.sourceClientVisualIdentity,
               );
-              hasStaleSource = currentSourceVisualIdentity !== job.sourceVisualIdentity;
+              hasStaleSource = !isCurrentSource;
               if (hasStaleSource) {
                 return segment;
               }
@@ -20622,18 +20628,19 @@ export function WorkspacePage({
     let pollStarted = false;
     try {
       let sourceMediaAssetId = getWorkspaceSegmentSceneSoundVisualAssetId(targetSegment);
-      const draftVisualAsset = getWorkspaceSegmentDraftVisualAsset(targetSegment);
+      const infographicSourceAsset = getWorkspaceSegmentInfographicSourceAsset(targetSegment);
+      const sourceClientVisualIdentity = getWorkspaceSegmentInfographicSourceIdentity(targetSegment);
       if (
-        shouldUploadWorkspaceSegmentInfographicSourceAsset(sourceMediaAssetId, Boolean(draftVisualAsset)) &&
-        draftVisualAsset
+        shouldUploadWorkspaceSegmentInfographicSourceAsset(sourceMediaAssetId, Boolean(infographicSourceAsset)) &&
+        infographicSourceAsset
       ) {
-        sourceMediaAssetId = (await ensureStudioUploadedAssetId(draftVisualAsset, {
+        sourceMediaAssetId = (await ensureStudioUploadedAssetId(infographicSourceAsset, {
           ensureProjectBinding: Boolean(persistedProjectId),
-          fallbackFileName: draftVisualAsset.fileName || `segment-visual-${targetSegmentIndex + 1}.bin`,
-          fallbackMimeType: draftVisualAsset.mimeType,
+          fallbackFileName: infographicSourceAsset.fileName || `segment-visual-${targetSegmentIndex + 1}.bin`,
+          fallbackMimeType: infographicSourceAsset.mimeType,
           kind: "segment_source",
           language: selectedLanguage,
-          mediaType: getWorkspaceSegmentCustomPreviewKind(draftVisualAsset) === "image" ? "photo" : "video",
+          mediaType: getWorkspaceSegmentCustomPreviewKind(infographicSourceAsset) === "image" ? "photo" : "video",
           projectId: persistedProjectId ?? undefined,
           role: "segment_source",
           segmentIndex: targetSegmentIndex,
@@ -20705,6 +20712,7 @@ export function WorkspacePage({
         requestFingerprint: getSegmentInfographicRequestFingerprint(request),
         serverRequestFingerprint,
         segmentIndex: targetSegmentIndex,
+        sourceClientVisualIdentity: sourceClientVisualIdentity ?? sourceVisualIdentity,
         sourceMediaAssetId,
         sourceVisualIdentity,
         status: payload.data.status,

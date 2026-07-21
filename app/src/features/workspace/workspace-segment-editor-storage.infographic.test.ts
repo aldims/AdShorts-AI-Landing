@@ -39,6 +39,7 @@ const buildJob = (
   requestFingerprint: '{"projectId":4178,"segmentIndex":2}',
   segmentIndex: 2,
   serverRequestFingerprint: "a".repeat(64),
+  sourceClientVisualIdentity: "url:/api/workspace/project-segment-video?projectId=4178&segmentIndex=2",
   sourceMediaAssetId: 55,
   sourceVisualIdentity: "asset:55",
   status: "queued",

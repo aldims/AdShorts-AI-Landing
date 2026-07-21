@@ -1652,8 +1652,8 @@ export const getWorkspaceSegmentFallbackStillFrameAsset = (
   const stillUrl =
     getWorkspaceSegmentPreferredStillPreviewUrl(segment) ||
     draftPosterUrl ||
-    segment.currentPosterUrl ||
-    segment.originalPosterUrl ||
+    getWorkspaceSegmentCurrentPosterUrl(segment) ||
+    getWorkspaceSegmentOriginalPosterUrl(segment) ||
     "";
 
   return stillUrl ? createWorkspaceSegmentStillFrameAsset(segment, stillUrl) : null;
@@ -1713,6 +1713,10 @@ export const getWorkspaceSegmentLatestEditablePhotoAsset = (
     }
 
     return currentPhotoAsset ?? originalPhotoAsset ?? getWorkspaceSegmentFallbackStillFrameAsset(segment);
+  }
+
+  if (latestVisualAction === "ai") {
+    return getWorkspaceSegmentFallbackStillFrameAsset(segment);
   }
 
   if (latestVisualAction === "original") {
@@ -2112,7 +2116,7 @@ export const buildWorkspaceSegmentScopedPosterUrlFromVideoUrl = (value: string |
   }
 
   try {
-    const videoUrl = new URL(normalizedValue, window.location.origin);
+    const videoUrl = new URL(normalizedValue, "http://workspace.local");
     if (videoUrl.pathname !== "/api/workspace/project-segment-video") {
       return null;
     }
@@ -2148,7 +2152,7 @@ export const getWorkspaceSegmentCurrentPosterUrl = (segment: WorkspaceSegmentEdi
     return scopedPosterUrl;
   }
 
-  return getWorkspaceStableMediaAssetPosterUrl(segment.currentAsset, segment.currentPosterUrl);
+  return getWorkspaceStableMediaAssetPosterUrl(segment.currentAsset, segment.currentPosterUrl) ?? scopedPosterUrl;
 };
 
 export const getWorkspaceSegmentOriginalPosterUrl = (segment: WorkspaceSegmentEditorDraftSegment) => {
@@ -2160,7 +2164,7 @@ export const getWorkspaceSegmentOriginalPosterUrl = (segment: WorkspaceSegmentEd
     return scopedPosterUrl;
   }
 
-  return getWorkspaceStableMediaAssetPosterUrl(segment.originalAsset, segment.originalPosterUrl);
+  return getWorkspaceStableMediaAssetPosterUrl(segment.originalAsset, segment.originalPosterUrl) ?? scopedPosterUrl;
 };
 
 export const getWorkspaceMediaAssetIdentityKey = (asset: WorkspaceMediaAssetRef | null | undefined) => {

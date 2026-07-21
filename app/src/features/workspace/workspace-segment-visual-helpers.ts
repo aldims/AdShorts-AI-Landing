@@ -316,6 +316,38 @@ export const getWorkspaceSegmentTalkingCharacterSourceAsset = (
   return getWorkspaceSegmentCurrentVideoSourceAsset(segment) ?? getWorkspaceSegmentPhotoAnimationSourceAsset(segment);
 };
 
+export const getWorkspaceSegmentInfographicSourceAsset = (
+  segment: WorkspaceSegmentEditorDraftSegment | null | undefined,
+): StudioCustomVideoFile | null => {
+  if (!segment) {
+    return null;
+  }
+
+  const draftVisualAsset = getWorkspaceSegmentDraftVisualAsset(segment);
+  if (draftVisualAsset) {
+    return draftVisualAsset;
+  }
+
+  return getWorkspaceSegmentCurrentVideoSourceAsset(segment) ?? getWorkspaceSegmentLatestEditablePhotoAsset(segment);
+};
+
+export const getWorkspaceSegmentInfographicSourceIdentity = (
+  segment: WorkspaceSegmentEditorDraftSegment | null | undefined,
+) => getStudioCustomVideoFileIdentityKey(getWorkspaceSegmentInfographicSourceAsset(segment));
+
+export const isWorkspaceSegmentInfographicJobSourceCurrent = (
+  segment: WorkspaceSegmentEditorDraftSegment | null | undefined,
+  sourceVisualIdentity: string | null | undefined,
+  sourceClientVisualIdentity?: string | null,
+) => {
+  const currentIdentity = getWorkspaceSegmentInfographicSourceIdentity(segment);
+  const expectedIdentities = [sourceVisualIdentity, sourceClientVisualIdentity]
+    .map((value) => String(value ?? "").trim())
+    .filter(Boolean);
+
+  return Boolean(currentIdentity && expectedIdentities.includes(currentIdentity));
+};
+
 export const getWorkspaceSegmentSceneReferenceAssetId = (
   segment: WorkspaceSegmentEditorDraftSegment | null | undefined,
 ) => {
@@ -599,7 +631,10 @@ export const canWorkspaceSegmentUpscalePhoto = (segment: WorkspaceSegmentEditorD
 
 export const canWorkspaceSegmentCreateInfographic = (
   segment: WorkspaceSegmentEditorDraftSegment | null | undefined,
-) => Boolean(segment && getWorkspaceSegmentSceneSoundVisualAssetId(segment));
+) => Boolean(
+  segment &&
+    (getWorkspaceSegmentSceneSoundVisualAssetId(segment) || getWorkspaceSegmentInfographicSourceAsset(segment)),
+);
 
 export const getWorkspaceSegmentVisualModalDefaultTab = (
   segment: WorkspaceSegmentEditorDraftSegment,

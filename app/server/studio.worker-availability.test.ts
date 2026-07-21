@@ -26,7 +26,7 @@ const adsflowHealthyPayload = {
 };
 
 const segmentInfographic = {
-  animation: { durationSeconds: 2.2, type: "fade" as const },
+  animation: { durationSeconds: 1, type: "fade" as const },
   inputHash: "a".repeat(64),
   intrinsicHeight: 600,
   intrinsicWidth: 1200,

@@ -19,6 +19,12 @@ import {
 import { listWorkspaceDeletedProjects, listWorkspaceGenerationHistory } from "./workspace-history.js";
 import type { ProjectMediaEnvelope, WorkspaceMediaAssetRef } from "../shared/workspace-media-assets.js";
 import {
+  STUDIO_SEGMENT_INFOGRAPHIC_FADE_SECONDS,
+  STUDIO_SEGMENT_INFOGRAPHIC_LEGACY_PART_REVEAL_SECONDS,
+  STUDIO_SEGMENT_INFOGRAPHIC_PART_REVEAL_SECONDS,
+  STUDIO_SEGMENT_INFOGRAPHIC_TIMING_SCALE,
+} from "../shared/studio-infographic-timing.js";
+import {
   normalizeWorkspaceSegmentSpeechTimingCoordinateSpace,
   normalizeWorkspaceSegmentVoiceSourceCoordinateSpace,
   resolveWorkspaceSegmentAssetLocalSpeechTiming,
@@ -3150,11 +3156,6 @@ export const buildWorkspaceSegmentEditorSessionFromPayload = (
   };
 };
 
-const WORKSPACE_SEGMENT_INFOGRAPHIC_FADE_SECONDS = 2.2;
-const WORKSPACE_SEGMENT_INFOGRAPHIC_PART_REVEAL_SECONDS = 1.3;
-const WORKSPACE_SEGMENT_INFOGRAPHIC_LEGACY_PART_REVEAL_SECONDS = 0.65;
-const WORKSPACE_SEGMENT_INFOGRAPHIC_TIMING_SCALE = 2;
-
 const normalizeWorkspaceSegmentInfographic = (value: unknown): WorkspaceSegmentInfographic | null => {
   if (!value || typeof value !== "object") {
     return null;
@@ -3205,8 +3206,8 @@ const normalizeWorkspaceSegmentInfographic = (value: unknown): WorkspaceSegmentI
         ? null
         : delaySeconds * (
             revealDurationSeconds === null ||
-            revealDurationSeconds <= WORKSPACE_SEGMENT_INFOGRAPHIC_LEGACY_PART_REVEAL_SECONDS + 0.000001
-              ? WORKSPACE_SEGMENT_INFOGRAPHIC_TIMING_SCALE
+            revealDurationSeconds <= STUDIO_SEGMENT_INFOGRAPHIC_LEGACY_PART_REVEAL_SECONDS + 0.000001
+              ? STUDIO_SEGMENT_INFOGRAPHIC_TIMING_SCALE
               : 1
           );
       const partText = String(part.text ?? "").trim();
@@ -3228,7 +3229,7 @@ const normalizeWorkspaceSegmentInfographic = (value: unknown): WorkspaceSegmentI
         mediaAssetId: partAssetId,
         reveal: {
           delaySeconds: normalizedDelaySeconds,
-          durationSeconds: WORKSPACE_SEGMENT_INFOGRAPHIC_PART_REVEAL_SECONDS,
+          durationSeconds: STUDIO_SEGMENT_INFOGRAPHIC_PART_REVEAL_SECONDS,
         },
         text: partText,
       });
@@ -3251,7 +3252,7 @@ const normalizeWorkspaceSegmentInfographic = (value: unknown): WorkspaceSegmentI
   }
 
   return {
-    animation: { durationSeconds: WORKSPACE_SEGMENT_INFOGRAPHIC_FADE_SECONDS, type: "fade" },
+    animation: { durationSeconds: STUDIO_SEGMENT_INFOGRAPHIC_FADE_SECONDS, type: "fade" },
     inputHash,
     intrinsicHeight,
     intrinsicWidth,

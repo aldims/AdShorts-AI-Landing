@@ -142,6 +142,7 @@ export type StoredWorkspaceSegmentInfographicJob = {
   requestFingerprint: string;
   serverRequestFingerprint: string;
   segmentIndex: number;
+  sourceClientVisualIdentity?: string;
   sourceMediaAssetId: number;
   sourceVisualIdentity: string;
   status: string;
@@ -1790,6 +1791,7 @@ const normalizeStoredWorkspaceSegmentInfographicJob = (
   requestFingerprint: String(value.requestFingerprint ?? "").trim(),
   serverRequestFingerprint: String(value.serverRequestFingerprint ?? "").trim().toLowerCase(),
   segmentIndex: Math.max(0, Math.trunc(Number(value.segmentIndex))),
+  sourceClientVisualIdentity: String(value.sourceClientVisualIdentity ?? "").trim() || undefined,
   sourceMediaAssetId: Math.max(0, Math.trunc(Number(value.sourceMediaAssetId))),
   sourceVisualIdentity: String(value.sourceVisualIdentity ?? "").trim(),
   status: String(value.status ?? "queued").trim() || "queued",

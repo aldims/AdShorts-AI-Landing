@@ -80,7 +80,10 @@ import {
   applyWorkspaceSegmentSceneSoundVisualAssetId,
   canWorkspaceSegmentCreateInfographic,
   getWorkspaceSegmentCurrentVideoSourceAsset,
+  getWorkspaceSegmentInfographicSourceAsset,
+  getWorkspaceSegmentInfographicSourceIdentity,
   getWorkspaceSegmentSceneSoundVisualAssetId,
+  isWorkspaceSegmentInfographicJobSourceCurrent,
   isWorkspaceSegmentReadyVisualSelectionTab,
 } from "./workspace-segment-visual-helpers";
 import {
@@ -306,7 +309,7 @@ const createProjectVoiceoverSegment = (
 };
 
 describe("segment infographic availability", () => {
-  it("is available for durable photo and video visuals and disabled for an empty segment", () => {
+  it("is available for durable and reloadable visuals and disabled for an empty segment", () => {
     const photo = createProjectVoiceoverSegment({
       currentAsset: { assetId: 101 } as any,
       mediaType: "photo",
@@ -315,10 +318,40 @@ describe("segment infographic availability", () => {
       currentAsset: { assetId: 202 } as any,
       mediaType: "video",
     });
+    const reloadedVideo = createProjectVoiceoverSegment({
+      currentPlaybackUrl:
+        "/api/workspace/project-segment-video?projectId=4271&segmentIndex=1&source=original&delivery=playback",
+      mediaType: "video",
+      videoAction: "original",
+    });
     const empty = createProjectVoiceoverSegment();
 
     expect(canWorkspaceSegmentCreateInfographic(photo)).toBe(true);
     expect(canWorkspaceSegmentCreateInfographic(video)).toBe(true);
+    expect(canWorkspaceSegmentCreateInfographic(reloadedVideo)).toBe(true);
+    expect(getWorkspaceSegmentInfographicSourceAsset(reloadedVideo)).toEqual(
+      expect.objectContaining({
+        mimeType: "video/mp4",
+        remoteUrl: reloadedVideo.currentPlaybackUrl,
+      }),
+    );
+    expect(getWorkspaceSegmentInfographicSourceIdentity(reloadedVideo)).toBe(
+      `url:${reloadedVideo.currentPlaybackUrl}`,
+    );
+    expect(
+      isWorkspaceSegmentInfographicJobSourceCurrent(
+        reloadedVideo,
+        "asset:9901",
+        `url:${reloadedVideo.currentPlaybackUrl}`,
+      ),
+    ).toBe(true);
+    expect(
+      isWorkspaceSegmentInfographicJobSourceCurrent(
+        { ...reloadedVideo, currentPlaybackUrl: `${reloadedVideo.currentPlaybackUrl}&v=changed` },
+        "asset:9901",
+        `url:${reloadedVideo.currentPlaybackUrl}`,
+      ),
+    ).toBe(false);
     expect(canWorkspaceSegmentCreateInfographic(empty)).toBe(false);
   });
 });
@@ -455,7 +488,7 @@ describe("segment infographic refresh isolation", () => {
   it("preserves a generated layer when a concurrent fresh session still has no infographic", () => {
     const baselineSegment = createProjectVoiceoverSegment({ index: 0 });
     const infographic = {
-      animation: { durationSeconds: 2.2 as const, type: "fade" as const },
+      animation: { durationSeconds: 1 as const, type: "fade" as const },
       inputHash: "b".repeat(64),
       intrinsicHeight: 400,
       intrinsicWidth: 800,
@@ -484,7 +517,7 @@ describe("segment infographic refresh isolation", () => {
     const firstSegment = createProjectVoiceoverSegment({ index: 0 });
     const secondSegment = createProjectVoiceoverSegment({ index: 1 });
     const infographic = {
-      animation: { durationSeconds: 2.2 as const, type: "fade" as const },
+      animation: { durationSeconds: 1 as const, type: "fade" as const },
       inputHash: "c".repeat(64),
       intrinsicHeight: 1453,
       intrinsicWidth: 908,

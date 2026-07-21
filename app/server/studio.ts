@@ -37,6 +37,12 @@ import {
 } from "../shared/example-prefill.js";
 import { isInfographicTemplateId } from "../shared/infographic-templates.js";
 import {
+  STUDIO_SEGMENT_INFOGRAPHIC_FADE_SECONDS,
+  STUDIO_SEGMENT_INFOGRAPHIC_LEGACY_PART_REVEAL_SECONDS,
+  STUDIO_SEGMENT_INFOGRAPHIC_PART_REVEAL_SECONDS,
+  STUDIO_SEGMENT_INFOGRAPHIC_TIMING_SCALE,
+} from "../shared/studio-infographic-timing.js";
+import {
   DEFAULT_LOCALE,
   DEFAULT_STUDIO_VOICE_ID,
   SUPPORTED_LOCALES,
@@ -968,11 +974,6 @@ export type StudioSegmentInfographic = {
   };
   version: 1;
 };
-
-const STUDIO_SEGMENT_INFOGRAPHIC_FADE_SECONDS = 2.2;
-const STUDIO_SEGMENT_INFOGRAPHIC_PART_REVEAL_SECONDS = 1.3;
-const STUDIO_SEGMENT_INFOGRAPHIC_LEGACY_PART_REVEAL_SECONDS = 0.65;
-const STUDIO_SEGMENT_INFOGRAPHIC_TIMING_SCALE = 2;
 
 export type StudioSegmentEditorSegment = {
   customVideoAssetId?: number;

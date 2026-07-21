@@ -5439,6 +5439,29 @@ describe("WorkspacePage studio locale defaults", () => {
     ).toBe(true);
     expect(
       canWorkspaceSegmentUseVideoExtensionTool(createDraftSegment({
+        currentPlaybackUrl:
+          "/api/workspace/project-segment-video?projectId=4271&segmentIndex=1&source=original&delivery=playback",
+        mediaType: "video",
+        videoAction: "original",
+      })),
+    ).toBe(true);
+    expect(
+      canWorkspaceSegmentUseVideoExtensionTool(createDraftSegment({
+        aiVideoAsset: {
+          fileName: "generated-scene.mp4",
+          fileSize: 0,
+          mimeType: "video/mp4",
+          posterUrl: "/api/workspace/media-assets/103/poster",
+          remoteUrl: "/api/workspace/media-assets/103/playback",
+          source: "media-library",
+        },
+        aiVideoGeneratedMode: "ai_video",
+        mediaType: "video",
+        videoAction: "ai",
+      })),
+    ).toBe(true);
+    expect(
+      canWorkspaceSegmentUseVideoExtensionTool(createDraftSegment({
         aiVideoAsset: {
           fileName: "animated-scene.mp4",
           fileSize: 0,

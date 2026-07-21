@@ -46,7 +46,7 @@ describe("workspace segment editor infographic hydration", () => {
     });
 
     expect(segment?.infographic).toEqual({
-      animation: { durationSeconds: 2.2, type: "fade" },
+      animation: { durationSeconds: 1, type: "fade" },
       inputHash: "a".repeat(64),
       intrinsicHeight: 640,
       intrinsicWidth: 1280,
