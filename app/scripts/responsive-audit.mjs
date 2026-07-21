@@ -1253,13 +1253,13 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
         const auditsTinyIdeaViewport = scenario.type === "idea-compact";
         const minimumCompactPreviewHeight = effectiveHeight <= 400 ? 130 : auditsTinyIdeaViewport ? 150 : 220;
         const expectedPreviewActionSize = auditsRegularIdeaControls
-          ? Math.min(34, Math.max(30, metrics.studioPreview.width * 0.15))
+          ? Math.min(30, Math.max(26, metrics.studioPreview.width * 0.13))
           : null;
         const expectedPlayerControlSize = auditsRegularIdeaControls
           ? Math.min(34, Math.max(30, metrics.studioPreview.width * 0.15))
           : null;
         const maximumPreviewActionSize = auditsRegularIdeaControls
-          ? (expectedPreviewActionSize ?? 34) + 1
+          ? (expectedPreviewActionSize ?? 30) + 1
           : metrics.studioPreview.width <= 100 ? 21 : 32;
         const maximumPlayerControlSize = auditsRegularIdeaControls
           ? (expectedPlayerControlSize ?? 34) + 1
@@ -1442,7 +1442,7 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
       if (!metrics.studioPreview || !metrics.studioComposer || !metrics.studioPreviewClose) {
         failures.push("legacy project preview, composer or close action is missing at 1229x692");
       } else {
-        const expectedLaptopCloseSize = Math.min(34, Math.max(30, metrics.studioPreview.width * 0.15));
+        const expectedLaptopCloseSize = Math.min(30, Math.max(26, metrics.studioPreview.width * 0.13));
         if (metrics.studioPreview.bottom > metrics.studioComposer.top - 8) {
           failures.push(
             `legacy preview overlaps its composer at 1229x692: ` +
