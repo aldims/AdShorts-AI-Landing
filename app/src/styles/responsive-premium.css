@@ -739,6 +739,9 @@ html {
   }
 
   #app .studio-canvas-route:not(.is-segment-editor) .studio-canvas-content {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
     min-height: 0 !important;
     padding: var(--studio-stage-gap) 8px !important;
     overflow: hidden !important;
@@ -746,6 +749,8 @@ html {
 
   #app .studio-canvas-route:not(.is-segment-editor) .studio-canvas-create-layout {
     width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
     height: 100% !important;
     max-height: none !important;
     min-height: 0 !important;
@@ -789,7 +794,15 @@ html {
     inset: auto !important;
     grid-row: 2;
     width: 100%;
+    min-width: 0;
+    max-width: 100%;
     flex: 0 0 auto;
+  }
+
+  #app .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__inner--compact {
+    width: min(var(--studio-prompt-panel-max-width), 100%) !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
   }
 
   #app .studio-canvas-route:not(.is-segment-editor) .studio-welcome-inline {

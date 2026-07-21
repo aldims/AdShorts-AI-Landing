@@ -492,6 +492,8 @@ const buildScenarios = () => {
       { width: 390, height: 844, zoom: 1, fontScale: 1.5, type: "font" },
       { width: 1024, height: 768, zoom: 1, fontScale: 1.5, type: "font" },
       { width: 1229, height: 692, zoom: 1, fontScale: 1, type: "laptop-125" },
+      { width: 1002, height: 424, zoom: 1, fontScale: 1, type: "idea-compact" },
+      { width: 983, height: 388, zoom: 1, fontScale: 1, type: "idea-compact" },
       { width: 1180, height: 499, zoom: 1, fontScale: 1, type: "scene-breakpoint-lower" },
       { width: 1181, height: 499, zoom: 1, fontScale: 1, type: "scene-breakpoint-upper" },
       { width: 1920, height: 980, zoom: 1.25, fontScale: 1, type: "scene-fit" },
@@ -516,6 +518,8 @@ const buildScenarios = () => {
     { width: 844, height: 390, zoom: 1, fontScale: 1, type: "landscape" },
     { width: 932, height: 430, zoom: 1, fontScale: 1, type: "landscape" },
     { width: 1229, height: 692, zoom: 1, fontScale: 1, type: "laptop-125" },
+    { width: 1002, height: 424, zoom: 1, fontScale: 1, type: "idea-compact" },
+    { width: 983, height: 388, zoom: 1, fontScale: 1, type: "idea-compact" },
     { width: 1180, height: 499, zoom: 1, fontScale: 1, type: "scene-breakpoint-lower" },
     { width: 1181, height: 499, zoom: 1, fontScale: 1, type: "scene-breakpoint-upper" },
     { width: 1920, height: 980, zoom: 1.25, fontScale: 1, type: "scene-fit" },
@@ -742,6 +746,9 @@ const evaluateLayout = async (page) =>
     const studioComposerRect = document
       .querySelector(".studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt")
       ?.getBoundingClientRect();
+    const studioComposerInnerRect = document
+      .querySelector(".studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__inner")
+      ?.getBoundingClientRect();
     const studioPreviewRect = document
       .querySelector(".studio-canvas-preview.has-video-preview:not(.is-segment-editor)")
       ?.getBoundingClientRect();
@@ -849,6 +856,16 @@ const evaluateLayout = async (page) =>
             top: Math.round(studioComposerRect.top),
             bottom: Math.round(studioComposerRect.bottom),
             height: Math.round(studioComposerRect.height),
+          }
+        : null,
+      studioComposerInner: studioComposerInnerRect
+        ? {
+            top: Math.round(studioComposerInnerRect.top),
+            right: Math.round(studioComposerInnerRect.right),
+            bottom: Math.round(studioComposerInnerRect.bottom),
+            left: Math.round(studioComposerInnerRect.left),
+            width: Math.round(studioComposerInnerRect.width),
+            height: Math.round(studioComposerInnerRect.height),
           }
         : null,
       studioPreview: studioPreviewRect
@@ -1136,7 +1153,8 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
     const auditsCompactLegacyProject =
       surface === "app" &&
       route.includes("audit=legacy-project") &&
-      (scenario.type === "scene-breakpoint-lower" ||
+      (scenario.type === "idea-compact" ||
+        scenario.type === "scene-breakpoint-lower" ||
         scenario.type === "scene-breakpoint-upper");
     const expectsCompactLandscapeSceneEditor =
       expectsScenesMode &&
@@ -1188,12 +1206,18 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
       if (
         !metrics.studioPreview ||
         !metrics.studioComposer ||
+        !metrics.studioComposerInner ||
         !metrics.studioPreviewControls ||
         metrics.studioPreviewActions.length === 0 ||
         metrics.studioPreviewControlButtons.length === 0
       ) {
         failures.push("compact legacy project is missing preview, composer or player controls");
       } else {
+        const auditsTinyIdeaViewport = scenario.type === "idea-compact";
+        const minimumCompactPreviewHeight = effectiveHeight <= 400 ? 130 : auditsTinyIdeaViewport ? 150 : 220;
+        const maximumPreviewActionSize = metrics.studioPreview.width <= 100 ? 21 : 32;
+        const maximumPlayerControlSize = metrics.studioPreview.width <= 100 ? 18 : 28;
+
         if (metrics.studioPreview.bottom > metrics.studioComposer.top - 6) {
           failures.push(
             `compact legacy preview overlaps its composer: ` +
@@ -1205,8 +1229,21 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
           failures.push(`compact legacy composer is too tall: ${metrics.studioComposer.height}px`);
         }
 
-        if (metrics.studioPreview.height < 220) {
+        if (metrics.studioPreview.height < minimumCompactPreviewHeight) {
           failures.push(`compact legacy preview is disproportionately small: ${metrics.studioPreview.height}px`);
+        }
+
+        if (
+          metrics.studioComposer.left < 8 ||
+          metrics.studioComposer.right > metrics.clientWidth - 8 ||
+          metrics.studioComposerInner.left < metrics.studioComposer.left ||
+          metrics.studioComposerInner.right > metrics.studioComposer.right
+        ) {
+          failures.push(
+            `compact composer leaves its available width: outer ` +
+              `${metrics.studioComposer.left}-${metrics.studioComposer.right}, inner ` +
+              `${metrics.studioComposerInner.left}-${metrics.studioComposerInner.right}, viewport ${metrics.clientWidth}`,
+          );
         }
 
         const outsidePreviewAction = metrics.studioPreviewActions.find(
@@ -1214,8 +1251,8 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
             rect.left < metrics.studioPreview.left - 1 ||
             rect.right > metrics.studioPreview.right + 1 ||
             rect.top < metrics.studioPreview.top - 1 ||
-            rect.width > 32 ||
-            rect.height > 32,
+            rect.width > maximumPreviewActionSize ||
+            rect.height > maximumPreviewActionSize,
         );
         if (outsidePreviewAction) {
           failures.push(
@@ -1226,7 +1263,7 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
         }
 
         const oversizedPlayerControl = metrics.studioPreviewControlButtons.find(
-          (rect) => rect.width > 28 || rect.height > 28,
+          (rect) => rect.width > maximumPlayerControlSize || rect.height > maximumPlayerControlSize,
         );
         if (oversizedPlayerControl || metrics.studioPreviewControls.height > 48) {
           failures.push(

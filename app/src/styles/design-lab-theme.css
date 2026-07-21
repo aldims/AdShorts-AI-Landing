@@ -23068,9 +23068,9 @@ body.studio-video-fullscreen-open .studio-canvas-preview::after {
   .studio-canvas-preview__quick-action--expanded,
   .studio-canvas-preview__generated-actions--expanded
     > .studio-canvas-preview__quick-action:not(.studio-canvas-preview__quick-action--close) {
-    flex-basis: clamp(22px, 18cqw, 28px);
-    width: clamp(22px, 18cqw, 28px);
-    height: clamp(22px, 18cqw, 28px);
+    flex-basis: clamp(16px, 18cqw, 28px);
+    width: clamp(16px, 18cqw, 28px);
+    height: clamp(16px, 18cqw, 28px);
   }
 
   .studio-canvas-preview__generated-actions .studio-canvas-preview__quick-action--close,
@@ -23078,15 +23078,15 @@ body.studio-video-fullscreen-open .studio-canvas-preview::after {
     > .studio-canvas-preview__quick-action.studio-canvas-preview__quick-action--close:not(
       .studio-canvas-preview__quick-action--expanded
     ) {
-    flex-basis: clamp(28px, 21cqw, 32px);
-    width: clamp(28px, 21cqw, 32px);
-    height: clamp(28px, 21cqw, 32px);
+    flex-basis: clamp(20px, 21cqw, 32px);
+    width: clamp(20px, 21cqw, 32px);
+    height: clamp(20px, 21cqw, 32px);
   }
 
   .studio-canvas-preview__quick-action svg,
   .studio-canvas-preview__quick-action--expanded svg {
-    width: clamp(10px, 9cqw, 14px);
-    height: clamp(10px, 9cqw, 14px);
+    width: clamp(8px, 9cqw, 14px);
+    height: clamp(8px, 9cqw, 14px);
   }
 
   .studio-canvas-preview__player-shell
@@ -23108,17 +23108,17 @@ body.studio-video-fullscreen-open .studio-canvas-preview::after {
   .studio-canvas-preview__player-shell
     .studio-video-modal__player:not(.is-fullscreen)
     .studio-video-modal__control-btn--fullscreen {
-    flex-basis: clamp(22px, 18cqw, 28px);
-    width: clamp(22px, 18cqw, 28px);
-    height: clamp(22px, 18cqw, 28px);
+    flex-basis: clamp(16px, 18cqw, 28px);
+    width: clamp(16px, 18cqw, 28px);
+    height: clamp(16px, 18cqw, 28px);
     border-radius: clamp(7px, 5cqw, 9px);
   }
 
   .studio-canvas-preview__player-shell
     .studio-video-modal__player:not(.is-fullscreen)
     .studio-video-modal__control-btn svg {
-    width: clamp(12px, 10cqw, 16px);
-    height: clamp(12px, 10cqw, 16px);
+    width: clamp(9px, 10cqw, 16px);
+    height: clamp(9px, 10cqw, 16px);
   }
 
   .studio-canvas-preview__player-shell
@@ -23159,6 +23159,46 @@ body.studio-video-fullscreen-open .studio-canvas-preview::after {
     .studio-video-modal__player:not(.is-fullscreen)
     .studio-video-modal__time {
     display: none;
+  }
+}
+
+@container (max-width: 100px) {
+  .studio-canvas-preview__floating-actions {
+    top: 4px;
+    right: 2px;
+    left: 2px;
+  }
+
+  .studio-canvas-preview__generated-actions,
+  .studio-canvas-preview__generated-actions--expanded {
+    gap: 1px;
+  }
+
+  .studio-canvas-preview__player-shell
+    .studio-video-modal__player:not(.is-fullscreen)
+    .studio-video-modal__player-controls {
+    gap: 3px;
+    padding: 4px;
+  }
+
+  .studio-canvas-preview__player-shell
+    .studio-video-modal__player:not(.is-fullscreen)
+    .studio-video-modal__player-toolbar {
+    gap: 2px;
+  }
+
+  .studio-canvas-preview__player-shell
+    .studio-video-modal__player:not(.is-fullscreen)
+    .studio-video-modal__progress::-webkit-slider-thumb {
+    width: 8px;
+    height: 8px;
+  }
+
+  .studio-canvas-preview__player-shell
+    .studio-video-modal__player:not(.is-fullscreen)
+    .studio-video-modal__progress::-moz-range-thumb {
+    width: 8px;
+    height: 8px;
   }
 }
 
