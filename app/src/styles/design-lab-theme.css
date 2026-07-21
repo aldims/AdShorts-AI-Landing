@@ -22694,27 +22694,6 @@ body.studio-video-fullscreen-open .studio-canvas-preview::after {
   pointer-events: auto;
 }
 
-.studio-canvas-preview__player-shell:has(.studio-video-modal__player.is-playing) .studio-canvas-preview__floating-actions {
-  opacity: 0;
-  visibility: hidden;
-  transform: translateY(-6px);
-}
-
-.studio-canvas-preview__player-shell:has(.studio-video-modal__player.is-playing):hover .studio-canvas-preview__floating-actions,
-.studio-canvas-preview__player-shell:has(.studio-video-modal__player.is-playing):has(.studio-canvas-preview__floating-actions :focus-visible) .studio-canvas-preview__floating-actions {
-  opacity: 1;
-  visibility: visible;
-  transform: translateY(0);
-}
-
-@media (hover: none) {
-  .studio-canvas-preview__player-shell:has(.studio-video-modal__player.is-playing) .studio-canvas-preview__floating-actions {
-    opacity: 1;
-    visibility: visible;
-    transform: translateY(0);
-  }
-}
-
 /* ── Основной контейнер видео — liquid glass ── */
 .studio-canvas-preview__video-btn {
   position: relative;
@@ -22890,13 +22869,18 @@ body.studio-video-fullscreen-open .studio-canvas-preview::after {
 
 .studio-canvas-preview__quick-action--close,
 .studio-canvas-preview__quick-action--close:hover {
-  background: transparent;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  box-shadow: none;
+  background: rgba(4, 7, 14, 0.72);
+  backdrop-filter: blur(14px) saturate(150%);
+  -webkit-backdrop-filter: blur(14px) saturate(150%);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.16),
+    0 6px 18px rgba(0, 0, 0, 0.38);
 }
 
 .studio-canvas-preview__quick-action--close {
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
   color: rgba(255, 255, 255, 0.86);
 }
 
@@ -23045,6 +23029,23 @@ body.studio-video-fullscreen-open .studio-canvas-preview::after {
   .studio-canvas-preview__player-shell .studio-video-modal__time {
     font-size: 0.66rem;
   }
+}
+
+/* Closing the current preview is a primary escape action. Keep its target
+   reachable even when container queries compact the secondary actions. */
+.studio-canvas-preview__generated-actions .studio-canvas-preview__quick-action--close {
+  flex-basis: 44px;
+  width: 44px;
+  height: 44px;
+}
+
+.studio-canvas-preview__generated-actions--expanded
+  > .studio-canvas-preview__quick-action.studio-canvas-preview__quick-action--close:not(
+    .studio-canvas-preview__quick-action--expanded
+  ) {
+  flex-basis: 44px;
+  width: 44px;
+  height: 44px;
 }
 
 @keyframes studio-toast-in {

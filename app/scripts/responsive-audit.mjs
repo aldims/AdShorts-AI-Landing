@@ -87,6 +87,8 @@ const appRoutes = scenesOnly
         "/en/app",
         "/app/studio",
         "/en/app/studio",
+        "/app/studio?audit=legacy-project",
+        "/en/app/studio?audit=legacy-project",
         "/app/studio?mode=scenes",
         "/en/app/studio?mode=scenes",
         "/app/projects",
@@ -103,6 +105,8 @@ const appRoutes = scenesOnly
         "/en/app",
         "/app/studio",
         "/en/app/studio",
+        "/app/studio?audit=legacy-project",
+        "/en/app/studio?audit=legacy-project",
         "/app/studio?mode=scenes",
         "/en/app/studio?mode=scenes",
         "/app/projects",
@@ -201,6 +205,33 @@ const workspaceProject = {
   videoFallbackUrl: null,
   videoUrl: null,
   youtubePublication: null,
+};
+
+const legacyProjectGeneration = {
+  error: undefined,
+  generation: {
+    adId: workspaceProject.adId,
+    aspectRatio: "9:16",
+    description: "Legacy project used to verify the compact laptop layout.",
+    durationLabel: "00:12",
+    generatedAt: nowIso,
+    hashtags: ["#shorts", "#audit"],
+    id: "audit-legacy-generation",
+    isReadyForEditor: false,
+    modelLabel: "Audit",
+    prefillSettings: null,
+    projectStatus: "ready",
+    prompt: "Legacy project responsive fixture.",
+    readyReason: "project_not_ready",
+    title: "Legacy responsive audit project",
+    videoFallbackUrl: null,
+    videoUrl: "/studio/generation-background.mp4",
+  },
+  isReadyForEditor: false,
+  jobId: "audit-legacy-job",
+  projectStatus: "ready",
+  readyReason: "project_not_ready",
+  status: "done",
 };
 
 const mimeTypes = new Map([
@@ -354,13 +385,13 @@ const fulfillJson = (route, body, status = 200) =>
     body: JSON.stringify(body),
   });
 
-const installAppMocks = async (page) => {
+const installAppMocks = async (page, { hasLegacyProject = false } = {}) => {
   await page.route("**/*", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const resourceType = request.resourceType();
 
-    if (resourceType === "media") {
+    if (resourceType === "media" && url.pathname !== "/studio/generation-background.mp4") {
       await route.fulfill({ status: 204, body: "" });
       return;
     }
@@ -392,7 +423,13 @@ const installAppMocks = async (page) => {
     }
 
     if (url.pathname === "/api/workspace/bootstrap") {
-      await fulfillJson(route, { data: { latestGeneration: null, profile: workspaceProfile, studioOptions } });
+      await fulfillJson(route, {
+        data: {
+          latestGeneration: hasLegacyProject ? legacyProjectGeneration : null,
+          profile: workspaceProfile,
+          studioOptions,
+        },
+      });
       return;
     }
 
@@ -701,6 +738,12 @@ const evaluateLayout = async (page) =>
     const studioComposerRect = document
       .querySelector(".studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt")
       ?.getBoundingClientRect();
+    const studioPreviewRect = document
+      .querySelector(".studio-canvas-preview.has-video-preview:not(.is-segment-editor)")
+      ?.getBoundingClientRect();
+    const studioPreviewCloseRect = document
+      .querySelector('.studio-canvas-preview.has-video-preview [aria-label="Закрыть видео"], .studio-canvas-preview.has-video-preview [aria-label="Close video"]')
+      ?.getBoundingClientRect();
     const studioWelcomeRect = document
       .querySelector(".studio-welcome-card.studio-canvas-welcome")
       ?.getBoundingClientRect();
@@ -788,6 +831,26 @@ const evaluateLayout = async (page) =>
             top: Math.round(studioComposerRect.top),
             bottom: Math.round(studioComposerRect.bottom),
             height: Math.round(studioComposerRect.height),
+          }
+        : null,
+      studioPreview: studioPreviewRect
+        ? {
+            top: Math.round(studioPreviewRect.top),
+            right: Math.round(studioPreviewRect.right),
+            bottom: Math.round(studioPreviewRect.bottom),
+            left: Math.round(studioPreviewRect.left),
+            width: Math.round(studioPreviewRect.width),
+            height: Math.round(studioPreviewRect.height),
+          }
+        : null,
+      studioPreviewClose: studioPreviewCloseRect
+        ? {
+            top: Math.round(studioPreviewCloseRect.top),
+            right: Math.round(studioPreviewCloseRect.right),
+            bottom: Math.round(studioPreviewCloseRect.bottom),
+            left: Math.round(studioPreviewCloseRect.left),
+            width: Math.round(studioPreviewCloseRect.width),
+            height: Math.round(studioPreviewCloseRect.height),
           }
         : null,
       studioWelcome: studioWelcomeRect
@@ -990,7 +1053,7 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
   });
 
   if (surface === "app") {
-    await installAppMocks(page);
+    await installAppMocks(page, { hasLegacyProject: route.includes("audit=legacy-project") });
   }
 
   const label = `${browserName} ${surface}${route} viewport=${scenario.width}x${scenario.height} effective=${effectiveWidth}x${effectiveHeight} zoom=${Math.round(
@@ -1022,6 +1085,10 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
     await page.waitForTimeout(180);
 
     const expectsScenesMode = surface === "app" && route.includes("mode=scenes");
+    const auditsLegacyLaptopProject =
+      surface === "app" &&
+      route.includes("audit=legacy-project") &&
+      scenario.type === "laptop-125";
     const expectsCompactLandscapeSceneEditor =
       expectsScenesMode &&
       effectiveWidth >= 641 &&
@@ -1046,10 +1113,29 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
       : true;
 
     const metrics = await evaluateLayout(page);
+    let legacyProjectSceneFeedback = null;
+    if (auditsLegacyLaptopProject) {
+      const scenesTabName = route.startsWith("/en/") ? "By scenes" : "По сценам";
+      const scenesTab = page.getByRole("tab", { name: scenesTabName, exact: true });
+      if ((await scenesTab.count()) === 1) {
+        await scenesTab.click();
+        const warningToast = page.locator(".studio-toast--warning");
+        const warningVisible = await warningToast
+          .waitFor({ state: "visible", timeout: 2_000 })
+          .then(() => true)
+          .catch(() => false);
+        legacyProjectSceneFeedback = {
+          isSegmentEditorOpen: Boolean(await page.locator(".studio-canvas-main.is-segment-editor").count()),
+          message: warningVisible ? (await warningToast.textContent())?.trim() ?? "" : "",
+          warningVisible,
+        };
+      }
+    }
     let laptopIdeaMetrics = null;
     const auditsLaptopIdea =
       surface === "app" &&
       route.includes("/app/studio") &&
+      !route.includes("audit=legacy-project") &&
       !expectsScenesMode &&
       scenario.type === "laptop-125";
     if (auditsLaptopIdea) {
@@ -1131,6 +1217,40 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
             `${laptopIdeaMetrics.studioIdeaEmptyState.bottom} > ` +
             `${laptopIdeaMetrics.studioComposer.top - 8}`,
         );
+      }
+    }
+
+    if (auditsLegacyLaptopProject) {
+      if (!metrics.studioPreview || !metrics.studioComposer || !metrics.studioPreviewClose) {
+        failures.push("legacy project preview, composer or close action is missing at 1229x692");
+      } else {
+        if (metrics.studioPreview.bottom > metrics.studioComposer.top - 8) {
+          failures.push(
+            `legacy preview overlaps its composer at 1229x692: ` +
+              `${metrics.studioPreview.bottom} > ${metrics.studioComposer.top - 8}`,
+          );
+        }
+        if (
+          metrics.studioPreview.top < 0 ||
+          metrics.studioPreviewClose.top < 0 ||
+          metrics.studioPreviewClose.right > metrics.clientWidth ||
+          metrics.studioPreviewClose.width < 44 ||
+          metrics.studioPreviewClose.height < 44
+        ) {
+          failures.push(
+            `legacy preview close action is not safely reachable at 1229x692: ` +
+              `${metrics.studioPreviewClose.width}x${metrics.studioPreviewClose.height} ` +
+              `at ${metrics.studioPreviewClose.left},${metrics.studioPreviewClose.top}`,
+          );
+        }
+      }
+
+      if (
+        !legacyProjectSceneFeedback?.warningVisible ||
+        legacyProjectSceneFeedback.isSegmentEditorOpen ||
+        !legacyProjectSceneFeedback.message
+      ) {
+        failures.push("legacy project does not explain why By scenes mode is unavailable");
       }
     }
 

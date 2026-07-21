@@ -731,6 +731,7 @@ html {
   #app .studio-canvas-route:not(.is-segment-editor) .studio-canvas-create {
     display: grid !important;
     grid-template-rows: minmax(0, 1fr) auto !important;
+    row-gap: clamp(8px, 1.2dvh, 12px) !important;
     overflow: hidden !important;
   }
 
@@ -751,6 +752,28 @@ html {
     overflow-y: auto !important;
     overscroll-behavior-y: contain;
     scrollbar-width: thin;
+  }
+
+  /* The preview must be sized by the actual grid row, not by an independent
+     viewport estimate. Otherwise a short laptop viewport lets the 9:16 card
+     escape its row and cover the composer below it. */
+  #app
+    .studio-canvas-route:not(.is-segment-editor)
+    .studio-canvas-preview.has-video-preview:not(.is-segment-editor) {
+    width: auto !important;
+    height: 100% !important;
+    max-width: 100% !important;
+    max-height: 100% !important;
+    aspect-ratio: 9 / 16;
+    transform: none !important;
+  }
+
+  #app
+    .studio-canvas-route:not(.is-segment-editor)
+    .studio-canvas-preview.has-video-preview:not(.is-segment-editor)
+    .studio-canvas-preview__player-shell {
+    width: 100%;
+    height: 100%;
   }
 
   #app .studio-canvas-route:not(.is-segment-editor) .studio-idea-empty-state {

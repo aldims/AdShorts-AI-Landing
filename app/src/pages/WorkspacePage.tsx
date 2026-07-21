@@ -6203,6 +6203,11 @@ export function WorkspacePage({
           "Editing is unavailable because scene voiceovers must be restored.",
         )
       : generatedVideoProjectPreparingTitle;
+  const generatedVideoScenesUnavailableTitle = workspaceText(
+    locale,
+    "Этот проект нельзя открыть в режиме «По сценам». Закройте его крестиком и начните новый проект по сценам.",
+    "This project cannot be opened in By scenes mode. Close it and start a new scenes project.",
+  );
   const projectPreviewModalPanelStyle = isProjectPreviewModalOpen
     ? ({
         "--studio-video-modal-aspect-ratio": String(projectPreviewModalAspectRatio ?? 9 / 16),
@@ -12560,12 +12565,19 @@ export function WorkspacePage({
     const projectId = generatedVideo?.adId ?? null;
 
     if (!projectId) {
-      setSegmentEditorLoadError("Редактор Shorts доступен только для сохранённого проекта.");
+      const message = workspaceText(
+        locale,
+        "Редактор Shorts доступен только для сохранённого проекта.",
+        "The Shorts editor is only available for a saved project.",
+      );
+      setSegmentEditorLoadError(message);
+      showStudioToast(message, { durationMs: 5000, kind: "warning" });
       return;
     }
 
     if (!isGeneratedVideoProjectReadyForEditing) {
-      setSegmentEditorLoadError(generatedVideoEditUnavailableTitle);
+      setSegmentEditorLoadError(generatedVideoScenesUnavailableTitle);
+      showStudioToast(generatedVideoScenesUnavailableTitle, { durationMs: 6000, kind: "warning" });
       return;
     }
 
@@ -12643,6 +12655,12 @@ export function WorkspacePage({
       retainedDraftProjectId: retainedScenesDraft?.projectId,
       retainedDraftUpdatedAt: retainedScenesDraft?.clientUpdatedAt,
     });
+
+    if (target === "project" && !isGeneratedVideoProjectReadyForEditing) {
+      setSegmentEditorLoadError(generatedVideoScenesUnavailableTitle);
+      showStudioToast(generatedVideoScenesUnavailableTitle, { durationMs: 6000, kind: "warning" });
+      return;
+    }
 
     rememberStudioCreateMode("segment-editor");
     if (target === "current") {
