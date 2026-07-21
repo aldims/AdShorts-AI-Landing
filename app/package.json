@@ -13,6 +13,7 @@
     "test:watch": "vitest",
     "audit:responsive": "node scripts/responsive-audit.mjs",
     "audit:responsive:app": "RESPONSIVE_AUDIT_SCOPE=app node scripts/responsive-audit.mjs",
+    "audit:responsive:app:browsers": "RESPONSIVE_AUDIT_SCOPE=app RESPONSIVE_AUDIT_BROWSERS=chromium,firefox,webkit node scripts/responsive-audit.mjs",
     "audit:responsive:app:quick": "RESPONSIVE_AUDIT_SCOPE=app RESPONSIVE_AUDIT_QUICK=1 node scripts/responsive-audit.mjs",
     "audit:responsive:static": "RESPONSIVE_AUDIT_SCOPE=static node scripts/responsive-audit.mjs",
     "preview": "concurrently -k -n auth,web \"npm:start:server\" \"ADSHORTS_AUTO_AUTH_BACKEND=0 npm run preview:web\"",

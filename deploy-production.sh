@@ -54,7 +54,8 @@ npm run build
 
 if [ "${RUN_RESPONSIVE_AUDIT:-1}" = "1" ]; then
   echo "[production] full app responsive gate"
-  npm run audit:responsive:app
+  npx playwright install chromium firefox webkit
+  npm run audit:responsive:app:browsers
 fi
 
 if [ "${RUN_TESTS:-0}" = "1" ]; then

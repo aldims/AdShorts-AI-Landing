@@ -840,6 +840,12 @@ html {
   .route-page--video-hero .hero__actions .btn {
     width: 100%;
     min-width: 0;
+    height: auto !important;
+    min-height: 64px;
+    padding-block: 12px;
+    overflow: visible;
+    line-height: 1.18;
+    white-space: normal;
   }
 
   .route-page--layered-hero .hero__features,

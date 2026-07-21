@@ -5,7 +5,7 @@ import { mkdir, rm, stat } from "node:fs/promises";
 import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { chromium } from "playwright";
+import { chromium, firefox, webkit } from "playwright";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const appRoot = path.resolve(scriptDir, "..");
@@ -23,6 +23,19 @@ if (!supportedScopes.has(auditScope)) {
 const auditsApp = auditScope === "all" || auditScope === "app";
 const auditsStatic = auditScope === "all" || auditScope === "static";
 const artifactDir = path.join(repoRoot, ".codex-tmp", "responsive-audit", auditScope);
+const browserTypes = { chromium, firefox, webkit };
+const requestedBrowserNames = (process.env.RESPONSIVE_AUDIT_BROWSERS ?? "chromium")
+  .split(",")
+  .map((name) => name.trim())
+  .filter(Boolean);
+const unsupportedBrowsers = requestedBrowserNames.filter((name) => !(name in browserTypes));
+
+if (requestedBrowserNames.length === 0 || unsupportedBrowsers.length > 0) {
+  throw new Error(
+    `Unsupported RESPONSIVE_AUDIT_BROWSERS value. Use a comma-separated subset of chromium, firefox, webkit.`,
+  );
+}
+
 const requestedConcurrency = Number.parseInt(process.env.RESPONSIVE_AUDIT_CONCURRENCY ?? "", 10);
 const auditConcurrency = Number.isFinite(requestedConcurrency) && requestedConcurrency > 0
   ? requestedConcurrency
@@ -917,7 +930,7 @@ const openAndMeasureSceneVisualPanel = async (page) => {
   return { ...openedMetrics, ...closedMetrics };
 };
 
-const auditRoute = async ({ browser, baseUrl, route, surface, scenario, sampleState }) => {
+const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scenario, sampleState }) => {
   const effectiveWidth = Math.max(320, Math.round(scenario.width / scenario.zoom));
   const effectiveHeight = Math.max(320, Math.round(scenario.height / scenario.zoom));
   const page = await browser.newPage({
@@ -934,7 +947,7 @@ const auditRoute = async ({ browser, baseUrl, route, surface, scenario, sampleSt
     await installAppMocks(page);
   }
 
-  const label = `${surface}${route} viewport=${scenario.width}x${scenario.height} effective=${effectiveWidth}x${effectiveHeight} zoom=${Math.round(
+  const label = `${browserName} ${surface}${route} viewport=${scenario.width}x${scenario.height} effective=${effectiveWidth}x${effectiveHeight} zoom=${Math.round(
     scenario.zoom * 100,
   )}% font=${Math.round(scenario.fontScale * 100)}%`;
   const url = new URL(route, baseUrl).toString();
@@ -973,7 +986,7 @@ const auditRoute = async ({ browser, baseUrl, route, surface, scenario, sampleSt
         scenario.type === "scene-compact-desktop");
     const scenesModeReady = expectsScenesMode
       ? await page
-          .waitForSelector(".studio-canvas-main.is-segment-editor", { state: "visible", timeout: 5_000 })
+          .waitForSelector(".studio-canvas-main.is-segment-editor", { state: "visible", timeout: 10_000 })
           .then(() => true)
           .catch(() => false)
       : true;
@@ -1273,7 +1286,7 @@ const auditRoute = async ({ browser, baseUrl, route, surface, scenario, sampleSt
       `${surface}-${route}-w${scenario.width}-h${scenario.height}-z${scenario.zoom}-f${scenario.fontScale}`,
     )}.png`;
     if (failures.length > 0) {
-      const screenshotPath = path.join(artifactDir, "failures", screenshotName);
+      const screenshotPath = path.join(artifactDir, browserName, "failures", screenshotName);
       await mkdir(path.dirname(screenshotPath), { recursive: true });
       await page.screenshot({ path: screenshotPath, fullPage: false });
       return {
@@ -1307,7 +1320,7 @@ const auditRoute = async ({ browser, baseUrl, route, surface, scenario, sampleSt
       if (route === "/" || route === "/en") {
         await page.waitForTimeout(800);
       }
-      const screenshotPath = path.join(artifactDir, "samples", screenshotName);
+      const screenshotPath = path.join(artifactDir, browserName, "samples", screenshotName);
       await mkdir(path.dirname(screenshotPath), { recursive: true });
       await page.screenshot({ path: screenshotPath, fullPage: false });
       sampleState.count += 1;
@@ -1317,6 +1330,7 @@ const auditRoute = async ({ browser, baseUrl, route, surface, scenario, sampleSt
   } catch (error) {
     const screenshotPath = path.join(
       artifactDir,
+      browserName,
       "failures",
       `${safeName(
         `${surface}-${route}-w${scenario.width}-h${scenario.height}-z${scenario.zoom}-f${scenario.fontScale}-error`,
@@ -1349,10 +1363,9 @@ const run = async () => {
     : startProcess("npm", ["run", "dev:web", "--", "--port", String(appPort), "--strictPort"], appRoot, "vite");
   const staticServer = staticPort === null ? null : await startStaticServer(staticPort);
   const scenarios = buildScenarios();
-  const sampleState = { count: 0 };
   const failures = [];
   let checked = 0;
-  let browser = null;
+  let activeBrowser = null;
 
   const shutdown = async () => {
     await stopProcess(appServer);
@@ -1368,55 +1381,72 @@ const run = async () => {
       ...(appBaseUrl ? [waitForUrl(appBaseUrl, "Vite")] : []),
       ...(staticBaseUrl ? [waitForUrl(staticBaseUrl, "static server")] : []),
     ]);
-    browser = await chromium.launch();
-
     const surfaces = [
       ...(appBaseUrl ? [{ surface: "app", baseUrl: appBaseUrl, routes: appRoutes }] : []),
       ...(staticBaseUrl ? [{ surface: "static", baseUrl: staticBaseUrl, routes: staticRoutes }] : []),
     ];
 
-    for (const entry of surfaces) {
-      for (const route of entry.routes) {
-        let scenarioIndex = 0;
-        const workerCount = Math.min(auditConcurrency, scenarios.length);
-        await Promise.all(
-          Array.from({ length: workerCount }, async () => {
-            while (scenarioIndex < scenarios.length) {
-              const scenario = scenarios[scenarioIndex];
-              scenarioIndex += 1;
-              const result = await auditRoute({ browser, ...entry, route, scenario, sampleState });
-              checked += 1;
+    for (const browserName of requestedBrowserNames) {
+      const browserType = browserTypes[browserName];
+      activeBrowser = await browserType.launch();
+      const sampleState = { count: 0 };
 
-              if (!result.ok) {
-                failures.push(result);
-                console.error(`FAIL ${result.label}`);
-                console.error(`  ${result.failures.join("; ")}`);
-                if (result.metrics?.offenders?.length) {
-                  console.error(`  offenders: ${result.metrics.offenders.map((item) => item.selector).join(", ")}`);
+      try {
+        for (const entry of surfaces) {
+          for (const route of entry.routes) {
+            let scenarioIndex = 0;
+            const workerCount = Math.min(auditConcurrency, scenarios.length);
+            await Promise.all(
+              Array.from({ length: workerCount }, async () => {
+                while (scenarioIndex < scenarios.length) {
+                  const scenario = scenarios[scenarioIndex];
+                  scenarioIndex += 1;
+                  const result = await auditRoute({
+                    browser: activeBrowser,
+                    browserName,
+                    ...entry,
+                    route,
+                    scenario,
+                    sampleState,
+                  });
+                  checked += 1;
+
+                  if (!result.ok) {
+                    failures.push(result);
+                    console.error(`FAIL ${result.label}`);
+                    console.error(`  ${result.failures.join("; ")}`);
+                    if (result.metrics?.offenders?.length) {
+                      console.error(`  offenders: ${result.metrics.offenders.map((item) => item.selector).join(", ")}`);
+                    }
+                    if (result.metrics?.scenePreview) {
+                      console.error(
+                        `  scene geometry: ${JSON.stringify({
+                          mainScrollTop: result.metrics.sceneMainScrollTop,
+                          layout: result.metrics.sceneLayout,
+                          previewColumn: result.metrics.scenePreviewColumn,
+                          preview: result.metrics.scenePreview,
+                          submit: result.metrics.sceneSubmit,
+                          timeline: result.metrics.sceneTimeline,
+                        })}`,
+                      );
+                    }
+                    if (result.screenshotPath) console.error(`  screenshot: ${result.screenshotPath}`);
+                  }
                 }
-                if (result.metrics?.scenePreview) {
-                  console.error(
-                    `  scene geometry: ${JSON.stringify({
-                      mainScrollTop: result.metrics.sceneMainScrollTop,
-                      layout: result.metrics.sceneLayout,
-                      previewColumn: result.metrics.scenePreviewColumn,
-                      preview: result.metrics.scenePreview,
-                      submit: result.metrics.sceneSubmit,
-                      timeline: result.metrics.sceneTimeline,
-                    })}`,
-                  );
-                }
-                if (result.screenshotPath) console.error(`  screenshot: ${result.screenshotPath}`);
-              }
-            }
-          }),
-        );
+              }),
+            );
+          }
+        }
+      } finally {
+        await activeBrowser.close().catch(() => undefined);
+        activeBrowser = null;
       }
     }
 
     const auditMode = scenesOnly ? "scenes" : quickMode ? "quick" : "full";
     console.log(`Responsive audit checked ${checked} scenarios (${auditMode} mode).`);
     console.log(`Scope: ${auditScope}.`);
+    console.log(`Browsers: ${requestedBrowserNames.join(", ")}.`);
     console.log(`Screenshots: ${artifactDir}`);
 
     if (failures.length > 0) {
@@ -1427,7 +1457,7 @@ const run = async () => {
 
     console.log("Responsive audit passed.");
   } finally {
-    if (browser) await browser.close().catch(() => undefined);
+    if (activeBrowser) await activeBrowser.close().catch(() => undefined);
     await shutdown();
   }
 };
