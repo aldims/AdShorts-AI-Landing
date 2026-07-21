@@ -748,6 +748,20 @@ const evaluateLayout = async (page) =>
     const studioPreviewCloseRect = document
       .querySelector('.studio-canvas-preview.has-video-preview [aria-label="Закрыть видео"], .studio-canvas-preview.has-video-preview [aria-label="Close video"]')
       ?.getBoundingClientRect();
+    const studioPreviewActionRects = Array.from(
+      document.querySelectorAll(
+        ".studio-canvas-preview.has-video-preview .studio-canvas-preview__floating-actions button, " +
+          ".studio-canvas-preview.has-video-preview .studio-canvas-preview__floating-actions a",
+      ),
+    ).map((element) => element.getBoundingClientRect());
+    const studioPreviewControlRects = Array.from(
+      document.querySelectorAll(
+        ".studio-canvas-preview.has-video-preview .studio-video-modal__control-btn",
+      ),
+    ).map((element) => element.getBoundingClientRect());
+    const studioPreviewControlsRect = document
+      .querySelector(".studio-canvas-preview.has-video-preview .studio-video-modal__player-controls")
+      ?.getBoundingClientRect();
     const studioWelcomeRect = document
       .querySelector(".studio-welcome-card.studio-canvas-welcome")
       ?.getBoundingClientRect();
@@ -857,6 +871,32 @@ const evaluateLayout = async (page) =>
             height: Math.round(studioPreviewCloseRect.height),
           }
         : null,
+      studioPreviewActions: studioPreviewActionRects.map((rect) => ({
+        top: Math.round(rect.top),
+        right: Math.round(rect.right),
+        bottom: Math.round(rect.bottom),
+        left: Math.round(rect.left),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+      })),
+      studioPreviewControls: studioPreviewControlsRect
+        ? {
+            top: Math.round(studioPreviewControlsRect.top),
+            right: Math.round(studioPreviewControlsRect.right),
+            bottom: Math.round(studioPreviewControlsRect.bottom),
+            left: Math.round(studioPreviewControlsRect.left),
+            width: Math.round(studioPreviewControlsRect.width),
+            height: Math.round(studioPreviewControlsRect.height),
+          }
+        : null,
+      studioPreviewControlButtons: studioPreviewControlRects.map((rect) => ({
+        top: Math.round(rect.top),
+        right: Math.round(rect.right),
+        bottom: Math.round(rect.bottom),
+        left: Math.round(rect.left),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+      })),
       studioWelcome: studioWelcomeRect
         ? {
             top: Math.round(studioWelcomeRect.top),
@@ -1093,6 +1133,11 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
       surface === "app" &&
       route.includes("audit=legacy-project") &&
       scenario.type === "laptop-125";
+    const auditsCompactLegacyProject =
+      surface === "app" &&
+      route.includes("audit=legacy-project") &&
+      (scenario.type === "scene-breakpoint-lower" ||
+        scenario.type === "scene-breakpoint-upper");
     const expectsCompactLandscapeSceneEditor =
       expectsScenesMode &&
       effectiveWidth >= 641 &&
@@ -1119,6 +1164,7 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
       : true;
 
     const metrics = await evaluateLayout(page);
+    const failures = [];
     let legacyProjectSceneFeedback = null;
     if (auditsLegacyLaptopProject) {
       const scenesTabName = route.startsWith("/en/") ? "By scenes" : "По сценам";
@@ -1137,6 +1183,59 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
         };
       }
     }
+
+    if (auditsCompactLegacyProject) {
+      if (
+        !metrics.studioPreview ||
+        !metrics.studioComposer ||
+        !metrics.studioPreviewControls ||
+        metrics.studioPreviewActions.length === 0 ||
+        metrics.studioPreviewControlButtons.length === 0
+      ) {
+        failures.push("compact legacy project is missing preview, composer or player controls");
+      } else {
+        if (metrics.studioPreview.bottom > metrics.studioComposer.top - 6) {
+          failures.push(
+            `compact legacy preview overlaps its composer: ` +
+              `${metrics.studioPreview.bottom} > ${metrics.studioComposer.top - 6}`,
+          );
+        }
+
+        if (metrics.studioComposer.height > 145) {
+          failures.push(`compact legacy composer is too tall: ${metrics.studioComposer.height}px`);
+        }
+
+        if (metrics.studioPreview.height < 220) {
+          failures.push(`compact legacy preview is disproportionately small: ${metrics.studioPreview.height}px`);
+        }
+
+        const outsidePreviewAction = metrics.studioPreviewActions.find(
+          (rect) =>
+            rect.left < metrics.studioPreview.left - 1 ||
+            rect.right > metrics.studioPreview.right + 1 ||
+            rect.top < metrics.studioPreview.top - 1 ||
+            rect.width > 32 ||
+            rect.height > 32,
+        );
+        if (outsidePreviewAction) {
+          failures.push(
+            `compact preview action outgrows the video card: ` +
+              `${outsidePreviewAction.width}x${outsidePreviewAction.height} at ` +
+              `${outsidePreviewAction.left},${outsidePreviewAction.top}`,
+          );
+        }
+
+        const oversizedPlayerControl = metrics.studioPreviewControlButtons.find(
+          (rect) => rect.width > 28 || rect.height > 28,
+        );
+        if (oversizedPlayerControl || metrics.studioPreviewControls.height > 48) {
+          failures.push(
+            `compact player controls do not scale with the video card: ` +
+              `${oversizedPlayerControl?.width ?? "panel"}x${oversizedPlayerControl?.height ?? metrics.studioPreviewControls.height}`,
+          );
+        }
+      }
+    }
     let laptopIdeaMetrics = null;
     const auditsLaptopIdea =
       surface === "app" &&
@@ -1151,7 +1250,6 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
       }
       laptopIdeaMetrics = await evaluateLayout(page);
     }
-    const failures = [];
     const sceneVisualPanel = auditsSceneVisualPanel ? await openAndMeasureSceneVisualPanel(page) : null;
 
     if (!scenesModeReady) {

@@ -799,6 +799,56 @@ html {
   }
 }
 
+/* At 1181px the tablet composer rules stop applying. On a short laptop this
+   used to jump the panel from 126px to 198px and collapse the preview above
+   it. Keep the same height-driven composition on both sides of that width
+   breakpoint. */
+@media (min-width: 981px) and (max-height: 620px) {
+  #app .studio-canvas-route:not(.is-segment-editor) {
+    --studio-prompt-panel-compact-height: clamp(122px, 25dvh, 132px) !important;
+  }
+
+  #app .studio-canvas-route:not(.is-segment-editor) .studio-canvas-create {
+    row-gap: clamp(6px, 1dvh, 8px) !important;
+  }
+
+  #app .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt {
+    padding: 0 16px max(8px, env(safe-area-inset-bottom)) !important;
+  }
+
+  #app .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__inner--compact {
+    gap: 5px !important;
+    padding: 10px 12px 8px !important;
+    border-radius: 18px !important;
+  }
+
+  #app .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__editor-pane {
+    gap: 5px !important;
+  }
+
+  #app .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__input-row {
+    flex: 1 1 auto;
+    min-height: 0 !important;
+  }
+
+  #app .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__input-main,
+  #app .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__textarea {
+    height: 100% !important;
+    min-height: 0 !important;
+    max-height: none !important;
+  }
+
+  #app .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__footer {
+    gap: 6px !important;
+  }
+
+  #app .studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt__btn {
+    height: 36px !important;
+    min-width: 72px !important;
+    padding-inline: 10px !important;
+  }
+}
+
 /*
  * Compact desktop scene editor.  Secondary visual tools receive a bounded
  * column while the preview keeps its height and aspect ratio.  The timeline
