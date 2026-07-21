@@ -1184,6 +1184,39 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
           .catch(() => false)
       : true;
 
+    if (surface === "app" && route.includes("audit=legacy-project")) {
+      await page
+        .waitForSelector(
+          ".studio-canvas-preview.has-video-preview .studio-video-modal__player-controls",
+          { state: "visible", timeout: 5_000 },
+        )
+        .catch(() => undefined);
+      await page
+        .waitForFunction(
+          () => {
+            const preview = document
+              .querySelector(".studio-canvas-preview.has-video-preview")
+              ?.getBoundingClientRect();
+            const composer = document
+              .querySelector(".studio-canvas-route:not(.is-segment-editor) .studio-canvas-prompt")
+              ?.getBoundingClientRect();
+            return Boolean(
+              preview &&
+                composer &&
+                preview.width > 0 &&
+                preview.height > 0 &&
+                composer.width > 0 &&
+                composer.height > 0 &&
+                preview.bottom <= composer.top - 6,
+            );
+          },
+          null,
+          { timeout: 3_000 },
+        )
+        .catch(() => undefined);
+      await page.waitForTimeout(80);
+    }
+
     const metrics = await evaluateLayout(page);
     const failures = [];
     let legacyProjectSceneFeedback = null;
@@ -1219,9 +1252,24 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
         const auditsRegularIdeaControls = scenario.type === "idea-controls";
         const auditsTinyIdeaViewport = scenario.type === "idea-compact";
         const minimumCompactPreviewHeight = effectiveHeight <= 400 ? 130 : auditsTinyIdeaViewport ? 150 : 220;
-        const maximumPreviewActionSize = auditsRegularIdeaControls ? 44 : metrics.studioPreview.width <= 100 ? 21 : 32;
-        const maximumPlayerControlSize = auditsRegularIdeaControls ? 36 : metrics.studioPreview.width <= 100 ? 18 : 28;
-        const maximumPlayerPanelHeight = auditsRegularIdeaControls ? 72 : 48;
+        const expectedPreviewActionSize = auditsRegularIdeaControls
+          ? Math.min(30, Math.max(28, metrics.studioPreview.width * 0.135))
+          : null;
+        const expectedPreviewCloseSize = auditsRegularIdeaControls
+          ? Math.min(44, Math.max(34, metrics.studioPreview.width * 0.17))
+          : null;
+        const expectedPlayerControlSize = auditsRegularIdeaControls
+          ? Math.min(34, Math.max(30, metrics.studioPreview.width * 0.15))
+          : null;
+        const maximumPreviewActionSize = auditsRegularIdeaControls
+          ? (expectedPreviewCloseSize ?? 44) + 1
+          : metrics.studioPreview.width <= 100 ? 21 : 32;
+        const maximumPlayerControlSize = auditsRegularIdeaControls
+          ? (expectedPlayerControlSize ?? 34) + 1
+          : metrics.studioPreview.width <= 100 ? 18 : 28;
+        const maximumPlayerPanelHeight = auditsRegularIdeaControls
+          ? (expectedPlayerControlSize ?? 34) + 35
+          : 48;
 
         if (metrics.studioPreview.bottom > metrics.studioComposer.top - 6) {
           failures.push(
@@ -1267,28 +1315,41 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
           );
         }
 
-        if (
-          auditsRegularIdeaControls &&
-          metrics.studioPreviewActions.some((rect, index) => index < 3 && (rect.width < 30 || rect.height < 30))
-        ) {
-          failures.push("regular preview actions remain undersized below 30px");
+        if (auditsRegularIdeaControls) {
+          const mismatchedPreviewAction = metrics.studioPreviewActions.find((rect, index) => {
+            const expectedSize = index < 3 ? expectedPreviewActionSize : expectedPreviewCloseSize;
+            return (
+              expectedSize !== null &&
+              (Math.abs(rect.width - expectedSize) > 1.25 || Math.abs(rect.height - expectedSize) > 1.25)
+            );
+          });
+          if (mismatchedPreviewAction) {
+            failures.push(
+              `regular preview action is not proportional: ` +
+                `${mismatchedPreviewAction.width}x${mismatchedPreviewAction.height}`,
+            );
+          }
         }
 
         const oversizedPlayerControl = metrics.studioPreviewControlButtons.find(
           (rect) => rect.width > maximumPlayerControlSize || rect.height > maximumPlayerControlSize,
         );
-        const undersizedPlayerControl = auditsRegularIdeaControls
-          ? metrics.studioPreviewControlButtons.find((rect) => rect.width < 34 || rect.height < 34)
+        const mismatchedPlayerControl = auditsRegularIdeaControls && expectedPlayerControlSize !== null
+          ? metrics.studioPreviewControlButtons.find(
+              (rect) =>
+                Math.abs(rect.width - expectedPlayerControlSize) > 1.25 ||
+                Math.abs(rect.height - expectedPlayerControlSize) > 1.25,
+            )
           : null;
         if (
           oversizedPlayerControl ||
-          undersizedPlayerControl ||
+          mismatchedPlayerControl ||
           metrics.studioPreviewControls.height > maximumPlayerPanelHeight
         ) {
           failures.push(
             `compact player controls do not scale with the video card: ` +
-              `${oversizedPlayerControl?.width ?? undersizedPlayerControl?.width ?? "panel"}x` +
-              `${oversizedPlayerControl?.height ?? undersizedPlayerControl?.height ?? metrics.studioPreviewControls.height}`,
+              `${oversizedPlayerControl?.width ?? mismatchedPlayerControl?.width ?? "panel"}x` +
+              `${oversizedPlayerControl?.height ?? mismatchedPlayerControl?.height ?? metrics.studioPreviewControls.height}`,
           );
         }
       }
@@ -1385,6 +1446,7 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
       if (!metrics.studioPreview || !metrics.studioComposer || !metrics.studioPreviewClose) {
         failures.push("legacy project preview, composer or close action is missing at 1229x692");
       } else {
+        const expectedLaptopCloseSize = Math.min(44, Math.max(34, metrics.studioPreview.width * 0.17));
         if (metrics.studioPreview.bottom > metrics.studioComposer.top - 8) {
           failures.push(
             `legacy preview overlaps its composer at 1229x692: ` +
@@ -1395,8 +1457,10 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
           metrics.studioPreview.top < 0 ||
           metrics.studioPreviewClose.top < 0 ||
           metrics.studioPreviewClose.right > metrics.clientWidth ||
-          metrics.studioPreviewClose.width < 44 ||
-          metrics.studioPreviewClose.height < 44
+          metrics.studioPreviewClose.left < metrics.studioPreview.left - 1 ||
+          metrics.studioPreviewClose.right > metrics.studioPreview.right + 1 ||
+          Math.abs(metrics.studioPreviewClose.width - expectedLaptopCloseSize) > 1.25 ||
+          Math.abs(metrics.studioPreviewClose.height - expectedLaptopCloseSize) > 1.25
         ) {
           failures.push(
             `legacy preview close action is not safely reachable at 1229x692: ` +
