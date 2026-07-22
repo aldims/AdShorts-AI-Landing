@@ -27,6 +27,10 @@ import {
 } from "./local-examples.js";
 
 describe("local examples administration", () => {
+  it("allows the AdsFlow content account to manage the shared catalog", () => {
+    expect(isLocalExamplesAdmin({ email: "adsflowai@gmail.com" })).toBe(true);
+  });
+
   it("allows the content administrator account regardless of email casing", () => {
     expect(isLocalExamplesAdmin({ email: "  ALEXMAMONDI@GMAIL.COM  " })).toBe(true);
   });

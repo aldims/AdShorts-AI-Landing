@@ -90,6 +90,7 @@ const LOCAL_EXAMPLE_POSTER_FRAME_TIMES_SECONDS = [1.5, 0.75, 0.15, 0];
 const LOCAL_EXAMPLES_ADMIN_EMAIL = "adshortsai@gmail.com";
 const LOCAL_EXAMPLES_ALLOWED_ADMIN_EMAILS = new Set([
   LOCAL_EXAMPLES_ADMIN_EMAIL,
+  "adsflowai@gmail.com",
   "aldima@mail.com",
   "alexmamondi@gmail.com",
 ]);
