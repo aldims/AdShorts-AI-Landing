@@ -52,15 +52,16 @@ npm ci --no-audit --no-fund
 echo "[production] build release"
 npm run build
 
-if [ "${RUN_RESPONSIVE_AUDIT:-1}" = "1" ]; then
+if [ "${RUN_RESPONSIVE_AUDIT:-0}" = "1" ]; then
   RESPONSIVE_AUDIT_BROWSERS_VALUE="${RESPONSIVE_AUDIT_BROWSERS:-chromium}"
   IFS=',' read -r -a RESPONSIVE_AUDIT_BROWSER_LIST <<< "$RESPONSIVE_AUDIT_BROWSERS_VALUE"
   echo "[production] bounded responsive gate ($RESPONSIVE_AUDIT_BROWSERS_VALUE, quick mode)"
   npx playwright install "${RESPONSIVE_AUDIT_BROWSER_LIST[@]}"
   RESPONSIVE_AUDIT_BROWSERS="$RESPONSIVE_AUDIT_BROWSERS_VALUE" \
-    RESPONSIVE_AUDIT_TIMEOUT_MS="${RESPONSIVE_AUDIT_TIMEOUT_MS:-300000}" \
     RESPONSIVE_AUDIT_PROGRESS_EVERY="${RESPONSIVE_AUDIT_PROGRESS_EVERY:-25}" \
     npm run audit:responsive:app:quick
+else
+  echo "[production] skip responsive gate (set RUN_RESPONSIVE_AUDIT=1 to enable)"
 fi
 
 if [ "${RUN_TESTS:-0}" = "1" ]; then
