@@ -541,6 +541,9 @@ const ADSFLOW_MEDIA_DOWNLOAD_PATH_PATTERN = /\/api\/media\/(\d+)\/download(?:[/?
 
 const buildWorkspaceMediaAssetProxyUrl = (assetId: number) => `/api/workspace/media-assets/${assetId}`;
 
+const buildWorkspaceMediaAssetPlaybackUrl = (assetId: number) =>
+  `/api/workspace/media-assets/${assetId}/playback`;
+
 const getProjectMediaEntryAssetId = (entry?: AdsflowProjectMediaEntryPayload | null) =>
   normalizeInteger(entry?.media_asset_id) ?? normalizeInteger(entry?.id);
 
@@ -3266,6 +3269,31 @@ const normalizeWorkspaceSegmentInfographic = (value: unknown): WorkspaceSegmentI
   };
 };
 
+const resolveWorkspaceSegmentInfographicSourceAsset = (
+  infographic: WorkspaceSegmentInfographic | null,
+  projectMediaByAssetId: ReadonlyMap<number, WorkspaceMediaAssetRef>,
+  options: { projectId: number; segmentIndex: number },
+) => {
+  const match = infographic?.sourceVisualIdentity.match(/^asset:([1-9]\d*)$/);
+  const sourceAssetId = match ? normalizePositiveProjectId(match[1]) : null;
+  const sourceAsset = sourceAssetId ? projectMediaByAssetId.get(sourceAssetId) ?? null : null;
+  if (!sourceAsset || sourceAsset.lifecycle !== "ready") {
+    return null;
+  }
+
+  if (
+    (sourceAsset.segmentIndex !== null && sourceAsset.segmentIndex !== options.segmentIndex) ||
+    (!isWorkspaceVideoMediaAssetRef(sourceAsset) && !isWorkspacePhotoMediaAssetRef(sourceAsset))
+  ) {
+    return null;
+  }
+
+  // The project media envelope is already owner-checked and scoped by an
+  // explicit ProjectMediaLink. A reused project's immutable source therefore
+  // may legitimately retain the source project's projectId.
+  return sourceAsset;
+};
+
 export const buildWorkspaceSegmentEditorSegment = (
   projectId: number,
   payload: AdsflowSegmentEditorSegmentPayload,
@@ -3321,6 +3349,7 @@ export const buildWorkspaceSegmentEditorSegment = (
   const originalVideoMarker = normalizeText(payload.original_video);
   const hasCurrentVideo = Boolean(currentVideoMarker);
   const hasOriginalVideo = Boolean(originalVideoMarker);
+  const infographic = normalizeWorkspaceSegmentInfographic(payload.infographic);
   const currentEntry =
     projectSources?.currentEntriesBySegmentIndex?.get(index) ??
     findProjectMediaEntryBySegmentIndex(projectSources?.currentEntries ?? [], index);
@@ -3333,18 +3362,31 @@ export const buildWorkspaceSegmentEditorSegment = (
   const projectMediaByAssetId = projectSources?.projectMediaByAssetId ?? new Map();
   const projectMediaAssets = projectSources?.projectMediaAssets ?? [];
   const projectMediaLoaded = Boolean(projectSources?.projectMediaLoaded);
+  const infographicSourceAsset = resolveWorkspaceSegmentInfographicSourceAsset(
+    infographic,
+    projectMediaByAssetId,
+    { projectId, segmentIndex: index },
+  );
   const currentAsset = buildSegmentMediaAssetFromEntry(currentEntry, projectMediaByAssetId, {
     projectId,
     projectMediaLoaded,
     role: "segment_current",
     segmentIndex: index,
   });
-  const originalAsset = buildSegmentMediaAssetFromEntry(originalEntry, projectMediaByAssetId, {
-    projectId,
-    projectMediaLoaded,
-    role: "segment_original",
-    segmentIndex: index,
-  });
+  const originalAsset =
+    infographicSourceAsset ??
+    buildSegmentMediaAssetFromEntry(originalEntry, projectMediaByAssetId, {
+      projectId,
+      projectMediaLoaded,
+      role: "segment_original",
+      segmentIndex: index,
+    });
+  const infographicSourceAssetId = normalizePositiveProjectId(infographicSourceAsset?.assetId);
+  const infographicSourceMediaUrl = infographicSourceAssetId
+    ? isWorkspaceVideoMediaAssetRef(infographicSourceAsset)
+      ? buildWorkspaceMediaAssetPlaybackUrl(infographicSourceAssetId)
+      : buildWorkspaceMediaAssetProxyUrl(infographicSourceAssetId)
+    : null;
   const resolvedMediaType = resolveWorkspaceSegmentMediaType({
     currentAsset,
     currentEntry,
@@ -3443,19 +3485,34 @@ export const buildWorkspaceSegmentEditorSegment = (
     duration_sync_mode_user_selected: durationSyncModeUserSelected,
     endTime,
     index,
-    infographic: normalizeWorkspaceSegmentInfographic(payload.infographic),
+    infographic,
     manualDurationSeconds,
     mediaType: resolvedMediaType,
     originalAsset,
-    originalExternalPlaybackUrl: getProjectMediaEntryPlaybackUrl(originalEntry),
-    originalExternalPreviewUrl: getProjectMediaEntryPreviewUrl(originalEntry),
-    originalPlaybackUrl: hasOriginalVideo
-      ? buildWorkspaceSegmentEditorVideoUrl(projectId, index, "original", "playback", originalVideoMarker)
-      : null,
-    originalPosterUrl: buildWorkspaceSegmentPosterUrl(projectId, index, "original", originalAsset, originalEntry, originalVideoMarker),
-    originalPreviewUrl: hasOriginalVideo
-      ? buildWorkspaceSegmentEditorVideoUrl(projectId, index, "original", "preview", originalVideoMarker)
-      : null,
+    originalExternalPlaybackUrl:
+      infographicSourceMediaUrl ?? getProjectMediaEntryPlaybackUrl(originalEntry),
+    originalExternalPreviewUrl:
+      infographicSourceMediaUrl ?? getProjectMediaEntryPreviewUrl(originalEntry),
+    originalPlaybackUrl:
+      infographicSourceMediaUrl ??
+      (hasOriginalVideo
+        ? buildWorkspaceSegmentEditorVideoUrl(projectId, index, "original", "playback", originalVideoMarker)
+        : null),
+    originalPosterUrl: infographicSourceAsset
+      ? buildWorkspaceMediaAssetPosterUrl(infographicSourceAsset)
+      : buildWorkspaceSegmentPosterUrl(
+          projectId,
+          index,
+          "original",
+          originalAsset,
+          originalEntry,
+          originalVideoMarker,
+        ),
+    originalPreviewUrl:
+      infographicSourceMediaUrl ??
+      (hasOriginalVideo
+        ? buildWorkspaceSegmentEditorVideoUrl(projectId, index, "original", "preview", originalVideoMarker)
+        : null),
     originalSourceKind: resolvedOriginalSourceKind,
     sceneSoundAssetId,
     scene_sound: sceneSound,

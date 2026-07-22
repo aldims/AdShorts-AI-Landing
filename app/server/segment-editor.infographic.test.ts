@@ -76,4 +76,92 @@ describe("workspace segment editor infographic hydration", () => {
       version: 1,
     });
   });
+
+  it("uses the infographic source asset instead of a baked legacy original", () => {
+    const cleanSourceAssetId = 10222;
+    const segment = buildWorkspaceSegmentEditorSegment(
+      4284,
+      {
+        current_video: "asset:10485",
+        duration: 4,
+        end_time: 4,
+        index: 0,
+        infographic: {
+          input_hash: "b".repeat(64),
+          intrinsic_height: 640,
+          intrinsic_width: 1280,
+          media_asset_id: 10244,
+          source_visual_identity: `asset:${cleanSourceAssetId}`,
+          text: "Создайте атмосферу уюта",
+          transform: { center_x: 0.5, center_y: 0.25, width: 0.6 },
+          version: 1,
+        },
+        media_type: "video",
+        original_video: "asset:10485",
+        start_time: 0,
+        text: "Сцена",
+      },
+      {
+        currentEntries: [
+          {
+            media_asset_id: 10485,
+            media_type: "video",
+            role: "final_video",
+            segment_index: 0,
+          },
+        ],
+        originalEntries: [
+          {
+            media_asset_id: 10485,
+            media_type: "video",
+            role: "final_video",
+            segment_index: 0,
+          },
+        ],
+        projectMediaByAssetId: new Map([
+          [
+            cleanSourceAssetId,
+            {
+              assetId: cleanSourceAssetId,
+              createdAt: "2026-07-19T10:59:00.000Z",
+              deletedAt: null,
+              downloadPath: "/api/media/10222/download",
+              downloadUrl: null,
+              durationSeconds: 4,
+              expiresAt: null,
+              isCurrent: false,
+              kind: "rendered_segment",
+              libraryKind: "photo_animation",
+              lifecycle: "ready",
+              mediaType: "video",
+              mimeType: "video/mp4",
+              originalUrl: null,
+              playbackUrl: "/api/media/10222/download",
+              projectId: 4271,
+              renderedAnimationMode: null,
+              renderedViaI2v: true,
+              role: "source_upload",
+              segmentIndex: 0,
+              sourceKind: "ai_generated",
+              status: "ready",
+              storageKey: "projects/4284/segments/0/source.mp4",
+            },
+          ],
+        ]),
+        projectMediaLoaded: true,
+      },
+    );
+
+    expect(segment?.infographic?.mediaAssetId).toBe(10244);
+    expect(segment?.originalAsset?.assetId).toBe(cleanSourceAssetId);
+    expect(segment?.originalPlaybackUrl).toBe(
+      `/api/workspace/media-assets/${cleanSourceAssetId}/playback`,
+    );
+    expect(segment?.originalPreviewUrl).toBe(
+      `/api/workspace/media-assets/${cleanSourceAssetId}/playback`,
+    );
+    expect(segment?.originalPosterUrl).toContain(
+      `/api/workspace/media-assets/${cleanSourceAssetId}/poster`,
+    );
+  });
 });
