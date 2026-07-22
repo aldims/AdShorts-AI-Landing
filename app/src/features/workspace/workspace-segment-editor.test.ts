@@ -9,6 +9,7 @@ import {
   applyWorkspaceSegmentPendingInfographicTransforms,
   applyWorkspaceSegmentSceneSoundAsset,
   buildWorkspaceSegmentKnownVideoDurationPatch,
+  applyWorkspaceSegmentEditorGlobalVoiceSelection,
   applyWorkspaceSegmentEditorGlobalVoiceToSegments,
   applyWorkspaceSegmentEditorSceneVoiceOverride,
   applyWorkspaceSegmentEditorSceneVoiceSelection,
@@ -620,6 +621,7 @@ it("applies a voice override only to the selected scene", () => {
       manualDurationSeconds: null,
       startTime: 0,
       voiceType: "Russian_BrightHeroine",
+      voice_type: "Russian_BrightHeroine",
       voiceoverAsset: null,
       voiceoverLanguage: null,
       voiceoverTextHash: null,
@@ -627,6 +629,31 @@ it("applies a voice override only to the selected scene", () => {
     }),
   );
   expect(updatedDraft.segments[1]).toBe(secondSegment);
+});
+
+it("clears both scene voice aliases when the selected voice matches the project voice", () => {
+  const projectVoiceType = "Russian_BrightHeroine";
+  const previousSceneVoiceType = DEFAULT_STUDIO_VOICE_ID.ru;
+  const segment = createProjectVoiceoverSegment({
+    voiceType: previousSceneVoiceType,
+    voice_type: previousSceneVoiceType,
+  });
+  const draft = {
+    ...createProjectVoiceoverDraft([segment]),
+    voiceType: projectVoiceType,
+  };
+
+  const updatedDraft = applyWorkspaceSegmentEditorSceneVoiceSelection(
+    draft,
+    segment.index,
+    projectVoiceType,
+  );
+
+  expect(updatedDraft.segments[0]).toEqual(expect.objectContaining({
+    voiceType: null,
+    voice_type: null,
+  }));
+  expect(getWorkspaceSegmentEffectiveVoiceId(updatedDraft.segments[0]!, updatedDraft)).toBe(projectVoiceType);
 });
 
 it("restores the original voiceover and exact duration when the baseline voice is selected again", () => {
@@ -926,6 +953,31 @@ it("preserves an explicit visual duration when bulk voice text and the global vo
   }));
   expect(withUpdatedVoice.segments[0]?.voiceoverAsset).toBeNull();
   expect(withUpdatedVoice.ttsAssetId).toBeNull();
+});
+
+it("keeps a selected global voice when another segment edit follows", () => {
+  const baseline = createProjectVoiceoverDraft([
+    createProjectVoiceoverSegment({
+      text: "Исходный текст",
+      textByLanguage: { ru: "Исходный текст" },
+    }),
+  ]);
+
+  const withSelectedVoice = applyWorkspaceSegmentEditorGlobalVoiceSelection(
+    baseline,
+    "Russian_BrightHeroine",
+    "ru",
+  );
+  const withLaterTextEdit = applyWorkspaceSegmentEditorBulkVoiceText(
+    withSelectedVoice,
+    ["Текст после выбора голоса"],
+    "ru",
+  );
+
+  expect(withLaterTextEdit.voiceType).toBe("Russian_BrightHeroine");
+  expect(getWorkspaceSegmentEffectiveVoiceId(withLaterTextEdit.segments[0]!, withLaterTextEdit)).toBe(
+    "Russian_BrightHeroine",
+  );
 });
 
 it("keeps a persisted local voice selection through a fresh project refresh", () => {

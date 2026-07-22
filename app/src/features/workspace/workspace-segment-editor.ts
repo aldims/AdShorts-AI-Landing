@@ -6480,6 +6480,17 @@ export const applyWorkspaceSegmentEditorGlobalVoiceToSegments = (
   };
 };
 
+export const applyWorkspaceSegmentEditorGlobalVoiceSelection = (
+  draft: WorkspaceSegmentEditorDraftSession,
+  voiceType: string,
+  language?: StudioLanguage | null,
+): WorkspaceSegmentEditorDraftSession => {
+  const nextDraft = applyWorkspaceSegmentEditorGlobalVoiceToSegments(draft, voiceType);
+  return normalizeWorkspaceSegmentEditorSetting(voiceType) !== "none" && language
+    ? { ...nextDraft, language }
+    : nextDraft;
+};
+
 export const applyWorkspaceSegmentEditorBulkVoiceText = (
   draft: WorkspaceSegmentEditorDraftSession,
   texts: readonly string[],
@@ -6533,6 +6544,7 @@ export const applyWorkspaceSegmentEditorSceneVoiceOverride = (
             ...segment,
             ...(options && "subtitleType" in options ? { subtitleType: options.subtitleType ?? null } : {}),
             voiceType,
+            voice_type: voiceType,
           }, {
             resetTimelineToEstimatedVoiceover: true,
             session: draft,

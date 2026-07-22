@@ -175,6 +175,7 @@ import {
   areWorkspaceSegmentDurationValuesEqual,
   applyWorkspaceSegmentEditorBulkVoiceText,
   applyWorkspaceSegmentSceneSoundAsset,
+  applyWorkspaceSegmentEditorGlobalVoiceSelection,
   applyWorkspaceSegmentEditorGlobalVoiceToSegments,
   applyWorkspaceSegmentEditorJobResult,
   applyWorkspaceSegmentEditorSceneVoiceOverride,
@@ -26595,6 +26596,35 @@ export function WorkspacePage({
     const nextDraft = updater(segmentTimelineGlobalVoiceDraftRef.current ?? segmentTimelineGlobalVoiceDraft);
     segmentTimelineGlobalVoiceDraftRef.current = nextDraft;
     setSegmentTimelineGlobalVoiceDraft(nextDraft);
+    return nextDraft;
+  };
+  const persistSegmentTimelineGlobalVoiceSelection = (voiceDraft: SegmentTimelineGlobalVoiceDraft) => {
+    const voiceType = voiceDraft.isEnabled ? voiceDraft.voiceId : "none";
+    const nextDraft = updateSegmentEditorDraft((draft) =>
+      applyWorkspaceSegmentEditorGlobalVoiceSelection(draft, voiceType, voiceDraft.language),
+    );
+    const snapshot = segmentTimelineBulkVoiceTextEditSnapshotRef.current;
+    if (!nextDraft || !snapshot) {
+      return;
+    }
+
+    const snapshotDraft = applyWorkspaceSegmentEditorGlobalVoiceSelection(
+      {
+        ...nextDraft,
+        language: snapshot.language,
+        segments: snapshot.segments,
+        ttsAssetId: snapshot.ttsAssetId,
+        voiceType: snapshot.voiceType,
+      },
+      voiceType,
+      voiceDraft.language,
+    );
+    segmentTimelineBulkVoiceTextEditSnapshotRef.current = {
+      language: voiceDraft.isEnabled ? voiceDraft.language : snapshot.language,
+      segments: snapshotDraft.segments,
+      ttsAssetId: snapshotDraft.ttsAssetId,
+      voiceType: snapshotDraft.voiceType,
+    };
   };
   const getSegmentTimelineGlobalVoiceDraftForGeneration = (
     selection?: StudioVoiceSelectorGenerationSelection | null,
@@ -26627,26 +26657,34 @@ export function WorkspacePage({
   };
   const handleSegmentTimelineGlobalVoiceToggle = (isEnabled: boolean) => {
     const currentVoiceDraft = getCurrentSegmentTimelineGlobalVoiceDraft();
-    latestExplicitStudioVoiceSelectionRef.current = isEnabled
-      ? { language: currentVoiceDraft.language, voiceId: currentVoiceDraft.voiceId }
-      : null;
-    updateSegmentTimelineGlobalVoiceDraft((current) => ({
+    const nextVoiceDraft = updateSegmentTimelineGlobalVoiceDraft((current) => ({
       ...(current ?? currentVoiceDraft),
       isEnabled,
     }));
+    latestExplicitStudioVoiceSelectionRef.current = isEnabled
+      ? { language: nextVoiceDraft.language, voiceId: nextVoiceDraft.voiceId }
+      : null;
+    persistSegmentTimelineGlobalVoiceSelection(nextVoiceDraft);
   };
   const handleSegmentTimelineGlobalVoiceSelect = (voiceId: StudioVoiceOption["id"]) => {
     const nextLanguage =
-      getStudioLanguageForVoiceId(voiceId, segmentTimelineGlobalVoiceDraft?.language ?? selectedLanguage) ??
+      getStudioLanguageForVoiceId(
+        voiceId,
+        segmentTimelineGlobalVoiceDraftRef.current?.language ?? segmentTimelineGlobalVoiceDraft?.language ?? selectedLanguage,
+      ) ??
+      segmentTimelineGlobalVoiceDraftRef.current?.language ??
       segmentTimelineGlobalVoiceDraft?.language ??
       selectedLanguage;
     latestExplicitStudioVoiceSelectionRef.current = { language: nextLanguage, voiceId };
-    updateSegmentTimelineGlobalVoiceDraft((current) => ({
+    selectedVoiceIdByLanguageRef.current[nextLanguage] = voiceId;
+    setSelectedVoiceId(voiceId);
+    const nextVoiceDraft = updateSegmentTimelineGlobalVoiceDraft((current) => ({
       ...(current ?? getCurrentSegmentTimelineGlobalVoiceDraft()),
       isEnabled: true,
       language: nextLanguage,
       voiceId,
     }));
+    persistSegmentTimelineGlobalVoiceSelection(nextVoiceDraft);
   };
   const handleSegmentTimelineGlobalVoiceLanguageSelect = async (language: StudioLanguage) => {
     const currentVoiceDraft =
