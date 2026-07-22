@@ -502,6 +502,8 @@ const buildScenarios = () => {
       { width: 1121, height: 419, zoom: 1, fontScale: 1, type: "scene-short-desktop" },
       { width: 1166, height: 464, zoom: 1, fontScale: 1, type: "scene-short-desktop" },
       { width: 1181, height: 499, zoom: 1, fontScale: 1, type: "scene-breakpoint-upper" },
+      { width: 1688, height: 600, zoom: 1, fontScale: 1, type: "scene-height-threshold-lower" },
+      { width: 1688, height: 601, zoom: 1, fontScale: 1, type: "scene-height-threshold-upper" },
       { width: 1920, height: 980, zoom: 1.25, fontScale: 1, type: "scene-fit" },
       { width: 1208, height: 681, zoom: 1, fontScale: 1, type: "scene-user-laptop" },
       { width: 961, height: 698, zoom: 1, fontScale: 1, type: "scene-user-laptop" },
@@ -536,6 +538,8 @@ const buildScenarios = () => {
     { width: 1121, height: 419, zoom: 1, fontScale: 1, type: "scene-short-desktop" },
     { width: 1166, height: 464, zoom: 1, fontScale: 1, type: "scene-short-desktop" },
     { width: 1181, height: 499, zoom: 1, fontScale: 1, type: "scene-breakpoint-upper" },
+    { width: 1688, height: 600, zoom: 1, fontScale: 1, type: "scene-height-threshold-lower" },
+    { width: 1688, height: 601, zoom: 1, fontScale: 1, type: "scene-height-threshold-upper" },
     { width: 1920, height: 980, zoom: 1.25, fontScale: 1, type: "scene-fit" },
     { width: 1208, height: 681, zoom: 1, fontScale: 1, type: "scene-user-laptop" },
     { width: 961, height: 698, zoom: 1, fontScale: 1, type: "scene-user-laptop" },
@@ -747,6 +751,13 @@ const evaluateLayout = async (page) =>
     const sceneCardFooterStyle = sceneCardFooter
       ? window.getComputedStyle(sceneCardFooter)
       : null;
+    const sceneSourceBadge = activeSceneCard?.querySelector(
+      ".studio-segment-editor__card-badge",
+    );
+    const sceneSourceBadgeRect = sceneSourceBadge?.getBoundingClientRect();
+    const sceneSourceBadgeStyle = sceneSourceBadge
+      ? window.getComputedStyle(sceneSourceBadge)
+      : null;
     const sceneBrandAddRect = activeSceneCard
       ?.querySelector(".studio-segment-editor__brand-add")
       ?.getBoundingClientRect();
@@ -886,6 +897,12 @@ const evaluateLayout = async (page) =>
           sceneCardFooterStyle?.display !== "none" &&
           sceneCardFooterRect.width > 1 &&
           sceneCardFooterRect.height > 1,
+      ),
+      sceneSourceBadgeVisible: Boolean(
+        sceneSourceBadgeRect &&
+          sceneSourceBadgeStyle?.display !== "none" &&
+          sceneSourceBadgeRect.width > 1 &&
+          sceneSourceBadgeRect.height > 1,
       ),
       sceneBrandAdd: sceneBrandAddRect
         ? {
@@ -1323,6 +1340,8 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
         scenario.type === "scene-breakpoint-lower" ||
         scenario.type === "scene-short-desktop" ||
         scenario.type === "scene-breakpoint-upper" ||
+        scenario.type === "scene-height-threshold-lower" ||
+        scenario.type === "scene-height-threshold-upper" ||
         scenario.type === "scene-compact-desktop" ||
         scenario.type === "scene-user-laptop" ||
         scenario.type === "laptop-125");
@@ -2097,6 +2116,57 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
             `embedded preview/actions group is off-center: ${Math.round(compositionCenter)} vs ${Math.round(metrics.clientWidth / 2)}`,
           );
         }
+      }
+    }
+
+    if (
+      sceneVisualPanel &&
+      (scenario.type === "scene-height-threshold-lower" ||
+        scenario.type === "scene-height-threshold-upper")
+    ) {
+      const previewSlack = metrics.scenePreview && metrics.scenePreviewColumn
+        ? metrics.scenePreviewColumn.height - metrics.scenePreview.height
+        : Number.POSITIVE_INFINITY;
+      const actionsRightInset = metrics.sceneSubmit
+        ? metrics.clientWidth - metrics.sceneSubmit.right
+        : Number.POSITIVE_INFINITY;
+
+      if (
+        !metrics.sceneTimeline ||
+        metrics.sceneTimeline.height < 230 ||
+        metrics.sceneTimeline.bottom > metrics.clientHeight - 5
+      ) {
+        failures.push(
+          `scene height-threshold timeline jumps at ${scenario.width}x${scenario.height}: ` +
+            `${metrics.sceneTimeline?.height ?? "missing"}px, bottom ${metrics.sceneTimeline?.bottom ?? "missing"}`,
+        );
+      }
+
+      if (previewSlack < -1 || previewSlack > 16) {
+        failures.push(
+          `scene height-threshold preview leaves unused vertical space: ${previewSlack}px`,
+        );
+      }
+
+      if (
+        !metrics.sceneSubmit ||
+        actionsRightInset < 8 ||
+        actionsRightInset > 40 ||
+        metrics.sceneSubmit.bottom > (metrics.sceneTimeline?.top ?? 0) - 6
+      ) {
+        failures.push(
+          `scene height-threshold actions left the lower-right safe zone: ` +
+            `${metrics.sceneSubmit?.right ?? "missing"},${metrics.sceneSubmit?.bottom ?? "missing"}; ` +
+            `right inset ${actionsRightInset}`,
+        );
+      }
+
+      if (
+        metrics.scenePreview &&
+        metrics.scenePreview.width <= 190 &&
+        metrics.sceneSourceBadgeVisible
+      ) {
+        failures.push("scene source badge remains visible when the preview cannot fit it");
       }
     }
 
