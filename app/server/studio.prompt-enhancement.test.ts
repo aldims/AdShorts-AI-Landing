@@ -125,4 +125,24 @@ describe("studio prompt enhancement", () => {
       }),
     ).rejects.toThrow("Missing Authentication header");
   });
+
+  it("uses the deterministic fallback when every OpenRouter model is denied by access policy", async () => {
+    env.openrouterApiKey = "sk-or-v1-real-looking-key";
+    globalThis.fetch = async () =>
+      new Response(JSON.stringify({ success: false, error: "Access denied by security policy." }), {
+        headers: {
+          "Content-Type": "application/json",
+        },
+        status: 403,
+      });
+
+    const result = await improveStudioSegmentAiPhotoPrompt("кошка и котенок реалистично играют в мячик", {
+      language: "ru",
+      mode: "photo_animation",
+    });
+
+    expect(result.prompt).toContain("Кошка и котенок реалистично играют в мячик");
+    expect(result.prompt).toContain("естественное движение");
+    expect(result.prompt).not.toContain("Access denied");
+  });
 });

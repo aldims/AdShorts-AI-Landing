@@ -3802,6 +3802,9 @@ const extractOpenRouterErrorMessage = (payload: OpenRouterChatCompletionResponse
   return String(payload?.error?.message ?? "").trim();
 };
 
+const isOpenRouterAccessPolicyError = (error: unknown) =>
+  error instanceof Error && error.message.trim().toLowerCase() === "access denied by security policy.";
+
 const getStudioLanguageLabel = (language: "en" | "ru") => (language === "en" ? "English" : "Russian");
 
 const STUDIO_CONTENT_PLAN_IDEA_COUNT_MIN = 3;
@@ -7769,6 +7772,7 @@ export async function improveStudioSegmentAiPhotoPrompt(
   const normalizedMode = normalizeStudioSegmentPromptImproveMode(options?.mode);
   const modelCandidates = getStudioOpenRouterPromptEnhancementModelCandidates();
   let lastError: Error | null = null;
+  let accessPolicyFailureCount = 0;
   const hasConfiguredOpenRouterKey = Boolean(String(env.openrouterApiKey ?? "").trim());
   const hasOpenRouter = hasUsableOpenRouterApiKey(env.openrouterApiKey);
 
@@ -7790,8 +7794,25 @@ export async function improveStudioSegmentAiPhotoPrompt(
         };
       } catch (error) {
         lastError = error instanceof Error ? error : new Error("OpenRouter prompt enhancement failed.");
+        if (isOpenRouterAccessPolicyError(lastError)) {
+          accessPolicyFailureCount += 1;
+        }
         console.warn(`[studio] Failed to improve segment AI photo prompt with ${model}`, lastError);
       }
+    }
+  }
+
+  if (hasOpenRouter && accessPolicyFailureCount === modelCandidates.length) {
+    const fallbackPrompt = buildStudioSegmentPromptEnhancementFallback(
+      normalizedPrompt,
+      normalizedLanguage,
+      normalizedMode,
+    );
+    if (fallbackPrompt) {
+      console.warn("[studio] OpenRouter access policy denied prompt enhancement; using deterministic fallback");
+      return {
+        prompt: fallbackPrompt,
+      };
     }
   }
 
