@@ -12,7 +12,7 @@
     --studio-header-reserve: clamp(48px, 9.06dvh, 78px) !important;
     --studio-header-height: clamp(44px, 8.6dvh, 74px) !important;
     --studio-header-control-height: clamp(34px, 5.58dvh, 48px) !important;
-    --studio-height-continuum-bottom-inset: clamp(12px, 3.48dvh, 30px);
+    --studio-height-continuum-bottom-inset: clamp(18px, 4.25dvh, 32px);
     --studio-height-continuum-inline-inset: clamp(10px, 3.72dvh, 32px);
   }
 
@@ -99,11 +99,12 @@
       100dvh - var(--studio-header-reserve) - var(--studio-height-continuum-bottom-inset)
     ) !important;
     --studio-height-continuum-carousel-height: clamp(
-      148px,
+      138px,
       calc(
         var(--studio-segment-editor-layout-height) -
           var(--studio-segment-editor-adaptive-timeline-height) -
-          var(--studio-segment-editor-adaptive-gap) -
+          var(--studio-segment-editor-submit-height) -
+          (var(--studio-segment-editor-adaptive-gap) * 2) -
           (var(--studio-segment-editor-preview-inset) * 2)
       ),
       480px
@@ -283,7 +284,10 @@
     .studio-canvas-main.is-segment-editor
     .studio-segment-editor__layout.is-visual-panel-closed
     .studio-segment-editor__preview-column {
-    grid-row: 1 / 3 !important;
+    /* Keep the carousel inside the dedicated preview row. It previously
+     * spanned the action row as well, so the preview button overlapped the
+     * bottom of the active card at medium desktop heights. */
+    grid-row: 1 !important;
     min-width: 0 !important;
     width: 100% !important;
     min-height: 0 !important;
@@ -528,6 +532,23 @@
     .studio-canvas-main.is-segment-editor
     .studio-segment-editor__timeline-cell--has-play.studio-segment-editor__timeline-cell--has-history {
     padding-left: clamp(34px, 7dvh, 46px) !important;
+  }
+
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__timeline-row--visual
+    .studio-segment-editor__timeline-status,
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__timeline-row--visual
+    .studio-segment-editor__timeline-cell--has-history
+    .studio-segment-editor__timeline-status {
+    /* Place the edited badge beside the scene number instead of below it.
+     * Both remain readable even when the visual track is compressed. */
+    top: clamp(4px, 0.9dvh, 7px) !important;
+    right: auto !important;
+    bottom: auto !important;
+    left: clamp(36px, 7dvh, 46px) !important;
   }
 
   #app
