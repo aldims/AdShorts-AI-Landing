@@ -494,9 +494,11 @@ const buildScenarios = () => {
       { width: 1229, height: 692, zoom: 1, fontScale: 1, type: "laptop-125" },
       { width: 1208, height: 615, zoom: 1, fontScale: 1, type: "idea-controls" },
       { width: 2560, height: 1440, zoom: 1, fontScale: 1, type: "idea-standard" },
+      { width: 1121, height: 419, zoom: 1, fontScale: 1, type: "idea-compact" },
       { width: 1002, height: 424, zoom: 1, fontScale: 1, type: "idea-compact" },
       { width: 983, height: 388, zoom: 1, fontScale: 1, type: "idea-compact" },
       { width: 1180, height: 499, zoom: 1, fontScale: 1, type: "scene-breakpoint-lower" },
+      { width: 1121, height: 419, zoom: 1, fontScale: 1, type: "scene-short-desktop" },
       { width: 1166, height: 464, zoom: 1, fontScale: 1, type: "scene-short-desktop" },
       { width: 1181, height: 499, zoom: 1, fontScale: 1, type: "scene-breakpoint-upper" },
       { width: 1920, height: 980, zoom: 1.25, fontScale: 1, type: "scene-fit" },
@@ -525,9 +527,11 @@ const buildScenarios = () => {
     { width: 1229, height: 692, zoom: 1, fontScale: 1, type: "laptop-125" },
     { width: 1208, height: 615, zoom: 1, fontScale: 1, type: "idea-controls" },
     { width: 2560, height: 1440, zoom: 1, fontScale: 1, type: "idea-standard" },
+    { width: 1121, height: 419, zoom: 1, fontScale: 1, type: "idea-compact" },
     { width: 1002, height: 424, zoom: 1, fontScale: 1, type: "idea-compact" },
     { width: 983, height: 388, zoom: 1, fontScale: 1, type: "idea-compact" },
     { width: 1180, height: 499, zoom: 1, fontScale: 1, type: "scene-breakpoint-lower" },
+    { width: 1121, height: 419, zoom: 1, fontScale: 1, type: "scene-short-desktop" },
     { width: 1166, height: 464, zoom: 1, fontScale: 1, type: "scene-short-desktop" },
     { width: 1181, height: 499, zoom: 1, fontScale: 1, type: "scene-breakpoint-upper" },
     { width: 1920, height: 980, zoom: 1.25, fontScale: 1, type: "scene-fit" },
@@ -805,6 +809,12 @@ const evaluateLayout = async (page) =>
     const studioPreviewControlsRect = document
       .querySelector(".studio-canvas-preview.has-video-preview .studio-video-modal__player-controls")
       ?.getBoundingClientRect();
+    const studioPreviewPlayer = document.querySelector(
+      ".studio-canvas-preview.has-video-preview .studio-video-modal__player",
+    );
+    const studioPreviewPlayerStyle = studioPreviewPlayer
+      ? window.getComputedStyle(studioPreviewPlayer)
+      : null;
     const studioWelcomeRect = document
       .querySelector(".studio-welcome-card.studio-canvas-welcome")
       ?.getBoundingClientRect();
@@ -970,6 +980,9 @@ const evaluateLayout = async (page) =>
             height: Math.round(studioPreviewControlsRect.height),
           }
         : null,
+      studioPreviewPlayerRadius: studioPreviewPlayerStyle
+        ? Number.parseFloat(studioPreviewPlayerStyle.borderTopLeftRadius) || 0
+        : null,
       studioPreviewControlButtons: studioPreviewControlRects.map((rect) => ({
         top: Math.round(rect.top),
         right: Math.round(rect.right),
@@ -1030,7 +1043,20 @@ const openAndMeasureSceneVisualPanel = async (page) => {
     const submitRow = document.querySelector(
       ".studio-segment-editor__layout.is-visual-panel-open .studio-segment-editor__timeline-submit-row",
     );
+    const previewToggleLabel = submitRow?.querySelector(
+      ".studio-segment-editor__timeline-preview-toggle span",
+    );
     const timeline = document.querySelector(".studio-segment-editor__timeline");
+    const timelineScroll = timeline?.querySelector(".studio-segment-editor__timeline-scroll");
+    const timelineAddRail = timeline?.querySelector(".studio-segment-editor__timeline-add-rail");
+    const timelineEndTimecode = timeline?.querySelector(
+      ".studio-segment-editor__timeline-timecode-boundary--end",
+    );
+    const firstVoiceShell = timeline?.querySelector(
+      ".studio-segment-editor__timeline-row--voice .studio-segment-editor__timeline-cell-shell",
+    );
+    const firstVoicePlay = firstVoiceShell?.querySelector(".studio-segment-editor__timeline-play");
+    const firstVoiceCopy = firstVoiceShell?.querySelector(".studio-segment-editor__timeline-cell-copy");
     const header = document.querySelector(".site-header--workspace .site-header__inner");
     if (
       !main ||
@@ -1055,6 +1081,11 @@ const openAndMeasureSceneVisualPanel = async (page) => {
     const previewRect = preview.getBoundingClientRect();
     const submitRowRect = submitRow.getBoundingClientRect();
     const timelineRect = timeline.getBoundingClientRect();
+    const timelineScrollRect = timelineScroll?.getBoundingClientRect() ?? null;
+    const timelineAddRailRect = timelineAddRail?.getBoundingClientRect() ?? null;
+    const timelineEndTimecodeRect = timelineEndTimecode?.getBoundingClientRect() ?? null;
+    const firstVoicePlayRect = firstVoicePlay?.getBoundingClientRect() ?? null;
+    const firstVoiceCopyRect = firstVoiceCopy?.getBoundingClientRect() ?? null;
     const headerRect = header?.getBoundingClientRect() ?? null;
     const documentElement = document.documentElement;
     const body = document.body;
@@ -1114,8 +1145,19 @@ const openAndMeasureSceneVisualPanel = async (page) => {
       submitLeft: Math.round(submitRowRect.left),
       submitRight: Math.round(submitRowRect.right),
       submitTop: Math.round(submitRowRect.top),
+      previewLabelClientWidth: previewToggleLabel?.clientWidth ?? null,
+      previewLabelScrollWidth: previewToggleLabel?.scrollWidth ?? null,
+      timelineAddRailBottom: timelineAddRailRect ? Math.round(timelineAddRailRect.bottom) : null,
+      timelineAddRailHeight: timelineAddRailRect ? Math.round(timelineAddRailRect.height) : null,
+      timelineAddRailTop: timelineAddRailRect ? Math.round(timelineAddRailRect.top) : null,
       timelineBottom: Math.round(timelineRect.bottom),
+      timelineEndTimecodeRight: timelineEndTimecodeRect
+        ? Math.round(timelineEndTimecodeRect.right)
+        : null,
+      timelineScrollRight: timelineScrollRect ? Math.round(timelineScrollRect.right) : null,
       timelineTop: Math.round(timelineRect.top),
+      voiceCopyLeft: firstVoiceCopyRect ? Math.round(firstVoiceCopyRect.left) : null,
+      voicePlayRight: firstVoicePlayRect ? Math.round(firstVoicePlayRect.right) : null,
       visibleHeight: Math.round(visibleHeight),
       viewportHeight: document.documentElement.clientHeight,
       viewportWidth: document.documentElement.clientWidth,
@@ -1418,6 +1460,13 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
         const oversizedPlayerControl = metrics.studioPreviewControlButtons.find(
           (rect) => rect.width > maximumPlayerControlSize || rect.height > maximumPlayerControlSize,
         );
+        const outsidePlayerControl = metrics.studioPreviewControlButtons.find(
+          (rect) =>
+            rect.left < metrics.studioPreview.left - 1 ||
+            rect.right > metrics.studioPreview.right + 1 ||
+            rect.top < metrics.studioPreview.top - 1 ||
+            rect.bottom > metrics.studioPreview.bottom + 1,
+        );
         const mismatchedPlayerControl = auditsRegularIdeaControls && expectedPlayerControlSize !== null
           ? metrics.studioPreviewControlButtons.find(
               (rect) =>
@@ -1427,13 +1476,26 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
           : null;
         if (
           oversizedPlayerControl ||
+          outsidePlayerControl ||
           mismatchedPlayerControl ||
-          metrics.studioPreviewControls.height > maximumPlayerPanelHeight
+          metrics.studioPreviewControls.height > maximumPlayerPanelHeight ||
+          metrics.studioPreviewControls.left < metrics.studioPreview.left - 1 ||
+          metrics.studioPreviewControls.right > metrics.studioPreview.right + 1 ||
+          metrics.studioPreviewControls.bottom > metrics.studioPreview.bottom + 1
         ) {
           failures.push(
             `compact player controls do not scale with the video card: ` +
               `${oversizedPlayerControl?.width ?? mismatchedPlayerControl?.width ?? "panel"}x` +
               `${oversizedPlayerControl?.height ?? mismatchedPlayerControl?.height ?? metrics.studioPreviewControls.height}`,
+          );
+        }
+
+        if (
+          metrics.studioPreview.width <= 180 &&
+          (metrics.studioPreviewPlayerRadius === null || metrics.studioPreviewPlayerRadius > 17)
+        ) {
+          failures.push(
+            `compact video card radius is disproportionate: ${metrics.studioPreviewPlayerRadius ?? "missing"}px`,
           );
         }
       }
@@ -1767,6 +1829,7 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
     }
 
     if (sceneVisualPanel && scenario.type === "scene-short-desktop") {
+      const minimumShortTimelineHeight = effectiveHeight <= 460 ? 148 : 164;
       if (
         metrics.scrollHeight > metrics.clientHeight + 1 ||
         metrics.sceneMainScrollHeight > metrics.sceneMainClientHeight + 1
@@ -1783,7 +1846,7 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
 
       if (
         !metrics.sceneTimeline ||
-        metrics.sceneTimeline.height < 164 ||
+        metrics.sceneTimeline.height < minimumShortTimelineHeight ||
         metrics.sceneTimeline.bottom > metrics.clientHeight - 5
       ) {
         failures.push(
@@ -1858,6 +1921,55 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
             `panel right ${sceneVisualPanel.panelRight}, preview left ` +
             `${sceneVisualPanel.previewRight - sceneVisualPanel.previewWidth}, actions ` +
             `${sceneVisualPanel.submitRight}/${sceneVisualPanel.submitBottom}`,
+        );
+      }
+
+      if (
+        sceneVisualPanel.previewLabelClientWidth === null ||
+        sceneVisualPanel.previewLabelScrollWidth === null ||
+        sceneVisualPanel.previewLabelScrollWidth > sceneVisualPanel.previewLabelClientWidth + 1
+      ) {
+        failures.push(
+          `short desktop preview label is clipped: ` +
+            `${sceneVisualPanel.previewLabelClientWidth ?? "missing"}/` +
+            `${sceneVisualPanel.previewLabelScrollWidth ?? "missing"}`,
+        );
+      }
+
+      if (
+        sceneVisualPanel.voicePlayRight === null ||
+        sceneVisualPanel.voiceCopyLeft === null ||
+        sceneVisualPanel.voiceCopyLeft < sceneVisualPanel.voicePlayRight + 2
+      ) {
+        failures.push(
+          `short desktop voice text overlaps playback: ` +
+            `${sceneVisualPanel.voiceCopyLeft ?? "missing"}/` +
+            `${sceneVisualPanel.voicePlayRight ?? "missing"}`,
+        );
+      }
+
+      if (
+        sceneVisualPanel.timelineAddRailHeight === null ||
+        sceneVisualPanel.timelineAddRailHeight < minimumShortTimelineHeight - 32 ||
+        sceneVisualPanel.timelineAddRailBottom === null ||
+        sceneVisualPanel.timelineAddRailBottom > sceneVisualPanel.timelineBottom - 3
+      ) {
+        failures.push(
+          `short desktop add-scene rail does not span the tracks: ` +
+            `${sceneVisualPanel.timelineAddRailHeight ?? "missing"}px, bottom ` +
+            `${sceneVisualPanel.timelineAddRailBottom ?? "missing"}`,
+        );
+      }
+
+      if (
+        sceneVisualPanel.timelineEndTimecodeRight === null ||
+        sceneVisualPanel.timelineScrollRight === null ||
+        sceneVisualPanel.timelineEndTimecodeRight > sceneVisualPanel.timelineScrollRight + 1
+      ) {
+        failures.push(
+          `short desktop final timecode is clipped: ` +
+            `${sceneVisualPanel.timelineEndTimecodeRight ?? "missing"}/` +
+            `${sceneVisualPanel.timelineScrollRight ?? "missing"}`,
         );
       }
     }

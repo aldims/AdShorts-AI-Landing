@@ -23043,22 +23043,40 @@ body.studio-video-fullscreen-open .studio-canvas-preview::after {
    not outgrow the 9:16 card. Fullscreen playback keeps the regular controls. */
 @container (max-width: 180px) {
   .studio-canvas-preview__player-shell {
-    --studio-inline-control-size: clamp(16px, 18cqw, 28px);
+    --studio-inline-control-size: clamp(16px, 16cqw, 26px);
     --studio-preview-action-icon-size: clamp(5.33px, 6cqw, 9.33px);
     --studio-preview-action-size: clamp(9.33px, 10.67cqw, 16px);
   }
 
+  .studio-canvas-preview__player-shell .studio-video-modal__player,
+  .studio-canvas-preview__player-shell .studio-video-modal__player video {
+    border-radius: clamp(12px, 8cqw, 16px);
+  }
+
+  .studio-canvas-preview__player-shell .studio-video-modal__player-controls {
+    border-radius: 0 0 clamp(12px, 8cqw, 16px) clamp(12px, 8cqw, 16px);
+  }
+
   .studio-canvas-preview__floating-actions {
-    top: clamp(5px, 4cqw, 8px);
-    right: clamp(5px, 4cqw, 8px);
-    left: clamp(5px, 4cqw, 8px);
+    top: clamp(4px, 3.5cqw, 7px);
+    right: clamp(4px, 3.5cqw, 7px);
+    left: clamp(4px, 3.5cqw, 7px);
     width: auto;
     max-width: none;
+    overflow: hidden;
   }
 
   .studio-canvas-preview__generated-actions,
   .studio-canvas-preview__generated-actions--expanded {
+    width: 100%;
+    max-width: 100%;
     gap: clamp(2px, 2cqw, 4px);
+    justify-content: flex-end;
+    overflow: hidden;
+  }
+
+  .studio-canvas-preview__generated-actions .studio-canvas-preview__quick-action--close {
+    margin: 0;
   }
 
   .studio-canvas-preview__player-shell
@@ -23129,8 +23147,21 @@ body.studio-video-fullscreen-open .studio-canvas-preview::after {
 @container (max-width: 120px) {
   .studio-canvas-preview__player-shell
     .studio-video-modal__player:not(.is-fullscreen)
+    .studio-video-modal__player-controls {
+    gap: 2px;
+    padding: 4px;
+  }
+
+  .studio-canvas-preview__player-shell
+    .studio-video-modal__player:not(.is-fullscreen)
+    .studio-video-modal__player-toolbar {
+    gap: 2px;
+  }
+
+  .studio-canvas-preview__player-shell
+    .studio-video-modal__player:not(.is-fullscreen)
     .studio-video-modal__time {
-    display: none;
+    font-size: 0.48rem;
   }
 }
 

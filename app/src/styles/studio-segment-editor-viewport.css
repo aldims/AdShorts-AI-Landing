@@ -1849,6 +1849,125 @@
     min-height: 100% !important;
     height: 100% !important;
   }
+
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout.is-visual-panel-open
+    .studio-segment-editor__timeline-submit-row {
+    justify-self: end !important;
+    width: 226px !important;
+    grid-template-columns: 120px minmax(0, 1fr) !important;
+  }
+
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout.is-visual-panel-open
+    .studio-segment-editor__timeline-preview-toggle {
+    gap: 2px !important;
+    padding-inline: 1px !important;
+    font-size: 0.5rem !important;
+    text-overflow: clip !important;
+  }
+
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout.is-visual-panel-open
+    .studio-segment-editor__timeline-preview-toggle
+    svg {
+    width: 11px !important;
+    min-width: 11px !important;
+    height: 11px !important;
+  }
+
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout.is-visual-panel-open
+    .studio-segment-editor__timeline-preview-toggle
+    span {
+    overflow: visible !important;
+    text-overflow: clip !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-cell--has-play,
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__timeline-cell--has-play.studio-segment-editor__timeline-cell--has-history {
+    padding-left: 28px !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-add-rail {
+    top: 22px !important;
+    bottom: 4px !important;
+    height: auto !important;
+    min-height: 0 !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-timecode-boundary--end {
+    right: 0 !important;
+    left: auto !important;
+    width: 58px !important;
+    min-width: 58px !important;
+    padding-inline: 3px !important;
+    text-align: right !important;
+  }
+}
+
+/* Very short desktop workspaces still have enough width for the desktop
+ * composition. Recover vertical space from chrome and timeline density instead
+ * of collapsing the visual editor or clipping its working controls. */
+@media (min-width: 961px) and (max-width: 1180.98px) and (min-height: 400px) and (max-height: 460px) and (orientation: landscape) {
+  #app .studio-canvas-route.is-segment-editor {
+    --studio-header-reserve: 44px !important;
+    --studio-header-height: 42px !important;
+  }
+
+  #app .studio-canvas-route.is-segment-editor .site-header--workspace {
+    --studio-header-control-height: 34px !important;
+    height: var(--studio-header-height) !important;
+  }
+
+  #app .studio-canvas-route.is-segment-editor .site-header--workspace .site-header__inner {
+    height: 40px !important;
+    min-height: 40px !important;
+    margin-top: 1px !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__layout,
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout.is-visual-panel-closed {
+    --studio-segment-editor-landscape-timeline-height: 150px;
+    --studio-segment-editor-carousel-height: clamp(178px, 44dvh, 202px) !important;
+    --studio-segment-editor-carousel-width: calc(var(--studio-segment-editor-carousel-height) * 0.5625) !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__preview-column,
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout.is-visual-panel-closed
+    .studio-segment-editor__preview-column {
+    --studio-segment-editor-carousel-height: clamp(178px, 44dvh, 202px) !important;
+    --studio-segment-editor-carousel-width: calc(var(--studio-segment-editor-carousel-height) * 0.5625) !important;
+  }
+
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout.is-visual-panel-open
+    .studio-segment-editor__preview-column {
+    --studio-segment-editor-carousel-height: min(214px, 50dvh, calc(100dvh - 208px)) !important;
+    --studio-segment-editor-carousel-width: calc(var(--studio-segment-editor-carousel-height) * 0.5625) !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline {
+    --studio-segment-editor-timeline-visual-track-height: 36px !important;
+    --studio-segment-editor-timeline-scene-track-height: 22px !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__brand-add {
+    width: 46px !important;
+    min-width: 46px !important;
+    max-width: 46px !important;
+  }
 }
 
 @media (max-width: 380px) {
