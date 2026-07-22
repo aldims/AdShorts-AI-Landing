@@ -503,8 +503,11 @@ const buildScenarios = () => {
       { width: 1166, height: 464, zoom: 1, fontScale: 1, type: "scene-short-desktop" },
       { width: 1181, height: 499, zoom: 1, fontScale: 1, type: "scene-breakpoint-upper" },
       { width: 1688, height: 400, zoom: 1, fontScale: 1, type: "scene-height-continuum" },
+      { width: 1688, height: 458, zoom: 1, fontScale: 1, type: "scene-height-continuum" },
+      { width: 1688, height: 516, zoom: 1, fontScale: 1, type: "scene-height-continuum" },
       { width: 1688, height: 559, zoom: 1, fontScale: 1, type: "scene-height-continuum" },
       { width: 1688, height: 560, zoom: 1, fontScale: 1, type: "scene-height-continuum" },
+      { width: 1688, height: 575, zoom: 1, fontScale: 1, type: "scene-height-continuum" },
       { width: 1688, height: 620, zoom: 1, fontScale: 1, type: "scene-height-continuum" },
       { width: 1688, height: 621, zoom: 1, fontScale: 1, type: "scene-height-continuum" },
       { width: 1688, height: 760, zoom: 1, fontScale: 1, type: "scene-height-continuum" },
@@ -545,8 +548,11 @@ const buildScenarios = () => {
     { width: 1166, height: 464, zoom: 1, fontScale: 1, type: "scene-short-desktop" },
     { width: 1181, height: 499, zoom: 1, fontScale: 1, type: "scene-breakpoint-upper" },
     { width: 1688, height: 400, zoom: 1, fontScale: 1, type: "scene-height-continuum" },
+    { width: 1688, height: 458, zoom: 1, fontScale: 1, type: "scene-height-continuum" },
+    { width: 1688, height: 516, zoom: 1, fontScale: 1, type: "scene-height-continuum" },
     { width: 1688, height: 559, zoom: 1, fontScale: 1, type: "scene-height-continuum" },
     { width: 1688, height: 560, zoom: 1, fontScale: 1, type: "scene-height-continuum" },
+    { width: 1688, height: 575, zoom: 1, fontScale: 1, type: "scene-height-continuum" },
     { width: 1688, height: 620, zoom: 1, fontScale: 1, type: "scene-height-continuum" },
     { width: 1688, height: 621, zoom: 1, fontScale: 1, type: "scene-height-continuum" },
     { width: 1688, height: 760, zoom: 1, fontScale: 1, type: "scene-height-continuum" },
@@ -1262,14 +1268,65 @@ const openAndMeasureSceneVisualPanel = async (page) => {
   const closedMetrics = await page.evaluate(() => {
     const previewContainer = document.querySelector(".studio-canvas-preview.is-segment-editor");
     const activeCard = document.querySelector(".studio-segment-editor__card.is-active");
+    const activeCardCopy = activeCard?.querySelector(".studio-segment-editor__card-copy");
+    const activeCardPlaceholder = activeCard?.querySelector(
+      ".studio-segment-editor__card-placeholder.is-action",
+    );
+    const activeCardPlaceholderBefore = activeCardPlaceholder
+      ? window.getComputedStyle(activeCardPlaceholder, "::before")
+      : null;
+    const timeline = document.querySelector(".studio-segment-editor__timeline");
+    const timelineScroll = timeline?.querySelector(".studio-segment-editor__timeline-scroll");
+    const timelineMusicRow = timeline?.querySelector(
+      ".studio-segment-editor__timeline-row--music",
+    );
+    const timelineLabels = Array.from(
+      timeline?.querySelectorAll(
+        ".studio-segment-editor__timeline-row .studio-segment-editor__timeline-label",
+      ) ?? [],
+    );
     const header = document.querySelector("header");
     const activeCardRect = activeCard?.getBoundingClientRect();
+    const timelineScrollRect = timelineScroll?.getBoundingClientRect();
+    const timelineMusicRowRect = timelineMusicRow?.getBoundingClientRect();
     const headerRect = header?.getBoundingClientRect();
+    const timelineLabelsValid =
+      timelineLabels.length === 5 &&
+      timelineLabels.every((label) => {
+        const style = window.getComputedStyle(label);
+        const row = label.closest(".studio-segment-editor__timeline-row");
+        const track = row?.querySelector(".studio-segment-editor__timeline-track");
+        const labelRect = label.getBoundingClientRect();
+        const trackRect = track?.getBoundingClientRect();
+        return (
+          Number.parseFloat(style.fontSize) > 0 &&
+          style.color !== "rgba(0, 0, 0, 0)" &&
+          label.scrollWidth <= label.clientWidth + 1 &&
+          Boolean(trackRect && labelRect.right <= trackRect.left + 1)
+        );
+      });
 
     return {
+      closedCardCopyDisplay: activeCardCopy
+        ? window.getComputedStyle(activeCardCopy).display
+        : null,
+      closedCardPlaceholderClientWidth: activeCardPlaceholder?.clientWidth ?? null,
+      closedCardPlaceholderScrollWidth: activeCardPlaceholder?.scrollWidth ?? null,
+      closedCardPlaceholderSquareHeight: activeCardPlaceholderBefore
+        ? Number.parseFloat(activeCardPlaceholderBefore.height)
+        : null,
+      closedCardPlaceholderSquareWidth: activeCardPlaceholderBefore
+        ? Number.parseFloat(activeCardPlaceholderBefore.width)
+        : null,
       closedCardTop: activeCardRect ? Math.round(activeCardRect.top) : null,
+      closedCardWidth: activeCardRect ? Math.round(activeCardRect.width) : null,
       closedHeaderBottom: headerRect ? Math.round(headerRect.bottom) : null,
       closedPreviewScrollTop: previewContainer ? Math.round(previewContainer.scrollTop) : null,
+      closedTimelineContentOverflow:
+        timelineScrollRect && timelineMusicRowRect
+          ? Math.max(0, timelineMusicRowRect.bottom - timelineScrollRect.bottom)
+          : null,
+      closedTimelineLabelsValid: timelineLabelsValid,
     };
   });
 
@@ -2150,7 +2207,7 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
       const expectedPreviewInset = clampMetric(4, effectiveHeight * 0.008, 7);
       const expectedSubmitHeight = clampMetric(30, effectiveHeight * 0.0558, 48);
       const expectedTimelineHeight =
-        clampMetric(28, effectiveHeight * 0.0534, 46) +
+        clampMetric(31, effectiveHeight * 0.0534, 46) +
         clampMetric(30, effectiveHeight * 0.07, 72) +
         clampMetric(20, effectiveHeight * 0.045, 46) * 4;
       const expectedLayoutHeight =
@@ -2207,6 +2264,46 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
         metrics.sceneSourceBadgeVisible
       ) {
         failures.push("scene source badge remains visible when the preview cannot fit it");
+      }
+
+      if (
+        sceneVisualPanel.closedTimelineContentOverflow === null ||
+        sceneVisualPanel.closedTimelineContentOverflow > 1
+      ) {
+        failures.push(
+          `scene height continuum clips the bottom track: ` +
+            `${sceneVisualPanel.closedTimelineContentOverflow ?? "missing"}px`,
+        );
+      }
+
+      if (!sceneVisualPanel.closedTimelineLabelsValid) {
+        failures.push("scene height continuum hides or clips the left timeline labels");
+      }
+
+      if (
+        typeof sceneVisualPanel.closedCardWidth === "number" &&
+        sceneVisualPanel.closedCardWidth <= 230 &&
+        sceneVisualPanel.closedCardCopyDisplay !== "none"
+      ) {
+        failures.push("scene height continuum lets scene metadata overlap the brand control");
+      }
+
+      if (
+        sceneVisualPanel.closedCardPlaceholderSquareWidth === null ||
+        sceneVisualPanel.closedCardPlaceholderSquareHeight === null ||
+        Math.abs(
+          sceneVisualPanel.closedCardPlaceholderSquareWidth -
+            sceneVisualPanel.closedCardPlaceholderSquareHeight,
+        ) > 1 ||
+        sceneVisualPanel.closedCardPlaceholderSquareWidth < 20 ||
+        sceneVisualPanel.closedCardPlaceholderScrollWidth >
+          sceneVisualPanel.closedCardPlaceholderClientWidth + 1
+      ) {
+        failures.push(
+          `scene height continuum distorts the add-visual control: ` +
+            `${sceneVisualPanel.closedCardPlaceholderSquareWidth ?? "missing"}x` +
+            `${sceneVisualPanel.closedCardPlaceholderSquareHeight ?? "missing"}px`,
+        );
       }
 
       if (

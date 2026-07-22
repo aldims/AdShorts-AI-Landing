@@ -1917,6 +1917,32 @@
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__card-badge {
     display: none !important;
   }
+
+  /* Scene metadata and the centered brand control share the footer. On a
+   * narrow active card the metadata cannot fit without covering the brand,
+   * so retain the primary action and remove the secondary copy. */
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__card-copy {
+    display: none !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__card-placeholder.is-action {
+    flex-direction: column !important;
+    gap: clamp(4px, 1dvh, 7px) !important;
+    padding: 8px !important;
+    font-size: clamp(0.56rem, 1.2dvh, 0.68rem) !important;
+    line-height: 1.15 !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__card-placeholder.is-action::before {
+    box-sizing: border-box !important;
+    flex: 0 0 clamp(22px, 5.5dvh, 28px) !important;
+    width: clamp(22px, 5.5dvh, 28px) !important;
+    height: clamp(22px, 5.5dvh, 28px) !important;
+    aspect-ratio: 1 !important;
+    margin-right: 0 !important;
+    border-radius: clamp(6px, 1.4dvh, 9px) !important;
+    font-size: clamp(0.8rem, 2.5dvh, 1rem) !important;
+  }
 }
 
 @media (max-width: 380px) {

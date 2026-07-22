@@ -75,7 +75,10 @@
     --studio-segment-editor-adaptive-gap: clamp(5px, 1.5dvh, 13px);
     --studio-segment-editor-preview-inset: clamp(4px, 0.8dvh, 7px);
     --studio-segment-editor-submit-height: clamp(30px, 5.58dvh, 48px);
-    --studio-segment-editor-timeline-chrome-height: clamp(28px, 5.34dvh, 46px);
+    /* The ruler and the timeline's vertical insets need 31px even at the
+     * shortest supported desktop viewport. A 28px floor clipped the last
+     * track by a couple of pixels at 458-516px high. */
+    --studio-segment-editor-timeline-chrome-height: clamp(31px, 5.34dvh, 46px);
     --studio-segment-editor-adaptive-visual-track-height: clamp(30px, 7dvh, 72px);
     --studio-segment-editor-adaptive-scene-track-height: clamp(20px, 4.5dvh, 46px);
     --studio-segment-editor-adaptive-timeline-height: calc(
@@ -390,7 +393,7 @@
     .studio-segment-editor__layout:is(.is-visual-panel-open, .is-visual-panel-closed)
     .studio-segment-editor__timeline {
     --studio-segment-editor-timeline-add-rail-offset: clamp(4px, 1.16dvh, 10px);
-    --studio-segment-editor-timeline-add-rail-width: clamp(48px, 11.5dvh, 86px);
+    --studio-segment-editor-timeline-add-rail-width: clamp(72px, 11.5dvh, 86px);
     --studio-segment-editor-timeline-visual-track-height:
       var(--studio-segment-editor-adaptive-visual-track-height) !important;
     --studio-segment-editor-timeline-scene-track-height:
@@ -507,6 +510,12 @@
 }
 
 @media (min-width: 1181px) and (min-height: 400px) and (max-height: 520px) and (orientation: landscape) {
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline {
+    /* Keep a real label rail on short screens. This variable is shared by
+     * the left labels and the right add-scene rail, so both remain aligned. */
+    --studio-segment-editor-timeline-add-rail-width: clamp(72px, 16dvh, 86px) !important;
+  }
+
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-block
     > .studio-segment-editor__prompt-section-label {
     min-height: 12px !important;
@@ -549,15 +558,17 @@
   }
 
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-label {
-    justify-content: center !important;
-    color: transparent !important;
-    font-size: 0 !important;
+    justify-content: flex-start !important;
+    gap: 3px !important;
+    padding-inline: 1px !important;
+    color: rgba(226, 232, 240, 0.82) !important;
+    font-size: clamp(0.5rem, 1.1dvh, 0.6rem) !important;
   }
 
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-label-icon {
-    width: 18px !important;
-    min-width: 18px !important;
-    height: 18px !important;
+    width: 15px !important;
+    min-width: 15px !important;
+    height: 15px !important;
     color: rgba(204, 216, 245, 0.82) !important;
   }
 }
