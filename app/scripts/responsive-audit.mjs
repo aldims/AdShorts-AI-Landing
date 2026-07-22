@@ -498,6 +498,7 @@ const buildScenarios = () => {
       { width: 1002, height: 424, zoom: 1, fontScale: 1, type: "idea-compact" },
       { width: 983, height: 388, zoom: 1, fontScale: 1, type: "idea-compact" },
       { width: 1180, height: 499, zoom: 1, fontScale: 1, type: "scene-breakpoint-lower" },
+      { width: 1144, height: 406, zoom: 1, fontScale: 1, type: "scene-short-desktop" },
       { width: 1121, height: 419, zoom: 1, fontScale: 1, type: "scene-short-desktop" },
       { width: 1166, height: 464, zoom: 1, fontScale: 1, type: "scene-short-desktop" },
       { width: 1181, height: 499, zoom: 1, fontScale: 1, type: "scene-breakpoint-upper" },
@@ -531,6 +532,7 @@ const buildScenarios = () => {
     { width: 1002, height: 424, zoom: 1, fontScale: 1, type: "idea-compact" },
     { width: 983, height: 388, zoom: 1, fontScale: 1, type: "idea-compact" },
     { width: 1180, height: 499, zoom: 1, fontScale: 1, type: "scene-breakpoint-lower" },
+    { width: 1144, height: 406, zoom: 1, fontScale: 1, type: "scene-short-desktop" },
     { width: 1121, height: 419, zoom: 1, fontScale: 1, type: "scene-short-desktop" },
     { width: 1166, height: 464, zoom: 1, fontScale: 1, type: "scene-short-desktop" },
     { width: 1181, height: 499, zoom: 1, fontScale: 1, type: "scene-breakpoint-upper" },
@@ -738,6 +740,13 @@ const evaluateLayout = async (page) =>
     const sceneCardCopyRect = activeSceneCard
       ?.querySelector(".studio-segment-editor__card-copy")
       ?.getBoundingClientRect();
+    const sceneCardFooter = activeSceneCard?.querySelector(
+      ".studio-segment-editor__card-overlay-footer",
+    );
+    const sceneCardFooterRect = sceneCardFooter?.getBoundingClientRect();
+    const sceneCardFooterStyle = sceneCardFooter
+      ? window.getComputedStyle(sceneCardFooter)
+      : null;
     const sceneBrandAddRect = activeSceneCard
       ?.querySelector(".studio-segment-editor__brand-add")
       ?.getBoundingClientRect();
@@ -767,6 +776,19 @@ const evaluateLayout = async (page) =>
     const sceneActiveVisualCellStyle = sceneActiveVisualCell
       ? window.getComputedStyle(sceneActiveVisualCell)
       : null;
+    const existingSceneSelectionFrame = document.querySelector(
+      ".studio-segment-editor__timeline-scene-selection-frame",
+    );
+    const sceneSelectionFrameProbe = !existingSceneSelectionFrame && sceneVisualTrack
+      ? document.createElement("span")
+      : null;
+    if (sceneSelectionFrameProbe) {
+      sceneSelectionFrameProbe.className = "studio-segment-editor__timeline-scene-selection-frame";
+      sceneSelectionFrameProbe.setAttribute("aria-hidden", "true");
+      sceneVisualTrack.append(sceneSelectionFrameProbe);
+    }
+    const sceneSelectionFrame = existingSceneSelectionFrame ?? sceneSelectionFrameProbe;
+    const sceneSelectionFrameRect = sceneSelectionFrame?.getBoundingClientRect();
     const sceneMain = document.querySelector(".studio-canvas-main.is-segment-editor");
     const sceneLayout = document.querySelector(".studio-segment-editor__layout");
     const sceneLayoutRect = sceneLayout?.getBoundingClientRect();
@@ -820,6 +842,16 @@ const evaluateLayout = async (page) =>
       ?.getBoundingClientRect();
     const headerRect = document.querySelector("header")?.getBoundingClientRect();
     const firstHeadingRect = document.querySelector("main h1")?.getBoundingClientRect();
+    const sceneSelectionFrameMetrics = sceneSelectionFrameRect && sceneSelectionFrame
+      ? {
+          top: Math.round(sceneSelectionFrameRect.top),
+          bottom: Math.round(sceneSelectionFrameRect.bottom),
+          clientHeight: Math.round(sceneSelectionFrame.clientHeight),
+          scrollHeight: Math.round(sceneSelectionFrame.scrollHeight),
+          outlineBoxSizing: window.getComputedStyle(sceneSelectionFrame, "::before").boxSizing,
+        }
+      : null;
+    sceneSelectionFrameProbe?.remove();
     return {
       isStudioRoute,
       clientWidth: viewportWidth,
@@ -849,6 +881,12 @@ const evaluateLayout = async (page) =>
             bottom: Math.round(sceneCardCopyRect.bottom),
           }
         : null,
+      sceneCardFooterVisible: Boolean(
+        sceneCardFooterRect &&
+          sceneCardFooterStyle?.display !== "none" &&
+          sceneCardFooterRect.width > 1 &&
+          sceneCardFooterRect.height > 1,
+      ),
       sceneBrandAdd: sceneBrandAddRect
         ? {
             left: Math.round(sceneBrandAddRect.left),
@@ -896,6 +934,7 @@ const evaluateLayout = async (page) =>
             pointerEvents: sceneActiveVisualCellStyle?.pointerEvents ?? "",
           }
         : null,
+      sceneSelectionFrame: sceneSelectionFrameMetrics,
       sceneMainScrollTop: sceneMain ? Math.round(sceneMain.scrollTop) : null,
       sceneMainClientHeight: sceneMain ? Math.round(sceneMain.clientHeight) : null,
       sceneMainScrollHeight: sceneMain ? Math.round(sceneMain.scrollHeight) : null,
@@ -1867,6 +1906,25 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
             `${metrics.sceneActiveVisualCell?.height ?? "missing"}px, pointer-events ` +
             `${metrics.sceneActiveVisualCell?.pointerEvents ?? "missing"}`,
         );
+      }
+
+      if (
+        !metrics.sceneSelectionFrame ||
+        metrics.sceneSelectionFrame.outlineBoxSizing !== "border-box" ||
+        metrics.sceneSelectionFrame.scrollHeight > metrics.sceneSelectionFrame.clientHeight + 1 ||
+        metrics.sceneSelectionFrame.bottom > (metrics.sceneTimeline?.bottom ?? 0) - 2
+      ) {
+        failures.push(
+          `short desktop selection outline is clipped: ` +
+            `${metrics.sceneSelectionFrame?.clientHeight ?? "missing"}/` +
+            `${metrics.sceneSelectionFrame?.scrollHeight ?? "missing"}px, ` +
+            `bottom ${metrics.sceneSelectionFrame?.bottom ?? "missing"}, ` +
+            `box-sizing ${metrics.sceneSelectionFrame?.outlineBoxSizing ?? "missing"}`,
+        );
+      }
+
+      if (effectiveHeight <= 460 && metrics.sceneCardFooterVisible) {
+        failures.push("short desktop preview footer should leave only the centered brand control");
       }
 
       if (

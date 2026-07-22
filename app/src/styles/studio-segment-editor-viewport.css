@@ -1968,6 +1968,13 @@
     min-width: 46px !important;
     max-width: 46px !important;
   }
+
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__card.is-active
+    .studio-segment-editor__card-overlay-footer {
+    display: none !important;
+  }
 }
 
 @media (max-width: 380px) {
