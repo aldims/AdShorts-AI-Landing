@@ -12,9 +12,10 @@ import {
   getWorkspacePhotoAnimationSourcePosterUrl,
 } from "./workspace-media-library-helpers";
 import {
+  buildWorkspaceMediaAssetPlaybackUrl,
+  buildWorkspaceSegmentScopedPosterUrlFromVideoUrl,
   fallbackStudioSubtitleColorOption,
   fallbackStudioSubtitleStyleOption,
-  buildWorkspaceMediaAssetPlaybackUrl,
   getPositiveWorkspaceMediaAssetId,
   getStudioCustomAssetPreviewUrl,
   getStudioLanguageForVoiceId,
@@ -374,7 +375,10 @@ export const getWorkspaceSegmentDraftPosterUrl = (segment: WorkspaceSegmentEdito
   }
 
   if (segment.videoAction === "custom" && getWorkspaceSegmentCustomPreviewKind(segment.customVideo) === "video") {
-    return getStudioCustomAssetPosterUrl(segment.customVideo);
+    return (
+      getStudioCustomAssetPosterUrl(segment.customVideo) ??
+      buildWorkspaceSegmentScopedPosterUrlFromVideoUrl(getStudioCustomAssetPreviewUrl(segment.customVideo))
+    );
   }
 
   if (segment.videoAction === "original") {
@@ -868,7 +872,10 @@ export const getWorkspaceSegmentResolvedMediaSurface = (
         ? getWorkspaceSegmentDraftPlaybackVideoUrl(segment)
         : getWorkspaceSegmentDraftVideoUrl(segment)
       : previewUrl;
-  const posterUrl = previewKind === "video" ? getWorkspaceSegmentDraftPosterUrl(segment) : null;
+  const posterUrl =
+    previewKind === "video"
+      ? getWorkspaceSegmentDraftPosterUrl(segment) ?? buildWorkspaceSegmentScopedPosterUrlFromVideoUrl(viewerUrl)
+      : null;
   const fallbackPosterUrl = previewKind === "video" ? getWorkspaceSegmentDraftFallbackPosterUrl(segment) : null;
   const fallbackUrls = getWorkspaceSegmentDraftPreviewFallbackUrls(segment, previewKind);
   const latestVisualAction = getWorkspaceSegmentLatestVisualAction(segment);

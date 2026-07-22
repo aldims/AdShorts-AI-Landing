@@ -10476,6 +10476,31 @@ describe("WorkspacePage studio locale defaults", () => {
     expect(idleSurface.preloadPolicy).toBe("none");
   });
 
+  it("derives a scoped timeline poster from the resolved generated video url", () => {
+    const segment = createDraftSegment({
+      aiVideoAsset: {
+        fileName: "legacy-ai-video.mp4",
+        fileSize: 0,
+        mimeType: "video/mp4",
+        remoteUrl:
+          "/api/workspace/project-segment-video?projectId=4284&segmentIndex=1&source=original&delivery=playback&v=legacy",
+      },
+      aiVideoGeneratedMode: "ai_video",
+      mediaType: "video",
+      videoAction: "ai",
+    });
+
+    expect(getWorkspaceSegmentDraftPosterUrl(segment)).toBeNull();
+
+    const timelineSurface = getWorkspaceSegmentResolvedMediaSurface(segment, "segment-thumb");
+
+    expect(timelineSurface.posterUrl).toBe(
+      "/api/workspace/project-segment-poster?projectId=4284&segmentIndex=1&source=original&v=legacy",
+    );
+    expect(timelineSurface.mountVideoWhenIdle).toBe(false);
+    expect(timelineSurface.preloadPolicy).toBe("none");
+  });
+
   it("rewrites project segment preview delivery for playback-only custom videos", () => {
     const segment = createDraftSegment({
       customVideo: {
@@ -10491,11 +10516,20 @@ describe("WorkspacePage studio locale defaults", () => {
     const playbackSurface = getWorkspaceSegmentResolvedMediaSurface(segment, "segment-carousel-card", {
       isPlaybackRequested: true,
     });
+    const timelineSurface = getWorkspaceSegmentResolvedMediaSurface(segment, "segment-thumb");
 
     expect(playbackSurface.displayUrl).toBe(
       "/api/workspace/project-segment-video?projectId=3753&segmentIndex=2&source=current&delivery=playback&v=clip",
     );
     expect(playbackSurface.viewerUrl).toBe(playbackSurface.displayUrl);
+    expect(getWorkspaceSegmentDraftPosterUrl(segment)).toBe(
+      "/api/workspace/project-segment-poster?projectId=3753&segmentIndex=2&source=current&v=clip",
+    );
+    expect(timelineSurface.posterUrl).toBe(
+      "/api/workspace/project-segment-poster?projectId=3753&segmentIndex=2&source=current&v=clip",
+    );
+    expect(timelineSurface.mountVideoWhenIdle).toBe(false);
+    expect(timelineSurface.preloadPolicy).toBe("none");
   });
 
   it("uses server-provided posters for video segment previews", () => {
