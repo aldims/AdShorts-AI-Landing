@@ -1517,9 +1517,8 @@
   }
 }
 
-/* The 1920x980/125% viewport exposes roughly 850x440 CSS pixels. Keep the
- * complete desktop information architecture, but size it from that effective
- * canvas instead of carrying the full-height tablet header into the editor. */
+/* Strongly zoomed and embedded landscape workspaces need a one-row header in
+ * place of the regular tablet stack. */
 @media (min-width: 641px) and (max-width: 960px) and (min-height: 400px) and (max-height: 600px) and (orientation: landscape) {
   #app .studio-canvas-route.is-segment-editor {
     --studio-header-reserve: 42px !important;
@@ -1707,6 +1706,148 @@
     .studio-segment-editor__preview-column {
     --studio-segment-editor-carousel-height: min(252px, 51dvh, calc(100dvh - 234px)) !important;
     --studio-segment-editor-carousel-width: calc(var(--studio-segment-editor-carousel-height) * 0.5625) !important;
+  }
+}
+
+/* At short desktop widths the preview remains centered like the large-screen
+ * composition, while the compact actions use the free lower-right corner. */
+@media (min-width: 961px) and (max-width: 1180.98px) and (min-height: 400px) and (max-height: 600px) and (orientation: landscape) {
+  #app .studio-canvas-route.is-segment-editor {
+    --studio-header-reserve: 50px !important;
+    --studio-header-height: 48px !important;
+  }
+
+  #app .studio-canvas-route.is-segment-editor .site-header--workspace {
+    --studio-header-control-height: 40px !important;
+    height: var(--studio-header-height) !important;
+  }
+
+  #app .studio-canvas-route.is-segment-editor .site-header--workspace .site-header__inner {
+    width: calc(100% - 20px) !important;
+    height: 44px !important;
+    min-height: 44px !important;
+    margin-top: 2px !important;
+    padding-inline: 6px !important;
+    gap: 8px !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__layout,
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout.is-visual-panel-closed {
+    --studio-segment-editor-landscape-timeline-height: clamp(164px, 36.6dvh, 170px);
+    --studio-segment-editor-carousel-height: clamp(188px, 46dvh, 240px) !important;
+    --studio-segment-editor-carousel-width: calc(var(--studio-segment-editor-carousel-height) * 0.5625) !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__preview-column,
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout.is-visual-panel-closed
+    .studio-segment-editor__preview-column {
+    --studio-segment-editor-carousel-height: clamp(188px, 46dvh, 240px) !important;
+    --studio-segment-editor-carousel-width: calc(var(--studio-segment-editor-carousel-height) * 0.5625) !important;
+  }
+
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout.is-visual-panel-open
+    .studio-segment-editor__preview-column {
+    --studio-segment-editor-carousel-height: min(252px, 51dvh, calc(100dvh - 234px)) !important;
+    --studio-segment-editor-carousel-width: calc(var(--studio-segment-editor-carousel-height) * 0.5625) !important;
+  }
+
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout.is-visual-panel-closed {
+    grid-template-columns:
+      minmax(0, 1fr)
+      var(--studio-segment-editor-carousel-width)
+      minmax(260px, 1fr) !important;
+  }
+
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout.is-visual-panel-closed
+    .studio-segment-editor__preview-column {
+    grid-column: 2 !important;
+  }
+
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout.is-visual-panel-closed
+    .studio-segment-editor__timeline-submit-row {
+    grid-column: 3 !important;
+    align-self: end !important;
+    justify-self: end !important;
+    width: clamp(248px, 31vw, 300px) !important;
+    min-height: 34px !important;
+    height: 34px !important;
+    margin: 0 4px 4px 0 !important;
+    padding: 3px !important;
+    grid-template-columns: minmax(92px, 108px) minmax(0, 1fr) !important;
+    border-radius: 11px !important;
+  }
+
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout.is-visual-panel-closed
+    .studio-segment-editor__timeline-submit-row
+    .studio-segment-editor__timeline-preview-controls,
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout.is-visual-panel-closed
+    .studio-segment-editor__timeline-submit-row
+    .studio-segment-editor__timeline-preview-toggle,
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout.is-visual-panel-closed
+    .studio-segment-editor__timeline-submit-row
+    .studio-segment-editor__prompt-submit {
+    min-height: 26px !important;
+    height: 26px !important;
+    padding-inline: 6px !important;
+    border-radius: 8px !important;
+    font-size: 0.6rem !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__brand-add {
+    bottom: 6px !important;
+    width: 54px !important;
+    min-width: 54px !important;
+    max-width: 54px !important;
+    min-height: 20px !important;
+    height: 20px !important;
+    padding-inline: 6px !important;
+    font-size: 0.5rem !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__card-copy {
+    flex: 0 1 22px !important;
+    width: 22px !important;
+    min-width: 0 !important;
+    max-width: 22px !important;
+    overflow: hidden !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__card-copy strong,
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__card-copy span {
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline {
+    --studio-segment-editor-timeline-visual-track-height: 40px !important;
+    --studio-segment-editor-timeline-scene-track-height: 25px !important;
+  }
+
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__timeline-row--visual
+    .studio-segment-editor__timeline-cell--visual {
+    min-height: 100% !important;
+    height: 100% !important;
   }
 }
 

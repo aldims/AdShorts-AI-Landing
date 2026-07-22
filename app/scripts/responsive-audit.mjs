@@ -497,6 +497,7 @@ const buildScenarios = () => {
       { width: 1002, height: 424, zoom: 1, fontScale: 1, type: "idea-compact" },
       { width: 983, height: 388, zoom: 1, fontScale: 1, type: "idea-compact" },
       { width: 1180, height: 499, zoom: 1, fontScale: 1, type: "scene-breakpoint-lower" },
+      { width: 1166, height: 464, zoom: 1, fontScale: 1, type: "scene-short-desktop" },
       { width: 1181, height: 499, zoom: 1, fontScale: 1, type: "scene-breakpoint-upper" },
       { width: 1920, height: 980, zoom: 1.25, fontScale: 1, type: "scene-fit" },
       { width: 1208, height: 681, zoom: 1, fontScale: 1, type: "scene-user-laptop" },
@@ -527,6 +528,7 @@ const buildScenarios = () => {
     { width: 1002, height: 424, zoom: 1, fontScale: 1, type: "idea-compact" },
     { width: 983, height: 388, zoom: 1, fontScale: 1, type: "idea-compact" },
     { width: 1180, height: 499, zoom: 1, fontScale: 1, type: "scene-breakpoint-lower" },
+    { width: 1166, height: 464, zoom: 1, fontScale: 1, type: "scene-short-desktop" },
     { width: 1181, height: 499, zoom: 1, fontScale: 1, type: "scene-breakpoint-upper" },
     { width: 1920, height: 980, zoom: 1.25, fontScale: 1, type: "scene-fit" },
     { width: 1208, height: 681, zoom: 1, fontScale: 1, type: "scene-user-laptop" },
@@ -750,6 +752,17 @@ const evaluateLayout = async (page) =>
     const sceneSubmitRect = document
       .querySelector(".studio-segment-editor__timeline-submit-row")
       ?.getBoundingClientRect();
+    const sceneVisualTrack = document.querySelector(
+      ".studio-segment-editor__timeline-track--visual",
+    );
+    const sceneVisualTrackRect = sceneVisualTrack?.getBoundingClientRect();
+    const sceneActiveVisualCell = document.querySelector(
+      ".studio-segment-editor__timeline-row--visual .studio-segment-editor__timeline-cell--visual[aria-pressed='true']",
+    );
+    const sceneActiveVisualCellRect = sceneActiveVisualCell?.getBoundingClientRect();
+    const sceneActiveVisualCellStyle = sceneActiveVisualCell
+      ? window.getComputedStyle(sceneActiveVisualCell)
+      : null;
     const sceneMain = document.querySelector(".studio-canvas-main.is-segment-editor");
     const sceneLayout = document.querySelector(".studio-segment-editor__layout");
     const sceneLayoutRect = sceneLayout?.getBoundingClientRect();
@@ -853,8 +866,24 @@ const evaluateLayout = async (page) =>
             left: Math.round(sceneSubmitRect.left),
             right: Math.round(sceneSubmitRect.right),
             width: Math.round(sceneSubmitRect.width),
+            height: Math.round(sceneSubmitRect.height),
             top: Math.round(sceneSubmitRect.top),
             bottom: Math.round(sceneSubmitRect.bottom),
+          }
+        : null,
+      sceneVisualTrack: sceneVisualTrackRect
+        ? {
+            top: Math.round(sceneVisualTrackRect.top),
+            bottom: Math.round(sceneVisualTrackRect.bottom),
+            height: Math.round(sceneVisualTrackRect.height),
+          }
+        : null,
+      sceneActiveVisualCell: sceneActiveVisualCellRect
+        ? {
+            top: Math.round(sceneActiveVisualCellRect.top),
+            bottom: Math.round(sceneActiveVisualCellRect.bottom),
+            height: Math.round(sceneActiveVisualCellRect.height),
+            pointerEvents: sceneActiveVisualCellStyle?.pointerEvents ?? "",
           }
         : null,
       sceneMainScrollTop: sceneMain ? Math.round(sceneMain.scrollTop) : null,
@@ -1211,6 +1240,7 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
         scenario.type === "scene-fit" ||
         scenario.type === "scene-embedded" ||
         scenario.type === "scene-breakpoint-lower" ||
+        scenario.type === "scene-short-desktop" ||
         scenario.type === "scene-breakpoint-upper" ||
         scenario.type === "scene-compact-desktop" ||
         scenario.type === "scene-user-laptop" ||
@@ -1733,6 +1763,102 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
               `${Math.round(brandCenter)} vs ${Math.round(cardCenter)}`,
           );
         }
+      }
+    }
+
+    if (sceneVisualPanel && scenario.type === "scene-short-desktop") {
+      if (
+        metrics.scrollHeight > metrics.clientHeight + 1 ||
+        metrics.sceneMainScrollHeight > metrics.sceneMainClientHeight + 1
+      ) {
+        failures.push(
+          `short desktop scene editor scrolls: document ${metrics.scrollHeight}/${metrics.clientHeight}, ` +
+            `workspace ${metrics.sceneMainScrollHeight}/${metrics.sceneMainClientHeight}`,
+        );
+      }
+
+      if (metrics.headerHeight === null || metrics.headerHeight > 50) {
+        failures.push(`short desktop header is too tall: ${metrics.headerHeight ?? "missing"}px`);
+      }
+
+      if (
+        !metrics.sceneTimeline ||
+        metrics.sceneTimeline.height < 164 ||
+        metrics.sceneTimeline.bottom > metrics.clientHeight - 5
+      ) {
+        failures.push(
+          `short desktop timeline is squeezed: ${metrics.sceneTimeline?.height ?? "missing"}px, ` +
+            `bottom ${metrics.sceneTimeline?.bottom ?? "missing"}`,
+        );
+      }
+
+      if (
+        !metrics.sceneVisualTrack ||
+        !metrics.sceneActiveVisualCell ||
+        metrics.sceneActiveVisualCell.pointerEvents === "none" ||
+        metrics.sceneActiveVisualCell.height < metrics.sceneVisualTrack.height - 1
+      ) {
+        failures.push(
+          `short desktop visual track is not fully clickable: track ` +
+            `${metrics.sceneVisualTrack?.height ?? "missing"}px, cell ` +
+            `${metrics.sceneActiveVisualCell?.height ?? "missing"}px, pointer-events ` +
+            `${metrics.sceneActiveVisualCell?.pointerEvents ?? "missing"}`,
+        );
+      }
+
+      if (
+        !metrics.sceneSubmit ||
+        metrics.sceneSubmit.width > 304 ||
+        metrics.sceneSubmit.height > 36 ||
+        metrics.sceneSubmit.right < metrics.clientWidth - 18 ||
+        metrics.sceneSubmit.bottom > (metrics.sceneTimeline?.top ?? 0) - 6
+      ) {
+        failures.push(
+          `short desktop actions are not in the lower-right safe zone: ` +
+            `${metrics.sceneSubmit?.width ?? "missing"}x${metrics.sceneSubmit?.height ?? "missing"} at ` +
+            `${metrics.sceneSubmit?.right ?? "missing"},${metrics.sceneSubmit?.bottom ?? "missing"}`,
+        );
+      }
+
+      if (metrics.scenePreview && metrics.sceneBrandAdd) {
+        const cardCenter = (metrics.scenePreview.left + metrics.scenePreview.right) / 2;
+        const brandCenter = (metrics.sceneBrandAdd.left + metrics.sceneBrandAdd.right) / 2;
+        if (
+          Math.abs(cardCenter - brandCenter) > 2 ||
+          metrics.sceneBrandAdd.right - metrics.sceneBrandAdd.left > 56 ||
+          metrics.sceneBrandAdd.bottom - metrics.sceneBrandAdd.top > 22
+        ) {
+          failures.push(
+            `short desktop brand control is disproportionate: ` +
+              `${metrics.sceneBrandAdd.right - metrics.sceneBrandAdd.left}x` +
+              `${metrics.sceneBrandAdd.bottom - metrics.sceneBrandAdd.top}px`,
+          );
+        }
+      }
+
+      if (metrics.sceneCardCopy && metrics.sceneBrandAdd) {
+        const overlapWidth = Math.min(metrics.sceneCardCopy.right, metrics.sceneBrandAdd.right) -
+          Math.max(metrics.sceneCardCopy.left, metrics.sceneBrandAdd.left);
+        const overlapHeight = Math.min(metrics.sceneCardCopy.bottom, metrics.sceneBrandAdd.bottom) -
+          Math.max(metrics.sceneCardCopy.top, metrics.sceneBrandAdd.top);
+        if (overlapWidth > 0 && overlapHeight > 0) {
+          failures.push(`short desktop preview footer overlaps branding: ${overlapWidth}x${overlapHeight}px`);
+        }
+      }
+
+      if (
+        sceneVisualPanel.headerHeight === null ||
+        sceneVisualPanel.headerHeight > 46 ||
+        sceneVisualPanel.panelRight > sceneVisualPanel.previewRight - sceneVisualPanel.previewWidth + 1 ||
+        sceneVisualPanel.submitBottom > sceneVisualPanel.timelineTop - 6 ||
+        sceneVisualPanel.submitRight > sceneVisualPanel.viewportWidth - 8
+      ) {
+        failures.push(
+          `short desktop open visual panel leaves its composition: header ${sceneVisualPanel.headerHeight}px, ` +
+            `panel right ${sceneVisualPanel.panelRight}, preview left ` +
+            `${sceneVisualPanel.previewRight - sceneVisualPanel.previewWidth}, actions ` +
+            `${sceneVisualPanel.submitRight}/${sceneVisualPanel.submitBottom}`,
+        );
       }
     }
 
