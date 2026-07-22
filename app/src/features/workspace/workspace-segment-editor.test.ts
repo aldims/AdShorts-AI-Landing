@@ -516,6 +516,76 @@ describe("segment infographic refresh isolation", () => {
     expect(refreshed.segments[0]?.infographic).toEqual(infographic);
   });
 
+  it("replaces a cached baked original with the infographic source asset", () => {
+    const infographic = {
+      animation: { durationSeconds: 1 as const, type: "fade" as const },
+      inputHash: "d".repeat(64),
+      intrinsicHeight: 480,
+      intrinsicWidth: 376,
+      mediaAssetId: 10244,
+      parts: [],
+      sourceVisualIdentity: "asset:10222",
+      stylePrompt: null,
+      text: "Создайте атмосферу уюта",
+      transform: { centerX: 0.5, centerY: 0.3, width: 0.6 },
+      version: 1 as const,
+    };
+    const mediaAsset = (assetId: number, role: string) => ({
+      assetId,
+      createdAt: null,
+      deletedAt: null,
+      downloadPath: null,
+      downloadUrl: `/api/workspace/media-assets/${assetId}`,
+      expiresAt: null,
+      isCurrent: false,
+      kind: "rendered_segment",
+      libraryKind: "photo_animation",
+      lifecycle: "ready" as const,
+      mediaType: "video",
+      mimeType: "video/mp4",
+      originalUrl: null,
+      playbackUrl: `/api/workspace/media-assets/${assetId}/playback`,
+      projectId: 77,
+      role,
+      segmentIndex: 0,
+      sourceKind: "ai_generated",
+      status: "ready",
+      storageKey: null,
+    });
+    const staleSegment = createProjectVoiceoverSegment({
+      infographic,
+      mediaType: "video",
+      originalAsset: mediaAsset(10485, "final_video"),
+      originalPlaybackUrl: "/api/workspace/media-assets/10485/playback",
+      originalPosterUrl: "/api/workspace/media-assets/10485/poster",
+      originalPreviewUrl: "/api/workspace/media-assets/10485/playback",
+      videoAction: "photo_animation",
+    });
+    const freshSegment = createProjectVoiceoverSegment({
+      ...staleSegment,
+      originalAsset: mediaAsset(10222, "source_upload"),
+      originalPlaybackUrl: "/api/workspace/media-assets/10222/playback",
+      originalPosterUrl: "/api/workspace/media-assets/10222/poster",
+      originalPreviewUrl: "/api/workspace/media-assets/10222/playback",
+    });
+    const staleDraft = createProjectVoiceoverDraft([staleSegment]);
+
+    const refreshed = refreshWorkspaceSegmentEditorDraftWithFreshSession(
+      staleDraft,
+      createProjectVoiceoverDraft([freshSegment]),
+      { baselineSession: staleDraft },
+    );
+
+    expect(refreshed.segments[0]?.infographic).toEqual(infographic);
+    expect(refreshed.segments[0]?.originalAsset?.assetId).toBe(10222);
+    expect(refreshed.segments[0]?.originalPlaybackUrl).toBe(
+      "/api/workspace/media-assets/10222/playback",
+    );
+    expect(refreshed.segments[0]?.originalPosterUrl).toBe(
+      "/api/workspace/media-assets/10222/poster",
+    );
+  });
+
   it("applies the last visible transform before rendering without changing other scenes", () => {
     const firstSegment = createProjectVoiceoverSegment({ index: 0 });
     const secondSegment = createProjectVoiceoverSegment({ index: 1 });

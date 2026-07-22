@@ -9090,9 +9090,6 @@ export const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
         ? freshDurationExtensionSourceDurationSeconds
         : liveDurationExtensionSourceDurationSeconds;
   const currentVisualSegment = liveSegment.visualReset ? liveSegment : normalizedFreshSegment;
-  const originalVisualSegment = shouldPreserveWorkspaceSegmentLiveOriginalVisualOnRefresh(liveSegment)
-    ? liveSegment
-    : normalizedFreshSegment;
   const liveVoiceOverrideId = getWorkspaceSegmentVoiceOverrideId(liveSegment);
   const freshVoiceOverrideId = getWorkspaceSegmentVoiceOverrideId(normalizedFreshSegment);
   const voiceOverrideId = resolveWorkspaceSegmentProjectVoiceoverVoiceOverrideId(
@@ -9137,6 +9134,16 @@ export const mergeWorkspaceSegmentEditorDraftSegmentWithFreshSession = (
   const nextInfographic = shouldPreserveLiveInfographic
     ? cloneWorkspaceSegmentInfographic(liveSegment.infographic)
     : freshInfographic;
+  const shouldAdoptFreshInfographicSource = Boolean(
+    nextInfographic?.sourceVisualIdentity &&
+      getWorkspaceSegmentOriginalVisualIdentityKey(normalizedFreshSegment) ===
+        nextInfographic.sourceVisualIdentity,
+  );
+  const originalVisualSegment =
+    shouldAdoptFreshInfographicSource ||
+    !shouldPreserveWorkspaceSegmentLiveOriginalVisualOnRefresh(liveSegment)
+      ? normalizedFreshSegment
+      : liveSegment;
   const nextVoiceLanguage = freshVoiceoverAsset || shouldUseFreshProjectVoiceoverTiming
     ? normalizeStudioLanguageValue(normalizedFreshSegment.voiceLanguage ?? normalizedFreshSegment.voice_language) ??
       normalizeStudioLanguageValue(normalizedFreshSegment.voiceoverLanguage) ??
