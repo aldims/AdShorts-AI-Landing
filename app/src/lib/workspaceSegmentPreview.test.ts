@@ -4,6 +4,7 @@ import {
   filterWorkspaceStillAssetUrls,
   getWorkspaceSegmentPausedPreviewTime,
   isLikelyVideoAssetUrl,
+  resolveWorkspaceSegmentIdleVideoPreload,
   sanitizeWorkspaceSegmentPosterUrl,
 } from "./workspaceSegmentPreview";
 
@@ -60,5 +61,36 @@ describe("workspace segment preview helpers", () => {
     expect(clearWorkspaceSegmentPreviewTimes(emptyTimes)).toBe(emptyTimes);
     expect(clearWorkspaceSegmentPreviewTimes(populatedTimes)).toEqual({});
     expect(clearWorkspaceSegmentPreviewTimes(populatedTimes)).not.toBe(populatedTimes);
+  });
+
+  it("keeps loading an active carousel video until its first poster frame is ready", () => {
+    expect(
+      resolveWorkspaceSegmentIdleVideoPreload({
+        hasPosterFrame: false,
+        isActiveCarouselCard: true,
+        preload: "metadata",
+      }),
+    ).toBe("metadata");
+    expect(
+      resolveWorkspaceSegmentIdleVideoPreload({
+        hasPosterFrame: false,
+        isActiveCarouselCard: true,
+        preload: "auto",
+      }),
+    ).toBe("metadata");
+    expect(
+      resolveWorkspaceSegmentIdleVideoPreload({
+        hasPosterFrame: true,
+        isActiveCarouselCard: true,
+        preload: "metadata",
+      }),
+    ).toBe("none");
+    expect(
+      resolveWorkspaceSegmentIdleVideoPreload({
+        hasPosterFrame: false,
+        isActiveCarouselCard: false,
+        preload: "metadata",
+      }),
+    ).toBe("none");
   });
 });

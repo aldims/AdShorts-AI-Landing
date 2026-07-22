@@ -1015,7 +1015,10 @@ import {
 } from "../lib/workspaceProjectStacks";
 import { resolveWorkspaceGenerationMusicRequest } from "../lib/workspaceGenerationMusic";
 import { resolveWorkspaceRegenerationPrompt } from "../lib/workspaceRegenerationPrompt";
-import { clearWorkspaceSegmentPreviewTimes } from "../lib/workspaceSegmentPreview";
+import {
+  clearWorkspaceSegmentPreviewTimes,
+  resolveWorkspaceSegmentIdleVideoPreload,
+} from "../lib/workspaceSegmentPreview";
 import {
   clampWorkspaceSegmentEditorFullPreviewTime,
   getWorkspaceSegmentEditorFullPreviewAudioFadeOptions,
@@ -9911,8 +9914,17 @@ export function WorkspacePage({
       element.pause();
       element.muted = true;
       element.defaultMuted = true;
-      if (element.preload !== "none") {
-        element.preload = "none";
+      const idlePreload = resolveWorkspaceSegmentIdleVideoPreload({
+        hasPosterFrame: Boolean(element.poster),
+        isActiveCarouselCard: Boolean(element.closest(".studio-segment-editor__card.is-active")),
+        preload: element.preload,
+      });
+      if (element.preload !== idlePreload) {
+        element.preload = idlePreload;
+      }
+      if (idlePreload !== "none") {
+        ensureVideoElementLoading(element, HTMLMediaElement.HAVE_CURRENT_DATA);
+        return;
       }
       delete element.dataset.previewPrimed;
     },

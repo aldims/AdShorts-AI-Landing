@@ -95,6 +95,17 @@ export const shouldAllowWorkspaceSegmentPreviewVideoPlayback = (options: {
   (options.allowVideoPlayback ?? true) &&
   Boolean(options.autoplay || options.isPlaybackRequested);
 
+export const resolveWorkspaceSegmentIdleVideoPreload = (options: {
+  hasPosterFrame: boolean;
+  isActiveCarouselCard: boolean;
+  preload: "" | "auto" | "metadata" | "none";
+}) =>
+  options.isActiveCarouselCard &&
+  !options.hasPosterFrame &&
+  (options.preload === "auto" || options.preload === "metadata")
+    ? "metadata"
+    : "none";
+
 export const clearWorkspaceSegmentPreviewTimes = <T extends Record<number, number>>(
   current: T,
 ): T | Record<number, number> =>
