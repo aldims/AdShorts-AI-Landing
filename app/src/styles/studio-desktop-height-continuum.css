@@ -61,6 +61,15 @@
     overflow: hidden !important;
   }
 
+  /* These two nested workspaces must never become programmatic scroll
+   * containers. A focused timeline control could scroll both `overflow:
+   * hidden` ancestors and shift the complete editor upward without moving
+   * the document. `clip` preserves the intended crop without a scrollport. */
+  #app .studio-canvas-main.is-segment-editor .studio-canvas-preview.is-segment-editor,
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor {
+    overflow: clip !important;
+  }
+
   #app .studio-canvas-main.is-segment-editor .studio-canvas-create.is-segment-editor {
     padding-bottom: 0 !important;
   }
@@ -75,10 +84,10 @@
     --studio-segment-editor-adaptive-gap: clamp(5px, 1.5dvh, 13px);
     --studio-segment-editor-preview-inset: clamp(4px, 0.8dvh, 7px);
     --studio-segment-editor-submit-height: clamp(30px, 5.58dvh, 48px);
-    /* The ruler and the timeline's vertical insets need 31px even at the
+    /* The ruler and the timeline's vertical insets need 33px even at the
      * shortest supported desktop viewport. A 28px floor clipped the last
-     * track by a couple of pixels at 458-516px high. */
-    --studio-segment-editor-timeline-chrome-height: clamp(31px, 5.34dvh, 46px);
+     * track by a couple of pixels at 400-516px high. */
+    --studio-segment-editor-timeline-chrome-height: clamp(33px, 5.34dvh, 46px);
     --studio-segment-editor-adaptive-visual-track-height: clamp(30px, 7dvh, 72px);
     --studio-segment-editor-adaptive-scene-track-height: clamp(20px, 4.5dvh, 46px);
     --studio-segment-editor-adaptive-timeline-height: calc(
@@ -230,6 +239,30 @@
     min-height: clamp(28px, 4.65dvh, 40px) !important;
     height: clamp(28px, 4.65dvh, 40px) !important;
     max-height: clamp(28px, 4.65dvh, 40px) !important;
+  }
+
+  /* Reference controls are children of the scaled action row, but their
+   * desktop defaults were still 36/40px tall. Between 521px and 621px they
+   * therefore escaped the visual panel by several pixels. Keep the complete
+   * control group on the same height continuum as its parent. */
+  #app .studio-canvas-main.is-segment-editor .studio-segment-references--editor,
+  #app .studio-canvas-main.is-segment-editor .studio-segment-references__compact-row,
+  #app .studio-canvas-main.is-segment-editor .studio-segment-references__compact-trigger {
+    min-height: clamp(28px, 4.65dvh, 40px) !important;
+    height: clamp(28px, 4.65dvh, 40px) !important;
+    max-height: clamp(28px, 4.65dvh, 40px) !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-references__compact-trigger {
+    gap: clamp(5px, 0.93dvh, 8px) !important;
+    padding: 1px clamp(7px, 1.63dvh, 10px) 1px 1px !important;
+    font-size: clamp(0.62rem, 1.25dvh, 0.72rem) !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-references__compact-tool-icon {
+    width: clamp(24px, 3.49dvh, 30px) !important;
+    min-width: clamp(24px, 3.49dvh, 30px) !important;
+    height: clamp(24px, 3.49dvh, 30px) !important;
   }
 
   #app .studio-canvas-main.is-segment-editor .studio-canvas-prompt__input-row,
@@ -550,6 +583,36 @@
     min-height: clamp(24px, 5.5dvh, 28px) !important;
     height: clamp(24px, 5.5dvh, 28px) !important;
     max-height: clamp(24px, 5.5dvh, 28px) !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-references--editor,
+  #app .studio-canvas-main.is-segment-editor .studio-segment-references__compact-row,
+  #app .studio-canvas-main.is-segment-editor .studio-segment-references__compact-trigger {
+    min-height: clamp(24px, 5.5dvh, 28px) !important;
+    height: clamp(24px, 5.5dvh, 28px) !important;
+    max-height: clamp(24px, 5.5dvh, 28px) !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-references__compact-trigger {
+    gap: clamp(4px, 1dvh, 6px) !important;
+    padding: 1px clamp(6px, 1.8dvh, 9px) 1px 1px !important;
+    font-size: clamp(0.58rem, 1.3dvh, 0.68rem) !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-references__compact-tool-icon {
+    width: clamp(20px, 4.5dvh, 24px) !important;
+    min-width: clamp(20px, 4.5dvh, 24px) !important;
+    height: clamp(20px, 4.5dvh, 24px) !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-scene-number {
+    top: 3px !important;
+    left: 3px !important;
+    width: clamp(18px, 4.5dvh, 22px) !important;
+    min-width: clamp(18px, 4.5dvh, 22px) !important;
+    height: clamp(18px, 4.5dvh, 22px) !important;
+    min-height: clamp(18px, 4.5dvh, 22px) !important;
+    font-size: clamp(0.5rem, 1.16dvh, 0.58rem) !important;
   }
 
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-label small,

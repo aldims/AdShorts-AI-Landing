@@ -503,6 +503,7 @@ const buildScenarios = () => {
       { width: 1166, height: 464, zoom: 1, fontScale: 1, type: "scene-short-desktop" },
       { width: 1181, height: 499, zoom: 1, fontScale: 1, type: "scene-breakpoint-upper" },
       { width: 1688, height: 400, zoom: 1, fontScale: 1, type: "scene-height-continuum" },
+      { width: 1688, height: 450, zoom: 1, fontScale: 1, type: "scene-height-continuum" },
       { width: 1688, height: 458, zoom: 1, fontScale: 1, type: "scene-height-continuum" },
       { width: 1688, height: 516, zoom: 1, fontScale: 1, type: "scene-height-continuum" },
       { width: 1688, height: 559, zoom: 1, fontScale: 1, type: "scene-height-continuum" },
@@ -548,6 +549,7 @@ const buildScenarios = () => {
     { width: 1166, height: 464, zoom: 1, fontScale: 1, type: "scene-short-desktop" },
     { width: 1181, height: 499, zoom: 1, fontScale: 1, type: "scene-breakpoint-upper" },
     { width: 1688, height: 400, zoom: 1, fontScale: 1, type: "scene-height-continuum" },
+    { width: 1688, height: 450, zoom: 1, fontScale: 1, type: "scene-height-continuum" },
     { width: 1688, height: 458, zoom: 1, fontScale: 1, type: "scene-height-continuum" },
     { width: 1688, height: 516, zoom: 1, fontScale: 1, type: "scene-height-continuum" },
     { width: 1688, height: 559, zoom: 1, fontScale: 1, type: "scene-height-continuum" },
@@ -1193,6 +1195,17 @@ const openAndMeasureSceneVisualPanel = async (page) => {
         })
         .map((label) => label.textContent?.trim() || "unnamed label");
     });
+    const promptControlEscapes = Array.from(promptActionRow.querySelectorAll("button"))
+      .filter((button) => {
+        const buttonRect = button.getBoundingClientRect();
+        return (
+          buttonRect.left < promptVisualPanelRect.left - 1 ||
+          buttonRect.right > promptVisualPanelRect.right + 1 ||
+          buttonRect.top < promptVisualPanelRect.top - 1 ||
+          buttonRect.bottom > promptVisualPanelRect.bottom + 1
+        );
+      })
+      .map((button) => button.textContent?.trim() || button.getAttribute("aria-label") || "button");
 
     return {
       error: null,
@@ -1211,7 +1224,10 @@ const openAndMeasureSceneVisualPanel = async (page) => {
       promptFieldWidth: Math.round(promptFieldRect.width),
       promptTop: Math.round(promptColumnRect.top),
       promptVisualHeight: Math.round(promptVisualPanelRect.height),
+      promptVisualClientHeight: promptVisualPanel.clientHeight,
+      promptVisualScrollHeight: promptVisualPanel.scrollHeight,
       promptVisualWidth: Math.round(promptVisualPanelRect.width),
+      promptControlEscapes,
       promptTextEscapes,
       previewBottom: Math.round(previewRect.bottom),
       previewHeight: Math.round(previewRect.height),
@@ -1267,6 +1283,7 @@ const openAndMeasureSceneVisualPanel = async (page) => {
 
   const closedMetrics = await page.evaluate(() => {
     const previewContainer = document.querySelector(".studio-canvas-preview.is-segment-editor");
+    const segmentEditor = document.querySelector(".studio-segment-editor");
     const activeCard = document.querySelector(".studio-segment-editor__card.is-active");
     const activeCardCopy = activeCard?.querySelector(".studio-segment-editor__card-copy");
     const activeCardPlaceholder = activeCard?.querySelector(
@@ -1280,6 +1297,12 @@ const openAndMeasureSceneVisualPanel = async (page) => {
     const timelineMusicRow = timeline?.querySelector(
       ".studio-segment-editor__timeline-row--music",
     );
+    const timelineVisualRow = timeline?.querySelector(
+      ".studio-segment-editor__timeline-row--visual",
+    );
+    const timelineSceneNumber = timelineVisualRow?.querySelector(
+      ".studio-segment-editor__timeline-scene-number",
+    );
     const timelineLabels = Array.from(
       timeline?.querySelectorAll(
         ".studio-segment-editor__timeline-row .studio-segment-editor__timeline-label",
@@ -1289,6 +1312,8 @@ const openAndMeasureSceneVisualPanel = async (page) => {
     const activeCardRect = activeCard?.getBoundingClientRect();
     const timelineScrollRect = timelineScroll?.getBoundingClientRect();
     const timelineMusicRowRect = timelineMusicRow?.getBoundingClientRect();
+    const timelineVisualRowRect = timelineVisualRow?.getBoundingClientRect();
+    const timelineSceneNumberRect = timelineSceneNumber?.getBoundingClientRect();
     const headerRect = header?.getBoundingClientRect();
     const timelineLabelsValid =
       timelineLabels.length === 5 &&
@@ -1322,11 +1347,16 @@ const openAndMeasureSceneVisualPanel = async (page) => {
       closedCardWidth: activeCardRect ? Math.round(activeCardRect.width) : null,
       closedHeaderBottom: headerRect ? Math.round(headerRect.bottom) : null,
       closedPreviewScrollTop: previewContainer ? Math.round(previewContainer.scrollTop) : null,
+      closedSegmentEditorScrollTop: segmentEditor ? Math.round(segmentEditor.scrollTop) : null,
+      closedSceneNumberBottom: timelineSceneNumberRect?.bottom ?? null,
+      closedSceneNumberHeight: timelineSceneNumberRect?.height ?? null,
+      closedSceneNumberWidth: timelineSceneNumberRect?.width ?? null,
       closedTimelineContentOverflow:
         timelineScrollRect && timelineMusicRowRect
           ? Math.max(0, timelineMusicRowRect.bottom - timelineScrollRect.bottom)
           : null,
       closedTimelineLabelsValid: timelineLabelsValid,
+      closedVisualRowBottom: timelineVisualRowRect?.bottom ?? null,
     };
   });
 
@@ -1871,13 +1901,15 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
     if (
       sceneVisualPanel &&
       (sceneVisualPanel.closedPreviewScrollTop !== 0 ||
+        sceneVisualPanel.closedSegmentEditorScrollTop !== 0 ||
         (typeof sceneVisualPanel.closedCardTop === "number" &&
           typeof sceneVisualPanel.closedHeaderBottom === "number" &&
           sceneVisualPanel.closedCardTop < sceneVisualPanel.closedHeaderBottom))
     ) {
       failures.push(
         `scene preview shifts after closing the visual panel: scroll ${sceneVisualPanel.closedPreviewScrollTop}, ` +
-          `card/header ${sceneVisualPanel.closedCardTop}/${sceneVisualPanel.closedHeaderBottom}`,
+          `editor ${sceneVisualPanel.closedSegmentEditorScrollTop}, card/header ` +
+          `${sceneVisualPanel.closedCardTop}/${sceneVisualPanel.closedHeaderBottom}`,
       );
     }
 
@@ -2207,7 +2239,7 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
       const expectedPreviewInset = clampMetric(4, effectiveHeight * 0.008, 7);
       const expectedSubmitHeight = clampMetric(30, effectiveHeight * 0.0558, 48);
       const expectedTimelineHeight =
-        clampMetric(31, effectiveHeight * 0.0534, 46) +
+        clampMetric(33, effectiveHeight * 0.0534, 46) +
         clampMetric(30, effectiveHeight * 0.07, 72) +
         clampMetric(20, effectiveHeight * 0.045, 46) * 4;
       const expectedLayoutHeight =
@@ -2278,6 +2310,23 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
 
       if (!sceneVisualPanel.closedTimelineLabelsValid) {
         failures.push("scene height continuum hides or clips the left timeline labels");
+      }
+
+      if (
+        effectiveHeight <= 520 &&
+        (sceneVisualPanel.closedSceneNumberWidth === null ||
+          sceneVisualPanel.closedSceneNumberHeight === null ||
+          sceneVisualPanel.closedSceneNumberBottom === null ||
+          sceneVisualPanel.closedVisualRowBottom === null ||
+          sceneVisualPanel.closedSceneNumberWidth > 22.5 ||
+          sceneVisualPanel.closedSceneNumberHeight > 22.5 ||
+          sceneVisualPanel.closedSceneNumberBottom > sceneVisualPanel.closedVisualRowBottom + 1)
+      ) {
+        failures.push(
+          `scene height continuum lets the scene number escape its track: ` +
+            `${sceneVisualPanel.closedSceneNumberWidth ?? "missing"}x` +
+            `${sceneVisualPanel.closedSceneNumberHeight ?? "missing"}px`,
+        );
       }
 
       if (
@@ -2363,6 +2412,17 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
       if (sceneVisualPanel.promptTextEscapes.length > 0) {
         failures.push(
           `scene height continuum prompt text escapes its controls: ${sceneVisualPanel.promptTextEscapes.join(", ")}`,
+        );
+      }
+
+      if (
+        sceneVisualPanel.promptVisualScrollHeight > sceneVisualPanel.promptVisualClientHeight + 1 ||
+        sceneVisualPanel.promptControlEscapes.length > 0
+      ) {
+        failures.push(
+          `scene height continuum clips prompt actions: ` +
+            `${sceneVisualPanel.promptVisualClientHeight}/${sceneVisualPanel.promptVisualScrollHeight}px, ` +
+            `${sceneVisualPanel.promptControlEscapes.join(", ") || "internal overflow"}`,
         );
       }
     }
