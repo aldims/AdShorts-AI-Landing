@@ -16,6 +16,7 @@ import "./styles/studio-segment-editor-viewport.css";
 import "./styles/studio-segment-editor-platform.css";
 import "./styles/studio-generation-card.css";
 import "./styles/responsive-premium.css";
+import "./styles/studio-desktop-height-continuum.css";
 
 const appElement = document.getElementById("app");
 

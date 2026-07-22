@@ -502,9 +502,14 @@ const buildScenarios = () => {
       { width: 1121, height: 419, zoom: 1, fontScale: 1, type: "scene-short-desktop" },
       { width: 1166, height: 464, zoom: 1, fontScale: 1, type: "scene-short-desktop" },
       { width: 1181, height: 499, zoom: 1, fontScale: 1, type: "scene-breakpoint-upper" },
-      { width: 1688, height: 559, zoom: 1, fontScale: 1, type: "scene-height-threshold-lower" },
-      { width: 1688, height: 620, zoom: 1, fontScale: 1, type: "scene-height-threshold-upper" },
-      { width: 1688, height: 621, zoom: 1, fontScale: 1, type: "scene-height-medium" },
+      { width: 1688, height: 400, zoom: 1, fontScale: 1, type: "scene-height-continuum" },
+      { width: 1688, height: 559, zoom: 1, fontScale: 1, type: "scene-height-continuum" },
+      { width: 1688, height: 560, zoom: 1, fontScale: 1, type: "scene-height-continuum" },
+      { width: 1688, height: 620, zoom: 1, fontScale: 1, type: "scene-height-continuum" },
+      { width: 1688, height: 621, zoom: 1, fontScale: 1, type: "scene-height-continuum" },
+      { width: 1688, height: 760, zoom: 1, fontScale: 1, type: "scene-height-continuum" },
+      { width: 1688, height: 860, zoom: 1, fontScale: 1, type: "scene-height-continuum" },
+      { width: 1688, height: 861, zoom: 1, fontScale: 1, type: "scene-height-continuum" },
       { width: 1920, height: 980, zoom: 1.25, fontScale: 1, type: "scene-fit" },
       { width: 1208, height: 681, zoom: 1, fontScale: 1, type: "scene-user-laptop" },
       { width: 961, height: 698, zoom: 1, fontScale: 1, type: "scene-user-laptop" },
@@ -539,9 +544,14 @@ const buildScenarios = () => {
     { width: 1121, height: 419, zoom: 1, fontScale: 1, type: "scene-short-desktop" },
     { width: 1166, height: 464, zoom: 1, fontScale: 1, type: "scene-short-desktop" },
     { width: 1181, height: 499, zoom: 1, fontScale: 1, type: "scene-breakpoint-upper" },
-    { width: 1688, height: 559, zoom: 1, fontScale: 1, type: "scene-height-threshold-lower" },
-    { width: 1688, height: 620, zoom: 1, fontScale: 1, type: "scene-height-threshold-upper" },
-    { width: 1688, height: 621, zoom: 1, fontScale: 1, type: "scene-height-medium" },
+    { width: 1688, height: 400, zoom: 1, fontScale: 1, type: "scene-height-continuum" },
+    { width: 1688, height: 559, zoom: 1, fontScale: 1, type: "scene-height-continuum" },
+    { width: 1688, height: 560, zoom: 1, fontScale: 1, type: "scene-height-continuum" },
+    { width: 1688, height: 620, zoom: 1, fontScale: 1, type: "scene-height-continuum" },
+    { width: 1688, height: 621, zoom: 1, fontScale: 1, type: "scene-height-continuum" },
+    { width: 1688, height: 760, zoom: 1, fontScale: 1, type: "scene-height-continuum" },
+    { width: 1688, height: 860, zoom: 1, fontScale: 1, type: "scene-height-continuum" },
+    { width: 1688, height: 861, zoom: 1, fontScale: 1, type: "scene-height-continuum" },
     { width: 1920, height: 980, zoom: 1.25, fontScale: 1, type: "scene-fit" },
     { width: 1208, height: 681, zoom: 1, fontScale: 1, type: "scene-user-laptop" },
     { width: 961, height: 698, zoom: 1, fontScale: 1, type: "scene-user-laptop" },
@@ -1314,6 +1324,12 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
     await page.waitForTimeout(180);
 
     const expectsScenesMode = surface === "app" && route.includes("mode=scenes");
+    const usesSceneHeightContinuum =
+      expectsScenesMode &&
+      effectiveWidth >= 1181 &&
+      effectiveHeight >= 400 &&
+      effectiveHeight <= 861 &&
+      effectiveWidth > effectiveHeight;
     const auditsLegacyLaptopProject =
       surface === "app" &&
       route.includes("audit=legacy-project") &&
@@ -1346,9 +1362,7 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
         scenario.type === "scene-breakpoint-lower" ||
         scenario.type === "scene-short-desktop" ||
         scenario.type === "scene-breakpoint-upper" ||
-        scenario.type === "scene-height-threshold-lower" ||
-        scenario.type === "scene-height-threshold-upper" ||
-        scenario.type === "scene-height-medium" ||
+        scenario.type === "scene-height-continuum" ||
         scenario.type === "scene-compact-desktop" ||
         scenario.type === "scene-user-laptop" ||
         scenario.type === "laptop-125");
@@ -1837,7 +1851,7 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
       }
 
       const timelineInset = sceneVisualPanel.viewportHeight - sceneVisualPanel.timelineBottom;
-      if (timelineInset < 5 || timelineInset > 10) {
+      if (!usesSceneHeightContinuum && (timelineInset < 5 || timelineInset > 10)) {
         failures.push(`scene editor timeline inset is unsafe at 1920x980/125%: ${timelineInset}px`);
       }
 
@@ -2126,11 +2140,34 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
       }
     }
 
-    if (
-      sceneVisualPanel &&
-      (scenario.type === "scene-height-threshold-lower" ||
-        scenario.type === "scene-height-threshold-upper")
-    ) {
+    if (sceneVisualPanel && usesSceneHeightContinuum) {
+      const clampMetric = (minimum, value, maximum) =>
+        Math.min(maximum, Math.max(minimum, value));
+      const expectedHeaderHeight = clampMetric(40, effectiveHeight * 0.0744, 64);
+      const expectedHeaderReserve = clampMetric(48, effectiveHeight * 0.0906, 78);
+      const expectedBottomInset = clampMetric(12, effectiveHeight * 0.0348, 30);
+      const expectedGap = clampMetric(5, effectiveHeight * 0.015, 13);
+      const expectedPreviewInset = clampMetric(4, effectiveHeight * 0.008, 7);
+      const expectedSubmitHeight = clampMetric(30, effectiveHeight * 0.0558, 48);
+      const expectedTimelineHeight =
+        clampMetric(28, effectiveHeight * 0.0534, 46) +
+        clampMetric(30, effectiveHeight * 0.07, 72) +
+        clampMetric(20, effectiveHeight * 0.045, 46) * 4;
+      const expectedLayoutHeight =
+        effectiveHeight - expectedHeaderReserve - expectedBottomInset;
+      const expectedPreviewHeight = clampMetric(
+        148,
+        expectedLayoutHeight -
+          expectedTimelineHeight -
+          expectedGap -
+          expectedPreviewInset * 2,
+        480,
+      );
+      const expectedMinimumPromptFieldHeight = clampMetric(
+        48,
+        effectiveHeight * 0.125,
+        70,
+      );
       const previewSlack = metrics.scenePreview && metrics.scenePreviewColumn
         ? metrics.scenePreviewColumn.height - metrics.scenePreview.height
         : Number.POSITIVE_INFINITY;
@@ -2138,20 +2175,16 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
         ? metrics.clientWidth - metrics.sceneSubmit.right
         : Number.POSITIVE_INFINITY;
 
-      if (
-        !metrics.sceneTimeline ||
-        metrics.sceneTimeline.height < 230 ||
-        metrics.sceneTimeline.bottom > metrics.clientHeight - 5
-      ) {
+      if (!metrics.sceneTimeline || metrics.sceneTimeline.bottom > metrics.clientHeight - 8) {
         failures.push(
-          `scene height-threshold timeline jumps at ${scenario.width}x${scenario.height}: ` +
+          `scene height continuum leaves the viewport at ${scenario.width}x${scenario.height}: ` +
             `${metrics.sceneTimeline?.height ?? "missing"}px, bottom ${metrics.sceneTimeline?.bottom ?? "missing"}`,
         );
       }
 
-      if (previewSlack < -1 || previewSlack > 16) {
+      if (previewSlack < -1 || previewSlack > expectedPreviewInset * 2 + 2) {
         failures.push(
-          `scene height-threshold preview leaves unused vertical space: ${previewSlack}px`,
+          `scene height continuum preview leaves unused vertical space: ${previewSlack}px`,
         );
       }
 
@@ -2159,10 +2192,10 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
         !metrics.sceneSubmit ||
         actionsRightInset < 8 ||
         actionsRightInset > 40 ||
-        metrics.sceneSubmit.bottom > (metrics.sceneTimeline?.top ?? 0) - 6
+        metrics.sceneSubmit.bottom > (metrics.sceneTimeline?.top ?? 0) - expectedGap + 1
       ) {
         failures.push(
-          `scene height-threshold actions left the lower-right safe zone: ` +
+          `scene height continuum actions left the lower-right safe zone: ` +
             `${metrics.sceneSubmit?.right ?? "missing"},${metrics.sceneSubmit?.bottom ?? "missing"}; ` +
             `right inset ${actionsRightInset}`,
         );
@@ -2170,7 +2203,7 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
 
       if (
         metrics.scenePreview &&
-        metrics.scenePreview.width <= 190 &&
+        metrics.scenePreview.width <= 230 &&
         metrics.sceneSourceBadgeVisible
       ) {
         failures.push("scene source badge remains visible when the preview cannot fit it");
@@ -2178,50 +2211,70 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
 
       if (
         sceneVisualPanel.headerHeight === null ||
-        sceneVisualPanel.headerHeight > 52 ||
-        sceneVisualPanel.previewHeight < 230 ||
-        sceneVisualPanel.previewBottom > sceneVisualPanel.timelineTop - 3 ||
-        sceneVisualPanel.submitLeft - sceneVisualPanel.previewRight < 5 ||
-        sceneVisualPanel.promptBottom > sceneVisualPanel.timelineTop - 6 ||
-        sceneVisualPanel.submitBottom > sceneVisualPanel.timelineTop - 6 ||
-        sceneVisualPanel.promptFieldHeight < 80
+        Math.abs(sceneVisualPanel.headerHeight - expectedHeaderHeight) > 2 ||
+        Math.abs(sceneVisualPanel.previewHeight - expectedPreviewHeight) > 3 ||
+        Math.abs(sceneVisualPanel.timelineBottom - sceneVisualPanel.timelineTop - expectedTimelineHeight) > 3 ||
+        Math.abs(sceneVisualPanel.submitHeight - expectedSubmitHeight) > 3 ||
+        sceneVisualPanel.promptBottom > sceneVisualPanel.timelineTop - expectedGap + 1 ||
+        sceneVisualPanel.submitBottom > sceneVisualPanel.timelineTop - expectedGap + 1 ||
+        sceneVisualPanel.promptFieldHeight < expectedMinimumPromptFieldHeight
       ) {
         failures.push(
-          `scene height-threshold workspace is not balanced: header ${sceneVisualPanel.headerHeight}px, ` +
+          `scene height continuum is not proportional: header ${sceneVisualPanel.headerHeight}/${expectedHeaderHeight.toFixed(1)}px, ` +
             `preview ${sceneVisualPanel.previewHeight}px/${sceneVisualPanel.previewBottom}, ` +
-            `prompt ${sceneVisualPanel.promptBottom}, actions ${sceneVisualPanel.submitLeft}/${sceneVisualPanel.submitBottom}, ` +
-            `timeline ${sceneVisualPanel.timelineTop}, field ${sceneVisualPanel.promptFieldHeight}px`,
+            `prompt ${sceneVisualPanel.promptBottom}, actions ${sceneVisualPanel.submitHeight}/${sceneVisualPanel.submitBottom}, ` +
+            `timeline ${sceneVisualPanel.timelineTop}-${sceneVisualPanel.timelineBottom}/${expectedTimelineHeight.toFixed(1)}, ` +
+            `field ${sceneVisualPanel.promptFieldHeight}px`,
         );
+      }
+
+      if (
+        sceneVisualPanel.previewLabelClientWidth !== null &&
+        sceneVisualPanel.previewLabelScrollWidth !== null &&
+        sceneVisualPanel.previewLabelScrollWidth > sceneVisualPanel.previewLabelClientWidth + 1
+      ) {
+        failures.push("scene height continuum clips the preview label");
+      }
+
+      if (
+        sceneVisualPanel.timelineEndTimecodeRight !== null &&
+        sceneVisualPanel.timelineScrollRight !== null &&
+        sceneVisualPanel.timelineEndTimecodeRight > sceneVisualPanel.timelineScrollRight + 1
+      ) {
+        failures.push("scene height continuum clips the final timeline timecode");
+      }
+
+      if (
+        sceneVisualPanel.voiceCopyLeft !== null &&
+        sceneVisualPanel.voicePlayRight !== null &&
+        sceneVisualPanel.voiceCopyLeft < sceneVisualPanel.voicePlayRight + 3
+      ) {
+        failures.push("scene height continuum lets voice text overlap its play control");
+      }
+
+      if (
+        sceneVisualPanel.timelineAddRailTop === null ||
+        sceneVisualPanel.timelineAddRailBottom === null ||
+        sceneVisualPanel.timelineAddRailHeight === null ||
+        sceneVisualPanel.timelineAddRailTop < sceneVisualPanel.timelineTop ||
+        sceneVisualPanel.timelineAddRailBottom > sceneVisualPanel.timelineBottom + 1 ||
+        sceneVisualPanel.timelineAddRailHeight < expectedTimelineHeight * 0.58
+      ) {
+        failures.push("scene height continuum does not keep the add rail at full track height");
       }
 
       if (sceneVisualPanel.promptTextEscapes.length > 0) {
         failures.push(
-          `scene height-threshold prompt text escapes its controls: ${sceneVisualPanel.promptTextEscapes.join(", ")}`,
+          `scene height continuum prompt text escapes its controls: ${sceneVisualPanel.promptTextEscapes.join(", ")}`,
         );
       }
     }
 
-    if (sceneVisualPanel && scenario.type === "scene-height-medium") {
-      if (
-        sceneVisualPanel.headerHeight === null ||
-        sceneVisualPanel.headerHeight > 52 ||
-        sceneVisualPanel.previewHeight < 250 ||
-        sceneVisualPanel.previewBottom > sceneVisualPanel.timelineTop - 8 ||
-        sceneVisualPanel.promptBottom > sceneVisualPanel.timelineTop - 8 ||
-        sceneVisualPanel.submitBottom > sceneVisualPanel.timelineTop - 6 ||
-        sceneVisualPanel.timelineTop < 380 ||
-        sceneVisualPanel.timelineBottom > sceneVisualPanel.viewportHeight - 5
-      ) {
-        failures.push(
-          `medium-height scene workspace jumps after 620px: header ${sceneVisualPanel.headerHeight}px, ` +
-            `preview ${sceneVisualPanel.previewHeight}px/${sceneVisualPanel.previewBottom}, ` +
-            `prompt ${sceneVisualPanel.promptBottom}, actions ${sceneVisualPanel.submitBottom}, ` +
-            `timeline ${sceneVisualPanel.timelineTop}-${sceneVisualPanel.timelineBottom}`,
-        );
-      }
-    }
-
-    if (sceneVisualPanel && scenario.type === "scene-compact-desktop") {
+    if (
+      sceneVisualPanel &&
+      scenario.type === "scene-compact-desktop" &&
+      !usesSceneHeightContinuum
+    ) {
       const layoutInset = metrics.sceneLayout
         ? metrics.clientHeight - metrics.sceneLayout.bottom
         : Number.NaN;
@@ -2289,7 +2342,7 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
       }
 
       if (
-        sceneVisualPanel.promptBottom > sceneVisualPanel.timelineTop - 44 ||
+        sceneVisualPanel.promptBottom > sceneVisualPanel.timelineTop - 8 ||
         sceneVisualPanel.timelineBottom > sceneVisualPanel.viewportHeight - 5
       ) {
         failures.push(

@@ -1,0 +1,563 @@
+/*
+ * Wide Studio workspaces use one height-driven composition from 400px through
+ * 861px. The 861px desktop layout is the reference: preview/tools, actions and
+ * timeline keep the same three-row relationship while their vertical geometry
+ * follows the available viewport continuously.
+ *
+ * This file is imported last and intentionally owns the wide-desktop height
+ * contract. Earlier responsive layers still own tablets and mobile screens.
+ */
+@media (min-width: 1181px) and (min-height: 400px) and (max-height: 861px) and (orientation: landscape) {
+  #app .studio-canvas-route.is-segment-editor {
+    --studio-header-reserve: clamp(48px, 9.06dvh, 78px) !important;
+    --studio-header-height: clamp(44px, 8.6dvh, 74px) !important;
+    --studio-header-control-height: clamp(34px, 5.58dvh, 48px) !important;
+    --studio-height-continuum-bottom-inset: clamp(12px, 3.48dvh, 30px);
+    --studio-height-continuum-inline-inset: clamp(10px, 3.72dvh, 32px);
+  }
+
+  #app .studio-canvas-route.is-segment-editor .site-header--workspace {
+    --studio-header-control-height: clamp(34px, 5.58dvh, 48px) !important;
+    height: var(--studio-header-height) !important;
+  }
+
+  #app .studio-canvas-route.is-segment-editor .site-header--workspace .site-header__inner {
+    width: calc(100% - 24px) !important;
+    height: clamp(40px, 7.44dvh, 64px) !important;
+    min-height: clamp(40px, 7.44dvh, 64px) !important;
+    margin-top: clamp(2px, 0.7dvh, 6px) !important;
+    padding-block: 0 !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor {
+    box-sizing: border-box;
+    min-height: 100dvh !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    padding-top: var(--studio-header-reserve) !important;
+    overflow: hidden !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-canvas-shell,
+  #app .studio-canvas-main.is-segment-editor .studio-canvas-shell.is-sidebar-hidden {
+    box-sizing: border-box;
+    min-height: 0 !important;
+    height: calc(100dvh - var(--studio-header-reserve)) !important;
+    max-height: calc(100dvh - var(--studio-header-reserve)) !important;
+    padding: 0 var(--studio-height-continuum-inline-inset)
+      var(--studio-height-continuum-bottom-inset) !important;
+    overflow: hidden !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-canvas-stage,
+  #app .studio-canvas-main.is-segment-editor .studio-canvas-create.is-segment-editor,
+  #app .studio-canvas-main.is-segment-editor .studio-canvas-content.is-segment-editor,
+  #app .studio-canvas-main.is-segment-editor .studio-canvas-create-layout,
+  #app .studio-canvas-main.is-segment-editor .studio-canvas-preview.is-segment-editor,
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor {
+    min-height: 0 !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    overflow: hidden !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-canvas-create.is-segment-editor {
+    padding-bottom: 0 !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__layout,
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout.is-visual-panel-open,
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout.is-visual-panel-closed {
+    --studio-segment-editor-adaptive-gap: clamp(5px, 1.5dvh, 13px);
+    --studio-segment-editor-preview-inset: clamp(4px, 0.8dvh, 7px);
+    --studio-segment-editor-submit-height: clamp(30px, 5.58dvh, 48px);
+    --studio-segment-editor-timeline-chrome-height: clamp(28px, 5.34dvh, 46px);
+    --studio-segment-editor-adaptive-visual-track-height: clamp(30px, 7dvh, 72px);
+    --studio-segment-editor-adaptive-scene-track-height: clamp(20px, 4.5dvh, 46px);
+    --studio-segment-editor-adaptive-timeline-height: calc(
+      var(--studio-segment-editor-timeline-chrome-height) +
+        var(--studio-segment-editor-adaptive-visual-track-height) +
+        (var(--studio-segment-editor-adaptive-scene-track-height) * 4)
+    ) !important;
+    --studio-segment-editor-layout-height: calc(
+      100dvh - var(--studio-header-reserve) - var(--studio-height-continuum-bottom-inset)
+    ) !important;
+    --studio-height-continuum-carousel-height: clamp(
+      148px,
+      calc(
+        var(--studio-segment-editor-layout-height) -
+          var(--studio-segment-editor-adaptive-timeline-height) -
+          var(--studio-segment-editor-adaptive-gap) -
+          (var(--studio-segment-editor-preview-inset) * 2)
+      ),
+      480px
+    );
+    --studio-segment-editor-carousel-height:
+      var(--studio-height-continuum-carousel-height) !important;
+    --studio-segment-editor-carousel-width: calc(
+      var(--studio-segment-editor-carousel-height) * 0.5625
+    ) !important;
+    box-sizing: border-box;
+    position: relative !important;
+    display: grid !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: var(--studio-segment-editor-layout-height) !important;
+    height: var(--studio-segment-editor-layout-height) !important;
+    max-height: var(--studio-segment-editor-layout-height) !important;
+    grid-template-rows:
+      minmax(0, 1fr)
+      var(--studio-segment-editor-submit-height)
+      var(--studio-segment-editor-adaptive-timeline-height) !important;
+    row-gap: var(--studio-segment-editor-adaptive-gap) !important;
+    align-items: stretch !important;
+    align-content: stretch !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout.is-visual-panel-open {
+    grid-template-columns: minmax(540px, 60.35%) minmax(0, 1fr) !important;
+    column-gap: clamp(18px, 5.88dvh, 51px) !important;
+  }
+
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout.is-visual-panel-closed {
+    grid-template-columns: minmax(0, 1fr) !important;
+    column-gap: 0 !important;
+  }
+
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout.is-visual-panel-open
+    .studio-segment-editor__prompt-column {
+    position: relative !important;
+    z-index: 240 !important;
+    grid-column: 1 !important;
+    grid-row: 1 / 3 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    min-height: 0 !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    padding: 0 !important;
+    align-self: stretch !important;
+    justify-self: stretch !important;
+    overflow: hidden !important;
+    transform: none !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-shell,
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-panel,
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__prompt-panel
+    .studio-canvas-prompt__editor-layout,
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__prompt-panel
+    .studio-canvas-prompt__editor-pane {
+    min-height: 0 !important;
+    height: 100% !important;
+    max-height: 100% !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-shell {
+    gap: var(--studio-segment-editor-adaptive-gap) !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-panel {
+    padding: 0 clamp(6px, 1.28dvh, 11px) !important;
+    overflow: hidden !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-topbar {
+    gap: clamp(4px, 1.16dvh, 10px) !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-block,
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu {
+    gap: clamp(3px, 0.7dvh, 6px) !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button,
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__prompt-submenu-button--icon {
+    min-height: clamp(34px, 7.28dvh, 63px) !important;
+    height: clamp(34px, 7.28dvh, 63px) !important;
+    padding: clamp(3px, 0.93dvh, 8px) clamp(16px, 3dvh, 26px)
+      clamp(3px, 0.93dvh, 8px) clamp(6px, 0.93dvh, 8px) !important;
+    border-radius: clamp(9px, 1.4dvh, 12px) !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-button-content {
+    grid-template-columns: clamp(24px, 4.23dvh, 36px) minmax(0, 1fr) auto !important;
+    gap: clamp(5px, 0.93dvh, 8px) !important;
+  }
+
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__prompt-submenu-button--icon
+    :is(.studio-segment-editor__prompt-tool-icon, .studio-segment-editor__prompt-tool-icon--asset) {
+    width: clamp(24px, 4.23dvh, 36px) !important;
+    min-width: clamp(24px, 4.23dvh, 36px) !important;
+    height: clamp(24px, 4.23dvh, 36px) !important;
+    min-height: clamp(24px, 4.23dvh, 36px) !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-label strong {
+    font-size: clamp(0.64rem, 1.38dvh, 0.74rem) !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-label small {
+    font-size: clamp(0.52rem, 1.08dvh, 0.62rem) !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-action-row,
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-action {
+    min-height: clamp(28px, 4.65dvh, 40px) !important;
+    height: clamp(28px, 4.65dvh, 40px) !important;
+    max-height: clamp(28px, 4.65dvh, 40px) !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-canvas-prompt__input-row,
+  #app .studio-canvas-main.is-segment-editor .studio-canvas-prompt__input-main,
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-field,
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-textarea {
+    min-height: 0 !important;
+    height: 100% !important;
+    max-height: none !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__preview-column,
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout.is-visual-panel-open
+    .studio-segment-editor__preview-column,
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout.is-visual-panel-closed
+    .studio-segment-editor__preview-column {
+    grid-row: 1 / 3 !important;
+    min-width: 0 !important;
+    width: 100% !important;
+    min-height: 0 !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    padding: var(--studio-segment-editor-preview-inset) 0 !important;
+    align-content: center !important;
+    align-items: center !important;
+    justify-content: center !important;
+    justify-items: center !important;
+    overflow: hidden !important;
+    transform: none !important;
+  }
+
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout.is-visual-panel-open
+    .studio-segment-editor__preview-column {
+    grid-column: 2 !important;
+  }
+
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout.is-visual-panel-closed
+    .studio-segment-editor__preview-column {
+    grid-column: 1 !important;
+  }
+
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout:is(.is-visual-panel-open, .is-visual-panel-closed)
+    .studio-segment-editor__preview-column {
+    --studio-segment-editor-carousel-height:
+      var(--studio-height-continuum-carousel-height) !important;
+    --studio-segment-editor-carousel-width: calc(
+      var(--studio-height-continuum-carousel-height) * 0.5625
+    ) !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__stage,
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__carousel,
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__cards,
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__card,
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__card.is-active,
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__card-media {
+    width: var(--studio-segment-editor-carousel-width) !important;
+    min-width: var(--studio-segment-editor-carousel-width) !important;
+    max-width: var(--studio-segment-editor-carousel-width) !important;
+    height: var(--studio-segment-editor-carousel-height) !important;
+    min-height: var(--studio-segment-editor-carousel-height) !important;
+    max-height: var(--studio-segment-editor-carousel-height) !important;
+  }
+
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout:is(.is-visual-panel-open, .is-visual-panel-closed)
+    .studio-segment-editor__stage {
+    margin: 0 !important;
+    align-self: center !important;
+    justify-self: center !important;
+    transform: none !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__carousel {
+    aspect-ratio: auto !important;
+  }
+
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout:is(.is-visual-panel-open, .is-visual-panel-closed)
+    .studio-segment-editor__timeline-submit-row {
+    position: relative !important;
+    inset: auto !important;
+    z-index: 260 !important;
+    grid-row: 2 !important;
+    display: grid !important;
+    grid-template-columns: minmax(118px, 0.82fr) minmax(0, 1fr) !important;
+    align-self: center !important;
+    justify-self: end !important;
+    width: clamp(260px, 46.46dvh, 400px) !important;
+    min-width: 0 !important;
+    min-height: var(--studio-segment-editor-submit-height) !important;
+    height: var(--studio-segment-editor-submit-height) !important;
+    max-height: var(--studio-segment-editor-submit-height) !important;
+    margin: 0 !important;
+    padding: clamp(2px, 0.46dvh, 4px) !important;
+    gap: clamp(4px, 0.93dvh, 8px) !important;
+    border-radius: clamp(10px, 1.63dvh, 14px) !important;
+    transform: none !important;
+  }
+
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout.is-visual-panel-open
+    .studio-segment-editor__timeline-submit-row {
+    grid-column: 2 !important;
+  }
+
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout.is-visual-panel-closed
+    .studio-segment-editor__timeline-submit-row {
+    grid-column: 1 !important;
+    margin-right: var(--studio-segment-editor-preview-inset) !important;
+  }
+
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout:is(.is-visual-panel-open, .is-visual-panel-closed)
+    .studio-segment-editor__timeline-submit-row
+    :is(
+      .studio-segment-editor__timeline-preview-controls,
+      .studio-segment-editor__timeline-preview-toggle,
+      .studio-segment-editor__prompt-submit
+    ) {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: clamp(28px, 4.65dvh, 40px) !important;
+    height: clamp(28px, 4.65dvh, 40px) !important;
+    max-height: clamp(28px, 4.65dvh, 40px) !important;
+    padding-inline: clamp(8px, 1.5dvh, 13px) !important;
+    border-radius: clamp(8px, 1.4dvh, 12px) !important;
+    font-size: clamp(0.66rem, 1.5dvh, 0.78rem) !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout:is(.is-visual-panel-open, .is-visual-panel-closed)
+    .studio-segment-editor__timeline-preview-toggle
+    span {
+    overflow: visible !important;
+    text-overflow: clip !important;
+  }
+
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout:is(.is-visual-panel-open, .is-visual-panel-closed)
+    .studio-segment-editor__timeline {
+    --studio-segment-editor-timeline-add-rail-offset: clamp(4px, 1.16dvh, 10px);
+    --studio-segment-editor-timeline-add-rail-width: clamp(48px, 11.5dvh, 86px);
+    --studio-segment-editor-timeline-visual-track-height:
+      var(--studio-segment-editor-adaptive-visual-track-height) !important;
+    --studio-segment-editor-timeline-scene-track-height:
+      var(--studio-segment-editor-adaptive-scene-track-height) !important;
+    grid-column: 1 / -1 !important;
+    grid-row: 3 !important;
+    order: initial !important;
+    box-sizing: border-box;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: var(--studio-segment-editor-adaptive-timeline-height) !important;
+    height: var(--studio-segment-editor-adaptive-timeline-height) !important;
+    max-height: var(--studio-segment-editor-adaptive-timeline-height) !important;
+    padding: clamp(4px, 0.93dvh, 8px)
+      calc(
+        var(--studio-segment-editor-timeline-add-rail-offset) +
+          var(--studio-segment-editor-timeline-add-rail-width)
+      )
+      clamp(4px, 0.93dvh, 8px) clamp(4px, 1.16dvh, 10px) !important;
+    border-radius: clamp(12px, 2.1dvh, 18px) !important;
+    overflow: hidden !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-scroll {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    overscroll-behavior-x: contain;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline.is-standard-fit
+    .studio-segment-editor__timeline-scroll {
+    overflow-x: hidden !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-ruler,
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-row {
+    grid-template-columns: var(--studio-segment-editor-timeline-add-rail-width) minmax(0, 1fr) !important;
+    min-width: 0 !important;
+    column-gap: clamp(4px, 0.93dvh, 8px) !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-ruler,
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__timeline-ruler
+    .studio-segment-editor__timeline-track {
+    min-height: clamp(18px, 3.05dvh, 26px) !important;
+    height: clamp(18px, 3.05dvh, 26px) !important;
+    max-height: clamp(18px, 3.05dvh, 26px) !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-track,
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-cell {
+    min-height: var(--studio-segment-editor-timeline-scene-track-height) !important;
+    height: var(--studio-segment-editor-timeline-scene-track-height) !important;
+    max-height: var(--studio-segment-editor-timeline-scene-track-height) !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-track--visual,
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-cell--visual {
+    min-height: var(--studio-segment-editor-timeline-visual-track-height) !important;
+    height: var(--studio-segment-editor-timeline-visual-track-height) !important;
+    max-height: var(--studio-segment-editor-timeline-visual-track-height) !important;
+  }
+
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__timeline-row--music
+    .studio-segment-editor__timeline-track {
+    min-height: var(--studio-segment-editor-timeline-scene-track-height) !important;
+    height: var(--studio-segment-editor-timeline-scene-track-height) !important;
+    max-height: var(--studio-segment-editor-timeline-scene-track-height) !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-cell {
+    padding: clamp(2px, 0.7dvh, 6px) clamp(5px, 0.93dvh, 8px) !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-cell--has-play,
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__timeline-cell--has-play.studio-segment-editor__timeline-cell--has-history {
+    padding-left: clamp(34px, 7dvh, 46px) !important;
+  }
+
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__timeline-timecode-boundary--end {
+    right: 0 !important;
+    left: auto !important;
+    margin-inline: 0 !important;
+    text-align: right !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-label {
+    justify-content: flex-start !important;
+    gap: clamp(4px, 0.81dvh, 7px) !important;
+    padding-inline: 2px !important;
+    color: rgba(226, 232, 240, 0.82) !important;
+    font-size: clamp(0.56rem, 1.34dvh, 0.72rem) !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-add-rail {
+    top: calc(clamp(4px, 0.93dvh, 8px) + clamp(18px, 3.05dvh, 26px)) !important;
+    right: var(--studio-segment-editor-timeline-add-rail-offset) !important;
+    bottom: clamp(4px, 0.93dvh, 8px) !important;
+    width: var(--studio-segment-editor-timeline-add-rail-width) !important;
+    min-height: 0 !important;
+    height: auto !important;
+  }
+}
+
+@media (min-width: 1181px) and (min-height: 400px) and (max-height: 520px) and (orientation: landscape) {
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-block
+    > .studio-segment-editor__prompt-section-label {
+    min-height: 12px !important;
+    font-size: 0.54rem !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button,
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__prompt-submenu-button--icon {
+    min-height: clamp(28px, 6.5dvh, 34px) !important;
+    height: clamp(28px, 6.5dvh, 34px) !important;
+    padding-block: 2px !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-button-content {
+    grid-template-columns: clamp(20px, 5.5dvh, 24px) minmax(0, 1fr) auto !important;
+  }
+
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__prompt-submenu-button--icon
+    :is(.studio-segment-editor__prompt-tool-icon, .studio-segment-editor__prompt-tool-icon--asset) {
+    width: clamp(20px, 5.5dvh, 24px) !important;
+    min-width: clamp(20px, 5.5dvh, 24px) !important;
+    height: clamp(20px, 5.5dvh, 24px) !important;
+    min-height: clamp(20px, 5.5dvh, 24px) !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-action-row,
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-action {
+    min-height: clamp(24px, 5.5dvh, 28px) !important;
+    height: clamp(24px, 5.5dvh, 28px) !important;
+    max-height: clamp(24px, 5.5dvh, 28px) !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-label small,
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-cell-copy small {
+    display: none !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-label {
+    justify-content: center !important;
+    color: transparent !important;
+    font-size: 0 !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-label-icon {
+    width: 18px !important;
+    min-width: 18px !important;
+    height: 18px !important;
+    color: rgba(204, 216, 245, 0.82) !important;
+  }
+}

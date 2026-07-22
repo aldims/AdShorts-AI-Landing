@@ -175,79 +175,10 @@
   }
 }
 
-/* Compact-height desktops still have room for the full editor, but only when
- * the timeline tracks, action row and preview share the available height. */
-@media (min-width: 1181px) and (min-height: 601px) and (max-height: 860px) {
-  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__layout {
-    --studio-segment-editor-viewport-inset: clamp(6px, 1dvh, 8px);
-    --studio-segment-editor-layout-height: calc(
-      100dvh - var(--studio-header-reserve) - var(--studio-segment-editor-viewport-inset)
-    ) !important;
-    --studio-segment-editor-adaptive-gap: 10px;
-    --studio-segment-editor-preview-inset: 6px;
-    --studio-segment-editor-submit-height: 44px;
-    --studio-segment-editor-adaptive-visual-track-height: clamp(54px, 8.1dvh, 60px);
-    --studio-segment-editor-adaptive-scene-track-height: clamp(36px, 5.5dvh, 40px);
-  }
-
-  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__preview-column {
-    align-content: start !important;
-    align-items: start !important;
-  }
-
-  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__brand-add {
-    right: auto !important;
-    bottom: 10px !important;
-    left: 50% !important;
-    width: 58px !important;
-    min-width: 58px !important;
-    max-width: 58px !important;
-    min-height: 24px !important;
-    height: 24px !important;
-    padding-inline: 8px !important;
-    font-size: 0.58rem !important;
-    transform: translateX(-50%) !important;
-  }
-
-  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__brand-add:hover,
-  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__brand-add:focus-visible {
-    transform: translateX(-50%) translateY(-1px) !important;
-  }
-
-  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__card-overlay-footer,
-  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__card-overlay-main,
-  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__card-copy {
-    width: 100% !important;
-    min-width: 0 !important;
-    max-width: 100% !important;
-  }
-
-  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__card-overlay-main {
-    padding-right: 68px !important;
-  }
-
-  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__card-copy {
-    width: calc(50% - 36px) !important;
-    max-width: calc(50% - 36px) !important;
-    overflow: hidden !important;
-  }
-
-  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__card-copy strong,
-  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__card-copy span {
-    display: block !important;
-    width: 100% !important;
-    min-width: 0 !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-    white-space: nowrap !important;
-  }
-}
-
 /* Mobile scene editor: a focused preview, persistent actions and a touch-first timeline.
  * The .98px ceilings cover fractional layout widths produced by browser zoom. */
 @media (max-width: 980.98px),
-  (min-width: 641px) and (max-width: 1180.98px) and (max-height: 760px),
-  (min-width: 1181px) and (max-height: 620px) {
+  (min-width: 641px) and (max-width: 1180.98px) and (max-height: 760px) {
   #app .studio-canvas-route.is-segment-editor {
     overflow-x: hidden !important;
     overflow-y: hidden !important;
@@ -937,8 +868,7 @@
   }
 }
 
-@media (min-width: 641px) and (max-width: 1180.98px) and (max-height: 760px),
-  (min-width: 1181px) and (max-height: 620px) {
+@media (min-width: 641px) and (max-width: 1180.98px) and (max-height: 760px) {
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-submit-row {
     position: relative !important;
     bottom: auto !important;
@@ -949,8 +879,7 @@
  * two-row workspace, not the portrait mobile stack. The header keeps its normal
  * responsive layout while preview/actions share the first row and the complete
  * five-track timeline remains visible below. */
-@media (min-width: 641px) and (max-width: 1180.98px) and (min-height: 400px) and (max-height: 760px) and (orientation: landscape),
-  (min-width: 1181px) and (min-height: 400px) and (max-height: 620px) and (orientation: landscape) {
+@media (min-width: 641px) and (max-width: 1180.98px) and (min-height: 400px) and (max-height: 760px) and (orientation: landscape) {
   #app .studio-canvas-route.is-segment-editor,
   #app .studio-canvas-main.is-segment-editor {
     min-height: 100dvh !important;
@@ -1977,252 +1906,6 @@
   }
 }
 
-/* The centered desktop header owns authoritative !important tokens, so the
- * earlier compact-height layer could not actually reduce it. Restore the
- * intended short-screen header budget at the final scene-editor layer. */
-@media (min-width: 1181px) and (max-height: 760px) {
-  #app .studio-canvas-route.is-segment-editor {
-    --studio-header-reserve: 60px !important;
-    --studio-header-height: 56px !important;
-    --studio-header-control-height: 44px !important;
-  }
-
-  #app .studio-canvas-route.is-segment-editor .site-header--workspace {
-    --studio-header-control-height: 44px !important;
-    height: var(--studio-header-height) !important;
-  }
-
-  #app .studio-canvas-route.is-segment-editor .site-header--workspace .site-header__inner {
-    height: 52px !important;
-    min-height: 52px !important;
-    margin-top: 2px !important;
-    padding-block: 0 !important;
-  }
-}
-
-@media (min-width: 1181px) and (max-height: 560px) {
-  #app .studio-canvas-route.is-segment-editor {
-    --studio-header-reserve: 56px !important;
-    --studio-header-height: 52px !important;
-  }
-
-  #app .studio-canvas-route.is-segment-editor .site-header--workspace .site-header__inner {
-    height: 48px !important;
-    min-height: 48px !important;
-  }
-}
-
-/* The short-screen layout mode extends through 620px, matching the shared
- * height contract. Preview, tools and timeline use one viewport budget, so a
- * one-pixel resize cannot switch to the cramped three-row composition. */
-@media (min-width: 1181px) and (min-height: 400px) and (max-height: 620px) and (orientation: landscape) {
-  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__layout,
-  #app
-    .studio-canvas-main.is-segment-editor
-    .studio-segment-editor__layout.is-visual-panel-closed {
-    --studio-segment-editor-landscape-timeline-height: clamp(
-      142px,
-      calc(100dvh - var(--studio-header-reserve) - 42dvh - 32px),
-      244px
-    );
-    --studio-segment-editor-carousel-height: clamp(
-      148px,
-      min(
-        46dvh,
-        calc(
-          100dvh - var(--studio-header-reserve) -
-            var(--studio-segment-editor-landscape-timeline-height) - 30px
-        )
-      ),
-      300px
-    ) !important;
-    --studio-segment-editor-carousel-width: calc(var(--studio-segment-editor-carousel-height) * 0.5625) !important;
-  }
-
-  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__preview-column,
-  #app
-    .studio-canvas-main.is-segment-editor
-    .studio-segment-editor__layout.is-visual-panel-closed
-    .studio-segment-editor__preview-column,
-  #app
-    .studio-canvas-main.is-segment-editor
-    .studio-segment-editor__layout.is-visual-panel-open
-    .studio-segment-editor__preview-column {
-    --studio-segment-editor-carousel-height: clamp(
-      148px,
-      min(
-        46dvh,
-        calc(
-          100dvh - var(--studio-header-reserve) -
-            var(--studio-segment-editor-landscape-timeline-height) - 30px
-        )
-      ),
-      300px
-    ) !important;
-    --studio-segment-editor-carousel-width: calc(var(--studio-segment-editor-carousel-height) * 0.5625) !important;
-  }
-
-  #app
-    .studio-canvas-main.is-segment-editor
-    .studio-segment-editor__layout.is-visual-panel-closed {
-    grid-template-columns: minmax(0, 1fr) !important;
-  }
-
-  #app
-    .studio-canvas-main.is-segment-editor
-    .studio-segment-editor__layout.is-visual-panel-closed
-    .studio-segment-editor__preview-column,
-  #app
-    .studio-canvas-main.is-segment-editor
-    .studio-segment-editor__layout.is-visual-panel-closed
-    .studio-segment-editor__timeline-submit-row {
-    grid-column: 1 !important;
-  }
-
-  #app
-    .studio-canvas-main.is-segment-editor
-    .studio-segment-editor__layout.is-visual-panel-closed
-    .studio-segment-editor__timeline-submit-row {
-    align-self: end !important;
-    justify-self: end !important;
-    width: clamp(280px, 18vw, 320px) !important;
-    margin: 0 12px 8px 0 !important;
-  }
-
-  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline {
-    --studio-segment-editor-timeline-visual-track-height: clamp(30px, calc(12.4dvh - 20px), 54px) !important;
-    --studio-segment-editor-timeline-scene-track-height: clamp(20px, calc(7.9dvh - 12px), 36px) !important;
-  }
-
-  #app
-    .studio-canvas-main.is-segment-editor
-    .studio-segment-editor__layout.is-visual-panel-open {
-    grid-template-columns:
-      minmax(440px, 59.5%)
-      minmax(64px, 1fr)
-      clamp(230px, 14.6vw, 248px) !important;
-  }
-
-  #app
-    .studio-canvas-main.is-segment-editor
-    .studio-segment-editor__layout.is-visual-panel-open
-    .studio-segment-editor__stage {
-    transform: translateX(-12px) !important;
-  }
-
-  #app
-    .studio-canvas-main.is-segment-editor
-    .studio-segment-editor__layout.is-visual-panel-open
-    .studio-segment-editor__timeline-submit-row {
-    width: clamp(230px, 14.6vw, 248px) !important;
-    min-height: 36px !important;
-    height: 36px !important;
-    grid-template-columns: minmax(96px, 0.72fr) minmax(0, 1fr) !important;
-    gap: 5px !important;
-    margin-bottom: 4px !important;
-  }
-
-  #app
-    .studio-canvas-main.is-segment-editor
-    .studio-segment-editor__layout.is-visual-panel-open
-    .studio-segment-editor__timeline-submit-row
-    :is(
-      .studio-segment-editor__timeline-preview-controls,
-      .studio-segment-editor__timeline-preview-toggle,
-      .studio-segment-editor__prompt-submit
-    ) {
-    min-height: 36px !important;
-    height: 36px !important;
-    border-radius: 10px !important;
-    font-size: 0.68rem !important;
-  }
-
-  #app
-    .studio-canvas-main.is-segment-editor
-    .studio-segment-editor__layout.is-visual-panel-open
-    .studio-segment-editor__timeline-submit-row
-    .studio-segment-editor__prompt-submit {
-    padding-inline: 5px !important;
-    font-size: 0.6rem !important;
-  }
-
-  #app
-    .studio-canvas-main.is-segment-editor
-    .studio-segment-editor__layout.is-visual-panel-open
-    .studio-segment-editor__prompt-topbar {
-    gap: 6px !important;
-  }
-
-  #app
-    .studio-canvas-main.is-segment-editor
-    .studio-segment-editor__layout.is-visual-panel-open
-    .studio-segment-editor__prompt-tool-block,
-  #app
-    .studio-canvas-main.is-segment-editor
-    .studio-segment-editor__layout.is-visual-panel-open
-    .studio-segment-editor__prompt-submenu {
-    gap: 4px !important;
-  }
-
-  #app
-    .studio-canvas-main.is-segment-editor
-    .studio-segment-editor__layout.is-visual-panel-open
-    .studio-segment-editor__prompt-tool-block
-    > .studio-segment-editor__prompt-section-label {
-    min-height: 16px !important;
-    font-size: 0.58rem !important;
-  }
-
-  #app
-    .studio-canvas-main.is-segment-editor
-    .studio-segment-editor__layout.is-visual-panel-open
-    .studio-segment-editor__prompt-submenu-button,
-  #app
-    .studio-canvas-main.is-segment-editor
-    .studio-segment-editor__layout.is-visual-panel-open
-    .studio-segment-editor__prompt-submenu-button--icon {
-    min-height: 38px !important;
-    height: 38px !important;
-    padding: 4px 16px 4px 6px !important;
-    border-radius: 10px !important;
-  }
-
-  #app
-    .studio-canvas-main.is-segment-editor
-    .studio-segment-editor__layout.is-visual-panel-open
-    .studio-segment-editor__prompt-tool-button-content {
-    grid-template-columns: 28px minmax(0, 1fr) !important;
-    gap: 6px !important;
-  }
-
-  #app
-    .studio-canvas-main.is-segment-editor
-    .studio-segment-editor__layout.is-visual-panel-open
-    .studio-segment-editor__prompt-submenu-button--icon
-    :is(.studio-segment-editor__prompt-tool-icon, .studio-segment-editor__prompt-tool-icon--asset) {
-    width: 28px !important;
-    min-width: 28px !important;
-    height: 28px !important;
-    min-height: 28px !important;
-  }
-
-  #app
-    .studio-canvas-main.is-segment-editor
-    .studio-segment-editor__layout.is-visual-panel-open
-    .studio-segment-editor__prompt-tool-label
-    strong {
-    font-size: 0.66rem !important;
-  }
-
-  #app
-    .studio-canvas-main.is-segment-editor
-    .studio-segment-editor__layout.is-visual-panel-open
-    .studio-segment-editor__prompt-tool-label
-    small {
-    display: none !important;
-  }
-}
-
 /* Source labels are secondary metadata. Let the active card decide whether
  * the complete label fits instead of rendering a clipped abbreviation. */
 #app .studio-canvas-main.is-segment-editor .studio-segment-editor__card.is-active {
@@ -2230,7 +1913,7 @@
   container-type: inline-size;
 }
 
-@container studio-active-scene-card (max-width: 190px) {
+@container studio-active-scene-card (max-width: 230px) {
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__card-badge {
     display: none !important;
   }
