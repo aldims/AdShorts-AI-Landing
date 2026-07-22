@@ -1402,10 +1402,12 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
             rect.top < metrics.studioPreview.top - 1,
         );
         const mismatchedStandardAction = metrics.studioPreviewActions.find(
-          (rect) => Math.abs(rect.width - 20) > 1 || Math.abs(rect.height - 20) > 1,
+          (rect, index) =>
+            Math.abs(rect.height - 24) > 1 ||
+            (index < 3 ? rect.width <= 24 : Math.abs(rect.width - 24) > 1),
         );
         const mismatchedStandardActionIcon = metrics.studioPreviewActionIcons.find(
-          (rect) => Math.abs(rect.width - 8) > 1 || Math.abs(rect.height - 8) > 1,
+          (rect) => Math.abs(rect.width - 9) > 1 || Math.abs(rect.height - 9) > 1,
         );
 
         if (outsideStandardAction || mismatchedStandardAction || mismatchedStandardActionIcon) {
