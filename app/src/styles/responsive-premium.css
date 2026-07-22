@@ -863,24 +863,26 @@ html {
 }
 
 /*
- * Compact desktop scene editor.  Secondary visual tools receive a bounded
- * column while the preview keeps its height and aspect ratio.  The timeline
- * is a local work surface and scrolls internally when all tracks do not fit.
+ * Compact desktop scene editor. Secondary visual tools receive a bounded
+ * column while the carousel and timeline share the available height without
+ * introducing a second vertical scroll surface.
  */
 @media (min-width: 1181px) and (min-height: 621px) and (max-height: 860px) {
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__layout {
-    --studio-segment-editor-compact-timeline-height: clamp(184px, 27.5dvh, 196px);
+    --studio-segment-editor-compact-timeline-height: clamp(212px, 33dvh, 232px);
+    --studio-segment-editor-adaptive-visual-track-height: clamp(44px, 7dvh, 50px);
+    --studio-segment-editor-adaptive-scene-track-height: clamp(27px, 4.1dvh, 31px);
     --studio-segment-editor-adaptive-timeline-height:
       var(--studio-segment-editor-compact-timeline-height) !important;
     --studio-segment-editor-carousel-height: clamp(
-      330px,
+      260px,
       calc(
         var(--studio-segment-editor-layout-height) - var(--studio-segment-editor-submit-height) -
           var(--studio-segment-editor-compact-timeline-height) -
           (var(--studio-segment-editor-adaptive-gap) * 2) -
           (var(--studio-segment-editor-preview-inset) * 2)
       ),
-      520px
+      480px
     ) !important;
     --studio-segment-editor-carousel-width:
       calc(var(--studio-segment-editor-carousel-height) * 0.5625) !important;
@@ -904,14 +906,14 @@ html {
     .studio-canvas-main.is-segment-editor
     .studio-segment-editor__layout.is-visual-panel-closed {
     --studio-segment-editor-carousel-height: clamp(
-      350px,
+      270px,
       calc(
         var(--studio-segment-editor-layout-height) -
           var(--studio-segment-editor-compact-timeline-height) -
           var(--studio-segment-editor-adaptive-gap) -
           (var(--studio-segment-editor-preview-inset) * 2)
       ),
-      560px
+      500px
     ) !important;
   }
 
@@ -998,7 +1000,7 @@ html {
     height: var(--studio-segment-editor-compact-timeline-height) !important;
     max-height: var(--studio-segment-editor-compact-timeline-height) !important;
     overflow-x: hidden !important;
-    overflow-y: auto !important;
+    overflow-y: hidden !important;
     overscroll-behavior: contain;
     scrollbar-width: thin;
   }

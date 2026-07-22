@@ -499,6 +499,8 @@ const buildScenarios = () => {
       { width: 1180, height: 499, zoom: 1, fontScale: 1, type: "scene-breakpoint-lower" },
       { width: 1181, height: 499, zoom: 1, fontScale: 1, type: "scene-breakpoint-upper" },
       { width: 1920, height: 980, zoom: 1.25, fontScale: 1, type: "scene-fit" },
+      { width: 1208, height: 681, zoom: 1, fontScale: 1, type: "scene-user-laptop" },
+      { width: 961, height: 698, zoom: 1, fontScale: 1, type: "scene-user-laptop" },
       { width: 850, height: 434, zoom: 1, fontScale: 1, type: "scene-embedded" },
       { width: 1352, height: 690, zoom: 1, fontScale: 1, type: "scene-compact-desktop" },
     ];
@@ -527,6 +529,8 @@ const buildScenarios = () => {
     { width: 1180, height: 499, zoom: 1, fontScale: 1, type: "scene-breakpoint-lower" },
     { width: 1181, height: 499, zoom: 1, fontScale: 1, type: "scene-breakpoint-upper" },
     { width: 1920, height: 980, zoom: 1.25, fontScale: 1, type: "scene-fit" },
+    { width: 1208, height: 681, zoom: 1, fontScale: 1, type: "scene-user-laptop" },
+    { width: 961, height: 698, zoom: 1, fontScale: 1, type: "scene-user-laptop" },
     { width: 850, height: 434, zoom: 1, fontScale: 1, type: "scene-embedded" },
     { width: 1352, height: 690, zoom: 1, fontScale: 1, type: "scene-compact-desktop" },
     { width: 1342, height: 755, zoom: 1, fontScale: 1, type: "scene-compact-desktop" },
@@ -731,9 +735,18 @@ const evaluateLayout = async (page) =>
     const sceneBrandAddRect = activeSceneCard
       ?.querySelector(".studio-segment-editor__brand-add")
       ?.getBoundingClientRect();
-    const sceneTimelineRect = document
-      .querySelector(".studio-segment-editor__timeline")
-      ?.getBoundingClientRect();
+    const sceneTimeline = document.querySelector(".studio-segment-editor__timeline");
+    const sceneTimelineRect = sceneTimeline?.getBoundingClientRect();
+    const sceneTimelineScroll = document.querySelector(".studio-segment-editor__timeline-scroll");
+    const sceneTimelineContentMaxBottom = sceneTimelineScroll
+      ? Math.max(
+          sceneTimelineScroll.getBoundingClientRect().bottom,
+          ...Array.from(
+            sceneTimelineScroll.querySelectorAll("*"),
+            (element) => element.getBoundingClientRect().bottom,
+          ),
+        )
+      : null;
     const sceneSubmitRect = document
       .querySelector(".studio-segment-editor__timeline-submit-row")
       ?.getBoundingClientRect();
@@ -825,6 +838,14 @@ const evaluateLayout = async (page) =>
         ? {
             top: Math.round(sceneTimelineRect.top),
             bottom: Math.round(sceneTimelineRect.bottom),
+            height: Math.round(sceneTimelineRect.height),
+            clientHeight: Math.round(sceneTimeline.clientHeight),
+            scrollHeight: Math.round(sceneTimeline.scrollHeight),
+            contentClientHeight: sceneTimelineScroll ? Math.round(sceneTimelineScroll.clientHeight) : null,
+            contentScrollHeight: sceneTimelineScroll ? Math.round(sceneTimelineScroll.scrollHeight) : null,
+            contentMaxBottom: sceneTimelineContentMaxBottom === null
+              ? null
+              : Math.round(sceneTimelineContentMaxBottom),
           }
         : null,
       sceneSubmit: sceneSubmitRect
@@ -1192,6 +1213,7 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
         scenario.type === "scene-breakpoint-lower" ||
         scenario.type === "scene-breakpoint-upper" ||
         scenario.type === "scene-compact-desktop" ||
+        scenario.type === "scene-user-laptop" ||
         scenario.type === "laptop-125");
     const scenesModeReady = expectsScenesMode
       ? await page
@@ -1669,6 +1691,51 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
       }
     }
 
+    if (sceneVisualPanel && scenario.type === "scene-user-laptop") {
+      if (
+        metrics.scrollHeight > metrics.clientHeight + 1 ||
+        metrics.sceneMainScrollHeight > metrics.sceneMainClientHeight + 1
+      ) {
+        failures.push(
+          `scene user-laptop layout scrolls at ${scenario.width}x${scenario.height}: document ` +
+            `${metrics.scrollHeight}/${metrics.clientHeight}, workspace ` +
+            `${metrics.sceneMainScrollHeight}/${metrics.sceneMainClientHeight}`,
+        );
+      }
+
+      if (
+        !metrics.sceneTimeline ||
+        metrics.sceneTimeline.height < 178 ||
+        metrics.sceneTimeline.bottom > metrics.clientHeight - 5
+      ) {
+        failures.push(
+          `scene user-laptop timeline is squeezed at ${scenario.width}x${scenario.height}: ` +
+            `${metrics.sceneTimeline?.height ?? "missing"}px, bottom ${metrics.sceneTimeline?.bottom ?? "missing"}`,
+        );
+      }
+
+      if (
+        metrics.sceneTimeline?.contentMaxBottom !== null &&
+        metrics.sceneTimeline.contentMaxBottom > metrics.sceneTimeline.bottom
+      ) {
+        failures.push(
+          `scene user-laptop tracks are clipped at ${scenario.width}x${scenario.height}: ` +
+            `${metrics.sceneTimeline.contentMaxBottom}/${metrics.sceneTimeline.bottom}`,
+        );
+      }
+
+      if (metrics.scenePreview && metrics.sceneBrandAdd) {
+        const cardCenter = (metrics.scenePreview.left + metrics.scenePreview.right) / 2;
+        const brandCenter = (metrics.sceneBrandAdd.left + metrics.sceneBrandAdd.right) / 2;
+        if (Math.abs(cardCenter - brandCenter) > 2) {
+          failures.push(
+            `scene brand is off-center at ${scenario.width}x${scenario.height}: ` +
+              `${Math.round(brandCenter)} vs ${Math.round(cardCenter)}`,
+          );
+        }
+      }
+    }
+
     if (sceneVisualPanel && scenario.type === "scene-embedded") {
       if (
         metrics.sceneMainScrollHeight > metrics.sceneMainClientHeight + 1 ||
@@ -1788,7 +1855,7 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
         );
       }
 
-      if (sceneVisualPanel.previewWidth < 185 || sceneVisualPanel.previewHeight < 328) {
+      if (sceneVisualPanel.previewWidth < 165 || sceneVisualPanel.previewHeight < 295) {
         failures.push(
           `scene preview is undersized at 1229x692: ` +
             `${sceneVisualPanel.previewWidth}x${sceneVisualPanel.previewHeight}`,

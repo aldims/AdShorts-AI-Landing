@@ -196,9 +196,9 @@
   }
 
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__brand-add {
-    right: 10px !important;
+    right: auto !important;
     bottom: 10px !important;
-    left: auto !important;
+    left: 50% !important;
     width: 58px !important;
     min-width: 58px !important;
     max-width: 58px !important;
@@ -206,12 +206,12 @@
     height: 24px !important;
     padding-inline: 8px !important;
     font-size: 0.58rem !important;
-    transform: none !important;
+    transform: translateX(-50%) !important;
   }
 
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__brand-add:hover,
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__brand-add:focus-visible {
-    transform: translateY(-1px) !important;
+    transform: translateX(-50%) translateY(-1px) !important;
   }
 
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__card-overlay-footer,
@@ -227,6 +227,8 @@
   }
 
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__card-copy {
+    width: calc(50% - 36px) !important;
+    max-width: calc(50% - 36px) !important;
     overflow: hidden !important;
   }
 
@@ -1427,19 +1429,19 @@
   }
 
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-track {
-    min-height: 20px !important;
-    height: 20px !important;
+    min-height: var(--studio-segment-editor-timeline-scene-track-height) !important;
+    height: var(--studio-segment-editor-timeline-scene-track-height) !important;
   }
 
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-track--visual,
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-cell--visual {
-    min-height: 30px !important;
-    height: 30px !important;
+    min-height: var(--studio-segment-editor-timeline-visual-track-height) !important;
+    height: var(--studio-segment-editor-timeline-visual-track-height) !important;
   }
 
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-cell {
-    min-height: 20px !important;
-    height: 20px !important;
+    min-height: var(--studio-segment-editor-timeline-scene-track-height) !important;
+    height: var(--studio-segment-editor-timeline-scene-track-height) !important;
     padding: 2px 5px !important;
   }
 
@@ -1495,6 +1497,23 @@
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-reset {
     top: 3px !important;
     right: 14px !important;
+  }
+}
+
+/* Taller laptop landscapes can use the recovered vertical space to keep all
+ * five tracks readable without shrinking the carousel into the timeline. */
+@media (min-width: 641px) and (max-width: 1180.98px) and (min-height: 621px) and (max-height: 760px) and (orientation: landscape) {
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__layout,
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout.is-visual-panel-closed {
+    --studio-segment-editor-landscape-timeline-height: clamp(184px, 32dvh, 224px);
+    --studio-segment-editor-carousel-height: clamp(170px, 39dvh, 270px) !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline {
+    --studio-segment-editor-timeline-visual-track-height: clamp(36px, 6.4dvh, 46px) !important;
+    --studio-segment-editor-timeline-scene-track-height: clamp(24px, 4.3dvh, 30px) !important;
   }
 }
 
