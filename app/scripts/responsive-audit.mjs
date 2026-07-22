@@ -502,8 +502,9 @@ const buildScenarios = () => {
       { width: 1121, height: 419, zoom: 1, fontScale: 1, type: "scene-short-desktop" },
       { width: 1166, height: 464, zoom: 1, fontScale: 1, type: "scene-short-desktop" },
       { width: 1181, height: 499, zoom: 1, fontScale: 1, type: "scene-breakpoint-upper" },
-      { width: 1688, height: 600, zoom: 1, fontScale: 1, type: "scene-height-threshold-lower" },
-      { width: 1688, height: 601, zoom: 1, fontScale: 1, type: "scene-height-threshold-upper" },
+      { width: 1688, height: 559, zoom: 1, fontScale: 1, type: "scene-height-threshold-lower" },
+      { width: 1688, height: 620, zoom: 1, fontScale: 1, type: "scene-height-threshold-upper" },
+      { width: 1688, height: 621, zoom: 1, fontScale: 1, type: "scene-height-medium" },
       { width: 1920, height: 980, zoom: 1.25, fontScale: 1, type: "scene-fit" },
       { width: 1208, height: 681, zoom: 1, fontScale: 1, type: "scene-user-laptop" },
       { width: 961, height: 698, zoom: 1, fontScale: 1, type: "scene-user-laptop" },
@@ -538,8 +539,9 @@ const buildScenarios = () => {
     { width: 1121, height: 419, zoom: 1, fontScale: 1, type: "scene-short-desktop" },
     { width: 1166, height: 464, zoom: 1, fontScale: 1, type: "scene-short-desktop" },
     { width: 1181, height: 499, zoom: 1, fontScale: 1, type: "scene-breakpoint-upper" },
-    { width: 1688, height: 600, zoom: 1, fontScale: 1, type: "scene-height-threshold-lower" },
-    { width: 1688, height: 601, zoom: 1, fontScale: 1, type: "scene-height-threshold-upper" },
+    { width: 1688, height: 559, zoom: 1, fontScale: 1, type: "scene-height-threshold-lower" },
+    { width: 1688, height: 620, zoom: 1, fontScale: 1, type: "scene-height-threshold-upper" },
+    { width: 1688, height: 621, zoom: 1, fontScale: 1, type: "scene-height-medium" },
     { width: 1920, height: 980, zoom: 1.25, fontScale: 1, type: "scene-fit" },
     { width: 1208, height: 681, zoom: 1, fontScale: 1, type: "scene-user-laptop" },
     { width: 961, height: 698, zoom: 1, fontScale: 1, type: "scene-user-laptop" },
@@ -1161,6 +1163,10 @@ const openAndMeasureSceneVisualPanel = async (page) => {
         ),
       )
         .filter((label) => {
+          const labelStyle = window.getComputedStyle(label);
+          if (labelStyle.display === "none" || labelStyle.visibility === "hidden") {
+            return false;
+          }
           const labelRect = label.getBoundingClientRect();
           return (
             labelRect.left < buttonRect.left - 1 ||
@@ -1342,6 +1348,7 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
         scenario.type === "scene-breakpoint-upper" ||
         scenario.type === "scene-height-threshold-lower" ||
         scenario.type === "scene-height-threshold-upper" ||
+        scenario.type === "scene-height-medium" ||
         scenario.type === "scene-compact-desktop" ||
         scenario.type === "scene-user-laptop" ||
         scenario.type === "laptop-125");
@@ -2167,6 +2174,50 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
         metrics.sceneSourceBadgeVisible
       ) {
         failures.push("scene source badge remains visible when the preview cannot fit it");
+      }
+
+      if (
+        sceneVisualPanel.headerHeight === null ||
+        sceneVisualPanel.headerHeight > 52 ||
+        sceneVisualPanel.previewHeight < 230 ||
+        sceneVisualPanel.previewBottom > sceneVisualPanel.timelineTop - 3 ||
+        sceneVisualPanel.submitLeft - sceneVisualPanel.previewRight < 5 ||
+        sceneVisualPanel.promptBottom > sceneVisualPanel.timelineTop - 6 ||
+        sceneVisualPanel.submitBottom > sceneVisualPanel.timelineTop - 6 ||
+        sceneVisualPanel.promptFieldHeight < 80
+      ) {
+        failures.push(
+          `scene height-threshold workspace is not balanced: header ${sceneVisualPanel.headerHeight}px, ` +
+            `preview ${sceneVisualPanel.previewHeight}px/${sceneVisualPanel.previewBottom}, ` +
+            `prompt ${sceneVisualPanel.promptBottom}, actions ${sceneVisualPanel.submitLeft}/${sceneVisualPanel.submitBottom}, ` +
+            `timeline ${sceneVisualPanel.timelineTop}, field ${sceneVisualPanel.promptFieldHeight}px`,
+        );
+      }
+
+      if (sceneVisualPanel.promptTextEscapes.length > 0) {
+        failures.push(
+          `scene height-threshold prompt text escapes its controls: ${sceneVisualPanel.promptTextEscapes.join(", ")}`,
+        );
+      }
+    }
+
+    if (sceneVisualPanel && scenario.type === "scene-height-medium") {
+      if (
+        sceneVisualPanel.headerHeight === null ||
+        sceneVisualPanel.headerHeight > 52 ||
+        sceneVisualPanel.previewHeight < 250 ||
+        sceneVisualPanel.previewBottom > sceneVisualPanel.timelineTop - 8 ||
+        sceneVisualPanel.promptBottom > sceneVisualPanel.timelineTop - 8 ||
+        sceneVisualPanel.submitBottom > sceneVisualPanel.timelineTop - 6 ||
+        sceneVisualPanel.timelineTop < 380 ||
+        sceneVisualPanel.timelineBottom > sceneVisualPanel.viewportHeight - 5
+      ) {
+        failures.push(
+          `medium-height scene workspace jumps after 620px: header ${sceneVisualPanel.headerHeight}px, ` +
+            `preview ${sceneVisualPanel.previewHeight}px/${sceneVisualPanel.previewBottom}, ` +
+            `prompt ${sceneVisualPanel.promptBottom}, actions ${sceneVisualPanel.submitBottom}, ` +
+            `timeline ${sceneVisualPanel.timelineTop}-${sceneVisualPanel.timelineBottom}`,
+        );
       }
     }
 
