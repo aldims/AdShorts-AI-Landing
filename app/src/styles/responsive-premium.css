@@ -731,7 +731,7 @@ html {
     min-height: 0 !important;
   }
 
-  #app .studio-canvas-route:not(.is-segment-editor) .studio-canvas-create {
+  #app .studio-canvas-route:not(.is-segment-editor) .studio-canvas-create:not([hidden]) {
     display: grid !important;
     grid-template-rows: minmax(0, 1fr) auto !important;
     row-gap: clamp(8px, 1.2dvh, 12px) !important;
