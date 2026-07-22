@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_STUDIO_VOICE_ID } from "../../../shared/locales";
 import { STUDIO_EDIT_VIDEO_GENERATION_CREDIT_COST } from "../../../shared/studio-credit-costs";
 import {
+  applyWorkspaceSegmentEditorBulkVoiceText,
   applyWorkspaceSegmentEditorJobResult,
   applyWorkspaceSegmentEditorGlobalSubtitleSelection,
   applyWorkspaceSegmentPendingInfographicTransforms,
@@ -875,6 +876,87 @@ it("resets scene duration to pending voiceover estimate after a global voice cha
     estimatedVoiceoverDurationSeconds: 2.04,
     manualDurationSeconds: null,
     startTime: 0,
+  }));
+});
+
+it("preserves an explicit visual duration when bulk voice text and the global voice change", () => {
+  const segment = createProjectVoiceoverSegment({
+    customVideo: {
+      assetId: 4404,
+      durationSeconds: 5.5,
+      fileName: "uploaded-scene.mp4",
+      fileSize: 0,
+      mimeType: "video/mp4",
+      remoteUrl: "/api/workspace/media-assets/4404/playback",
+      source: "upload",
+    },
+    duration: 5.5,
+    durationMode: "manual",
+    durationSyncMode: "visual",
+    durationSyncModeUserSelected: true,
+    endTime: 5.5,
+    manualDurationSeconds: 5.5,
+    mediaType: "video",
+    startTime: 0,
+    text: "Исходный текст",
+    textByLanguage: { ru: "Исходный текст" },
+    videoAction: "custom",
+  });
+  const draft = createProjectVoiceoverDraft([segment]);
+
+  const withUpdatedText = applyWorkspaceSegmentEditorBulkVoiceText(
+    draft,
+    ["Обновлённый текст"],
+    "ru",
+  );
+  const withUpdatedVoice = applyWorkspaceSegmentEditorGlobalVoiceToSegments(
+    withUpdatedText,
+    "Russian_BrightHeroine",
+  );
+
+  expect(withUpdatedVoice.segments[0]).toEqual(expect.objectContaining({
+    duration: 5.5,
+    durationMode: "manual",
+    durationSyncMode: "visual",
+    durationSyncModeUserSelected: true,
+    endTime: 5.5,
+    manualDurationSeconds: 5.5,
+    startTime: 0,
+    text: "Обновлённый текст",
+  }));
+  expect(withUpdatedVoice.segments[0]?.voiceoverAsset).toBeNull();
+  expect(withUpdatedVoice.ttsAssetId).toBeNull();
+});
+
+it("keeps a persisted local voice selection through a fresh project refresh", () => {
+  const segment = createProjectVoiceoverSegment({
+    duration: 4.1,
+    durationMode: "manual",
+    durationSyncMode: "visual",
+    durationSyncModeUserSelected: true,
+    endTime: 4.1,
+    manualDurationSeconds: 4.1,
+  });
+  const baseline = createProjectVoiceoverDraft([segment]);
+  const localDraft = {
+    ...applyWorkspaceSegmentEditorGlobalVoiceToSegments(baseline, "Alisa"),
+    clientUpdatedAt: 1_722_000_000_000,
+  };
+
+  const refreshed = refreshWorkspaceSegmentEditorDraftWithFreshSession(localDraft, baseline, {
+    baselineSession: baseline,
+    preserveUnbaselinedManualDuration: true,
+  });
+
+  expect(refreshed.voiceType).toBe("Alisa");
+  expect(refreshed.clientUpdatedAt).toBe(localDraft.clientUpdatedAt);
+  expect(refreshed.segments[0]).toEqual(expect.objectContaining({
+    duration: 4.1,
+    durationMode: "manual",
+    durationSyncMode: "visual",
+    durationSyncModeUserSelected: true,
+    endTime: 4.1,
+    manualDurationSeconds: 4.1,
   }));
 });
 

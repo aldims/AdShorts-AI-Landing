@@ -140,6 +140,7 @@ import {
   getWorkspaceSegmentEditorCarouselNavigation,
   getWorkspaceSegmentEditorCarouselSlots,
   getWorkspaceSegmentEditorProjectOpenOptions,
+  hasWorkspaceSegmentEditorPersistedLocalChanges,
   getStudioRouteState,
   getWorkspaceSegmentMediaIdentityKey,
   getWorkspaceSegmentResolvedMediaSurface,
@@ -170,6 +171,7 @@ import {
   shouldPreserveWorkspaceSegmentEditorExplicitReset,
   shouldRequestWorkspaceSegmentEditorOpenRouteRefresh,
   shouldRequestWorkspaceSegmentEditorFreshRouteSession,
+  shouldRefreshWorkspaceSegmentEditorInitialEditRoute,
   shouldSyncWorkspaceSegmentMeasuredVoiceoverDurationToDraft,
   shouldUseWorkspaceSegmentMeasuredVoiceoverDuration,
   shouldSkipWorkspaceSegmentEditorActiveDraftReopen,
@@ -3363,6 +3365,20 @@ describe("WorkspacePage studio route transitions", () => {
     expect(shouldRequestWorkspaceSegmentEditorOpenRouteRefresh(false, true, false)).toBe(false);
     expect(shouldRequestWorkspaceSegmentEditorOpenRouteRefresh(false, false, true)).toBe(false);
     expect(shouldRequestWorkspaceSegmentEditorOpenRouteRefresh(false, false, false)).toBe(true);
+  });
+
+  it("restores a locally saved edit-route draft even when its baseline session is unavailable", () => {
+    expect(shouldRefreshWorkspaceSegmentEditorInitialEditRoute(false, false, true, false)).toBe(false);
+    expect(shouldRefreshWorkspaceSegmentEditorInitialEditRoute(false, false, false, false)).toBe(true);
+    expect(shouldRefreshWorkspaceSegmentEditorInitialEditRoute(false, false, true, true)).toBe(true);
+    expect(shouldRefreshWorkspaceSegmentEditorInitialEditRoute(true, false, false, false)).toBe(false);
+    expect(shouldRefreshWorkspaceSegmentEditorInitialEditRoute(false, true, false, false)).toBe(false);
+  });
+
+  it("recognizes a persisted client edit so a background refresh cannot replace it as clean", () => {
+    expect(hasWorkspaceSegmentEditorPersistedLocalChanges(Date.now())).toBe(true);
+    expect(hasWorkspaceSegmentEditorPersistedLocalChanges(0)).toBe(false);
+    expect(hasWorkspaceSegmentEditorPersistedLocalChanges(undefined)).toBe(false);
   });
 
   it("does not reopen an already handled active edit-route draft", () => {

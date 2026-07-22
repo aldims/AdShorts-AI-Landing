@@ -6,6 +6,7 @@ import {
   getWorkspaceSegmentEmbeddedVisualSoundAsset,
   getWorkspaceSegmentEffectiveSubtitleSettings,
   normalizeWorkspaceSegmentEditorTextForCompare,
+  normalizeWorkspaceSegmentEditorSetting,
   normalizeWorkspaceSegmentSceneSoundPrompt,
   getWorkspaceSegmentVoiceOverrideId,
   WORKSPACE_SEGMENT_SCENE_SOUND_DEFAULT_PROMPT,
@@ -21,6 +22,7 @@ import type {
 
 export type WorkspaceSegmentTimelineVoiceSettings = {
   getVoiceOptionById: (voiceId: string | null | undefined) => StudioVoiceOption | null;
+  projectVoiceType?: string | null;
   selectedVoiceOptions: StudioVoiceOption[];
   studioSidebarVoiceEnabled: boolean;
   studioSidebarVoiceId: StudioVoiceOption["id"];
@@ -42,18 +44,25 @@ export const getWorkspaceSegmentTimelineVoiceLabel = (
     return workspaceText(locale, "Добавить озвучку", "Add voiceover");
   }
 
+  const projectVoiceId = normalizeWorkspaceSegmentEditorSetting(settings.projectVoiceType);
+  if (!voiceOverrideId && projectVoiceId === "none") {
+    return workspaceText(locale, "Добавить озвучку", "Add voiceover");
+  }
+
   const voiceOverrideOption = settings.getVoiceOptionById(voiceOverrideId);
+  const projectVoiceOption = settings.getVoiceOptionById(projectVoiceId);
   const voiceoverVoiceOption = settings.getVoiceOptionById(segment.voiceoverVoiceType);
   const fallbackStudioVoiceOption = settings.studioSidebarVoiceEnabled
     ? settings.selectedVoiceOptions.find((option) => option.id === settings.studioSidebarVoiceId) ??
       settings.getVoiceOptionById(settings.studioSidebarVoiceId)
     : null;
-  if (!voiceOverrideOption && !voiceoverVoiceOption && !fallbackStudioVoiceOption) {
+  if (!voiceOverrideOption && !projectVoiceOption && !voiceoverVoiceOption && !fallbackStudioVoiceOption) {
     return workspaceText(locale, "Добавить озвучку", "Add voiceover");
   }
 
   const voice =
     voiceOverrideOption ??
+    projectVoiceOption ??
     voiceoverVoiceOption ??
     fallbackStudioVoiceOption;
   if (voiceOverrideOption && voiceOverrideOption.id !== settings.studioSidebarVoiceId) {
@@ -72,18 +81,25 @@ export const getWorkspaceSegmentTimelineVoiceOption = (
     return null;
   }
 
+  const projectVoiceId = normalizeWorkspaceSegmentEditorSetting(settings.projectVoiceType);
+  if (!voiceOverrideId && projectVoiceId === "none") {
+    return null;
+  }
+
   const voiceOverrideOption = settings.getVoiceOptionById(voiceOverrideId);
+  const projectVoiceOption = settings.getVoiceOptionById(projectVoiceId);
   const voiceoverVoiceOption = settings.getVoiceOptionById(segment.voiceoverVoiceType);
   const fallbackStudioVoiceOption = settings.studioSidebarVoiceEnabled
     ? settings.selectedVoiceOptions.find((option) => option.id === settings.studioSidebarVoiceId) ??
       settings.getVoiceOptionById(settings.studioSidebarVoiceId)
     : null;
-  if (!voiceOverrideOption && !voiceoverVoiceOption && !fallbackStudioVoiceOption) {
+  if (!voiceOverrideOption && !projectVoiceOption && !voiceoverVoiceOption && !fallbackStudioVoiceOption) {
     return null;
   }
 
   return (
     voiceOverrideOption ??
+    projectVoiceOption ??
     voiceoverVoiceOption ??
     fallbackStudioVoiceOption ??
     null

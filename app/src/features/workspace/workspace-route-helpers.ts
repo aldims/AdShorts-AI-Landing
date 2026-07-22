@@ -120,6 +120,20 @@ export const shouldRequestWorkspaceSegmentEditorOpenRouteRefresh = (
   hasSegmentEditorError: boolean,
 ) => !didReachPendingRoute && !isSegmentEditorLoading && !hasSegmentEditorError;
 
+export const shouldRefreshWorkspaceSegmentEditorInitialEditRoute = (
+  hasProcessedInitialEditRoute: boolean,
+  restoreKeyMatches: boolean,
+  hasStoredDraft: boolean,
+  shouldPreferFreshSession: boolean,
+) =>
+  !hasProcessedInitialEditRoute &&
+  !restoreKeyMatches &&
+  (!hasStoredDraft || shouldPreferFreshSession);
+
+export const hasWorkspaceSegmentEditorPersistedLocalChanges = (
+  clientUpdatedAt: number | null | undefined,
+) => Number.isFinite(Number(clientUpdatedAt)) && Number(clientUpdatedAt) > 0;
+
 export const shouldPreserveWorkspaceSegmentEditorExplicitReset = (
   hasExplicitReset: boolean,
   changeCount: number | null,

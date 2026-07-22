@@ -173,6 +173,7 @@ import {
 } from "../features/workspace/workspace-brand-helpers";
 import {
   areWorkspaceSegmentDurationValuesEqual,
+  applyWorkspaceSegmentEditorBulkVoiceText,
   applyWorkspaceSegmentSceneSoundAsset,
   applyWorkspaceSegmentEditorGlobalVoiceToSegments,
   applyWorkspaceSegmentEditorJobResult,
@@ -453,6 +454,7 @@ import {
   getStudioRouteSection,
   getStudioRouteState,
   getStudioViewFromRouteSection,
+  hasWorkspaceSegmentEditorPersistedLocalChanges,
   resolveWorkspaceSegmentEditorFreshRouteAttemptedKeyAfterLoad,
   resolveWorkspaceSegmentEditorScratchDraftOpenSource,
   resolveWorkspaceSegmentEditorPendingRouteSync,
@@ -460,6 +462,7 @@ import {
   shouldResetWorkspaceSegmentEditorConsumedSourceProject,
   shouldRequestWorkspaceSegmentEditorOpenRouteRefresh,
   shouldRequestWorkspaceSegmentEditorFreshRouteSession,
+  shouldRefreshWorkspaceSegmentEditorInitialEditRoute,
   shouldSkipWorkspaceSegmentEditorActiveDraftReopen,
   shouldDeferSegmentEditorRouteRestore,
   type StudioRouteMode,
@@ -1206,6 +1209,7 @@ export {
   shouldAllowWorkspaceSegmentPreviewVideoPlayback,
 } from "../lib/workspaceSegmentPreview";
 export {
+  hasWorkspaceSegmentEditorPersistedLocalChanges,
   resolveWorkspaceSegmentEditorScratchDraftOpenSource,
   resolveWorkspaceSegmentEditorPendingRouteSync,
   resolveWorkspaceSegmentEditorFreshRouteAttemptedKeyAfterLoad,
@@ -1213,6 +1217,7 @@ export {
   shouldResetWorkspaceSegmentEditorConsumedSourceProject,
   shouldRequestWorkspaceSegmentEditorOpenRouteRefresh,
   shouldRequestWorkspaceSegmentEditorFreshRouteSession,
+  shouldRefreshWorkspaceSegmentEditorInitialEditRoute,
   shouldSkipWorkspaceSegmentEditorActiveDraftReopen,
   shouldDeferSegmentEditorRouteRestore,
   buildStudioRouteUrl,
@@ -12448,6 +12453,7 @@ export function WorkspacePage({
         const shouldReplaceCleanLiveDraftWithFreshSession =
           options?.bypassCache === true &&
           options.openDraft === false &&
+          !hasWorkspaceSegmentEditorPersistedLocalChanges(liveDraft.clientUpdatedAt) &&
           !hasUnreflectedLiveGeneratedVideo &&
           !hasUnreflectedLiveGeneratedVoiceover &&
           ((liveDraftChangeChecklist !== null && liveDraftChangeChecklist.length === 0) ||
@@ -13011,6 +13017,7 @@ export function WorkspacePage({
       : null;
     const shouldPreferFreshRouteSessionOverStoredDraft =
       Boolean(reconciledStoredDraftForRoute && storedSessionForRoute) &&
+      !hasWorkspaceSegmentEditorPersistedLocalChanges(reconciledStoredDraftForRoute?.clientUpdatedAt) &&
       !hasStoredExplicitResetForRoute &&
       ((storedDraftChangeChecklist !== null && storedDraftChangeChecklist.length === 0) ||
         hasOnlyStaleSegmentEditorSourceDurationDrift(
@@ -13103,10 +13110,12 @@ export function WorkspacePage({
       return;
     }
 
-    const shouldRefreshInitialEditRoute =
-      !hasProcessedInitialSegmentEditorEditRouteRef.current &&
-      segmentEditorRouteRestoreKeyRef.current !== restoreKey &&
-      (!reconciledStoredDraftForRoute || !storedSessionForRoute || shouldPreferFreshRouteSessionOverStoredDraft);
+    const shouldRefreshInitialEditRoute = shouldRefreshWorkspaceSegmentEditorInitialEditRoute(
+      hasProcessedInitialSegmentEditorEditRouteRef.current,
+      segmentEditorRouteRestoreKeyRef.current === restoreKey,
+      Boolean(reconciledStoredDraftForRoute),
+      shouldPreferFreshRouteSessionOverStoredDraft,
+    );
     hasProcessedInitialSegmentEditorEditRouteRef.current = true;
 
     if (shouldRefreshInitialEditRoute) {
@@ -15152,25 +15161,10 @@ export function WorkspacePage({
       };
     }
 
-    updateSegmentEditorDraft((draft) => ({
-      ...draft,
-      segments: draft.segments.map((segment, index) => {
-        const nextText = result.texts[index] ?? "";
-
-        return clearSegmentEditorVoiceoverGenerationState({
-          ...segment,
-          text: nextText,
-          textByLanguage: {
-            ...segment.textByLanguage,
-            [textLanguage]: nextText,
-          },
-        }, {
-          preserveUserSelectedVisualDuration: false,
-          previousText: segment.text,
-        });
-      }),
-      ttsAssetId: null,
-    }), WORKSPACE_SEGMENT_EDITOR_VOICE_TEXT_TIMELINE_REBUILD_OPTIONS);
+    updateSegmentEditorDraft(
+      (draft) => applyWorkspaceSegmentEditorBulkVoiceText(draft, result.texts, textLanguage),
+      WORKSPACE_SEGMENT_EDITOR_VOICE_TEXT_TIMELINE_REBUILD_OPTIONS,
+    );
     setSegmentSubtitleBulkTextError(null);
     return true;
   };
@@ -15212,6 +15206,7 @@ export function WorkspacePage({
     }
 
     const selectedGlobalVoiceType = normalizeWorkspaceSegmentEditorSetting(voiceDraft.isEnabled ? voiceDraft.voiceId : "none");
+    let savedDraft: WorkspaceSegmentEditorDraftSession | null = null;
     if (selectedGlobalVoiceType && selectedGlobalVoiceType !== "none") {
       selectedVoiceIdByLanguageRef.current[voiceDraft.language] = selectedGlobalVoiceType;
       setSelectedVoiceId(selectedGlobalVoiceType);
@@ -15223,12 +15218,16 @@ export function WorkspacePage({
       };
       segmentTimelineGlobalVoiceDraftRef.current = nextGlobalVoiceDraft;
       setSegmentTimelineGlobalVoiceDraft(nextGlobalVoiceDraft);
-      updateSegmentEditorDraft((draft) => ({
+      savedDraft = updateSegmentEditorDraft((draft) => ({
         ...applySegmentEditorGlobalVoiceToAllSegments(draft, selectedGlobalVoiceType),
         language: voiceDraft.language,
       }));
     } else {
-      updateSegmentEditorDraft((draft) => applySegmentEditorGlobalVoiceToAllSegments(draft, "none"));
+      savedDraft = updateSegmentEditorDraft((draft) => applySegmentEditorGlobalVoiceToAllSegments(draft, "none"));
+    }
+
+    if (savedDraft) {
+      persistSegmentEditorDraftSnapshot(savedDraft);
     }
 
     clearSegmentTimelineBulkVoiceTextEditSnapshot();
@@ -28512,6 +28511,7 @@ export function WorkspacePage({
   };
   const segmentTimelineVoiceSettings: WorkspaceSegmentTimelineVoiceSettings = {
     getVoiceOptionById: getStudioVoiceOptionById,
+    projectVoiceType: segmentEditorDraft?.voiceType ?? null,
     selectedVoiceOptions,
     studioSidebarVoiceEnabled,
     studioSidebarVoiceId,

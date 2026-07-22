@@ -60,6 +60,7 @@ describe("getWorkspaceSegmentTimelineVoiceLabel", () => {
   const voices = [
     { description: "", id: "Bys_24000", label: "Борис" },
     { description: "", id: "Russian_BrightHeroine", label: "Тим" },
+    { description: "", id: "Alisa", label: "Алиса" },
   ];
   const settings = {
     getVoiceOptionById: (voiceId: string | null | undefined) =>
@@ -91,6 +92,20 @@ describe("getWorkspaceSegmentTimelineVoiceLabel", () => {
 
     expect(getWorkspaceSegmentTimelineVoiceLabel("ru", segment, fallbackSettings)).toBe("Борис");
     expect(getWorkspaceSegmentTimelineVoiceOption(segment, fallbackSettings)?.id).toBe("Bys_24000");
+  });
+
+  it("shows the saved project voice before a stale generated voice", () => {
+    const segment = {
+      voiceType: null,
+      voiceoverVoiceType: "Russian_BrightHeroine",
+    } as any;
+    const projectSettings = {
+      ...settings,
+      projectVoiceType: "Alisa",
+    };
+
+    expect(getWorkspaceSegmentTimelineVoiceLabel("ru", segment, projectSettings)).toBe("Алиса");
+    expect(getWorkspaceSegmentTimelineVoiceOption(segment, projectSettings)?.id).toBe("Alisa");
   });
 
   it("does not show a fallback voice when voiceover is disabled", () => {

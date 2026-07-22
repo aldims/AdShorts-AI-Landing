@@ -6480,6 +6480,44 @@ export const applyWorkspaceSegmentEditorGlobalVoiceToSegments = (
   };
 };
 
+export const applyWorkspaceSegmentEditorBulkVoiceText = (
+  draft: WorkspaceSegmentEditorDraftSession,
+  texts: readonly string[],
+  language: StudioLanguage,
+): WorkspaceSegmentEditorDraftSession => {
+  let hasTextChanges = false;
+  const segments = draft.segments.map((segment, index) => {
+    const nextText = texts[index] ?? "";
+    if (segment.text === nextText && segment.textByLanguage?.[language] === nextText) {
+      return segment;
+    }
+
+    hasTextChanges = true;
+    return clearWorkspaceSegmentEditorVoiceoverGenerationState({
+      ...segment,
+      text: nextText,
+      textByLanguage: {
+        ...segment.textByLanguage,
+        [language]: nextText,
+      },
+    }, {
+      previousText: segment.text,
+      resetTimelineToEstimatedVoiceover: true,
+      session: draft,
+    });
+  });
+
+  if (!hasTextChanges) {
+    return draft;
+  }
+
+  return {
+    ...draft,
+    segments,
+    ttsAssetId: null,
+  };
+};
+
 export const applyWorkspaceSegmentEditorSceneVoiceOverride = (
   draft: WorkspaceSegmentEditorDraftSession,
   segmentIndex: number,
@@ -9332,6 +9370,7 @@ export const refreshWorkspaceSegmentEditorDraftWithFreshSession = (
 
   return rebuildWorkspaceSegmentEditorDraftSessionTimeline({
     ...normalizedFreshSession,
+    clientUpdatedAt: liveDraft.clientUpdatedAt,
     customMusicAssetId: nextMusicState.customMusicAssetId ?? null,
     customMusicFileName: nextMusicState.customMusicFileName ?? null,
     description: liveDraft.description,
