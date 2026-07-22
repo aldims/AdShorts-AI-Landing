@@ -493,6 +493,7 @@ const buildScenarios = () => {
       { width: 1024, height: 768, zoom: 1, fontScale: 1.5, type: "font" },
       { width: 1229, height: 692, zoom: 1, fontScale: 1, type: "laptop-125" },
       { width: 1208, height: 615, zoom: 1, fontScale: 1, type: "idea-controls" },
+      { width: 2560, height: 1440, zoom: 1, fontScale: 1, type: "idea-standard" },
       { width: 1002, height: 424, zoom: 1, fontScale: 1, type: "idea-compact" },
       { width: 983, height: 388, zoom: 1, fontScale: 1, type: "idea-compact" },
       { width: 1180, height: 499, zoom: 1, fontScale: 1, type: "scene-breakpoint-lower" },
@@ -520,6 +521,7 @@ const buildScenarios = () => {
     { width: 932, height: 430, zoom: 1, fontScale: 1, type: "landscape" },
     { width: 1229, height: 692, zoom: 1, fontScale: 1, type: "laptop-125" },
     { width: 1208, height: 615, zoom: 1, fontScale: 1, type: "idea-controls" },
+    { width: 2560, height: 1440, zoom: 1, fontScale: 1, type: "idea-standard" },
     { width: 1002, height: 424, zoom: 1, fontScale: 1, type: "idea-compact" },
     { width: 983, height: 388, zoom: 1, fontScale: 1, type: "idea-compact" },
     { width: 1180, height: 499, zoom: 1, fontScale: 1, type: "scene-breakpoint-lower" },
@@ -1169,6 +1171,10 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
         scenario.type === "idea-compact" ||
         scenario.type === "scene-breakpoint-lower" ||
         scenario.type === "scene-breakpoint-upper");
+    const auditsStandardIdeaControls =
+      surface === "app" &&
+      route.includes("audit=legacy-project") &&
+      scenario.type === "idea-standard";
     const expectsCompactLandscapeSceneEditor =
       expectsScenesMode &&
       effectiveWidth >= 641 &&
@@ -1380,6 +1386,38 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
         }
       }
     }
+
+    if (auditsStandardIdeaControls) {
+      if (
+        !metrics.studioPreview ||
+        metrics.studioPreviewActions.length !== 4 ||
+        metrics.studioPreviewActionIcons.length !== 4
+      ) {
+        failures.push("standard legacy preview is missing its four compact actions");
+      } else {
+        const outsideStandardAction = metrics.studioPreviewActions.find(
+          (rect) =>
+            rect.left < metrics.studioPreview.left - 1 ||
+            rect.right > metrics.studioPreview.right + 1 ||
+            rect.top < metrics.studioPreview.top - 1,
+        );
+        const mismatchedStandardAction = metrics.studioPreviewActions.find(
+          (rect) => Math.abs(rect.width - 20) > 1 || Math.abs(rect.height - 20) > 1,
+        );
+        const mismatchedStandardActionIcon = metrics.studioPreviewActionIcons.find(
+          (rect) => Math.abs(rect.width - 8) > 1 || Math.abs(rect.height - 8) > 1,
+        );
+
+        if (outsideStandardAction || mismatchedStandardAction || mismatchedStandardActionIcon) {
+          failures.push(
+            `standard preview actions do not fit the video card uniformly: ` +
+              `${outsideStandardAction?.right ?? mismatchedStandardAction?.width ?? mismatchedStandardActionIcon?.width}x` +
+              `${outsideStandardAction?.top ?? mismatchedStandardAction?.height ?? mismatchedStandardActionIcon?.height}`,
+          );
+        }
+      }
+    }
+
     let laptopIdeaMetrics = null;
     const auditsLaptopIdea =
       surface === "app" &&

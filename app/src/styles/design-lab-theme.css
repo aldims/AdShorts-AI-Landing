@@ -22911,14 +22911,19 @@ body.studio-video-fullscreen-open .studio-canvas-preview::after {
   transform: none;
 }
 
+.studio-canvas-preview__player-shell {
+  --studio-preview-action-icon-size: 8px;
+  --studio-preview-action-size: 20px;
+}
+
 .studio-canvas-preview__quick-action--expanded {
-  width: auto;
+  width: var(--studio-preview-action-size);
   min-width: 0;
-  flex: 0 0 auto;
-  height: 30px;
-  padding: 0 8px;
-  border-radius: 999px;
-  gap: 4px;
+  flex: 0 0 var(--studio-preview-action-size);
+  height: var(--studio-preview-action-size);
+  padding: 0;
+  border-radius: 50%;
+  gap: 0;
   font-size: clamp(0.56rem, 2.8cqw, 0.68rem);
   font-weight: 800;
   line-height: 1;
@@ -22926,24 +22931,24 @@ body.studio-video-fullscreen-open .studio-canvas-preview::after {
 }
 
 .studio-canvas-preview__quick-action--expanded svg {
-  flex: 0 0 12px;
-  width: 12px;
-  height: 12px;
+  flex: 0 0 var(--studio-preview-action-icon-size);
+  width: var(--studio-preview-action-icon-size);
+  height: var(--studio-preview-action-icon-size);
 }
 
 .studio-canvas-preview__quick-action--expanded span {
-  min-width: 0;
+  display: none;
 }
 
 .studio-canvas-preview__generated-actions--expanded > .studio-canvas-preview__quick-action:not(.studio-canvas-preview__quick-action--expanded) {
-  flex: 0 0 30px;
-  width: 30px;
-  height: 30px;
+  flex: 0 0 var(--studio-preview-action-size);
+  width: var(--studio-preview-action-size);
+  height: var(--studio-preview-action-size);
 }
 
 .studio-canvas-preview__generated-actions--expanded > .studio-canvas-preview__quick-action:not(.studio-canvas-preview__quick-action--expanded) svg {
-  width: 13px;
-  height: 13px;
+  width: var(--studio-preview-action-icon-size);
+  height: var(--studio-preview-action-icon-size);
 }
 
 @container (max-width: 340px) {
@@ -22955,37 +22960,6 @@ body.studio-video-fullscreen-open .studio-canvas-preview::after {
 
   .studio-canvas-preview__generated-actions {
     gap: 4px;
-  }
-
-  .studio-canvas-preview__quick-action--expanded {
-    flex: 0 0 var(--studio-preview-action-size);
-    width: var(--studio-preview-action-size);
-    height: var(--studio-preview-action-size);
-    padding: 0;
-    border-radius: 50%;
-  }
-
-  .studio-canvas-preview__quick-action--expanded svg {
-    flex-basis: var(--studio-preview-action-icon-size);
-    width: var(--studio-preview-action-icon-size);
-    height: var(--studio-preview-action-icon-size);
-  }
-
-  .studio-canvas-preview__quick-action--expanded span {
-    display: none;
-  }
-
-  .studio-canvas-preview__generated-actions--expanded > .studio-canvas-preview__quick-action:not(.studio-canvas-preview__quick-action--expanded) {
-    flex-basis: var(--studio-preview-action-size);
-    width: var(--studio-preview-action-size);
-    height: var(--studio-preview-action-size);
-  }
-
-  .studio-canvas-preview__generated-actions--expanded
-    > .studio-canvas-preview__quick-action:not(.studio-canvas-preview__quick-action--expanded)
-    svg {
-    width: var(--studio-preview-action-icon-size);
-    height: var(--studio-preview-action-icon-size);
   }
 
   .studio-canvas-preview__player-shell .studio-video-modal__player-controls {
@@ -23034,33 +23008,21 @@ body.studio-video-fullscreen-open .studio-canvas-preview::after {
   }
 }
 
-/* Closing the current preview is a primary escape action. Keep its target at
-   44px on regular cards; compact queries below scale the whole action group. */
+/* Every generated-preview action uses the same compact geometry so the group
+   remains inside the 9:16 card at every container size. */
 .studio-canvas-preview__generated-actions .studio-canvas-preview__quick-action--close {
-  flex-basis: 44px;
-  width: 44px;
-  height: 44px;
+  flex-basis: var(--studio-preview-action-size);
+  width: var(--studio-preview-action-size);
+  height: var(--studio-preview-action-size);
 }
 
 .studio-canvas-preview__generated-actions--expanded
   > .studio-canvas-preview__quick-action.studio-canvas-preview__quick-action--close:not(
     .studio-canvas-preview__quick-action--expanded
   ) {
-  flex-basis: 44px;
-  width: 44px;
-  height: 44px;
-}
-
-@container (min-width: 181px) and (max-width: 340px) {
-  .studio-canvas-preview__generated-actions .studio-canvas-preview__quick-action--close,
-  .studio-canvas-preview__generated-actions--expanded
-    > .studio-canvas-preview__quick-action.studio-canvas-preview__quick-action--close:not(
-      .studio-canvas-preview__quick-action--expanded
-    ) {
-    flex-basis: var(--studio-preview-action-size);
-    width: var(--studio-preview-action-size);
-    height: var(--studio-preview-action-size);
-  }
+  flex-basis: var(--studio-preview-action-size);
+  width: var(--studio-preview-action-size);
+  height: var(--studio-preview-action-size);
 }
 
 /* The inline player can become much narrower on short laptop viewports.
@@ -23084,33 +23046,6 @@ body.studio-video-fullscreen-open .studio-canvas-preview::after {
   .studio-canvas-preview__generated-actions,
   .studio-canvas-preview__generated-actions--expanded {
     gap: clamp(2px, 2cqw, 4px);
-  }
-
-  .studio-canvas-preview__quick-action--expanded,
-  .studio-canvas-preview__generated-actions--expanded
-    > .studio-canvas-preview__quick-action:not(.studio-canvas-preview__quick-action--close) {
-    flex-basis: var(--studio-preview-action-size);
-    width: var(--studio-preview-action-size);
-    height: var(--studio-preview-action-size);
-  }
-
-  .studio-canvas-preview__generated-actions .studio-canvas-preview__quick-action--close,
-  .studio-canvas-preview__generated-actions--expanded
-    > .studio-canvas-preview__quick-action.studio-canvas-preview__quick-action--close:not(
-      .studio-canvas-preview__quick-action--expanded
-    ) {
-    flex-basis: var(--studio-preview-action-size);
-    width: var(--studio-preview-action-size);
-    height: var(--studio-preview-action-size);
-  }
-
-  .studio-canvas-preview__quick-action svg,
-  .studio-canvas-preview__quick-action--expanded svg,
-  .studio-canvas-preview__generated-actions--expanded
-    > .studio-canvas-preview__quick-action:not(.studio-canvas-preview__quick-action--expanded)
-    svg {
-    width: var(--studio-preview-action-icon-size);
-    height: var(--studio-preview-action-icon-size);
   }
 
   .studio-canvas-preview__player-shell
@@ -23451,10 +23386,6 @@ body.studio-video-fullscreen-open .studio-canvas-preview::after {
   .workspace-admin-notification__close {
     width: 30px;
     height: 30px;
-  }
-
-  .studio-canvas-preview__quick-action--expanded {
-    height: 28px;
   }
 
   .studio-toast {
