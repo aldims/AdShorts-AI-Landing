@@ -1,39 +1,50 @@
 /*
- * Wide Studio workspaces use one height-driven composition from 400px through
- * 861px. The 861px desktop layout is the reference: preview/tools, actions and
- * timeline keep the same three-row relationship while their vertical geometry
- * follows the available viewport continuously.
+ * Wide Studio workspaces below 862px keep the regular 862px composition and
+ * scale it as one unit. This avoids a one-pixel breakpoint changing the
+ * carousel, actions and timeline into a different compact layout.
  *
  * This file is imported last and intentionally owns the wide-desktop height
  * contract. Earlier responsive layers still own tablets and mobile screens.
  */
-@media (min-width: 1181px) and (min-height: 400px) and (max-height: 861px) and (orientation: landscape) {
+@media (min-width: 1181px) and (max-height: 861px) and (orientation: landscape) {
   #app .studio-canvas-route.is-segment-editor {
-    --studio-header-reserve: clamp(48px, 9.06dvh, 78px) !important;
-    --studio-header-height: clamp(44px, 8.6dvh, 74px) !important;
-    --studio-header-control-height: clamp(34px, 5.58dvh, 48px) !important;
-    --studio-height-continuum-bottom-inset: clamp(18px, 4.25dvh, 32px);
-    --studio-height-continuum-inline-inset: clamp(10px, 3.72dvh, 32px);
+    --studio-desktop-reference-height: 862px;
+    --studio-desktop-scale: calc(100dvh / 862px);
+    --studio-header-reserve: 78px !important;
+    --studio-header-height: 74px !important;
+    --studio-header-control-height: 48px !important;
+    --studio-height-continuum-bottom-inset: 30px;
+    --studio-height-continuum-inline-inset: 32px;
+    box-sizing: border-box;
+    width: calc(100vw / var(--studio-desktop-scale)) !important;
+    min-width: calc(100vw / var(--studio-desktop-scale)) !important;
+    max-width: calc(100vw / var(--studio-desktop-scale)) !important;
+    height: var(--studio-desktop-reference-height) !important;
+    min-height: var(--studio-desktop-reference-height) !important;
+    max-height: var(--studio-desktop-reference-height) !important;
+    zoom: var(--studio-desktop-scale);
+    container-type: size;
+    overflow: hidden !important;
   }
 
   #app .studio-canvas-route.is-segment-editor .site-header--workspace {
-    --studio-header-control-height: clamp(34px, 5.58dvh, 48px) !important;
+    --studio-header-control-height: clamp(34px, 5.58cqh, 48px) !important;
     height: var(--studio-header-height) !important;
   }
 
   #app .studio-canvas-route.is-segment-editor .site-header--workspace .site-header__inner {
     width: calc(100% - 24px) !important;
-    height: clamp(40px, 7.44dvh, 64px) !important;
-    min-height: clamp(40px, 7.44dvh, 64px) !important;
-    margin-top: clamp(2px, 0.7dvh, 6px) !important;
+    height: clamp(40px, 7.44cqh, 64px) !important;
+    min-height: clamp(40px, 7.44cqh, 64px) !important;
+    margin-top: clamp(2px, 0.7cqh, 6px) !important;
     padding-block: 0 !important;
   }
 
   #app .studio-canvas-main.is-segment-editor {
     box-sizing: border-box;
-    min-height: 100dvh !important;
-    height: 100dvh !important;
-    max-height: 100dvh !important;
+    min-height: 100cqh !important;
+    height: 100cqh !important;
+    max-height: 100cqh !important;
     padding-top: var(--studio-header-reserve) !important;
     overflow: hidden !important;
   }
@@ -42,8 +53,8 @@
   #app .studio-canvas-main.is-segment-editor .studio-canvas-shell.is-sidebar-hidden {
     box-sizing: border-box;
     min-height: 0 !important;
-    height: calc(100dvh - var(--studio-header-reserve)) !important;
-    max-height: calc(100dvh - var(--studio-header-reserve)) !important;
+    height: calc(100cqh - var(--studio-header-reserve)) !important;
+    max-height: calc(100cqh - var(--studio-header-reserve)) !important;
     padding: 0 var(--studio-height-continuum-inline-inset)
       var(--studio-height-continuum-bottom-inset) !important;
     overflow: hidden !important;
@@ -81,30 +92,28 @@
   #app
     .studio-canvas-main.is-segment-editor
     .studio-segment-editor__layout.is-visual-panel-closed {
-    --studio-segment-editor-adaptive-gap: clamp(5px, 1.5dvh, 13px);
-    --studio-segment-editor-preview-inset: clamp(4px, 0.8dvh, 7px);
-    --studio-segment-editor-submit-height: clamp(30px, 5.58dvh, 48px);
-    /* The ruler and the timeline's vertical insets need 33px even at the
-     * shortest supported desktop viewport. A 28px floor clipped the last
-     * track by a couple of pixels at 400-516px high. */
-    --studio-segment-editor-timeline-chrome-height: clamp(33px, 5.34dvh, 46px);
-    --studio-segment-editor-adaptive-visual-track-height: clamp(30px, 7dvh, 72px);
-    --studio-segment-editor-adaptive-scene-track-height: clamp(20px, 4.5dvh, 46px);
+    --studio-segment-editor-adaptive-gap: clamp(5px, 1.5cqh, 13px);
+    --studio-segment-editor-preview-inset: clamp(4px, 0.8cqh, 7px);
+    --studio-segment-editor-submit-height: clamp(30px, 5.58cqh, 48px);
+    /* Keep the ruler and timeline insets on the 862px reference geometry;
+     * the outer zoom scales the complete block without clipping its tracks. */
+    --studio-segment-editor-timeline-chrome-height: clamp(33px, 5.34cqh, 46px);
+    --studio-segment-editor-adaptive-visual-track-height: clamp(30px, 7cqh, 72px);
+    --studio-segment-editor-adaptive-scene-track-height: clamp(20px, 4.5cqh, 46px);
     --studio-segment-editor-adaptive-timeline-height: calc(
       var(--studio-segment-editor-timeline-chrome-height) +
         var(--studio-segment-editor-adaptive-visual-track-height) +
         (var(--studio-segment-editor-adaptive-scene-track-height) * 4)
     ) !important;
     --studio-segment-editor-layout-height: calc(
-      100dvh - var(--studio-header-reserve) - var(--studio-height-continuum-bottom-inset)
+      100cqh - var(--studio-header-reserve) - var(--studio-height-continuum-bottom-inset)
     ) !important;
     --studio-height-continuum-carousel-height: clamp(
-      138px,
+      148px,
       calc(
         var(--studio-segment-editor-layout-height) -
           var(--studio-segment-editor-adaptive-timeline-height) -
-          var(--studio-segment-editor-submit-height) -
-          (var(--studio-segment-editor-adaptive-gap) * 2) -
+          var(--studio-segment-editor-adaptive-gap) -
           (var(--studio-segment-editor-preview-inset) * 2)
       ),
       480px
@@ -137,7 +146,7 @@
     .studio-canvas-main.is-segment-editor
     .studio-segment-editor__layout.is-visual-panel-open {
     grid-template-columns: minmax(540px, 60.35%) minmax(0, 1fr) !important;
-    column-gap: clamp(18px, 5.88dvh, 51px) !important;
+    column-gap: clamp(18px, 5.88cqh, 51px) !important;
   }
 
   #app
@@ -188,82 +197,80 @@
   }
 
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-panel {
-    padding: 0 clamp(6px, 1.28dvh, 11px) !important;
+    padding: 0 clamp(6px, 1.28cqh, 11px) !important;
     overflow: hidden !important;
   }
 
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-topbar {
-    gap: clamp(4px, 1.16dvh, 10px) !important;
+    gap: clamp(4px, 1.16cqh, 10px) !important;
   }
 
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-block,
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu {
-    gap: clamp(3px, 0.7dvh, 6px) !important;
+    gap: clamp(3px, 0.7cqh, 6px) !important;
   }
 
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button,
   #app
     .studio-canvas-main.is-segment-editor
     .studio-segment-editor__prompt-submenu-button--icon {
-    min-height: clamp(34px, 7.28dvh, 63px) !important;
-    height: clamp(34px, 7.28dvh, 63px) !important;
-    padding: clamp(3px, 0.93dvh, 8px) clamp(16px, 3dvh, 26px)
-      clamp(3px, 0.93dvh, 8px) clamp(6px, 0.93dvh, 8px) !important;
-    border-radius: clamp(9px, 1.4dvh, 12px) !important;
+    min-height: clamp(34px, 7.28cqh, 63px) !important;
+    height: clamp(34px, 7.28cqh, 63px) !important;
+    padding: clamp(3px, 0.93cqh, 8px) clamp(16px, 3cqh, 26px)
+      clamp(3px, 0.93cqh, 8px) clamp(6px, 0.93cqh, 8px) !important;
+    border-radius: clamp(9px, 1.4cqh, 12px) !important;
   }
 
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-button-content {
-    grid-template-columns: clamp(24px, 4.23dvh, 36px) minmax(0, 1fr) auto !important;
-    gap: clamp(5px, 0.93dvh, 8px) !important;
+    grid-template-columns: clamp(24px, 4.23cqh, 36px) minmax(0, 1fr) auto !important;
+    gap: clamp(5px, 0.93cqh, 8px) !important;
   }
 
   #app
     .studio-canvas-main.is-segment-editor
     .studio-segment-editor__prompt-submenu-button--icon
     :is(.studio-segment-editor__prompt-tool-icon, .studio-segment-editor__prompt-tool-icon--asset) {
-    width: clamp(24px, 4.23dvh, 36px) !important;
-    min-width: clamp(24px, 4.23dvh, 36px) !important;
-    height: clamp(24px, 4.23dvh, 36px) !important;
-    min-height: clamp(24px, 4.23dvh, 36px) !important;
+    width: clamp(24px, 4.23cqh, 36px) !important;
+    min-width: clamp(24px, 4.23cqh, 36px) !important;
+    height: clamp(24px, 4.23cqh, 36px) !important;
+    min-height: clamp(24px, 4.23cqh, 36px) !important;
   }
 
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-label strong {
-    font-size: clamp(0.64rem, 1.38dvh, 0.74rem) !important;
+    font-size: clamp(0.64rem, 1.38cqh, 0.74rem) !important;
   }
 
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-label small {
-    font-size: clamp(0.52rem, 1.08dvh, 0.62rem) !important;
+    font-size: clamp(0.52rem, 1.08cqh, 0.62rem) !important;
   }
 
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-action-row,
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-action {
-    min-height: clamp(28px, 4.65dvh, 40px) !important;
-    height: clamp(28px, 4.65dvh, 40px) !important;
-    max-height: clamp(28px, 4.65dvh, 40px) !important;
+    min-height: clamp(28px, 4.65cqh, 40px) !important;
+    height: clamp(28px, 4.65cqh, 40px) !important;
+    max-height: clamp(28px, 4.65cqh, 40px) !important;
   }
 
-  /* Reference controls are children of the scaled action row, but their
-   * desktop defaults were still 36/40px tall. Between 521px and 621px they
-   * therefore escaped the visual panel by several pixels. Keep the complete
-   * control group on the same height continuum as its parent. */
+  /* Neutralize the earlier compact-height rules so these controls retain the
+   * same reference geometry as the rest of the scaled visual panel. */
   #app .studio-canvas-main.is-segment-editor .studio-segment-references--editor,
   #app .studio-canvas-main.is-segment-editor .studio-segment-references__compact-row,
   #app .studio-canvas-main.is-segment-editor .studio-segment-references__compact-trigger {
-    min-height: clamp(28px, 4.65dvh, 40px) !important;
-    height: clamp(28px, 4.65dvh, 40px) !important;
-    max-height: clamp(28px, 4.65dvh, 40px) !important;
+    min-height: clamp(28px, 4.65cqh, 40px) !important;
+    height: clamp(28px, 4.65cqh, 40px) !important;
+    max-height: clamp(28px, 4.65cqh, 40px) !important;
   }
 
   #app .studio-canvas-main.is-segment-editor .studio-segment-references__compact-trigger {
-    gap: clamp(5px, 0.93dvh, 8px) !important;
-    padding: 1px clamp(7px, 1.63dvh, 10px) 1px 1px !important;
-    font-size: clamp(0.62rem, 1.25dvh, 0.72rem) !important;
+    gap: clamp(5px, 0.93cqh, 8px) !important;
+    padding: 1px clamp(7px, 1.63cqh, 10px) 1px 1px !important;
+    font-size: clamp(0.62rem, 1.25cqh, 0.72rem) !important;
   }
 
   #app .studio-canvas-main.is-segment-editor .studio-segment-references__compact-tool-icon {
-    width: clamp(24px, 3.49dvh, 30px) !important;
-    min-width: clamp(24px, 3.49dvh, 30px) !important;
-    height: clamp(24px, 3.49dvh, 30px) !important;
+    width: clamp(24px, 3.49cqh, 30px) !important;
+    min-width: clamp(24px, 3.49cqh, 30px) !important;
+    height: clamp(24px, 3.49cqh, 30px) !important;
   }
 
   #app .studio-canvas-main.is-segment-editor .studio-canvas-prompt__input-row,
@@ -284,9 +291,6 @@
     .studio-canvas-main.is-segment-editor
     .studio-segment-editor__layout.is-visual-panel-closed
     .studio-segment-editor__preview-column {
-    /* Keep the carousel inside the dedicated preview row. It previously
-     * spanned the action row as well, so the preview button overlapped the
-     * bottom of the active card at medium desktop heights. */
     grid-row: 1 !important;
     min-width: 0 !important;
     width: 100% !important;
@@ -314,6 +318,7 @@
     .studio-segment-editor__layout.is-visual-panel-closed
     .studio-segment-editor__preview-column {
     grid-column: 1 !important;
+    grid-row: 1 / 3 !important;
   }
 
   #app
@@ -324,6 +329,22 @@
       var(--studio-height-continuum-carousel-height) !important;
     --studio-segment-editor-carousel-width: calc(
       var(--studio-height-continuum-carousel-height) * 0.5625
+    ) !important;
+  }
+
+  /* A wider virtual canvas must not make the open-panel preview taller than
+   * it is in the 1688 × 862 reference layout. Otherwise the card reaches the
+   * action row after zoom reflow, even though every vertical value is scaled. */
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout.is-visual-panel-open
+    .studio-segment-editor__preview-column {
+    --studio-segment-editor-carousel-height: min(
+      var(--studio-height-continuum-carousel-height),
+      405px
+    ) !important;
+    --studio-segment-editor-carousel-width: calc(
+      var(--studio-segment-editor-carousel-height) * 0.5625
     ) !important;
   }
 
@@ -363,22 +384,21 @@
     inset: auto !important;
     z-index: 260 !important;
     grid-row: 2 !important;
-    display: grid !important;
-    /* Both actions must retain their complete label, icon and credit badge.
-     * The former 260px floor left the preview action a few pixels narrower
-     * than its intrinsic content at short desktop heights. */
-    grid-template-columns: minmax(124px, 0.88fr) minmax(142px, 1fr) !important;
+    display: flex !important;
+    grid-template-columns: none !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
     align-self: center !important;
     justify-self: end !important;
-    width: clamp(280px, 50.5dvh, 400px) !important;
+    width: auto !important;
     min-width: 0 !important;
     min-height: var(--studio-segment-editor-submit-height) !important;
     height: var(--studio-segment-editor-submit-height) !important;
     max-height: var(--studio-segment-editor-submit-height) !important;
     margin: 0 !important;
-    padding: clamp(2px, 0.46dvh, 4px) !important;
-    gap: clamp(4px, 0.93dvh, 8px) !important;
-    border-radius: clamp(10px, 1.63dvh, 14px) !important;
+    padding: 0 !important;
+    gap: 8px !important;
+    border-radius: 0 !important;
     transform: none !important;
   }
 
@@ -401,21 +421,37 @@
     .studio-canvas-main.is-segment-editor
     .studio-segment-editor__layout:is(.is-visual-panel-open, .is-visual-panel-closed)
     .studio-segment-editor__timeline-submit-row
-    :is(
-      .studio-segment-editor__timeline-preview-controls,
-      .studio-segment-editor__timeline-preview-toggle,
-      .studio-segment-editor__prompt-submit
-    ) {
-    width: 100% !important;
+    :is(.studio-segment-editor__timeline-preview-controls, .studio-segment-editor__timeline-preview-toggle) {
+    flex: 0 0 auto !important;
+    width: max-content !important;
     min-width: 0 !important;
-    min-height: clamp(28px, 4.65dvh, 40px) !important;
-    height: clamp(28px, 4.65dvh, 40px) !important;
-    max-height: clamp(28px, 4.65dvh, 40px) !important;
-    padding-inline: clamp(8px, 1.5dvh, 13px) !important;
-    border-radius: clamp(8px, 1.4dvh, 12px) !important;
-    font-size: clamp(0.66rem, 1.5dvh, 0.78rem) !important;
+    min-height: 40px !important;
+    height: 40px !important;
+    max-height: 40px !important;
+    padding-inline: 13px !important;
+    border-radius: 12px !important;
+    font-size: 0.78rem !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__layout:is(.is-visual-panel-open, .is-visual-panel-closed)
+    .studio-segment-editor__timeline-submit-row
+    .studio-segment-editor__prompt-submit {
+    flex: 0 0 auto !important;
+    width: max-content !important;
+    min-width: 0 !important;
+    min-height: 42px !important;
+    height: 42px !important;
+    max-height: 42px !important;
+    padding-inline: 16px !important;
+    border-radius: 12px !important;
+    font-size: clamp(0.82rem, 0.9vw, 0.96rem) !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
     white-space: nowrap !important;
   }
 
@@ -432,8 +468,8 @@
     .studio-canvas-main.is-segment-editor
     .studio-segment-editor__layout:is(.is-visual-panel-open, .is-visual-panel-closed)
     .studio-segment-editor__timeline {
-    --studio-segment-editor-timeline-add-rail-offset: clamp(4px, 1.16dvh, 10px);
-    --studio-segment-editor-timeline-add-rail-width: clamp(72px, 11.5dvh, 86px);
+    --studio-segment-editor-timeline-add-rail-offset: clamp(4px, 1.16cqh, 10px);
+    --studio-segment-editor-timeline-add-rail-width: clamp(72px, 11.5cqh, 86px);
     --studio-segment-editor-timeline-visual-track-height:
       var(--studio-segment-editor-adaptive-visual-track-height) !important;
     --studio-segment-editor-timeline-scene-track-height:
@@ -447,13 +483,13 @@
     min-height: var(--studio-segment-editor-adaptive-timeline-height) !important;
     height: var(--studio-segment-editor-adaptive-timeline-height) !important;
     max-height: var(--studio-segment-editor-adaptive-timeline-height) !important;
-    padding: clamp(4px, 0.93dvh, 8px)
+    padding: clamp(4px, 0.93cqh, 8px)
       calc(
         var(--studio-segment-editor-timeline-add-rail-offset) +
           var(--studio-segment-editor-timeline-add-rail-width)
       )
-      clamp(4px, 0.93dvh, 8px) clamp(4px, 1.16dvh, 10px) !important;
-    border-radius: clamp(12px, 2.1dvh, 18px) !important;
+      clamp(4px, 0.93cqh, 8px) clamp(4px, 1.16cqh, 10px) !important;
+    border-radius: clamp(12px, 2.1cqh, 18px) !important;
     overflow: hidden !important;
   }
 
@@ -479,7 +515,7 @@
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-row {
     grid-template-columns: var(--studio-segment-editor-timeline-add-rail-width) minmax(0, 1fr) !important;
     min-width: 0 !important;
-    column-gap: clamp(4px, 0.93dvh, 8px) !important;
+    column-gap: clamp(4px, 0.93cqh, 8px) !important;
   }
 
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-ruler,
@@ -487,9 +523,9 @@
     .studio-canvas-main.is-segment-editor
     .studio-segment-editor__timeline-ruler
     .studio-segment-editor__timeline-track {
-    min-height: clamp(18px, 3.05dvh, 26px) !important;
-    height: clamp(18px, 3.05dvh, 26px) !important;
-    max-height: clamp(18px, 3.05dvh, 26px) !important;
+    min-height: clamp(18px, 3.05cqh, 26px) !important;
+    height: clamp(18px, 3.05cqh, 26px) !important;
+    max-height: clamp(18px, 3.05cqh, 26px) !important;
   }
 
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-track,
@@ -516,7 +552,7 @@
   }
 
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-cell {
-    padding: clamp(2px, 0.7dvh, 6px) clamp(5px, 0.93dvh, 8px) !important;
+    padding: clamp(2px, 0.7cqh, 6px) clamp(5px, 0.93cqh, 8px) !important;
   }
 
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-cell:hover:not(:disabled),
@@ -531,7 +567,7 @@
   #app
     .studio-canvas-main.is-segment-editor
     .studio-segment-editor__timeline-cell--has-play.studio-segment-editor__timeline-cell--has-history {
-    padding-left: clamp(34px, 7dvh, 46px) !important;
+    padding-left: clamp(34px, 7cqh, 46px) !important;
   }
 
   #app
@@ -545,10 +581,10 @@
     .studio-segment-editor__timeline-status {
     /* Place the edited badge beside the scene number instead of below it.
      * Both remain readable even when the visual track is compressed. */
-    top: clamp(4px, 0.9dvh, 7px) !important;
+    top: clamp(4px, 0.9cqh, 7px) !important;
     right: auto !important;
     bottom: auto !important;
-    left: clamp(36px, 7dvh, 46px) !important;
+    left: clamp(36px, 7cqh, 46px) !important;
   }
 
   #app
@@ -562,112 +598,18 @@
 
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-label {
     justify-content: flex-start !important;
-    gap: clamp(4px, 0.81dvh, 7px) !important;
+    gap: clamp(4px, 0.81cqh, 7px) !important;
     padding-inline: 2px !important;
     color: rgba(226, 232, 240, 0.82) !important;
-    font-size: clamp(0.56rem, 1.34dvh, 0.72rem) !important;
+    font-size: clamp(0.56rem, 1.34cqh, 0.72rem) !important;
   }
 
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-add-rail {
-    top: calc(clamp(4px, 0.93dvh, 8px) + clamp(18px, 3.05dvh, 26px)) !important;
+    top: calc(clamp(4px, 0.93cqh, 8px) + clamp(18px, 3.05cqh, 26px)) !important;
     right: var(--studio-segment-editor-timeline-add-rail-offset) !important;
-    bottom: clamp(4px, 0.93dvh, 8px) !important;
+    bottom: clamp(4px, 0.93cqh, 8px) !important;
     width: var(--studio-segment-editor-timeline-add-rail-width) !important;
     min-height: 0 !important;
     height: auto !important;
-  }
-}
-
-@media (min-width: 1181px) and (min-height: 400px) and (max-height: 520px) and (orientation: landscape) {
-  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline {
-    /* Keep a real label rail on short screens. This variable is shared by
-     * the left labels and the right add-scene rail, so both remain aligned. */
-    --studio-segment-editor-timeline-add-rail-width: clamp(72px, 16dvh, 86px) !important;
-  }
-
-  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-block
-    > .studio-segment-editor__prompt-section-label {
-    min-height: 12px !important;
-    font-size: 0.54rem !important;
-  }
-
-  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-submenu-button,
-  #app
-    .studio-canvas-main.is-segment-editor
-    .studio-segment-editor__prompt-submenu-button--icon {
-    min-height: clamp(28px, 6.5dvh, 34px) !important;
-    height: clamp(28px, 6.5dvh, 34px) !important;
-    padding-block: 2px !important;
-  }
-
-  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-button-content {
-    grid-template-columns: clamp(20px, 5.5dvh, 24px) minmax(0, 1fr) auto !important;
-  }
-
-  #app
-    .studio-canvas-main.is-segment-editor
-    .studio-segment-editor__prompt-submenu-button--icon
-    :is(.studio-segment-editor__prompt-tool-icon, .studio-segment-editor__prompt-tool-icon--asset) {
-    width: clamp(20px, 5.5dvh, 24px) !important;
-    min-width: clamp(20px, 5.5dvh, 24px) !important;
-    height: clamp(20px, 5.5dvh, 24px) !important;
-    min-height: clamp(20px, 5.5dvh, 24px) !important;
-  }
-
-  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-action-row,
-  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-action {
-    min-height: clamp(24px, 5.5dvh, 28px) !important;
-    height: clamp(24px, 5.5dvh, 28px) !important;
-    max-height: clamp(24px, 5.5dvh, 28px) !important;
-  }
-
-  #app .studio-canvas-main.is-segment-editor .studio-segment-references--editor,
-  #app .studio-canvas-main.is-segment-editor .studio-segment-references__compact-row,
-  #app .studio-canvas-main.is-segment-editor .studio-segment-references__compact-trigger {
-    min-height: clamp(24px, 5.5dvh, 28px) !important;
-    height: clamp(24px, 5.5dvh, 28px) !important;
-    max-height: clamp(24px, 5.5dvh, 28px) !important;
-  }
-
-  #app .studio-canvas-main.is-segment-editor .studio-segment-references__compact-trigger {
-    gap: clamp(4px, 1dvh, 6px) !important;
-    padding: 1px clamp(6px, 1.8dvh, 9px) 1px 1px !important;
-    font-size: clamp(0.58rem, 1.3dvh, 0.68rem) !important;
-  }
-
-  #app .studio-canvas-main.is-segment-editor .studio-segment-references__compact-tool-icon {
-    width: clamp(20px, 4.5dvh, 24px) !important;
-    min-width: clamp(20px, 4.5dvh, 24px) !important;
-    height: clamp(20px, 4.5dvh, 24px) !important;
-  }
-
-  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-scene-number {
-    top: 3px !important;
-    left: 3px !important;
-    width: clamp(18px, 4.5dvh, 22px) !important;
-    min-width: clamp(18px, 4.5dvh, 22px) !important;
-    height: clamp(18px, 4.5dvh, 22px) !important;
-    min-height: clamp(18px, 4.5dvh, 22px) !important;
-    font-size: clamp(0.5rem, 1.16dvh, 0.58rem) !important;
-  }
-
-  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__prompt-tool-label small,
-  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-cell-copy small {
-    display: none !important;
-  }
-
-  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-label {
-    justify-content: flex-start !important;
-    gap: 3px !important;
-    padding-inline: 1px !important;
-    color: rgba(226, 232, 240, 0.82) !important;
-    font-size: clamp(0.5rem, 1.1dvh, 0.6rem) !important;
-  }
-
-  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-label-icon {
-    width: 15px !important;
-    min-width: 15px !important;
-    height: 15px !important;
-    color: rgba(204, 216, 245, 0.82) !important;
   }
 }
