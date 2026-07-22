@@ -93,11 +93,13 @@ export const getStudioMenuAnchorRect = (element: Element): StudioMenuAnchorRect 
 };
 
 export const getStudioCompactMenuStyle = ({
+  expandToViewportWhenConstrained = false,
   estimatedMenuHeight,
   minWidth,
   preferredWidth,
   triggerRect,
 }: {
+  expandToViewportWhenConstrained?: boolean;
   estimatedMenuHeight: number;
   minWidth: number;
   preferredWidth?: number;
@@ -112,6 +114,16 @@ export const getStudioCompactMenuStyle = ({
   const availableAbove = Math.max(96, triggerRect.top - 24);
   const availableBelow = Math.max(96, window.innerHeight - triggerRect.bottom - 24);
   const shouldOpenDownward = availableAbove < estimatedMenuHeight && availableBelow > availableAbove;
+
+  if (expandToViewportWhenConstrained && Math.max(availableAbove, availableBelow) < estimatedMenuHeight) {
+    return {
+      left: `${nextLeft}px`,
+      top: "16px",
+      minWidth: `${menuWidth}px`,
+      maxHeight: `${Math.max(96, window.innerHeight - 32)}px`,
+      transform: "none",
+    };
+  }
 
   if (shouldOpenDownward) {
     const nextTop = Math.min(window.innerHeight - 16, triggerRect.bottom + 12);
@@ -934,6 +946,7 @@ export function StudioVoiceSelectorChip({
       );
       setMenuStyle(
         getStudioCompactMenuStyle({
+          expandToViewportWhenConstrained: hasBulkTextEditor,
           estimatedMenuHeight,
           minWidth: hasBulkTextEditor ? 540 : 228,
           preferredWidth: hasBulkTextEditor ? 620 : undefined,

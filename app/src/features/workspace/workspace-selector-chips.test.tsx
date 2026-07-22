@@ -9,6 +9,7 @@ import {
   fallbackStudioSubtitleStyleOption,
 } from "./workspace-segment-editor";
 import {
+  getStudioCompactMenuStyle,
   StudioBrandSelectorChip,
   StudioSubtitleSelectorChip,
   StudioVideoSelectorChip,
@@ -16,6 +17,41 @@ import {
 } from "./workspace-selector-chips";
 
 describe("StudioVoiceSelectorChip", () => {
+  it("uses the full safe viewport height for a constrained menu with a text editor", () => {
+    const originalInnerHeight = window.innerHeight;
+    const originalInnerWidth = window.innerWidth;
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: 615 });
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1208 });
+
+    try {
+      expect(
+        getStudioCompactMenuStyle({
+          expandToViewportWhenConstrained: true,
+          estimatedMenuHeight: 694,
+          minWidth: 540,
+          preferredWidth: 620,
+          triggerRect: {
+            bottom: 474,
+            height: 40,
+            left: 37,
+            right: 657,
+            top: 434,
+            width: 620,
+          },
+        }),
+      ).toMatchObject({
+        left: "37px",
+        maxHeight: "583px",
+        minWidth: "620px",
+        top: "16px",
+        transform: "none",
+      });
+    } finally {
+      Object.defineProperty(window, "innerHeight", { configurable: true, value: originalInnerHeight });
+      Object.defineProperty(window, "innerWidth", { configurable: true, value: originalInnerWidth });
+    }
+  });
+
   it("requests text-language synchronization when English is selected", () => {
     const onSelectLanguage = vi.fn();
 

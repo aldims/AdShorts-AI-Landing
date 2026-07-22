@@ -33424,6 +33424,105 @@ html.platform-windows .studio-voice-selector__menu {
   font-weight: 900;
 }
 
+@media (max-height: 720px) {
+  .studio-voice-selector__menu--with-text {
+    gap: 5px;
+    padding: 7px;
+    border-radius: 15px;
+  }
+
+  .studio-voice-selector__menu--with-text .studio-voice-selector__language-panel {
+    gap: 4px;
+    margin-bottom: 2px;
+    padding: 6px;
+    border-radius: 11px;
+  }
+
+  .studio-voice-selector__menu--with-text .studio-voice-selector__language-options {
+    gap: 4px;
+  }
+
+  .studio-voice-selector__menu--with-text .studio-voice-selector__language-option {
+    min-height: 38px;
+    padding: 5px 7px;
+    border-radius: 8px;
+  }
+
+  .studio-voice-selector__menu--with-text .studio-voice-selector__menu-title {
+    padding: 2px 7px 3px;
+    font-size: 0.59rem;
+  }
+
+  .studio-voice-selector__menu--with-text .studio-voice-selector__voice-grid {
+    gap: 3px;
+  }
+
+  .studio-voice-selector__menu--with-text .studio-voice-selector__option {
+    gap: 6px;
+    padding: 4px 5px;
+    border-radius: 10px;
+  }
+
+  .studio-voice-selector__menu--with-text .studio-voice-selector__option-main {
+    gap: 1px;
+    padding: 1px 2px;
+  }
+
+  .studio-voice-selector__menu--with-text .studio-voice-selector__option-main span {
+    font-size: 0.76rem;
+    line-height: 1.15;
+  }
+
+  .studio-voice-selector__menu--with-text .studio-voice-selector__option-main small {
+    overflow: hidden;
+    font-size: 0.64rem;
+    line-height: 1.15;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .studio-voice-selector__menu--with-text .studio-voice-selector__preview {
+    width: 28px;
+    min-width: 28px;
+    height: 28px;
+  }
+
+  .studio-voice-selector__menu--with-text .studio-voice-selector__preview svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  .studio-voice-selector__menu--with-text .studio-voice-selector__bulk-text {
+    gap: 5px;
+    padding: 7px;
+    border-radius: 10px;
+  }
+
+  .studio-voice-selector__menu--with-text .studio-voice-selector__bulk-textarea {
+    min-height: 82px;
+    max-height: 82px;
+    padding: 7px 8px;
+    font-size: 0.72rem;
+    line-height: 1.35;
+    resize: none;
+  }
+
+  .studio-voice-selector__menu--with-text .studio-voice-selector__bulk-cost {
+    min-height: 15px;
+    font-size: 0.62rem;
+  }
+
+  .studio-voice-selector__menu--with-text .studio-voice-selector__bulk-actions button {
+    height: 28px;
+  }
+
+  .studio-voice-selector__menu--with-text
+    .studio-voice-selector__bulk-actions
+    .studio-voice-selector__bulk-generate {
+    min-width: 176px;
+  }
+}
+
 .studio-segment-editor__timeline-voice-menu {
   z-index: 180;
   width: min(620px, calc(100vw - 32px));
