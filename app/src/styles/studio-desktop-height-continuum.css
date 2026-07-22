@@ -360,10 +360,13 @@
     z-index: 260 !important;
     grid-row: 2 !important;
     display: grid !important;
-    grid-template-columns: minmax(118px, 0.82fr) minmax(0, 1fr) !important;
+    /* Both actions must retain their complete label, icon and credit badge.
+     * The former 260px floor left the preview action a few pixels narrower
+     * than its intrinsic content at short desktop heights. */
+    grid-template-columns: minmax(124px, 0.88fr) minmax(142px, 1fr) !important;
     align-self: center !important;
     justify-self: end !important;
-    width: clamp(260px, 46.46dvh, 400px) !important;
+    width: clamp(280px, 50.5dvh, 400px) !important;
     min-width: 0 !important;
     min-height: var(--studio-segment-editor-submit-height) !important;
     height: var(--studio-segment-editor-submit-height) !important;
@@ -454,6 +457,10 @@
     width: 100% !important;
     max-width: 100% !important;
     padding: 0 !important;
+    /* The scroll grid is slightly taller than the sum of its adaptive rows
+     * after border and sub-pixel rounding. Stretching distributed that spare
+     * height between rows without extending their interactive tracks. */
+    align-content: start !important;
     overflow-x: auto !important;
     overflow-y: hidden !important;
     overscroll-behavior-x: contain;
@@ -506,6 +513,14 @@
 
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-cell {
     padding: clamp(2px, 0.7dvh, 6px) clamp(5px, 0.93dvh, 8px) !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-cell:hover:not(:disabled),
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-cell:focus-visible {
+    /* A vertical lift opens a dead strip at the bottom of compact tracks and
+     * makes adjacent hover targets feel disconnected. Keep the feedback in
+     * color and shadow while the hit area stays flush with its track. */
+    transform: none !important;
   }
 
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-cell--has-play,
