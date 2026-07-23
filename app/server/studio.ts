@@ -477,6 +477,10 @@ type AdsflowSegmentVoiceoverJobStatusResponse = AdsflowSegmentAiVideoJobStatusRe
   speech_words?: AdsflowSegmentVoiceoverSpeechWordPayload[] | null;
 };
 
+type AdsflowSegmentVoiceoverReusableResponse = {
+  job?: AdsflowSegmentVoiceoverJobStatusResponse | null;
+};
+
 type AdsflowBatchVoiceoverSegmentStatusPayload = AdsflowSegmentVoiceoverJobStatusResponse & {
   duration?: number | string | null;
   language?: string | null;
@@ -10099,8 +10103,16 @@ export async function getStudioSegmentVoiceoverJobStatus(
   user: StudioUser,
 ): Promise<StudioSegmentVoiceoverJobStatus> {
   const payload = await fetchAdsflowSegmentVoiceoverJobStatus(jobId, user);
+  return normalizeAdsflowSegmentVoiceoverJobStatus(payload, jobId);
+}
+
+const normalizeAdsflowSegmentVoiceoverJobStatus = async (
+  payload: AdsflowSegmentVoiceoverJobStatusResponse,
+  fallbackJobId: string,
+): Promise<StudioSegmentVoiceoverJobStatus> => {
   const status = String(payload.status ?? "queued").trim() || "queued";
-  const resolvedJobId = String(payload.job_id ?? jobId).trim() || String(jobId ?? "").trim();
+  const resolvedJobId =
+    String(payload.job_id ?? fallbackJobId).trim() || String(fallbackJobId ?? "").trim();
   const asset = payload.asset ? normalizeAdsflowSegmentVoiceoverAsset(resolvedJobId, payload.asset) : undefined;
   const speechStartTime = normalizeNumber(payload.speech_start_time);
   const speechEndTime = normalizeNumber(payload.speech_end_time);
@@ -10126,6 +10138,66 @@ export async function getStudioSegmentVoiceoverJobStatus(
     voiceSourceEndTime: voiceSourceWindow.voiceSourceEndTime,
     voiceSourceStartTime: voiceSourceWindow.voiceSourceStartTime,
   };
+};
+
+export async function findStudioReusableSegmentVoiceoverJob(
+  text: string,
+  user: StudioUser,
+  options?: {
+    language?: string;
+    voiceType?: string | null;
+  },
+): Promise<StudioSegmentVoiceoverJobStatus | null> {
+  assertAdsflowConfigured();
+
+  const normalizedText = normalizeStudioSegmentVoiceoverText(text);
+  if (!normalizedText) {
+    throw new Error("Voiceover text is required.");
+  }
+
+  const normalizedLanguage = normalizeStudioLanguage(options?.language);
+  const normalizedVoiceType = normalizeStudioVoiceIdForLanguage(
+    options?.voiceType,
+    normalizedLanguage,
+  );
+  if (!normalizedVoiceType || normalizedVoiceType === "none") {
+    throw new Error("Voice type is required for segment voiceover recovery.");
+  }
+
+  const externalUserId = await resolveStudioExternalUserId(user);
+  let payload: AdsflowSegmentVoiceoverReusableResponse;
+  try {
+    payload = await postAdsflowJson<AdsflowSegmentVoiceoverReusableResponse>(
+      "/api/web/segment-voiceover/reusable",
+      {
+        admin_token: env.adsflowAdminToken,
+        external_user_id: externalUserId,
+        language: normalizedLanguage,
+        text: normalizedText,
+        voice_type: normalizedVoiceType,
+      },
+      {
+        retryDelaysMs: [],
+        timeoutMs: ADSFLOW_MUTATION_TIMEOUT_MS,
+      },
+    );
+  } catch (error) {
+    if (isAdsflowHttpStatusError(error, 404)) {
+      return null;
+    }
+    throw error;
+  }
+
+  const reusableJob = payload.job;
+  if (!reusableJob) {
+    return null;
+  }
+
+  const jobId = normalizeGenerationText(reusableJob.job_id);
+  if (!jobId) {
+    throw new Error("AdsFlow did not return a reusable segment voiceover job id.");
+  }
+  return normalizeAdsflowSegmentVoiceoverJobStatus(reusableJob, jobId);
 }
 
 export async function getStudioProjectVoiceoverJobStatus(

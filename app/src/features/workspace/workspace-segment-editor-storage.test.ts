@@ -116,6 +116,12 @@ describe("workspace segment editor storage fallback", () => {
     expect(isStoredWorkspaceSegmentJobForDraft({ draftId: "scratch:current", projectId: 1 }, draft)).toBe(false);
     expect(isStoredWorkspaceSegmentJobForDraft({ projectId: 0 }, draft)).toBe(false);
     expect(isStoredWorkspaceSegmentJobForDraft({ projectId: 42 }, { ...draft, projectId: 42 })).toBe(true);
+    expect(
+      isStoredWorkspaceSegmentJobForDraft(
+        { draftId: "project:older-tab", projectId: 42 },
+        { ...draft, draftId: "project:newer-tab", projectId: 42 },
+      ),
+    ).toBe(true);
     expect(isStoredWorkspaceSegmentJobForDraft({ draftId: "scratch:current", projectId: 0 }, null)).toBe(false);
   });
 
@@ -161,6 +167,38 @@ describe("workspace segment editor storage fallback", () => {
         jobId: "other-job",
       }),
     ]);
+  });
+
+  it("skips an older ineligible receipt when resuming a persisted project job", () => {
+    const draft = {
+      ...createWorkspaceSegmentEditorScratchDraftSession(),
+      draftId: "project:new-tab",
+      projectId: 42,
+    };
+    const jobs = [
+      {
+        createdAt: 100,
+        draftId: "project:old-tab",
+        jobId: "stale-inputs",
+        projectId: 42,
+      },
+      {
+        createdAt: 200,
+        draftId: "project:new-tab",
+        jobId: "current-inputs",
+        projectId: 42,
+      },
+    ];
+
+    expect(
+      findOldestStoredWorkspaceSegmentJobForDraft(
+        jobs,
+        draft,
+        (job) => job.jobId === "current-inputs",
+      ),
+    ).toMatchObject({
+      jobId: "current-inputs",
+    });
   });
 
   it("round-trips a client-assigned AI video job before the create response arrives", () => {

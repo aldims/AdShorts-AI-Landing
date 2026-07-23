@@ -752,6 +752,7 @@ import {
   type WorkspaceBatchVoiceoverJobCreateRequest,
   type WorkspaceBatchVoiceoverJobStatusResponse,
   type WorkspaceSegmentVoiceoverJobCreateRequest,
+  type WorkspaceSegmentVoiceoverReusableResponse,
   type WorkspaceSegmentVoiceoverJobStatusResponse,
   type WorkspaceSegmentAiVideoJobCreateResponse,
   type WorkspaceSegmentAiVideoJobStatusResponse,
@@ -913,6 +914,7 @@ import {
   createWorkspaceClientJobId,
   distributeWorkspaceSegmentBulkSubtitleText,
   formatWorkspaceSegmentDurationInputValue,
+  getWorkspaceSegmentVoiceoverGenerationKey,
   getWorkspaceSegmentVoiceoverTextHash,
   hasWorkspaceStudioPrimaryActionInput,
   normalizeWorkspaceVideoSourceUrl,
@@ -2788,6 +2790,7 @@ export function WorkspacePage({
   const segmentSceneSoundRunRef = useRef<WorkspaceSegmentVisualRunState>({});
   const segmentSceneSoundActiveJobIdsRef = useRef<Set<string>>(new Set());
   const segmentVoiceoverRunRef = useRef<WorkspaceSegmentVisualRunState>({});
+  const segmentVoiceoverRecoveryAttemptsRef = useRef<Map<string, Promise<boolean>>>(new Map());
   const segmentBatchVoiceoverActiveJobIdsRef = useRef<Set<string>>(new Set());
   const segmentEditorActiveVisualRunKeysRef = useRef<Set<string>>(new Set());
   const segmentEditorRunRef = useRef(0);
@@ -3211,6 +3214,7 @@ export function WorkspacePage({
     segmentImageUpscaleActiveJobIdsRef.current.clear();
     segmentInfographicActiveJobIdsRef.current.clear();
     segmentSceneSoundActiveJobIdsRef.current.clear();
+    segmentVoiceoverRecoveryAttemptsRef.current.clear();
     segmentBatchVoiceoverActiveJobIdsRef.current.clear();
     setSegmentEditorGeneratingAiPhotoRunIds({});
     setSegmentEditorPreparingCustomVideoRunIds({});
@@ -18426,7 +18430,6 @@ export function WorkspacePage({
             ));
           }
           if (hasStaleInputs) {
-            removeStoredWorkspaceSegmentVoiceoverJob(session.email, safeJobId);
             throw new Error(workspaceText(
               locale,
               "Текст, язык или голос сцены изменились во время генерации. Готовая озвучка не применена.",
@@ -18434,14 +18437,12 @@ export function WorkspacePage({
             ));
           }
           if (attachment.status === "segment-missing") {
-            removeStoredWorkspaceSegmentVoiceoverJob(session.email, safeJobId);
             throw new Error(workspaceText(
               locale,
               "Озвучка готова, но сцена больше не существует.",
               "The voiceover is ready, but the scene no longer exists.",
             ));
           }
-          removeStoredWorkspaceSegmentVoiceoverJob(session.email, safeJobId);
           if (attachment.status === "attached") {
             clearSegmentEditorVoiceoverError(options.segmentIndex);
           }
@@ -18502,12 +18503,21 @@ export function WorkspacePage({
 
     const currentSegment = currentDraft.segments.find((segment) => segment.index === job.segmentIndex) ?? null;
     if (!currentSegment) {
-      removeStoredWorkspaceSegmentVoiceoverJob(session.email, job.jobId);
       return false;
     }
 
     if (!isSegmentEditorVoiceoverRequestCurrent(currentSegment, currentDraft, job)) {
-      removeStoredWorkspaceSegmentVoiceoverJob(session.email, job.jobId);
+      return false;
+    }
+
+    if (
+      isSegmentEditorVoiceoverFreshForVoice(
+        currentSegment,
+        job.language,
+        job.voiceType,
+        currentDraft,
+      )
+    ) {
       return false;
     }
 
@@ -18541,12 +18551,155 @@ export function WorkspacePage({
     return true;
   };
 
+  const tryRecoverReusableSegmentVoiceover = async (
+    draft: WorkspaceSegmentEditorDraftSession,
+    segment: WorkspaceSegmentEditorDraftSegment,
+    options: {
+      language: StudioLanguage;
+      text: string;
+      voiceType: string;
+    },
+  ): Promise<boolean> => {
+    if (
+      !isSegmentEditorVoiceoverRequestCurrent(segment, draft, options) ||
+      isSegmentEditorVoiceoverFreshForVoice(
+        segment,
+        options.language,
+        options.voiceType,
+        draft,
+      )
+    ) {
+      return false;
+    }
+
+    const draftIdentity =
+      draft.projectId > 0
+        ? `project:${draft.projectId}`
+        : getWorkspaceSegmentEditorDraftId(draft) ?? `scratch:${draft.draftId}`;
+    const recoveryKey = [
+      draftIdentity,
+      segment.index,
+      getWorkspaceSegmentVoiceoverGenerationKey(options),
+    ].join(":");
+    const existingAttempt = segmentVoiceoverRecoveryAttemptsRef.current.get(recoveryKey);
+    if (existingAttempt) {
+      return existingAttempt;
+    }
+
+    const recoveryAttempt = (async () => {
+      const response = await fetch("/api/studio/segment-voiceover/reusable", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          language: options.language,
+          text: options.text,
+          voiceType: options.voiceType,
+          voice_type: options.voiceType,
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | WorkspaceSegmentVoiceoverReusableResponse
+        | null;
+      if (!response.ok) {
+        throw new Error(payload?.error ?? "Failed to recover reusable segment voiceover.");
+      }
+
+      const reusableJob = payload?.data;
+      const reusableJobId = String(reusableJob?.jobId ?? "").trim();
+      if (!reusableJob || !reusableJobId) {
+        return false;
+      }
+
+      const currentDraft = segmentEditorDraftRef.current;
+      const currentSegment =
+        currentDraft?.segments.find((item) => item.index === segment.index) ?? null;
+      if (
+        !currentDraft ||
+        !currentSegment ||
+        !isStoredWorkspaceSegmentJobForDraft(
+          { draftId: draft.draftId, projectId: draft.projectId },
+          currentDraft,
+        ) ||
+        !isSegmentEditorVoiceoverRequestCurrent(currentSegment, currentDraft, options)
+      ) {
+        return false;
+      }
+
+      const createdAt = Date.now();
+      const storedJob: StoredWorkspaceSegmentVoiceoverJob = {
+        createdAt,
+        draftId: getWorkspaceSegmentEditorDraftId(currentDraft) ?? undefined,
+        jobId: reusableJobId,
+        language: options.language,
+        projectId: currentDraft.projectId,
+        segmentIndex: currentSegment.index,
+        status: reusableJob.status,
+        text: options.text,
+        voiceType: options.voiceType,
+      };
+      upsertStoredWorkspaceSegmentVoiceoverJob(session.email, storedJob);
+
+      if (
+        segmentBatchVoiceoverActiveJobIdsRef.current.size > 0 ||
+        hasWorkspaceSegmentVisualRun(
+          segmentEditorGeneratingVoiceoverRunIds,
+          currentSegment.index,
+        )
+      ) {
+        return true;
+      }
+
+      const runId = startSegmentVisualRun(
+        segmentVoiceoverRunRef,
+        setSegmentEditorGeneratingVoiceoverRunIds,
+        currentSegment.index,
+      );
+      void pollSegmentEditorVoiceoverJob(reusableJobId, reusableJob.status, {
+        createdAt,
+        draftId: storedJob.draftId,
+        language: storedJob.language,
+        projectId: storedJob.projectId,
+        runId,
+        segmentIndex: storedJob.segmentIndex,
+        text: storedJob.text,
+        voiceType: storedJob.voiceType,
+      }).catch((error) => {
+        logSegmentEditorDiagnostics(
+          "client.segment-editor.voiceover.recovery-poll-failed",
+          {
+            error: error instanceof Error ? { message: error.message, name: error.name } : String(error),
+            jobId: reusableJobId,
+            targetSegmentIndex: currentSegment.index,
+          },
+          { level: "warn" },
+        );
+      });
+      return true;
+    })().catch((error) => {
+      segmentVoiceoverRecoveryAttemptsRef.current.delete(recoveryKey);
+      logSegmentEditorDiagnostics(
+        "client.segment-editor.voiceover.recovery-failed",
+        {
+          error: error instanceof Error ? { message: error.message, name: error.name } : String(error),
+          targetSegmentIndex: segment.index,
+        },
+        { level: "warn" },
+      );
+      return false;
+    });
+
+    segmentVoiceoverRecoveryAttemptsRef.current.set(recoveryKey, recoveryAttempt);
+    return recoveryAttempt;
+  };
+
   useEffect(() => {
     if (createMode !== "segment-editor" || !segmentEditorDraft) {
       return undefined;
     }
 
-    const tryResume = () => {
+    const tryResumeOrRecover = () => {
       const currentDraft = segmentEditorDraftRef.current;
       if (!currentDraft || segmentBatchVoiceoverActiveJobIdsRef.current.size > 0) {
         return;
@@ -18555,18 +18708,62 @@ export function WorkspacePage({
       const pendingJob = findOldestStoredWorkspaceSegmentJobForDraft(
         readStoredWorkspaceSegmentVoiceoverJobs(session.email),
         currentDraft,
+        (job) => {
+          const segment =
+            currentDraft.segments.find((item) => item.index === job.segmentIndex) ?? null;
+          return Boolean(
+            segment &&
+            isSegmentEditorVoiceoverRequestCurrent(segment, currentDraft, job) &&
+            !isSegmentEditorVoiceoverFreshForVoice(
+              segment,
+              job.language,
+              job.voiceType,
+              currentDraft,
+            ),
+          );
+        },
       );
       if (pendingJob) {
         resumePendingSegmentVoiceoverJob(pendingJob);
+        return;
       }
+
+      const recoverableSegments = currentDraft.segments.filter((segment) => {
+        const text = normalizeWorkspaceSegmentEditorTextForCompare(segment.text);
+        const voiceType = getWorkspaceSegmentEffectiveVoiceId(segment, currentDraft);
+        const draftLanguage = getWorkspaceSegmentEditorSessionLanguage(currentDraft);
+        const language = getWorkspaceSegmentVoiceLanguage(segment, draftLanguage);
+        return Boolean(
+          text &&
+          voiceType &&
+          voiceType !== "none" &&
+          language &&
+          !doesWorkspaceSegmentUseEmbeddedTalkingPhotoAudio(segment) &&
+          !isSegmentEditorVoiceoverFreshForVoice(segment, language, voiceType, currentDraft),
+        );
+      });
+      recoverableSegments.forEach((segment) => {
+        const text = normalizeWorkspaceSegmentEditorTextForCompare(segment.text);
+        const voiceType = getWorkspaceSegmentEffectiveVoiceId(segment, currentDraft);
+        const draftLanguage = getWorkspaceSegmentEditorSessionLanguage(currentDraft);
+        const language = getWorkspaceSegmentVoiceLanguage(segment, draftLanguage);
+        if (!voiceType || voiceType === "none" || !language) {
+          return;
+        }
+        void tryRecoverReusableSegmentVoiceover(currentDraft, segment, {
+          language,
+          text,
+          voiceType,
+        });
+      });
     };
 
-    tryResume();
-    const intervalId = window.setInterval(tryResume, 30_000);
-    window.addEventListener("focus", tryResume);
+    tryResumeOrRecover();
+    const intervalId = window.setInterval(tryResumeOrRecover, 30_000);
+    window.addEventListener("focus", tryResumeOrRecover);
     return () => {
       window.clearInterval(intervalId);
-      window.removeEventListener("focus", tryResume);
+      window.removeEventListener("focus", tryResumeOrRecover);
     };
   }, [
     createMode,
@@ -21511,6 +21708,25 @@ export function WorkspacePage({
       setSegmentEditorVideoError(null);
       clearSegmentEditorVoiceoverError(targetSegmentIndex);
       showStudioToast(workspaceText(locale, "Актуальная озвучка уже готова.", "Current voiceover is already ready."));
+      return true;
+    }
+
+    if (
+      await tryRecoverReusableSegmentVoiceover(currentDraft, targetSegment, {
+        language,
+        text,
+        voiceType,
+      })
+    ) {
+      setSegmentEditorVideoError(null);
+      clearSegmentEditorVoiceoverError(targetSegmentIndex);
+      showStudioToast(
+        workspaceText(
+          locale,
+          "Готовая озвучка восстановлена без нового списания.",
+          "The completed voiceover was restored without a new charge.",
+        ),
+      );
       return true;
     }
 

@@ -948,6 +948,11 @@ export type WorkspaceSegmentVoiceoverJobStatusResponse = {
   error?: string;
 };
 
+export type WorkspaceSegmentVoiceoverReusableResponse = {
+  data?: WorkspaceSegmentVoiceoverJobStatusPayload | null;
+  error?: string;
+};
+
 export type WorkspaceProjectVoiceoverJobStatusResponse = WorkspaceSegmentVoiceoverJobStatusResponse;
 
 export type WorkspaceBatchVoiceoverJobSegmentStatusPayload = WorkspaceSegmentVoiceoverJobStatusPayload & {

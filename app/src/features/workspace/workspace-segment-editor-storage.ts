@@ -215,12 +215,17 @@ export const isStoredWorkspaceSegmentJobForDraft = (
     return false;
   }
 
+  if (draft.projectId > 0) {
+    // Persisted project ids are the durable identity. The local draft id may
+    // legitimately change after a reload or in another browser tab.
+    return true;
+  }
+
   const jobDraftId = String(job.draftId ?? "").trim();
   if (!jobDraftId) {
-    // A project id uniquely identifies persisted drafts, but every scratch draft
-    // uses project id 0. Legacy scratch jobs cannot be attached safely without
-    // their originating draft id.
-    return draft.projectId > 0;
+    // Every scratch draft uses project id 0, so legacy scratch jobs cannot be
+    // attached safely without their originating draft id.
+    return false;
   }
   return getWorkspaceSegmentEditorDraftId(draft) === jobDraftId;
 };
@@ -256,11 +261,13 @@ export const findOldestStoredWorkspaceSegmentJobForDraft = <
 >(
   jobs: readonly T[],
   draft: Pick<WorkspaceSegmentEditorDraftSession, "draftId" | "projectId"> | null | undefined,
+  isEligible: (job: T) => boolean = () => true,
 ): T | null => {
   let oldestJob: T | null = null;
   jobs.forEach((job) => {
     if (
       isStoredWorkspaceSegmentJobForDraft(job, draft) &&
+      isEligible(job) &&
       (!oldestJob || job.createdAt < oldestJob.createdAt)
     ) {
       oldestJob = job;

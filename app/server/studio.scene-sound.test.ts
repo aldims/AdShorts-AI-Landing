@@ -887,6 +887,78 @@ describe("studio segment voiceover jobs", () => {
     ]);
   });
 
+  it("recovers an exact completed segment voiceover without creating a charged job", async () => {
+    const { findStudioReusableSegmentVoiceoverJob } = await loadStudioModule();
+    const calls: Array<{ body: Record<string, unknown>; pathname: string }> = [];
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(String(input));
+        const body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {};
+        calls.push({ body, pathname: url.pathname });
+
+        if (url.pathname.startsWith("/api/admin/users")) {
+          return jsonResponse({ items: [] });
+        }
+        if (url.pathname === "/api/web/segment-voiceover/reusable") {
+          return jsonResponse({
+            job: {
+              asset: {
+                file_name: "scene-voice.wav",
+                media_asset_id: 10799,
+                mime_type: "audio/wav",
+              },
+              job_id: "completed-segment-voiceover",
+              speech_duration: 3.8,
+              speech_end_time: 3.8,
+              speech_start_time: 0,
+              status: "done",
+              user: {
+                balance: 795,
+                plan: "FREE",
+                user_id: "8160048802147561000",
+              },
+            },
+          });
+        }
+
+        return jsonResponse({ detail: `unexpected ${url.pathname}` }, 500);
+      }),
+    );
+
+    const status = await findStudioReusableSegmentVoiceoverJob(
+      "Заходи в adshortsai.com и напиши свою идею простыми словами.",
+      {
+        email: "alex@example.test",
+        name: "Alex",
+      },
+      {
+        language: "ru",
+        voiceType: "Misha",
+      },
+    );
+
+    expect(status).toEqual(expect.objectContaining({
+      asset: expect.objectContaining({
+        assetId: 10799,
+        remoteUrl: "/api/studio/segment-voiceover/jobs/completed-segment-voiceover/audio",
+      }),
+      jobId: "completed-segment-voiceover",
+      speechDuration: 3.8,
+      status: "done",
+    }));
+    expect(
+      calls.find((call) => call.pathname === "/api/web/segment-voiceover/reusable")?.body,
+    ).toEqual(expect.objectContaining({
+      external_user_id: "email:alex@example.test",
+      language: "ru",
+      text: "Заходи в adshortsai.com и напиши свою идею простыми словами.",
+      voice_type: "Misha",
+    }));
+    expect(calls.some((call) => call.pathname === "/api/web/segment-voiceover/jobs")).toBe(false);
+  });
+
   it("keeps batch voiceover processing until every segment has an asset", async () => {
     const { getStudioBatchVoiceoverJobStatus } = await loadStudioModule();
 

@@ -136,6 +136,7 @@ import {
   getStudioSegmentSceneSoundJobFileProxyTarget,
   getStudioSegmentSceneSoundJobStatus,
   getStudioBatchVoiceoverJobStatus,
+  findStudioReusableSegmentVoiceoverJob,
   getStudioProjectVoiceoverJobFileProxyTarget,
   getStudioProjectVoiceoverJobStatus,
   getStudioSegmentVoiceoverJobFileProxyTarget,
@@ -5870,6 +5871,48 @@ app.get("/api/studio/voiceover/batch-jobs/:jobId", async (req, res) => {
     console.error("[studio] Failed to fetch batch voiceover job status", error);
     res.status(500).json({
       error: error instanceof Error ? error.message : "Failed to fetch batch voiceover job status.",
+    });
+  }
+});
+
+app.post("/api/studio/segment-voiceover/reusable", async (req, res) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+
+  if (!session?.user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
+  const language = typeof req.body?.language === "string" ? req.body.language.trim() : "";
+  const voiceType =
+    typeof req.body?.voiceType === "string"
+      ? req.body.voiceType.trim()
+      : typeof req.body?.voice_type === "string"
+        ? req.body.voice_type.trim()
+        : "";
+
+  if (!text) {
+    res.status(400).json({ error: "Voiceover text is required." });
+    return;
+  }
+  if (!voiceType || voiceType === "none") {
+    res.status(400).json({ error: "Voice type is required for segment voiceover recovery." });
+    return;
+  }
+
+  try {
+    const job = await findStudioReusableSegmentVoiceoverJob(text, session.user, {
+      language,
+      voiceType,
+    });
+    res.json({ data: job });
+  } catch (error) {
+    console.error("[studio] Failed to recover reusable segment voiceover", error);
+    res.status(error instanceof StudioVoiceoverTextLimitError ? 400 : 500).json({
+      error: error instanceof Error ? error.message : "Failed to recover reusable segment voiceover.",
     });
   }
 });
