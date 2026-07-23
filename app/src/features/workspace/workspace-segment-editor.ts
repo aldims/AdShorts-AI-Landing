@@ -5245,6 +5245,19 @@ export const isWorkspaceSegmentStaleMeasuredRenderedPhotoDuration = (
   const baselineVoiceoverAssetId = getWorkspaceSegmentVoiceoverAssetIdForInference(baselineSegment);
   const hasChangedVoiceoverAsset =
     draftVoiceoverAssetId !== null && draftVoiceoverAssetId !== baselineVoiceoverAssetId;
+  const draftSpeechDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(
+    draftSegment.speechDuration,
+  );
+  const draftVoiceoverAssetDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(
+    getStudioCustomVideoFileDurationSeconds(draftSegment.voiceoverAsset),
+  );
+  const hasVoiceoverAssetBackedDuration =
+    draftSpeechDurationSeconds !== null &&
+    draftVoiceoverAssetDurationSeconds !== null &&
+    areWorkspaceSegmentDurationValuesEqual(
+      draftSpeechDurationSeconds,
+      draftVoiceoverAssetDurationSeconds,
+    );
 
   return Boolean(
     (isWorkspaceSegmentHoldableRenderedPhotoVisual(draftSegment) ||
@@ -5255,6 +5268,7 @@ export const isWorkspaceSegmentStaleMeasuredRenderedPhotoDuration = (
       Boolean(draftVisualIdentity) &&
       draftVisualIdentity === baselineVisualIdentity &&
       !hasChangedVoiceoverAsset &&
+      !hasVoiceoverAssetBackedDuration &&
       !areWorkspaceSegmentDurationValuesEqual(draftDurationSeconds, baselineDurationSeconds)
   );
 };

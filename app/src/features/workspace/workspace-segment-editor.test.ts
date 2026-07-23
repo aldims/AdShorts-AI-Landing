@@ -4568,6 +4568,33 @@ describe("workspace segment editor project voiceover timeline", () => {
         baselineSegment,
       ),
     ).toBe(regeneratedVoiceoverSegment);
+
+    const audioMeasuredVoiceoverSegment = {
+      ...staleMeasuredSegment,
+      duration: 4.745,
+      durationMode: "auto" as const,
+      durationSyncMode: "voiceover" as const,
+      endTime: 4.745,
+      manualDurationSeconds: null,
+      speechDuration: 4.745,
+      speechEndTime: 4.745,
+      voiceoverAsset: {
+        ...staleMeasuredSegment.voiceoverAsset!,
+        durationSeconds: 4.745,
+      },
+    };
+    expect(
+      isWorkspaceSegmentStaleMeasuredRenderedPhotoDuration(
+        audioMeasuredVoiceoverSegment,
+        baselineSegment,
+      ),
+    ).toBe(false);
+    expect(
+      restoreWorkspaceSegmentStaleMeasuredRenderedPhotoDuration(
+        audioMeasuredVoiceoverSegment,
+        baselineSegment,
+      ),
+    ).toBe(audioMeasuredVoiceoverSegment);
   });
 
   it("does not replace a voiceover-trimmed video scene with measured visual duration", () => {

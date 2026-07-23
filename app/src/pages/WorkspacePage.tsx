@@ -8611,6 +8611,10 @@ export function WorkspacePage({
   const segmentEditorTimelineVisualRow = segmentEditorTimelineRowsByKind.get("visual") ?? null;
   const segmentEditorTimelineMusicRow = segmentEditorTimelineRowsByKind.get("music") ?? null;
   const segmentEditorTimelineVoiceRow = segmentEditorTimelineRowsByKind.get("voice") ?? null;
+  const segmentEditorTimelineVoiceStateSignature =
+    segmentEditorTimelineVoiceRow?.spans
+      .map((span) => `${span.arrayIndex ?? "x"}:${span.segmentIndex ?? "x"}:${span.isEdited ? "1" : "0"}`)
+      .join("|") ?? "";
   const segmentEditorTimelineSoundRow = segmentEditorTimelineRowsByKind.get("sound") ?? null;
   const segmentEditorTimelineTextRow = segmentEditorTimelineRowsByKind.get("text") ?? null;
   const segmentEditorTimelineDragPreviewLayout =
@@ -29459,7 +29463,7 @@ export function WorkspacePage({
   }, [
     segmentEditorDraft,
     segmentEditorMeasuredVoiceoverDurations,
-    segmentEditorTimelineVoiceRow,
+    segmentEditorTimelineVoiceStateSignature,
     isSegmentTimelineGlobalVoiceEdited,
     studioSidebarVoiceEnabled,
     studioSidebarVoiceId,
@@ -30592,12 +30596,11 @@ export function WorkspacePage({
     element.onerror = () => {
       const wasFullPreviewActive = segmentEditorFullPreviewActiveRef.current;
       const failureTime = segmentEditorFullPreviewTimeRef.current;
-      const isOptionalProjectMusicTrack =
-        track.kind === "music" && track.url.includes("/api/workspace/project-music-audio");
+      const isOptionalMusicTrack = track.kind === "music";
       markSegmentEditorFullPreviewAudioTrackFailed(track, element, { clearRef: true });
       element.remove();
       logSegmentEditorDiagnostics(
-        isOptionalProjectMusicTrack
+        isOptionalMusicTrack
           ? "client.segment-editor.full-preview.music-unavailable"
           : "client.segment-editor.full-preview.audio-error",
         {
@@ -30606,9 +30609,9 @@ export function WorkspacePage({
           timelineStartTime: track.timelineStartTime,
           url: track.url,
         },
-        { level: isOptionalProjectMusicTrack ? "info" : "warn" },
+        { level: isOptionalMusicTrack ? "info" : "warn" },
       );
-      if (wasFullPreviewActive) {
+      if (wasFullPreviewActive && !isOptionalMusicTrack) {
         stopSegmentEditorFullPreviewRef.current?.({ preservePreparedAudio: true, status: "paused" });
         setSegmentEditorFullPreviewPlaybackTime(failureTime);
         setSegmentEditorVideoError(
@@ -30673,27 +30676,6 @@ export function WorkspacePage({
       element.load();
       seekSegmentEditorFullPreviewPreparedAudioElement(track, element, currentTime);
     });
-  };
-  const waitForSegmentEditorFullPreviewAudioTracksReady = async (token: number) => {
-    const audioTracks = segmentEditorFullPreviewAudioTracksRef.current.filter(
-      (track) => !segmentEditorFullPreviewFailedAudioKeysRef.current.has(track.key),
-    );
-    const readyResults = await Promise.all(
-      audioTracks.map((track) =>
-        waitForSegmentEditorFullPreviewMediaElementReady(
-          ensureSegmentEditorFullPreviewAudioElement(track),
-          {
-            minimumReadyState: HTMLMediaElement.HAVE_FUTURE_DATA,
-            timeoutMs: WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_START_READY_TIMEOUT_MS,
-          },
-        ),
-      ),
-    );
-    return (
-      segmentEditorFullPreviewTokenRef.current === token &&
-      segmentEditorFullPreviewActiveRef.current &&
-      readyResults.every(Boolean)
-    );
   };
   const prepareSegmentEditorFullPreviewAudioSources = (
     tracks: WorkspaceSegmentEditorFullPreviewAudioTrack[],
@@ -31801,6 +31783,9 @@ export function WorkspacePage({
         unreadyTracks.forEach(({ element, track }) => {
           markSegmentEditorFullPreviewAudioTrackFailed(track, element);
         });
+        if (unreadyTracks.some(({ track }) => isSegmentEditorFullPreviewVoiceAudioTrack(track))) {
+          return "not-ready";
+        }
       }
     }
 
@@ -31862,6 +31847,9 @@ export function WorkspacePage({
           getSegmentEditorFullPreviewAudioDebugPayload(track, element, currentTime),
         ),
       });
+      if (unreadyActiveElements.some(({ track }) => isSegmentEditorFullPreviewVoiceAudioTrack(track))) {
+        return "not-ready";
+      }
     }
     const startableActiveElements = activeElements.filter(
       ({ element, track }, index) =>
@@ -32471,10 +32459,41 @@ export function WorkspacePage({
       );
       return;
     }
+    const failedAudioSourceUrls = new Set(audioSourcePreflightResult.failedUrls);
+    const failedAudioSourceTracks = segmentEditorFullPreviewAudioTracksRef.current.filter((track) =>
+      failedAudioSourceUrls.has(track.url),
+    );
+    const optionalFailedAudioSourceUrls = new Set(
+      failedAudioSourceTracks
+        .filter((track) => track.kind === "music")
+        .map((track) => track.url),
+    );
+    const hasRequiredAudioSourceFailure = audioSourcePreflightResult.failedUrls.some(
+      (sourceUrl) =>
+        !optionalFailedAudioSourceUrls.has(sourceUrl) ||
+        failedAudioSourceTracks.some((track) => track.url === sourceUrl && track.kind !== "music"),
+    );
+    failedAudioSourceTracks
+      .filter((track) => track.kind === "music")
+      .forEach((track) => {
+        markSegmentEditorFullPreviewAudioTrackFailed(
+          track,
+          segmentEditorFullPreviewAudioRefs.current[track.key],
+        );
+      });
+    if (optionalFailedAudioSourceUrls.size > 0) {
+      logSegmentEditorDiagnostics(
+        "client.segment-editor.full-preview.music-unavailable",
+        { failedSourceCount: optionalFailedAudioSourceUrls.size },
+        { level: "info" },
+      );
+    }
+    const requiredAudioSourceCount =
+      audioSourcePreflightResult.total - optionalFailedAudioSourceUrls.size;
     if (
       audioSourcePreflightResult.aborted ||
-      audioSourcePreflightResult.failedUrls.length > 0 ||
-      audioSourcePreflightResult.readyCount < audioSourcePreflightResult.total
+      hasRequiredAudioSourceFailure ||
+      audioSourcePreflightResult.readyCount < requiredAudioSourceCount
     ) {
       stopSegmentEditorFullPreview({ preservePreparedAudio: true, status: "paused" });
       setSegmentEditorFullPreviewPlaybackTime(startTime);
@@ -32489,7 +32508,9 @@ export function WorkspacePage({
         "client.segment-editor.full-preview.audio-preflight-failed",
         {
           failedSourceCount: audioSourcePreflightResult.failedUrls.length,
+          optionalFailedSourceCount: optionalFailedAudioSourceUrls.size,
           readySourceCount: audioSourcePreflightResult.readyCount,
+          requiredSourceCount: requiredAudioSourceCount,
           totalSourceCount: audioSourcePreflightResult.total,
         },
         { level: "warn" },
@@ -32500,19 +32521,6 @@ export function WorkspacePage({
     applySegmentEditorFullPreviewPreparedAudioSources(startTime, {
       preservePrimedSource: options?.fromUserGesture === true,
     });
-    const areAudioTracksReady = await waitForSegmentEditorFullPreviewAudioTracksReady(token);
-    if (!areAudioTracksReady) {
-      stopSegmentEditorFullPreview({ preservePreparedAudio: true, status: "paused" });
-      setSegmentEditorFullPreviewPlaybackTime(startTime);
-      setSegmentEditorVideoError(
-        workspaceText(
-          locale,
-          "Не удалось декодировать все аудиодорожки предпросмотра. Попробуйте запустить предпросмотр ещё раз.",
-          "Could not decode every preview audio track. Try starting the preview again.",
-        ),
-      );
-      return;
-    }
     setSegmentEditorFullPreviewAudioPreparationProgress(null);
 
     const audioPreparationResult = await prepareSegmentEditorFullPreviewAudioAtTime(startTime, token);
