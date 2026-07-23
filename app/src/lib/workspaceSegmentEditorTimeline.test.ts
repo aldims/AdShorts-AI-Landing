@@ -638,6 +638,24 @@ describe("workspace segment editor timeline", () => {
     ).toBeCloseTo(3.75, 6);
   });
 
+  it("keeps final presentation padding when a video is synced to voiceover", () => {
+    const segment = createSegment({
+      durationSyncMode: "voiceover",
+      mediaType: "video",
+      speechDuration: 3.75,
+      text: "the final visual continues after the last spoken word",
+    });
+
+    expect(
+      resolveWorkspaceSegmentDuration(segment, {
+        minimumDurationSeconds: 4.05,
+        visualDurationSeconds: 10,
+        visualKind: "video",
+        voiceEnabled: true,
+      }),
+    ).toBeCloseTo(4.05, 6);
+  });
+
   it("extends video duration when voice is longer than the known video", () => {
     const segment = createSegment({
       mediaType: "video",

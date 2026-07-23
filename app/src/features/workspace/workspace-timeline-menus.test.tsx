@@ -337,6 +337,25 @@ describe("WorkspaceSegmentTimelineDurationMenu", () => {
     expect(screen.getByRole("button", { name: /Продлить с ИИ на 5с/ })).toBeTruthy();
   });
 
+  it("shows the audio length separately from the final scene presentation length", () => {
+    render(
+      <WorkspaceSegmentTimelineDurationMenu
+        {...baseDurationProps}
+        hasExtensionPlan={false}
+        trimToVoiceoverLabels={{
+          fullDurationLabel: "5с",
+          fullResultDurationLabel: "5с",
+          fullResultHoldsToVoiceover: true,
+          voiceoverAudioDurationLabel: "4.7с",
+          voiceoverDurationLabel: "5с",
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Текущая озвучка").parentElement?.textContent).toContain("4.7с");
+    expect(screen.getByText("С завершением ролика").parentElement?.textContent).toContain("5с");
+  });
+
   it("applies a video-length preset immediately when custom trim is available", () => {
     const onApplyDuration = vi.fn(() => ({ duration: 60 }));
     const onClose = vi.fn();
@@ -389,7 +408,7 @@ describe("WorkspaceSegmentTimelineDurationMenu", () => {
     expect(screen.getByText("5.9с")).toBeTruthy();
     expect(
       screen.getByText(
-        "Без ИИ-продления последний кадр будет удерживаться до конца озвучки. Чтобы сохранить движение, продлите видео с ИИ.",
+        "Без ИИ-продления последний кадр будет удерживаться до конца сцены. Чтобы сохранить движение, продлите видео с ИИ.",
       ),
     ).toBeTruthy();
     expect(screen.getByRole("button", { name: "Оставить с удержанием кадра" })).toBeTruthy();
@@ -411,7 +430,7 @@ describe("WorkspaceSegmentTimelineDurationMenu", () => {
 
     expect(
       screen.getByText(
-        "Без ИИ-продления последний кадр будет удерживаться до конца озвучки. Чтобы сохранить движение, продлите видео с ИИ.",
+        "Без ИИ-продления последний кадр будет удерживаться до конца сцены. Чтобы сохранить движение, продлите видео с ИИ.",
       ),
     ).toBeTruthy();
     expect(screen.getByRole("button", { name: "Оставить с удержанием кадра" })).toBeTruthy();

@@ -584,7 +584,7 @@ export const resolveWorkspaceSegmentDuration = <T extends WorkspaceSegmentTimeli
   }
 
   if (shouldSyncVideoToVoiceover && voiceDuration !== null) {
-    return Math.max(WORKSPACE_SEGMENT_TIMELINE_MIN_DURATION_SECONDS, voiceDuration);
+    return minimumDuration;
   }
 
   if (visualKind === "video" && visualDuration !== null && visualDuration > 0) {

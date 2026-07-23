@@ -66,6 +66,7 @@ type WorkspaceSegmentTimelineDurationMenuProps = {
     fullDurationLabel: string;
     fullResultDurationLabel: string;
     fullResultHoldsToVoiceover: boolean;
+    voiceoverAudioDurationLabel?: string;
     voiceoverDurationLabel: string;
   } | null;
 };
@@ -248,14 +249,23 @@ export function WorkspaceSegmentTimelineDurationMenu({
               </div>
               <div>
                 <span>{workspaceText(locale, "Текущая озвучка", "Current voiceover")}</span>
-                <strong>{trimToVoiceoverLabels.voiceoverDurationLabel}</strong>
+                <strong>
+                  {trimToVoiceoverLabels.voiceoverAudioDurationLabel ?? trimToVoiceoverLabels.voiceoverDurationLabel}
+                </strong>
               </div>
+              {trimToVoiceoverLabels.voiceoverAudioDurationLabel &&
+              trimToVoiceoverLabels.voiceoverAudioDurationLabel !== trimToVoiceoverLabels.voiceoverDurationLabel ? (
+                <div className="studio-segment-editor__timeline-duration-summary-ending">
+                  <span>{workspaceText(locale, "С завершением ролика", "With video ending")}</span>
+                  <strong>{trimToVoiceoverLabels.voiceoverDurationLabel}</strong>
+                </div>
+              ) : null}
             </div>
             <p className="studio-segment-editor__timeline-duration-loop-note" role="status">
               {workspaceText(
                 locale,
-                "Без ИИ-продления последний кадр будет удерживаться до конца озвучки. Чтобы сохранить движение, продлите видео с ИИ.",
-                "Without AI extension, the last frame will be held until the voiceover ends. Extend with AI to keep the motion.",
+                "Без ИИ-продления последний кадр будет удерживаться до конца сцены. Чтобы сохранить движение, продлите видео с ИИ.",
+                "Without AI extension, the last frame will be held until the scene ends. Extend with AI to keep the motion.",
               )}
             </p>
           </>

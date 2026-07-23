@@ -726,7 +726,7 @@ it("clears both scene voice aliases when the selected voice matches the project 
   expect(getWorkspaceSegmentEffectiveVoiceId(updatedDraft.segments[0]!, updatedDraft)).toBe(projectVoiceType);
 });
 
-it("restores the original voiceover and exact duration when the baseline voice is selected again", () => {
+it("restores the original voiceover and keeps final closing padding", () => {
   const text = "It was an ordinary day in the animal city.";
   const baselineSegment = createProjectVoiceoverSegment({
     duration: 4.4,
@@ -766,8 +766,8 @@ it("restores the original voiceover and exact duration when the baseline voice i
 
   expect(changedDraft.segments[0]?.voiceoverAsset).toBeNull();
   expect(restoredDraft.segments[0]).toEqual(expect.objectContaining({
-    duration: 4.4,
-    endTime: 4.4,
+    duration: 4.7,
+    endTime: 4.7,
     estimatedVoiceoverDurationSeconds: null,
     estimatedVoiceoverTextHash: null,
     speechDuration: 4.4,
@@ -1834,8 +1834,8 @@ describe("workspace segment editor visual and voiceover mismatch", () => {
     ).toBeNull();
     const hydratedDraft = createWorkspaceSegmentEditorDraftSession(draft);
     expect(hydratedDraft.segments[0]).toEqual(expect.objectContaining({
-      duration: 7.041,
-      endTime: 7.041,
+      duration: 7.341,
+      endTime: 7.341,
     }));
     expect(
       getWorkspaceSegmentVisualAudioDurationMismatchInfo(hydratedDraft.segments[0]!, hydratedDraft, {
@@ -2231,8 +2231,8 @@ describe("workspace segment editor project voiceover timeline", () => {
       startTime: 0,
     }));
     expect(normalized.segments[1]).toEqual(expect.objectContaining({
-      duration: 5.5,
-      endTime: 10.5,
+      duration: 5.8,
+      endTime: 10.8,
       startTime: 5,
     }));
   });
@@ -2278,8 +2278,8 @@ describe("workspace segment editor project voiceover timeline", () => {
       startTime: 0,
     }));
     expect(normalized.segments[1]).toEqual(expect.objectContaining({
-      duration: 4.8,
-      endTime: 8.8,
+      duration: 5.1,
+      endTime: 9.1,
       startTime: 4,
     }));
   });
@@ -2965,11 +2965,11 @@ describe("workspace segment editor project voiceover timeline", () => {
     }, { preserveSourceTimelineEnd: false });
 
     expect(normalized.segments[0]).toEqual(expect.objectContaining({
-      duration: 11.7,
-      durationExtensionSourceDurationSeconds: 11.8,
+      duration: 12,
+      durationExtensionSourceDurationSeconds: null,
       durationMode: "auto",
       durationSyncMode: "voiceover",
-      endTime: 11.7,
+      endTime: 12,
       manualDurationSeconds: null,
       startTime: 0,
     }));
@@ -3018,10 +3018,10 @@ describe("workspace segment editor project voiceover timeline", () => {
     }, { preserveSourceTimelineEnd: false });
 
     expect(normalized.segments[0]).toEqual(expect.objectContaining({
-      duration: 16.6,
+      duration: 16.9,
       durationMode: "auto",
       durationSyncMode: "voiceover",
-      endTime: 16.6,
+      endTime: 16.9,
       manualDurationSeconds: null,
       startTime: 0,
     }));
@@ -3348,7 +3348,7 @@ describe("workspace segment editor project voiceover timeline", () => {
     });
 
     expect(refreshed.segments[0]).toEqual(expect.objectContaining({
-      duration: 2.7,
+      duration: 3,
       durationExtensionSourceDurationSeconds: 5,
       durationMode: "auto",
       durationSyncMode: "voiceover",
@@ -3502,11 +3502,11 @@ describe("workspace segment editor project voiceover timeline", () => {
     });
 
     expect(refreshed.segments[0]).toEqual(expect.objectContaining({
-      duration: 2.7,
+      duration: 3,
       durationExtensionSourceDurationSeconds: 5.042,
       durationMode: "auto",
       durationSyncMode: "voiceover",
-      endTime: 2.7,
+      endTime: 3,
       manualDurationSeconds: null,
       startTime: 0,
     }));
@@ -3581,11 +3581,11 @@ describe("workspace segment editor project voiceover timeline", () => {
       voiceSourceStartTime: 0,
     }));
     expect(refreshed.segments[1]).toEqual(expect.objectContaining({
-      duration: 5.5,
+      duration: 5.8,
       durationMode: "auto",
       durationSyncMode: "voiceover",
       durationSyncModeUserSelected: false,
-      endTime: 10.5,
+      endTime: 10.8,
       manualDurationSeconds: null,
       startTime: 5,
       voiceSourceDuration: 5.5,
@@ -3784,11 +3784,11 @@ describe("workspace segment editor project voiceover timeline", () => {
     });
 
     expect(refreshed.segments[0]).toEqual(expect.objectContaining({
-      duration: 4,
+      duration: 4.3,
       durationMode: "auto",
       durationSyncMode: "voiceover",
       durationSyncModeUserSelected: true,
-      endTime: 4,
+      endTime: 4.3,
       manualDurationSeconds: null,
       startTime: 0,
     }));
@@ -4662,10 +4662,10 @@ describe("workspace segment editor project voiceover timeline", () => {
     }, { preserveSourceTimelineEnd: false });
 
     expect(normalized.segments[0]).toEqual(expect.objectContaining({
-      duration: 2.2,
+      duration: 2.5,
       durationMode: "auto",
       durationSyncMode: "voiceover",
-      endTime: 2.2,
+      endTime: 2.5,
       manualDurationSeconds: null,
       startTime: 0,
     }));
@@ -4715,10 +4715,10 @@ describe("workspace segment editor project voiceover timeline", () => {
     }, { preserveSourceTimelineEnd: false });
 
     expect(normalized.segments[0]).toEqual(expect.objectContaining({
-      duration: 4.7,
+      duration: 5,
       durationMode: "auto",
       durationSyncMode: "voiceover",
-      endTime: 4.7,
+      endTime: 5,
       manualDurationSeconds: null,
       speechDuration: 4.7,
       startTime: 0,
@@ -4838,12 +4838,12 @@ describe("workspace segment editor project voiceover timeline", () => {
     }, { preserveSourceTimelineEnd: false });
 
     expect(normalized.segments[0]).toEqual(expect.objectContaining({
-      duration: 4.7,
-      durationExtensionSourceDurationSeconds: 5,
+      duration: 5,
+      durationExtensionSourceDurationSeconds: null,
       durationMode: "auto",
       durationSyncMode: "voiceover",
       durationSyncModeUserSelected: false,
-      endTime: 4.7,
+      endTime: 5,
       manualDurationSeconds: null,
       speechDuration: 4.7,
       startTime: 0,
@@ -4895,11 +4895,11 @@ describe("workspace segment editor project voiceover timeline", () => {
     }, { preserveSourceTimelineEnd: false });
 
     expect(normalized.segments[0]).toEqual(expect.objectContaining({
-      duration: 2.2,
+      duration: 2.5,
       durationExtensionSourceDurationSeconds: 10,
       durationMode: "auto",
       durationSyncMode: "voiceover",
-      endTime: 2.2,
+      endTime: 2.5,
       manualDurationSeconds: null,
       startTime: 0,
     }));
@@ -6596,7 +6596,7 @@ describe("workspace segment editor project voiceover timeline", () => {
       startTime: 0,
     }));
     expect(rebuilt.segments[1]).toEqual(expect.objectContaining({
-      endTime: 10.8,
+      endTime: 10.95,
       startTime: 5.25,
     }));
   });
@@ -6633,10 +6633,10 @@ describe("workspace segment editor project voiceover timeline", () => {
     );
 
     expect(rebuilt.segments[0]).toEqual(expect.objectContaining({
-      duration: 2.22,
+      duration: 2.52,
       durationMode: "auto",
       durationSyncMode: "voiceover",
-      endTime: 2.22,
+      endTime: 2.52,
       manualDurationSeconds: null,
       startTime: 0,
     }));
@@ -6672,10 +6672,10 @@ describe("workspace segment editor project voiceover timeline", () => {
     );
 
     expect(rebuilt.segments[0]).toEqual(expect.objectContaining({
-      duration: 11.2,
+      duration: 11.5,
       durationMode: "auto",
       durationSyncMode: "visual",
-      endTime: 11.2,
+      endTime: 11.5,
       manualDurationSeconds: null,
       startTime: 0,
       voiceSourceDuration: 11.2,
@@ -6707,9 +6707,9 @@ describe("workspace segment editor project voiceover timeline", () => {
     );
 
     expect(rebuilt.segments[0]).toEqual(expect.objectContaining({
-      duration: 11.2,
+      duration: 11.5,
       durationMode: "auto",
-      endTime: 11.2,
+      endTime: 11.5,
       manualDurationSeconds: null,
       startTime: 0,
     }));
@@ -6740,9 +6740,9 @@ describe("workspace segment editor project voiceover timeline", () => {
     );
 
     expect(rebuilt.segments[0]).toEqual(expect.objectContaining({
-      duration: 6.9,
+      duration: 7.2,
       durationMode: "auto",
-      endTime: 6.9,
+      endTime: 7.2,
       manualDurationSeconds: null,
       startTime: 0,
     }));
@@ -6773,9 +6773,9 @@ describe("workspace segment editor project voiceover timeline", () => {
     );
 
     expect(rebuilt.segments[0]).toEqual(expect.objectContaining({
-      duration: 2.2,
+      duration: 2.5,
       durationMode: "auto",
-      endTime: 2.2,
+      endTime: 2.5,
       manualDurationSeconds: null,
       startTime: 0,
     }));
@@ -7351,7 +7351,7 @@ describe("workspace segment editor project voiceover timeline", () => {
       manualDurationSeconds: 30,
     }));
     expect(rebuiltFifthSegment).toEqual(expect.objectContaining({
-      duration: 4.9,
+      duration: 5,
       manualDurationSeconds: null,
       startTime: 33.7,
     }));
@@ -7382,9 +7382,9 @@ describe("workspace segment editor project voiceover timeline", () => {
     );
 
     expect(rebuilt.segments[0]).toEqual(expect.objectContaining({
-      duration: 1.7,
+      duration: 2,
       durationMode: "auto",
-      endTime: 1.7,
+      endTime: 2,
       manualDurationSeconds: null,
       startTime: 0,
     }));

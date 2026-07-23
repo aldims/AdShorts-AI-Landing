@@ -759,6 +759,7 @@ import {
   type WorkspaceSegmentVisualRunScope,
   type StudioCreateMode,
 } from "../features/workspace/workspace-page-model";
+import { WORKSPACE_SEGMENT_FINAL_CLOSING_PADDING_SECONDS } from "../features/workspace/workspace-constants";
 import { WorkspacePublishModal } from "../features/workspace/workspace-publish-modal";
 import {
   applyPublishScheduleDatePart,
@@ -1328,9 +1329,27 @@ const FIRST_VIDEO_PAYMENT_PROFILE_POLL_INTERVAL_MS = 2_000;
 const STUDIO_GENERATION_ERROR_TOAST_DURATION_MS = 5_000;
 const WORKSPACE_SEGMENT_GENERATED_VISUAL_PERSIST_RETRY_DELAYS_MS = [1000, 2500, 5000, 10000];
 
+export const resolveWorkspaceSegmentVoiceoverPresentationDurationSeconds = (options: {
+  isFinalSegment: boolean;
+  voiceoverDurationSeconds: number | null | undefined;
+}) => {
+  const voiceoverDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(
+    options.voiceoverDurationSeconds,
+  );
+  if (voiceoverDurationSeconds === null) {
+    return null;
+  }
+
+  return roundWorkspaceSegmentTimelineSeconds(
+    voiceoverDurationSeconds +
+      (options.isFinalSegment ? WORKSPACE_SEGMENT_FINAL_CLOSING_PADDING_SECONDS : 0),
+  );
+};
+
 export const resolveWorkspaceSegmentDurationMenuTrimLabels = (options: {
   currentVideoDurationSeconds: number | null | undefined;
   locale: Parameters<typeof formatWorkspaceSegmentEditorSegmentDurationLabel>[2];
+  voiceoverAudioDurationSeconds?: number | null;
   voiceoverDurationSeconds: number | null | undefined;
   voiceoverDurationSource?: "actual" | "estimated" | null;
 }) => {
@@ -1354,6 +1373,18 @@ export const resolveWorkspaceSegmentDurationMenuTrimLabels = (options: {
     voiceoverDurationSeconds,
     options.locale,
   ).replace(/\s+/g, "")}`;
+  const voiceoverAudioDurationSeconds = normalizeWorkspaceSegmentManualDurationSeconds(
+    options.voiceoverAudioDurationSeconds,
+  );
+  const voiceoverAudioDurationLabel = voiceoverAudioDurationSeconds !== null
+    ? `${
+        options.voiceoverDurationSource === "estimated" ? "≈" : ""
+      }${formatWorkspaceSegmentEditorSegmentDurationLabel(
+        0,
+        voiceoverAudioDurationSeconds,
+        options.locale,
+      ).replace(/\s+/g, "")}`
+    : null;
   const fullResultHoldsToVoiceover =
     voiceoverDurationSeconds > currentVideoDurationSeconds + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS;
 
@@ -1361,6 +1392,7 @@ export const resolveWorkspaceSegmentDurationMenuTrimLabels = (options: {
     fullDurationLabel,
     fullResultDurationLabel: fullResultHoldsToVoiceover ? voiceoverDurationLabel : fullDurationLabel,
     fullResultHoldsToVoiceover,
+    ...(voiceoverAudioDurationLabel ? { voiceoverAudioDurationLabel } : {}),
     voiceoverDurationLabel,
   };
 };
@@ -28369,7 +28401,10 @@ export function WorkspacePage({
       targetSegment,
       segmentEditorDraft,
     );
-    const targetVoiceoverDurationSeconds = targetVoiceoverDurationInfo?.durationSeconds ?? null;
+    const targetVoiceoverDurationSeconds = resolveWorkspaceSegmentVoiceoverPresentationDurationSeconds({
+      isFinalSegment: segmentArrayIndex === segmentEditorDraft.segments.length - 1,
+      voiceoverDurationSeconds: targetVoiceoverDurationInfo?.durationSeconds ?? null,
+    });
     const normalizedTargetVoiceoverDurationSeconds =
       normalizeWorkspaceSegmentManualDurationSeconds(targetVoiceoverDurationSeconds);
     const shouldDefaultDurationToVoiceover =
@@ -28780,7 +28815,14 @@ export function WorkspacePage({
     }
 
     const voiceoverInfo = getSegmentTimelineEffectiveVoiceoverDurationInfo(segment, draft);
-    return voiceoverInfo?.source === "actual" ? voiceoverInfo.durationSeconds : null;
+    if (voiceoverInfo?.source !== "actual") {
+      return null;
+    }
+
+    return resolveWorkspaceSegmentVoiceoverPresentationDurationSeconds({
+      isFinalSegment: draft.segments[draft.segments.length - 1]?.index === segment.index,
+      voiceoverDurationSeconds: voiceoverInfo.durationSeconds,
+    });
   };
   const resolveSegmentSeedanceDurationSeconds = (
     segment: WorkspaceSegmentEditorDraftSegment | null | undefined,
@@ -32509,8 +32551,14 @@ export function WorkspacePage({
   const segmentTimelineDurationMenuVoiceoverInfo = segmentTimelineDurationMenuSegment && segmentEditorDraft
     ? getSegmentTimelineEffectiveVoiceoverDurationInfo(segmentTimelineDurationMenuSegment, segmentEditorDraft)
     : null;
-  const segmentTimelineDurationMenuVoiceoverSeconds =
+  const segmentTimelineDurationMenuVoiceoverAudioSeconds =
     segmentTimelineDurationMenuVoiceoverInfo?.durationSeconds ?? null;
+  const segmentTimelineDurationMenuVoiceoverSeconds = resolveWorkspaceSegmentVoiceoverPresentationDurationSeconds({
+    isFinalSegment:
+      segmentTimelineDurationMenuArrayIndex >= 0 &&
+      segmentTimelineDurationMenuArrayIndex === (segmentEditorDraft?.segments.length ?? 0) - 1,
+    voiceoverDurationSeconds: segmentTimelineDurationMenuVoiceoverAudioSeconds,
+  });
   const segmentTimelineDurationMenuVoiceoverTailSeconds =
     segmentTimelineDurationMenuVoiceoverInfo?.source === "actual" &&
     segmentTimelineDurationMenuVoiceoverSeconds !== null &&
@@ -32702,6 +32750,7 @@ export function WorkspacePage({
       ? resolveWorkspaceSegmentDurationMenuTrimLabels({
           currentVideoDurationSeconds: segmentTimelineDurationMenuFullVideoSeconds,
           locale,
+          voiceoverAudioDurationSeconds: segmentTimelineDurationMenuVoiceoverAudioSeconds,
           voiceoverDurationSeconds: segmentTimelineDurationMenuVoiceoverSeconds,
           voiceoverDurationSource: segmentTimelineDurationMenuVoiceoverInfo?.source ?? null,
         })

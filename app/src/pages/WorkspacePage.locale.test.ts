@@ -191,6 +191,7 @@ import {
   resolveWorkspaceSegmentActivationPlaybackIndex,
   resolveWorkspaceSegmentEditorStructureChangePermission,
   resolveWorkspaceSegmentDurationMenuTrimLabels,
+  resolveWorkspaceSegmentVoiceoverPresentationDurationSeconds,
   resolveWorkspaceSegmentDurationExtensionRequestTiming,
   resolveWorkspaceSegmentSeedanceExtensionSelection,
   resolveWorkspaceSegmentVideoTrimDuration,
@@ -6809,8 +6810,8 @@ describe("WorkspacePage studio locale defaults", () => {
 
     expect(getWorkspaceSegmentVoiceoverDurationSeconds(normalized.segments[0]!, normalized)).toBe(6.4);
     expect(normalized.segments[0]).toEqual(expect.objectContaining({
-      duration: 6.4,
-      endTime: 6.4,
+      duration: 6.7,
+      endTime: 6.7,
       startTime: 0,
     }));
   });
@@ -6841,8 +6842,8 @@ describe("WorkspacePage studio locale defaults", () => {
 
     expect(getWorkspaceSegmentVoiceoverDurationSeconds(normalized.segments[0]!, normalized)).toBe(5.24);
     expect(normalized.segments[0]).toEqual(expect.objectContaining({
-      duration: 5.24,
-      endTime: 5.24,
+      duration: 5.54,
+      endTime: 5.54,
       startTime: 0,
     }));
   });
@@ -7060,10 +7061,10 @@ describe("WorkspacePage studio locale defaults", () => {
     const normalized = normalizeStoredWorkspaceSegmentEditorDraftSession(createDraftSession(segment));
 
     expect(normalized.segments[0]).toEqual(expect.objectContaining({
-      duration: 3,
+      duration: 3.3,
       durationMode: "auto",
       durationSyncMode: "voiceover",
-      endTime: 3,
+      endTime: 3.3,
       manualDurationSeconds: null,
       startTime: 0,
     }));
@@ -7248,12 +7249,12 @@ describe("WorkspacePage studio locale defaults", () => {
     });
 
     expect(normalized.segments[1]).toEqual(expect.objectContaining({
-      duration: 2.3,
+      duration: 2.6,
       durationExtensionSourceDurationSeconds: 5,
       durationMode: "auto",
       durationSyncMode: "voiceover",
       durationSyncModeUserSelected: false,
-      endTime: 13.7,
+      endTime: 14,
       manualDurationSeconds: null,
       startTime: 11.4,
     }));
@@ -7311,11 +7312,11 @@ describe("WorkspacePage studio locale defaults", () => {
     });
 
     expect(normalized.segments[1]).toEqual(expect.objectContaining({
-      duration: 2.3,
+      duration: 2.6,
       durationExtensionSourceDurationSeconds: 5,
       durationMode: "auto",
       durationSyncMode: "voiceover",
-      endTime: 13.7,
+      endTime: 14,
       manualDurationSeconds: null,
       startTime: 11.4,
     }));
@@ -7425,10 +7426,10 @@ describe("WorkspacePage studio locale defaults", () => {
     const normalized = normalizeStoredWorkspaceSegmentEditorDraftSession(createDraftSession(segment));
 
     expect(normalized.segments[0]).toEqual(expect.objectContaining({
-      duration: 2.3,
+      duration: 2.6,
       durationMode: "auto",
       durationSyncMode: "voiceover",
-      endTime: 2.3,
+      endTime: 2.6,
       manualDurationSeconds: null,
       startTime: 0,
     }));
@@ -7509,8 +7510,8 @@ describe("WorkspacePage studio locale defaults", () => {
 
     expect(getWorkspaceSegmentVoiceoverDurationSeconds(normalized.segments[0]!, normalized)).toBe(4.7);
     expect(normalized.segments[0]).toEqual(expect.objectContaining({
-      duration: 4.7,
-      endTime: 4.7,
+      duration: 5,
+      endTime: 5,
       speechDuration: 4.7,
     }));
   });
@@ -7811,6 +7812,21 @@ describe("WorkspacePage studio locale defaults", () => {
     );
   });
 
+  it("adds closing padding only to the final scene voiceover presentation", () => {
+    expect(
+      resolveWorkspaceSegmentVoiceoverPresentationDurationSeconds({
+        isFinalSegment: false,
+        voiceoverDurationSeconds: 4.7,
+      }),
+    ).toBe(4.7);
+    expect(
+      resolveWorkspaceSegmentVoiceoverPresentationDurationSeconds({
+        isFinalSegment: true,
+        voiceoverDurationSeconds: 4.7,
+      }),
+    ).toBe(5);
+  });
+
   it("labels the video mode result as held when voiceover is longer than video", () => {
     expect(
       resolveWorkspaceSegmentDurationMenuTrimLabels({
@@ -8071,6 +8087,42 @@ describe("WorkspacePage studio locale defaults", () => {
         startTime: 0,
       }),
     );
+  });
+
+  it("exports final scene closing padding without extending speech timing", async () => {
+    const text = "Final scene voiceover";
+    const segment = createDraftSegment({
+      duration: 4.7,
+      endTime: 4.7,
+      speechDuration: 4.7,
+      speechDurationSource: "audio",
+      speechEndTime: 4.7,
+      speechStartTime: 0,
+      text,
+      voiceoverAsset: {
+        assetId: 779,
+        durationSeconds: 4.7,
+        fileName: "final-scene-voice.wav",
+        fileSize: 0,
+        mimeType: "audio/wav",
+        remoteUrl: "/api/workspace/media-assets/779",
+      },
+      voiceoverLanguage: "ru",
+      voiceoverTextHash: getWorkspaceSegmentVoiceoverTextHash(text),
+      voiceoverVoiceType: DEFAULT_STUDIO_VOICE_ID.ru,
+    });
+
+    const result = await buildWorkspaceSegmentEditorPayload(createDraftSession(segment), { language: "ru" });
+
+    expect(result.payload.segments[0]).toEqual(expect.objectContaining({
+      duration: 5,
+      endTime: 5,
+      startTime: 0,
+      voiceoverAssetId: 779,
+    }));
+    expect(segment.speechDuration).toBe(4.7);
+    expect(segment.speechEndTime).toBe(4.7);
+    expect(segment.voiceoverAsset?.durationSeconds).toBe(4.7);
   });
 
   it("blocks scratch scene drafts without a scene visual before payload export", async () => {

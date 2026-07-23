@@ -17,7 +17,10 @@ import {
   type WorkspaceMediaAssetRef,
 } from "../../../shared/workspace-media-assets";
 import type { WorkspaceReferenceKind } from "../../../shared/workspace-references";
-import { WORKSPACE_SEGMENT_PHOTO_DURATION_AUDIO_GUARD_EPSILON_SECONDS } from "./workspace-constants";
+import {
+  WORKSPACE_SEGMENT_FINAL_CLOSING_PADDING_SECONDS,
+  WORKSPACE_SEGMENT_PHOTO_DURATION_AUDIO_GUARD_EPSILON_SECONDS,
+} from "./workspace-constants";
 import {
   areWorkspaceSegmentInfographicsEqual,
   cloneWorkspaceSegmentInfographic,
@@ -5511,6 +5514,9 @@ const syncWorkspaceSegmentGeneratedVideoDefaultVisualDuration = (
 const syncWorkspaceSegmentPendingVoiceoverEstimatedDuration = (
   segment: WorkspaceSegmentEditorDraftSegment,
   session?: Pick<WorkspaceSegmentEditorDraftSession, "ttsAssetId" | "voiceType"> | null,
+  options?: {
+    presentationPaddingSeconds?: number;
+  },
 ): WorkspaceSegmentEditorDraftSegment => {
   const selectedVisualPreviewKind = getWorkspaceSegmentSelectedVisualPreviewKind(segment);
   const previewKind = getWorkspaceSegmentPreviewKind(segment);
@@ -5571,7 +5577,10 @@ const syncWorkspaceSegmentPendingVoiceoverEstimatedDuration = (
     sourceDurationCandidates.length > 0
       ? roundWorkspaceSegmentTimelineSeconds(Math.max(...sourceDurationCandidates))
       : null;
-  const duration = roundWorkspaceSegmentTimelineSeconds(estimatedVoiceoverDurationSeconds);
+  const presentationPaddingSeconds = Math.max(0, Number(options?.presentationPaddingSeconds) || 0);
+  const duration = roundWorkspaceSegmentTimelineSeconds(
+    estimatedVoiceoverDurationSeconds + presentationPaddingSeconds,
+  );
   const durationExtensionSourceDurationSeconds =
     sourceDurationSeconds !== null &&
     sourceDurationSeconds > duration + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS
@@ -5593,7 +5602,7 @@ const syncWorkspaceSegmentPendingVoiceoverEstimatedDuration = (
     segment.estimatedVoiceoverTextHash === estimatedVoiceoverTextHash &&
     areWorkspaceSegmentDurationValuesEqual(
       normalizeWorkspaceSegmentManualDurationSeconds(segment.estimatedVoiceoverDurationSeconds),
-      duration,
+      estimatedVoiceoverDurationSeconds,
     )
   ) {
     return segment;
@@ -5608,7 +5617,7 @@ const syncWorkspaceSegmentPendingVoiceoverEstimatedDuration = (
     durationSyncModeUserSelected:
       durationSyncMode === "voiceover" && segment.durationSyncModeUserSelected === true,
     endTime: roundWorkspaceSegmentTimelineSeconds(startTime + duration),
-    estimatedVoiceoverDurationSeconds: duration,
+    estimatedVoiceoverDurationSeconds,
     estimatedVoiceoverTextHash,
     manualDurationSeconds: null,
     startTime,
@@ -5620,6 +5629,7 @@ export const getWorkspaceSegmentManualDurationMinimum = (
   session?: (Pick<WorkspaceSegmentEditorDraftSession, "voiceType"> &
     Partial<Pick<WorkspaceSegmentEditorDraftSession, "language" | "ttsAssetId">>) | null,
   options?: {
+    presentationPaddingSeconds?: number;
     voiceoverDurationSeconds?: number | null;
   },
 ) => {
@@ -5645,17 +5655,22 @@ export const getWorkspaceSegmentManualDurationMinimum = (
   const voiceoverDurationSeconds = hasExplicitVoiceoverDurationSeconds
     ? explicitVoiceoverDurationSeconds
     : fallbackVoiceoverDurationSeconds;
+  const presentationPaddingSeconds = Math.max(0, Number(options?.presentationPaddingSeconds) || 0);
+  const presentationVoiceoverDurationSeconds =
+    voiceoverDurationSeconds !== null
+      ? roundWorkspaceSegmentTimelineSeconds(voiceoverDurationSeconds + presentationPaddingSeconds)
+      : null;
   const isImageVisualSegment = getWorkspaceSegmentSelectedVisualPreviewKind(segment) === "image";
   const shouldUseExactFreshSceneVoiceoverMinimum =
     isImageVisualSegment &&
-    voiceoverDurationSeconds !== null &&
+    presentationVoiceoverDurationSeconds !== null &&
     isWorkspaceSegmentVoiceoverAssetFresh(segment, session);
   const visualMinimumDurationSeconds =
     isImageVisualSegment
       ? shouldUseExactFreshSceneVoiceoverMinimum
-        ? roundWorkspaceSegmentTimelineSeconds(voiceoverDurationSeconds)
-        : getWorkspaceSegmentPhotoDurationVoiceoverMinimumSeconds(voiceoverDurationSeconds)
-      : voiceoverDurationSeconds;
+        ? presentationVoiceoverDurationSeconds
+        : getWorkspaceSegmentPhotoDurationVoiceoverMinimumSeconds(presentationVoiceoverDurationSeconds)
+      : presentationVoiceoverDurationSeconds;
 
   return Math.max(1, visualMinimumDurationSeconds ?? 1);
 };
@@ -7470,6 +7485,9 @@ export const shouldPreserveWorkspaceSegmentUserVisualDurationForVoiceover = (
 export const syncWorkspaceSegmentFreshVoiceoverTimelineDuration = (
   segment: WorkspaceSegmentEditorDraftSegment,
   session?: Pick<WorkspaceSegmentEditorDraftSession, "language" | "ttsAssetId" | "voiceType"> | null,
+  options?: {
+    presentationPaddingSeconds?: number;
+  },
 ): WorkspaceSegmentEditorDraftSegment => {
   const freshVoiceoverDurationSeconds = getWorkspaceSegmentFreshVoiceoverDurationSeconds(segment, session);
   const storedDurationExtensionSourceDurationSeconds =
@@ -7488,6 +7506,10 @@ export const syncWorkspaceSegmentFreshVoiceoverTimelineDuration = (
   if (voiceoverDurationSeconds === null) {
     return segment;
   }
+  const presentationPaddingSeconds = Math.max(0, Number(options?.presentationPaddingSeconds) || 0);
+  const presentationDurationSeconds = roundWorkspaceSegmentTimelineSeconds(
+    voiceoverDurationSeconds + presentationPaddingSeconds,
+  );
 
   const durationSyncMode = normalizeWorkspaceSegmentDurationSyncMode(segment.durationSyncMode);
   const hasUserSelectedVisualDurationSync =
@@ -7633,7 +7655,7 @@ export const syncWorkspaceSegmentFreshVoiceoverTimelineDuration = (
     isVideoVisualSegment &&
     shouldSyncVideoToVoiceover
   ) {
-    const duration = roundWorkspaceSegmentTimelineSeconds(voiceoverDurationSeconds);
+    const duration = presentationDurationSeconds;
     const sourceDurationSeconds =
       currentVideoDurationSeconds !== null &&
       currentVideoDurationSeconds > duration + WORKSPACE_SEGMENT_EXTENSION_EPSILON_SECONDS
@@ -8259,7 +8281,13 @@ export const rebuildWorkspaceSegmentEditorDraftTimeline = (
   },
 ) => {
   let hasVoiceoverTimelineDurationReset = false;
-  const syncedSegments = syncWorkspaceSegmentsEmbeddedVisualDurations(segments).map((segment) => {
+  const embeddedDurationSyncedSegments = syncWorkspaceSegmentsEmbeddedVisualDurations(segments);
+  const finalSegmentArrayIndex = embeddedDurationSyncedSegments.length - 1;
+  const syncedSegments = embeddedDurationSyncedSegments.map((segment, arrayIndex) => {
+    const presentationPaddingSeconds =
+      arrayIndex === finalSegmentArrayIndex
+        ? WORKSPACE_SEGMENT_FINAL_CLOSING_PADDING_SECONDS
+        : 0;
     const segmentWithSanitizedProjectVoiceoverDuration =
       sanitizeWorkspaceSegmentLegacyVoiceRenderManualDuration(
         sanitizeWorkspaceSegmentObviousVoiceoverVisualEcho(
@@ -8272,10 +8300,12 @@ export const rebuildWorkspaceSegmentEditorDraftTimeline = (
     const segmentWithPendingVoiceoverTiming = syncWorkspaceSegmentPendingVoiceoverEstimatedDuration(
       segmentWithGeneratedVideoVisualDuration,
       session,
+      { presentationPaddingSeconds },
     );
     const segmentWithFreshVoiceoverTiming = syncWorkspaceSegmentFreshVoiceoverTimelineDuration(
       segmentWithPendingVoiceoverTiming,
       session,
+      { presentationPaddingSeconds },
     );
     const timelineDurationBeforeFreshVoiceoverSync = roundWorkspaceSegmentTimelineSeconds(
       Math.max(
@@ -8294,7 +8324,9 @@ export const rebuildWorkspaceSegmentEditorDraftTimeline = (
       normalizeWorkspaceSegmentDurationSyncMode(segmentWithFreshVoiceoverTiming.durationSyncMode) === "voiceover" &&
       !areWorkspaceSegmentDurationValuesEqual(
         timelineDurationBeforeFreshVoiceoverSync,
-        actualTimelineVoiceoverDurationInfo.durationSeconds,
+        roundWorkspaceSegmentTimelineSeconds(
+          actualTimelineVoiceoverDurationInfo.durationSeconds + presentationPaddingSeconds,
+        ),
       )
     ) {
       hasVoiceoverTimelineDurationReset = true;
@@ -8343,6 +8375,7 @@ export const rebuildWorkspaceSegmentEditorDraftTimeline = (
     hasWorkspaceSegmentUserSelectedStillDurationSlotConflict(syncedSegments);
   const preserveExistingStillDurationsOverride = options?.preserveExistingStillDurations;
   const preserveSpeechBoundaries = options?.preserveSpeechBoundaries ?? !hasVoiceoverTimelineDurationReset;
+  const finalSegment = syncedSegments[syncedSegments.length - 1] ?? null;
 
   return rebuildWorkspaceSegmentEditorTimeline(syncedSegments, {
     preferEstimatedDuration: shouldPreferEstimatedDurationForDraftSegment,
@@ -8371,7 +8404,13 @@ export const rebuildWorkspaceSegmentEditorDraftTimeline = (
     preserveExistingStillDurationsExact: (segment) =>
       isWorkspaceSegmentPersistedStillSlot(segment) &&
       !shouldSyncWorkspaceSegmentStillDurationToFreshVoiceover(segment, session),
-    minimumDurationSeconds: (segment) => getWorkspaceSegmentManualDurationMinimum(segment, session),
+    minimumDurationSeconds: (segment) =>
+      getWorkspaceSegmentManualDurationMinimum(segment, session, {
+        presentationPaddingSeconds:
+          segment === finalSegment
+            ? WORKSPACE_SEGMENT_FINAL_CLOSING_PADDING_SECONDS
+            : 0,
+      }),
     zeroDuration: isWorkspaceSegmentEditorDraftSegmentEmpty,
   });
 };

@@ -13,6 +13,7 @@ import {
   type WorkspaceMediaLibraryPreviewKind,
 } from "../../lib/workspaceMediaLibrary";
 import type { WorkspaceProfile } from "./workspace-profile-helpers";
+import { WORKSPACE_SEGMENT_FINAL_CLOSING_PADDING_SECONDS } from "./workspace-constants";
 import type { WorkspaceSegmentEditorPayload } from "./workspace-segment-payload-helpers";
 import type { StudioMusicType } from "./workspace-studio-options";
 import type {
@@ -504,7 +505,8 @@ export const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VISUAL_TRANSITION_READY_TIMEO
 export const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VISUAL_WARMUP_THROTTLE_MS = 3500;
 export const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_AUDIO_END_TOLERANCE_SECONDS = 0.6;
 export const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_START_SEEK_TOLERANCE_SECONDS = 0.035;
-export const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_END_GRACE_SECONDS = 0.45;
+export const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_END_GRACE_SECONDS =
+  WORKSPACE_SEGMENT_FINAL_CLOSING_PADDING_SECONDS;
 export const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_AUDIBLE_TAIL_SECONDS = 0.22;
 export const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_MUSIC_SEEK_TOLERANCE_SECONDS = 0.75;
 export const WORKSPACE_SEGMENT_EDITOR_FULL_PREVIEW_VOICE_START_GATE_SECONDS = 2;
