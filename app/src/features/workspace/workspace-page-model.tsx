@@ -1137,6 +1137,8 @@ export const WORKSPACE_SEGMENT_AI_PHOTO_JOB_TIMEOUT_MS = 10 * 60 * 1000;
 export const WORKSPACE_SEGMENT_AI_PHOTO_SERVER_BUSY_MESSAGE = "Сервер генерации изображений сейчас загружен. Попробуйте позже.";
 export const WORKSPACE_SEGMENT_AI_VIDEO_CREATION_VISIBILITY_TIMEOUT_MS = 90 * 1000;
 export const WORKSPACE_SEGMENT_AI_VIDEO_ASSET_PROPAGATION_TIMEOUT_MS = 30 * 1000;
+export const WORKSPACE_SEGMENT_VOICEOVER_CREATION_VISIBILITY_TIMEOUT_MS = 90 * 1000;
+export const WORKSPACE_SEGMENT_VOICEOVER_ASSET_PROPAGATION_TIMEOUT_MS = 30 * 1000;
 export const WORKSPACE_SEGMENT_VIDEO_GENERATION_JOB_TIMEOUT_MS = 10 * 60 * 1000;
 export const WORKSPACE_SEGMENT_PHOTO_ANIMATION_JOB_TIMEOUT_MS = 25 * 60 * 1000;
 export const WORKSPACE_SEGMENT_SCENE_SOUND_JOB_TIMEOUT_MS = 10 * 60 * 1000;
@@ -1155,6 +1157,23 @@ export const shouldRetryWorkspaceSegmentAiVideoStatusFailure = (options: {
   (options.statusCode === 404 &&
     (options.now ?? Date.now()) - options.createdAt <
       WORKSPACE_SEGMENT_AI_VIDEO_CREATION_VISIBILITY_TIMEOUT_MS);
+
+export const shouldRetryWorkspaceSegmentVoiceoverStatusFailure = (options: {
+  createdAt: number;
+  now?: number;
+  statusCode: number;
+}) =>
+  options.statusCode >= 500 ||
+  (options.statusCode === 404 &&
+    (options.now ?? Date.now()) - options.createdAt <
+      WORKSPACE_SEGMENT_VOICEOVER_CREATION_VISIBILITY_TIMEOUT_MS);
+
+export const shouldWaitForWorkspaceSegmentVoiceoverAsset = (options: {
+  observedAt: number;
+  now?: number;
+}) =>
+  (options.now ?? Date.now()) - options.observedAt <
+  WORKSPACE_SEGMENT_VOICEOVER_ASSET_PROPAGATION_TIMEOUT_MS;
 
 export const isWorkspaceSegmentLibraryLoadMoreSentinelNearViewport = (options: {
   rootBottom: number;

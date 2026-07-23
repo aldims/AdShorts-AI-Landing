@@ -668,8 +668,10 @@ import {
   shouldNotifyStudioGenerationError,
   shouldRedirectWorkspaceScenesModeDuringGeneration,
   shouldRetryWorkspaceSegmentAiVideoStatusFailure,
+  shouldRetryWorkspaceSegmentVoiceoverStatusFailure,
   shouldShowWorkspaceStudioIdeaEmptyState,
   shouldShowWorkspaceStudioWelcomeCard,
+  shouldWaitForWorkspaceSegmentVoiceoverAsset,
   shouldUseWorkspaceStudioExpandedPromptLayout,
   shouldShowWorkspaceStartFreshScenesAction,
   shouldShowWorkspaceSegmentEditorFullPreviewBusyIndicator,
@@ -18075,6 +18077,8 @@ export function WorkspacePage({
 
     let latestStatus = initialStatus;
     const startedAt = options.createdAt ?? Date.now();
+    let transientStatusFailures = 0;
+    let doneWithoutAssetObservedAt: number | null = null;
 
     try {
       while (isSegmentVisualRunCurrent(segmentVoiceoverRunRef, options.segmentIndex, options.runId)) {
@@ -18083,15 +18087,52 @@ export function WorkspacePage({
           throw new Error("Озвучка сцены генерируется слишком долго. Попробуйте запустить ещё раз.");
         }
 
-        const response = await fetch(`/api/studio/segment-voiceover/jobs/${encodeURIComponent(safeJobId)}`);
-        const payload = (await response.json().catch(() => null)) as WorkspaceSegmentVoiceoverJobStatusResponse | null;
+        let response: Response;
+        let payload: WorkspaceSegmentVoiceoverJobStatusResponse | null = null;
+        try {
+          response = await fetch(`/api/studio/segment-voiceover/jobs/${encodeURIComponent(safeJobId)}`);
+          payload = (await response.json().catch(() => null)) as WorkspaceSegmentVoiceoverJobStatusResponse | null;
+        } catch (error) {
+          transientStatusFailures += 1;
+          logSegmentEditorDiagnostics(
+            "client.segment-editor.voiceover.status.transient-fetch-failed",
+            {
+              error: error instanceof Error ? { message: error.message, name: error.name } : String(error),
+              failures: transientStatusFailures,
+              jobId: safeJobId,
+              targetSegmentIndex: options.segmentIndex,
+            },
+            { level: "warn" },
+          );
+          await new Promise((resolve) => window.setTimeout(resolve, 3000));
+          continue;
+        }
 
         if (!response.ok || !payload?.data) {
-          if (response.status < 500) {
-            removeStoredWorkspaceSegmentVoiceoverJob(session.email, safeJobId);
+          const shouldRetryStatusFailure = shouldRetryWorkspaceSegmentVoiceoverStatusFailure({
+            createdAt: startedAt,
+            statusCode: response.status,
+          });
+          if (shouldRetryStatusFailure) {
+            transientStatusFailures += 1;
+            logSegmentEditorDiagnostics(
+              "client.segment-editor.voiceover.status.transient-server-failed",
+              {
+                failures: transientStatusFailures,
+                jobId: safeJobId,
+                statusCode: response.status,
+                targetSegmentIndex: options.segmentIndex,
+              },
+              { level: "warn" },
+            );
+            await new Promise((resolve) => window.setTimeout(resolve, 3000));
+            continue;
           }
+
+          removeStoredWorkspaceSegmentVoiceoverJob(session.email, safeJobId);
           throw new Error(payload?.error ?? "Не удалось получить статус генерации озвучки сцены.");
         }
+        transientStatusFailures = 0;
 
         if (!isSegmentVisualRunCurrent(segmentVoiceoverRunRef, options.segmentIndex, options.runId)) {
           return;
@@ -18203,6 +18244,28 @@ export function WorkspacePage({
         }
 
         if (isWorkspaceSegmentGenerationJobDoneStatus(latestStatus)) {
+          const now = Date.now();
+          if (doneWithoutAssetObservedAt === null) {
+            doneWithoutAssetObservedAt = now;
+            logSegmentEditorDiagnostics(
+              "client.segment-editor.voiceover.done-without-asset",
+              {
+                jobId: safeJobId,
+                targetSegmentIndex: options.segmentIndex,
+              },
+              { level: "warn" },
+            );
+          }
+          if (
+            shouldWaitForWorkspaceSegmentVoiceoverAsset({
+              now,
+              observedAt: doneWithoutAssetObservedAt,
+            })
+          ) {
+            await new Promise((resolve) => window.setTimeout(resolve, 2200));
+            continue;
+          }
+
           removeStoredWorkspaceSegmentVoiceoverJob(session.email, safeJobId);
           throw new Error(payload.data.error ?? "Сгенерированная озвучка сцены недоступна.");
         }

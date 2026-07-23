@@ -25,9 +25,11 @@ import {
   shouldNotifyStudioGenerationError,
   shouldRedirectWorkspaceScenesModeDuringGeneration,
   shouldRetryWorkspaceSegmentAiVideoStatusFailure,
+  shouldRetryWorkspaceSegmentVoiceoverStatusFailure,
   shouldResetWorkspaceSegmentLibraryRenderCount,
   shouldShowWorkspaceStudioIdeaEmptyState,
   shouldShowWorkspaceStudioWelcomeCard,
+  shouldWaitForWorkspaceSegmentVoiceoverAsset,
   shouldUseWorkspaceStudioExpandedPromptLayout,
   shouldShowWorkspaceStartFreshScenesAction,
   shouldShowWorkspaceSegmentEditorFullPreviewBusyIndicator,
@@ -142,6 +144,45 @@ describe("segment editor session loading", () => {
         statusCode: 503,
       }),
     ).toBe(true);
+  });
+
+  it("keeps polling a completed voiceover while its asset metadata is propagating", () => {
+    const createdAt = 10_000;
+    const completedAt = createdAt + 5_000;
+
+    expect(
+      shouldRetryWorkspaceSegmentVoiceoverStatusFailure({
+        createdAt,
+        now: createdAt + 89_999,
+        statusCode: 404,
+      }),
+    ).toBe(true);
+    expect(
+      shouldRetryWorkspaceSegmentVoiceoverStatusFailure({
+        createdAt,
+        now: createdAt + 90_000,
+        statusCode: 404,
+      }),
+    ).toBe(false);
+    expect(
+      shouldRetryWorkspaceSegmentVoiceoverStatusFailure({
+        createdAt,
+        now: createdAt + 120_000,
+        statusCode: 503,
+      }),
+    ).toBe(true);
+    expect(
+      shouldWaitForWorkspaceSegmentVoiceoverAsset({
+        observedAt: completedAt,
+        now: completedAt + 29_999,
+      }),
+    ).toBe(true);
+    expect(
+      shouldWaitForWorkspaceSegmentVoiceoverAsset({
+        observedAt: completedAt,
+        now: completedAt + 30_000,
+      }),
+    ).toBe(false);
   });
 
   it("uses the cached endpoint unless a fresh session was explicitly requested", () => {
