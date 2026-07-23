@@ -224,6 +224,18 @@ export const shouldDisableWorkspaceScenesCreateMode = (options: {
   isGenerationVisible: boolean;
 }) => options.isEditHidden || options.isGenerationVisible;
 
+export const WORKSPACE_SCENES_COMPACT_VIEWPORT_MEDIA_QUERY =
+  "(pointer: coarse) and (max-width: 640px), (pointer: coarse) and (max-height: 500px)";
+
+export const shouldShowWorkspaceScenesCompactWarning = (options: {
+  hasAcceptedWarning: boolean;
+  isCompactTouchViewport: boolean;
+  isSegmentEditorActive: boolean;
+}) =>
+  options.isCompactTouchViewport &&
+  !options.hasAcceptedWarning &&
+  !options.isSegmentEditorActive;
+
 export const shouldNotifyStudioGenerationError = (
   generateError: string | null | undefined,
   isGenerating: boolean,

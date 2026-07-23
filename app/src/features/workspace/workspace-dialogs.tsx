@@ -92,6 +92,133 @@ const useWorkspaceDialogFocusManagement = (isOpen: boolean): RefObject<HTMLDivEl
   return panelRef;
 };
 
+export type WorkspaceScenesCompactWarningReturnTarget = "idea" | "projects";
+
+type WorkspaceScenesCompactWarningModalProps = {
+  isOpen: boolean;
+  locale: Locale;
+  onContinue: () => void;
+  onReturn: () => void;
+  returnTarget: WorkspaceScenesCompactWarningReturnTarget;
+};
+
+export function WorkspaceScenesCompactWarningModal({
+  isOpen,
+  locale,
+  onContinue,
+  onReturn,
+  returnTarget,
+}: WorkspaceScenesCompactWarningModalProps) {
+  const panelRef = useWorkspaceDialogFocusManagement(isOpen);
+
+  if (!isOpen || typeof document === "undefined") {
+    return null;
+  }
+
+  const returnLabel =
+    returnTarget === "projects"
+      ? workspaceText(locale, "Вернуться к проектам", "Back to projects")
+      : workspaceText(locale, "Остаться в режиме «Из идеи»", "Stay in From idea mode");
+
+  return createPortal(
+    <div
+      className="workspace-scenes-compact-warning"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="workspace-scenes-compact-warning-title"
+      aria-describedby="workspace-scenes-compact-warning-description"
+    >
+      <button
+        className="workspace-scenes-compact-warning__backdrop route-close"
+        type="button"
+        aria-label={workspaceText(locale, "Закрыть предупреждение", "Close warning")}
+        tabIndex={-1}
+        onClick={onReturn}
+      />
+
+      <div
+        ref={panelRef}
+        className="workspace-scenes-compact-warning__panel"
+        role="document"
+        tabIndex={-1}
+      >
+        <div className="workspace-scenes-compact-warning__visual" aria-hidden="true">
+          <span className="workspace-scenes-compact-warning__phone">
+            <i />
+            <i />
+            <i />
+          </span>
+          <span className="workspace-scenes-compact-warning__transfer">
+            <i />
+            <i />
+            <i />
+          </span>
+          <span className="workspace-scenes-compact-warning__desktop">
+            <i />
+            <i />
+            <i />
+            <b />
+          </span>
+        </div>
+
+        <div className="workspace-scenes-compact-warning__copy">
+          <span className="workspace-scenes-compact-warning__eyebrow">
+            {workspaceText(locale, "РЕЖИМ ПО СЦЕНАМ", "SCENE BY SCENE MODE")}
+          </span>
+          <h2 id="workspace-scenes-compact-warning-title">
+            {workspaceText(locale, "Удобнее работать на компьютере", "Works best on a computer")}
+          </h2>
+          <p id="workspace-scenes-compact-warning-description">
+            {workspaceText(
+              locale,
+              "В этом режиме много инструментов и временная шкала. На небольшом экране управлять сценами и точным монтажом будет сложнее.",
+              "This mode includes many tools and a timeline. Managing scenes and precise edits is harder on a small screen.",
+            )}
+          </p>
+        </div>
+
+        <ul className="workspace-scenes-compact-warning__benefits">
+          <li>
+            <span aria-hidden="true">✓</span>
+            {workspaceText(locale, "Все инструменты помещаются на одном экране", "All tools fit on one screen")}
+          </li>
+          <li>
+            <span aria-hidden="true">✓</span>
+            {workspaceText(locale, "Таймлайном удобнее управлять мышью", "The timeline is easier to control with a mouse")}
+          </li>
+        </ul>
+
+        <div className="workspace-scenes-compact-warning__actions">
+          <button
+            className="workspace-scenes-compact-warning__action workspace-scenes-compact-warning__action--primary"
+            type="button"
+            data-dialog-initial-focus
+            onClick={onReturn}
+          >
+            {returnLabel}
+          </button>
+          <button
+            className="workspace-scenes-compact-warning__action workspace-scenes-compact-warning__action--secondary"
+            type="button"
+            onClick={onContinue}
+          >
+            {workspaceText(locale, "Всё равно открыть", "Open anyway")}
+          </button>
+        </div>
+
+        <p className="workspace-scenes-compact-warning__note">
+          {workspaceText(
+            locale,
+            "Если продолжите, предупреждение больше не появится в этой сессии.",
+            "If you continue, this warning will not appear again during this session.",
+          )}
+        </p>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 type WorkspaceLocalExampleModalProps = {
   isOpen: boolean;
   isSaving: boolean;

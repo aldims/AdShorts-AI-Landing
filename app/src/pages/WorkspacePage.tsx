@@ -29,12 +29,14 @@ import {
 import {
   getStudioPreviewDismissKey,
   normalizeWorkspaceEmail,
+  persistAcceptedStudioScenesCompactWarning,
   persistDismissedStudioPreviewKey,
   persistDismissedFirstVideoOfferKey,
   persistDismissedStudioWelcomeCard,
   persistHiddenMediaLibraryItemKeys,
   persistStudioCreateMode,
   persistStudioCreateSettings,
+  readAcceptedStudioScenesCompactWarning,
   readDismissedStudioPreviewKey,
   readDismissedFirstVideoOfferKey,
   readDismissedStudioWelcomeCard,
@@ -511,12 +513,14 @@ import {
   WorkspaceLocalExampleModal,
   WorkspaceMediaLibraryDeleteConfirmModal,
   WorkspaceProjectDeleteModal,
+  WorkspaceScenesCompactWarningModal,
   WorkspaceSegmentEditorBulkSceneSoundModal,
   WorkspaceSegmentEditorDeleteConfirmModal,
   WorkspaceSegmentEditorInfographicDeleteConfirmModal,
   WorkspaceSegmentEditorVoiceoverGenerationRequiredModal,
   WorkspaceSegmentEditorResetConfirmModal,
   WorkspaceSegmentEditorStartFreshConfirmModal,
+  type WorkspaceScenesCompactWarningReturnTarget,
 } from "../features/workspace/workspace-dialogs";
 import {
   StudioBrandSelectorChip,
@@ -665,6 +669,7 @@ import {
   resolveWorkspaceRetainedScenesDraftState,
   resolveWorkspaceScenesModeSwitchTarget,
   shouldDisableWorkspaceScenesCreateMode,
+  shouldShowWorkspaceScenesCompactWarning,
   shouldNotifyStudioGenerationError,
   shouldRedirectWorkspaceScenesModeDuringGeneration,
   shouldRetryWorkspaceSegmentAiVideoStatusFailure,
@@ -675,6 +680,7 @@ import {
   shouldUseWorkspaceStudioExpandedPromptLayout,
   shouldShowWorkspaceStartFreshScenesAction,
   shouldShowWorkspaceSegmentEditorFullPreviewBusyIndicator,
+  WORKSPACE_SCENES_COMPACT_VIEWPORT_MEDIA_QUERY,
   getPublishBootstrapForPlatform,
   getPublishChannelsForPlatform,
   isWorkspacePublishPlatformAvailable,
@@ -1968,11 +1974,57 @@ export function WorkspacePage({
   });
   const [createMode, setCreateMode] = useState<StudioCreateMode>("default");
   const lastStudioCreateModeRef = useRef<StudioCreateMode>(initialStudioCreateMode);
+  const [hasAcceptedScenesCompactWarning, setHasAcceptedScenesCompactWarning] = useState(() =>
+    readAcceptedStudioScenesCompactWarning(session.email),
+  );
+  const [isScenesCompactTouchViewport, setIsScenesCompactTouchViewport] = useState(() =>
+    typeof window !== "undefined" && typeof window.matchMedia === "function"
+      ? window.matchMedia(WORKSPACE_SCENES_COMPACT_VIEWPORT_MEDIA_QUERY).matches
+      : false,
+  );
+  const [scenesCompactWarningReturnTarget, setScenesCompactWarningReturnTarget] =
+    useState<WorkspaceScenesCompactWarningReturnTarget | null>(null);
+  const scenesCompactWarningContinueRef = useRef<null | (() => void)>(null);
   const [topicInput, setTopicInput] = useState(() => readPendingStudioPrompt()?.prompt ?? "");
   const [studioIdeaSuggestionRotation, setStudioIdeaSuggestionRotation] = useState(
     getWorkspaceStudioIdeaSuggestionRotation,
   );
   const [isStudioIdeaPromptImproving, setIsStudioIdeaPromptImproving] = useState(false);
+  const shouldGuardScenesCompactEntry = shouldShowWorkspaceScenesCompactWarning({
+    hasAcceptedWarning: hasAcceptedScenesCompactWarning,
+    isCompactTouchViewport: isScenesCompactTouchViewport,
+    isSegmentEditorActive: createMode === "segment-editor",
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return undefined;
+    }
+
+    const compactViewportQuery = window.matchMedia(WORKSPACE_SCENES_COMPACT_VIEWPORT_MEDIA_QUERY);
+    const syncCompactViewport = () => {
+      setIsScenesCompactTouchViewport(compactViewportQuery.matches);
+    };
+
+    syncCompactViewport();
+    if (typeof compactViewportQuery.addEventListener === "function") {
+      compactViewportQuery.addEventListener("change", syncCompactViewport);
+    } else {
+      compactViewportQuery.addListener(syncCompactViewport);
+    }
+
+    return () => {
+      if (typeof compactViewportQuery.removeEventListener === "function") {
+        compactViewportQuery.removeEventListener("change", syncCompactViewport);
+      } else {
+        compactViewportQuery.removeListener(syncCompactViewport);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    setHasAcceptedScenesCompactWarning(readAcceptedStudioScenesCompactWarning(session.email));
+  }, [session.email]);
 
   useEffect(() => {
     if (isGuest) {
@@ -4105,6 +4157,7 @@ export function WorkspacePage({
   const isAnyPreviewModalOpen = isPreviewModalOpen || Boolean(projectPreviewModal) || Boolean(mediaLibraryPreviewModal) || isPublishModalOpen;
   const isAnyWorkspaceModalOpen =
     isAnyPreviewModalOpen ||
+    scenesCompactWarningReturnTarget !== null ||
     isSegmentAiPhotoModalOpen ||
     isSegmentEditorVoiceoverPreviewRequiredModalOpen ||
     isSegmentEditorBulkSceneSoundModalOpen ||
@@ -4280,6 +4333,50 @@ export function WorkspacePage({
     setIsSegmentEditorStartFreshConfirmOpen(false);
   };
 
+  const requestScenesCompactWarning = (
+    returnTarget: WorkspaceScenesCompactWarningReturnTarget,
+    onContinue?: () => void,
+  ) => {
+    if (
+      !shouldGuardScenesCompactEntry ||
+      readAcceptedStudioScenesCompactWarning(session.email)
+    ) {
+      return false;
+    }
+
+    scenesCompactWarningContinueRef.current = onContinue ?? null;
+    setScenesCompactWarningReturnTarget(returnTarget);
+    return true;
+  };
+
+  const handleScenesCompactWarningReturn = () => {
+    const returnTarget = scenesCompactWarningReturnTarget;
+    scenesCompactWarningContinueRef.current = null;
+    setScenesCompactWarningReturnTarget(null);
+    rememberStudioCreateMode("default");
+    suppressScratchSegmentEditorRouteOpenRef.current = true;
+    setCreateMode("default");
+    setActiveTab("studio");
+
+    if (returnTarget === "projects") {
+      setStudioView("projects");
+      syncStudioRouteSection("projects", { replace: true });
+      return;
+    }
+
+    setStudioView("create");
+    syncStudioRouteSection("create", { replace: true });
+  };
+
+  const handleScenesCompactWarningContinue = () => {
+    const continueAction = scenesCompactWarningContinueRef.current;
+    scenesCompactWarningContinueRef.current = null;
+    persistAcceptedStudioScenesCompactWarning(session.email);
+    setHasAcceptedScenesCompactWarning(true);
+    setScenesCompactWarningReturnTarget(null);
+    continueAction?.();
+  };
+
   const openSegmentEditorVoiceoverPreviewRequiredModal = () => {
     setIsSegmentEditorVoiceoverPreviewRequiredModalOpen(true);
   };
@@ -4312,6 +4409,38 @@ export function WorkspacePage({
   const isSegmentEditorPageActive = activeTab === "studio" && studioView === "create" && isScenesCreateMode;
 
   useEffect(() => {
+    if (
+      !shouldGuardScenesCompactEntry ||
+      isGuest ||
+      isUserFacingGeneration ||
+      !isStudioPathname
+    ) {
+      return;
+    }
+
+    const returnTarget =
+      routeStudioState.section === "edit" && routeStudioState.projectId
+        ? "projects"
+        : routeStudioState.section === "create" && routeStudioState.mode === "scenes"
+          ? "idea"
+          : null;
+    if (!returnTarget) {
+      return;
+    }
+
+    scenesCompactWarningContinueRef.current = null;
+    setScenesCompactWarningReturnTarget((currentTarget) => currentTarget ?? returnTarget);
+  }, [
+    isGuest,
+    isStudioPathname,
+    isUserFacingGeneration,
+    routeStudioState.mode,
+    routeStudioState.projectId,
+    routeStudioState.section,
+    shouldGuardScenesCompactEntry,
+  ]);
+
+  useEffect(() => {
     if (typeof document === "undefined") return undefined;
 
     document.body.classList.toggle("segment-editor-open", isSegmentEditorPageActive);
@@ -4326,6 +4455,10 @@ export function WorkspacePage({
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        if (scenesCompactWarningReturnTarget !== null) {
+          handleScenesCompactWarningReturn();
+          return;
+        }
         if (insufficientCreditsContext) {
           closeInsufficientCreditsModal();
           return;
@@ -4397,6 +4530,7 @@ export function WorkspacePage({
     isSegmentEditorVoiceoverPreviewRequiredModalOpen,
     isProjectDeleteSubmitting,
     isMediaLibraryDeleteSubmitting,
+    scenesCompactWarningReturnTarget,
   ]);
 
   useEffect(() => {
@@ -4411,6 +4545,8 @@ export function WorkspacePage({
       setSegmentEditorPendingInfographicDeleteIndex(null);
       setIsSegmentEditorResetConfirmOpen(false);
       setIsSegmentEditorStartFreshConfirmOpen(false);
+      scenesCompactWarningContinueRef.current = null;
+      setScenesCompactWarningReturnTarget(null);
       closeSegmentEditorVoiceoverPreviewRequiredModal();
       closeLocalExampleModal();
       closeSegmentAiPhotoModal();
@@ -11891,6 +12027,10 @@ export function WorkspacePage({
       return;
     }
 
+    if (shouldGuardScenesCompactEntry) {
+      return;
+    }
+
     if (suppressScratchSegmentEditorRouteOpenRef.current) {
       return;
     }
@@ -11911,6 +12051,7 @@ export function WorkspacePage({
     routeStudioState.mode,
     routeStudioState.section,
     session.email,
+    shouldGuardScenesCompactEntry,
   ]);
 
   const isSegmentEditorConsumedSourceProject = useCallback(
@@ -12677,12 +12818,21 @@ export function WorkspacePage({
     await ensureSegmentEditorDraftForProject(projectId, { initialSegmentIndex });
   };
 
-  const handleStudioCreateModeSwitch = async (nextMode: StudioCreateMode) => {
+  const handleStudioCreateModeSwitch = async (nextMode: StudioCreateMode): Promise<void> => {
     if (nextMode === createMode) {
       return;
     }
 
     if (nextMode === "segment-editor" && isScenesCreateModeDisabled) {
+      return;
+    }
+
+    if (
+      nextMode === "segment-editor" &&
+      requestScenesCompactWarning("projects", () => {
+        void handleStudioCreateModeSwitch("segment-editor");
+      })
+    ) {
       return;
     }
 
@@ -12724,13 +12874,21 @@ export function WorkspacePage({
     syncStudioRouteSection("create", { replace: true });
   };
 
-  const handleStudioCreateScenesModeSelect = () => {
+  const handleStudioCreateScenesModeSelect = (): void => {
     if (isScenesCreateModeDisabled) {
       return;
     }
 
     if (isGuest) {
       onAuthRequired?.();
+      return;
+    }
+
+    if (
+      requestScenesCompactWarning("idea", () => {
+        handleStudioCreateScenesModeSelect();
+      })
+    ) {
       return;
     }
 
@@ -12957,6 +13115,10 @@ export function WorkspacePage({
     }
 
     if (isUserFacingGeneration) {
+      return;
+    }
+
+    if (shouldGuardScenesCompactEntry) {
       return;
     }
 
@@ -13257,6 +13419,7 @@ export function WorkspacePage({
     segmentEditorDraft,
     segmentEditorLoadError,
     session.email,
+    shouldGuardScenesCompactEntry,
   ]);
 
   useEffect(() => {
@@ -24753,7 +24916,7 @@ export function WorkspacePage({
     }
   };
 
-  const handleOpenProjectSegmentEditor = async (project: WorkspaceProject) => {
+  const handleOpenProjectSegmentEditor = async (project: WorkspaceProject): Promise<void> => {
     const projectId = project.adId;
     if (!projectId) {
       showStudioToast("Редактор Shorts доступен только для сохранённого проекта.", {
@@ -24765,6 +24928,14 @@ export function WorkspacePage({
 
     if (project.status !== "ready" || !project.videoUrl) {
       showStudioToast(generatedVideoProjectPreparingTitle, { durationMs: 5000, kind: "warning" });
+      return;
+    }
+
+    if (
+      requestScenesCompactWarning("projects", () => {
+        void handleOpenProjectSegmentEditor(project);
+      })
+    ) {
       return;
     }
 
@@ -39918,6 +40089,14 @@ export function WorkspacePage({
           selectedGoal={selectedLocalExampleGoal}
           setSelectedGoal={setSelectedLocalExampleGoal}
           source={localExampleSource}
+        />
+
+        <WorkspaceScenesCompactWarningModal
+          isOpen={scenesCompactWarningReturnTarget !== null}
+          locale={locale}
+          onContinue={handleScenesCompactWarningContinue}
+          onReturn={handleScenesCompactWarningReturn}
+          returnTarget={scenesCompactWarningReturnTarget ?? "idea"}
         />
 
         <WorkspaceSegmentEditorResetConfirmModal

@@ -5,8 +5,10 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   persistDismissedFirstVideoOfferKey,
   persistDismissedStudioWelcomeCard,
+  persistAcceptedStudioScenesCompactWarning,
   persistStudioCreateMode,
   persistStudioCreateSettings,
+  readAcceptedStudioScenesCompactWarning,
   readDismissedFirstVideoOfferKey,
   readDismissedStudioWelcomeCard,
   readStoredStudioCreateMode,
@@ -150,5 +152,30 @@ describe("first video offer dismiss storage", () => {
 
     persistDismissedFirstVideoOfferKey("user@example.test", null);
     expect(readDismissedFirstVideoOfferKey("user@example.test")).toBeNull();
+  });
+});
+
+describe("scenes compact viewport warning storage", () => {
+  beforeEach(() => {
+    originalSessionStorage = Object.getOwnPropertyDescriptor(window, "sessionStorage");
+    Object.defineProperty(window, "sessionStorage", {
+      configurable: true,
+      value: createMemoryStorage(),
+    });
+  });
+
+  afterEach(() => {
+    if (originalSessionStorage) {
+      Object.defineProperty(window, "sessionStorage", originalSessionStorage);
+    }
+  });
+
+  it("accepts the warning only for the current account and browser session", () => {
+    expect(readAcceptedStudioScenesCompactWarning("user@example.test")).toBe(false);
+
+    persistAcceptedStudioScenesCompactWarning(" User@Example.Test ");
+
+    expect(readAcceptedStudioScenesCompactWarning("user@example.test")).toBe(true);
+    expect(readAcceptedStudioScenesCompactWarning("other@example.test")).toBe(false);
   });
 });

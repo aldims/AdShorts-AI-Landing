@@ -22,6 +22,7 @@ import {
   resolveWorkspaceRetainedScenesDraftState,
   resolveWorkspaceScenesModeSwitchTarget,
   shouldDisableWorkspaceScenesCreateMode,
+  shouldShowWorkspaceScenesCompactWarning,
   shouldNotifyStudioGenerationError,
   shouldRedirectWorkspaceScenesModeDuringGeneration,
   shouldRetryWorkspaceSegmentAiVideoStatusFailure,
@@ -290,6 +291,37 @@ describe("studio creation mode switching", () => {
         isGenerationVisible: false,
       }),
     ).toBe(true);
+  });
+
+  it("warns only before the first compact-touch entry into scenes mode", () => {
+    expect(
+      shouldShowWorkspaceScenesCompactWarning({
+        hasAcceptedWarning: false,
+        isCompactTouchViewport: true,
+        isSegmentEditorActive: false,
+      }),
+    ).toBe(true);
+    expect(
+      shouldShowWorkspaceScenesCompactWarning({
+        hasAcceptedWarning: true,
+        isCompactTouchViewport: true,
+        isSegmentEditorActive: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldShowWorkspaceScenesCompactWarning({
+        hasAcceptedWarning: false,
+        isCompactTouchViewport: false,
+        isSegmentEditorActive: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldShowWorkspaceScenesCompactWarning({
+        hasAcceptedWarning: false,
+        isCompactTouchViewport: true,
+        isSegmentEditorActive: true,
+      }),
+    ).toBe(false);
   });
 
   it("restores a detached scenes draft after leaving the editor", () => {

@@ -3,6 +3,8 @@ const STUDIO_FIRST_VIDEO_OFFER_DISMISS_STORAGE_KEY_PREFIX = "adshorts.first-vide
 const STUDIO_MEDIA_LIBRARY_HIDDEN_STORAGE_KEY_PREFIX = "adshorts.media-library-hidden:";
 const STUDIO_CREATE_MODE_STORAGE_KEY_PREFIX = "adshorts.studio-create-mode:";
 const STUDIO_CREATE_SETTINGS_STORAGE_KEY_PREFIX = "adshorts.studio-create-settings:";
+const STUDIO_SCENES_COMPACT_WARNING_ACCEPTED_STORAGE_KEY_PREFIX =
+  "adshorts.studio-scenes-compact-warning-accepted:";
 const STUDIO_WELCOME_CARD_DISMISS_STORAGE_KEY_PREFIX = "adshorts.studio-welcome-card-dismiss:";
 
 export const normalizeWorkspaceEmail = (value: string | null | undefined) => String(value ?? "").trim().toLowerCase();
@@ -13,6 +15,8 @@ const getStudioFirstVideoOfferDismissStorageKey = (email: string) =>
 const getStudioMediaLibraryHiddenStorageKey = (email: string) => `${STUDIO_MEDIA_LIBRARY_HIDDEN_STORAGE_KEY_PREFIX}${email}`;
 const getStudioCreateModeStorageKey = (email: string) => `${STUDIO_CREATE_MODE_STORAGE_KEY_PREFIX}${email}`;
 const getStudioCreateSettingsStorageKey = (email: string) => `${STUDIO_CREATE_SETTINGS_STORAGE_KEY_PREFIX}${email}`;
+const getStudioScenesCompactWarningAcceptedStorageKey = (email: string) =>
+  `${STUDIO_SCENES_COMPACT_WARNING_ACCEPTED_STORAGE_KEY_PREFIX}${email}`;
 const getStudioWelcomeCardDismissStorageOwner = (email: string | null | undefined) =>
   normalizeWorkspaceEmail(email) || "guest";
 const getStudioWelcomeCardDismissStorageKey = (owner: string) =>
@@ -233,6 +237,49 @@ export const persistDismissedFirstVideoOfferKey = (
     }
 
     window.sessionStorage.setItem(storageKey, normalizedDismissKey);
+  } catch {
+    // Ignore storage write errors.
+  }
+};
+
+export const readAcceptedStudioScenesCompactWarning = (
+  email: string | null | undefined,
+) => {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const normalizedEmail = normalizeWorkspaceEmail(email);
+  if (!normalizedEmail) {
+    return false;
+  }
+
+  try {
+    return window.sessionStorage.getItem(
+      getStudioScenesCompactWarningAcceptedStorageKey(normalizedEmail),
+    ) === "1";
+  } catch {
+    return false;
+  }
+};
+
+export const persistAcceptedStudioScenesCompactWarning = (
+  email: string | null | undefined,
+) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const normalizedEmail = normalizeWorkspaceEmail(email);
+  if (!normalizedEmail) {
+    return;
+  }
+
+  try {
+    window.sessionStorage.setItem(
+      getStudioScenesCompactWarningAcceptedStorageKey(normalizedEmail),
+      "1",
+    );
   } catch {
     // Ignore storage write errors.
   }

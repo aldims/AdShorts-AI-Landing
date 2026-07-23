@@ -5,10 +5,55 @@ import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  WorkspaceScenesCompactWarningModal,
   WorkspaceSegmentEditorBulkSceneSoundModal,
   WorkspaceSegmentEditorDeleteConfirmModal,
   WorkspaceSegmentEditorInfographicDeleteConfirmModal,
 } from "./workspace-dialogs";
+
+describe("WorkspaceScenesCompactWarningModal", () => {
+  it("recommends the desktop workflow without blocking phone access", () => {
+    const onContinue = vi.fn();
+    const onReturn = vi.fn();
+
+    render(
+      <WorkspaceScenesCompactWarningModal
+        isOpen
+        locale="ru"
+        onContinue={onContinue}
+        onReturn={onReturn}
+        returnTarget="idea"
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: "Удобнее работать на компьютере" })).toBeTruthy();
+    expect(screen.getByText("Все инструменты помещаются на одном экране")).toBeTruthy();
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "Остаться в режиме «Из идеи»" }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Всё равно открыть" }));
+    expect(onContinue).toHaveBeenCalledOnce();
+    expect(onReturn).not.toHaveBeenCalled();
+  });
+
+  it("returns a direct project editor entry to projects", () => {
+    const onReturn = vi.fn();
+
+    render(
+      <WorkspaceScenesCompactWarningModal
+        isOpen
+        locale="ru"
+        onContinue={() => undefined}
+        onReturn={onReturn}
+        returnTarget="projects"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Вернуться к проектам" }));
+    expect(onReturn).toHaveBeenCalledOnce();
+  });
+});
 
 function SceneDeleteModalHarness() {
   const [isOpen, setIsOpen] = useState(false);
