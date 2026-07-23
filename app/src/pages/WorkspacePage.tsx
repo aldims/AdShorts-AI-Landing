@@ -231,6 +231,7 @@ import {
   getWorkspaceSegmentEditorEffectiveSubtitleSelection,
   getWorkspaceSegmentEditorGenerationRequiredCredits,
   getWorkspaceSegmentEditorDraftId,
+  isWorkspaceSegmentEditorJobTargetDraft,
   isWorkspaceSegmentEditorProjectVoiceSelectionEdited,
   getWorkspaceSegmentEditorReservedSegmentIndexes,
   getWorkspaceSegmentEditorSessionLanguage,
@@ -259,7 +260,6 @@ import {
   getWorkspaceSegmentVideoVisualSourceDurationSeconds,
   getWorkspaceSegmentVisualGenerationDurationSeconds,
   getStudioVoiceOptionCopy,
-  WORKSPACE_SEGMENT_EDITOR_SCRATCH_PROJECT_ID,
   getWorkspaceSegmentVoiceoverAudioPreviewSource,
   getWorkspaceSegmentVoiceoverDurationSeconds,
   getWorkspaceSegmentVoiceSourceDurationSeconds,
@@ -13646,6 +13646,7 @@ export function WorkspacePage({
   };
 
   const attachSegmentEditorJobResult = (options: {
+    allowPersistedProjectDraftIdMismatch?: boolean;
     draftId?: string | null;
     projectId: number;
     segmentIndex: number;
@@ -13664,21 +13665,22 @@ export function WorkspacePage({
   } => {
     const expectedDraftId = String(options.draftId ?? "").trim() || null;
     const matchesJobDraft = (draft: WorkspaceSegmentEditorDraftSession | null | undefined) =>
-      Boolean(
-        draft &&
-        draft.projectId === options.projectId &&
-        (options.projectId !== WORKSPACE_SEGMENT_EDITOR_SCRATCH_PROJECT_ID || expectedDraftId) &&
-        (!expectedDraftId || getWorkspaceSegmentEditorDraftId(draft) === expectedDraftId),
-      );
+      isWorkspaceSegmentEditorJobTargetDraft(draft, {
+        allowPersistedProjectDraftIdMismatch: options.allowPersistedProjectDraftIdMismatch,
+        draftId: expectedDraftId,
+        projectId: options.projectId,
+      });
     const activeDraft = segmentEditorDraftRef.current;
     const detachedDraftState = detachedSegmentEditorDraftRef.current;
     const detachedDraft = detachedDraftState?.draft ?? null;
     const storedDraft = options.projectId === 0
       ? readStoredWorkspaceSegmentEditorScratchDraft(session.email)
       : readStoredWorkspaceSegmentEditorDraft(session.email, options.projectId);
-    const sourceDraft = matchesJobDraft(activeDraft)
+    const matchesActiveDraft = matchesJobDraft(activeDraft);
+    const matchesDetachedDraft = !matchesActiveDraft && matchesJobDraft(detachedDraft);
+    const sourceDraft = matchesActiveDraft
       ? activeDraft
-      : matchesJobDraft(detachedDraft)
+      : matchesDetachedDraft
         ? detachedDraft
         : matchesJobDraft(storedDraft)
           ? storedDraft
@@ -13705,14 +13707,14 @@ export function WorkspacePage({
       sourceDraft,
       restoreProjectTtsForCurrentSegmentEditorDraft(appliedResult.draft),
     );
-    if (matchesJobDraft(activeDraft)) {
+    if (matchesActiveDraft) {
       captureSegmentTimelineVisualChanges(sourceDraft, nextDraft);
       segmentEditorDraftRef.current = nextDraft;
       setSegmentEditorDraft((currentDraft) =>
         matchesJobDraft(currentDraft) ? nextDraft : currentDraft,
       );
     }
-    if (matchesJobDraft(detachedDraft)) {
+    if (matchesDetachedDraft) {
       detachedSegmentEditorDraftRef.current = {
         activeSegmentIndex: detachedDraftState?.activeSegmentIndex ?? 0,
         draft: nextDraft,
@@ -18378,6 +18380,7 @@ export function WorkspacePage({
 
           let hasStaleInputs = false;
           const attachment = attachSegmentEditorJobResult({
+            allowPersistedProjectDraftIdMismatch: true,
             draftId: options.draftId,
             projectId: options.projectId,
             segmentIndex: options.segmentIndex,
@@ -18416,7 +18419,11 @@ export function WorkspacePage({
             },
           });
           if (attachment.status === "draft-unavailable") {
-            return;
+            throw new Error(workspaceText(
+              locale,
+              "Озвучка готова, но активный черновик изменился. Результат будет применён после восстановления черновика.",
+              "The voiceover is ready, but the active draft changed. The result will be applied after the draft is restored.",
+            ));
           }
           if (hasStaleInputs) {
             removeStoredWorkspaceSegmentVoiceoverJob(session.email, safeJobId);
@@ -18424,6 +18431,14 @@ export function WorkspacePage({
               locale,
               "Текст, язык или голос сцены изменились во время генерации. Готовая озвучка не применена.",
               "The scene text, language, or voice changed during generation. The completed voiceover was not applied.",
+            ));
+          }
+          if (attachment.status === "segment-missing") {
+            removeStoredWorkspaceSegmentVoiceoverJob(session.email, safeJobId);
+            throw new Error(workspaceText(
+              locale,
+              "Озвучка готова, но сцена больше не существует.",
+              "The voiceover is ready, but the scene no longer exists.",
             ));
           }
           removeStoredWorkspaceSegmentVoiceoverJob(session.email, safeJobId);
@@ -21771,6 +21786,7 @@ export function WorkspacePage({
 
           let hasStaleInputs = false;
           const attachment = attachSegmentEditorJobResult({
+            allowPersistedProjectDraftIdMismatch: true,
             draftId: options.draftId,
             projectId: options.projectId,
             segmentIndex: segmentStatus.segmentIndex,
@@ -27710,9 +27726,9 @@ export function WorkspacePage({
       }),
     }), WORKSPACE_SEGMENT_EDITOR_VOICE_TEXT_TIMELINE_REBUILD_OPTIONS);
   };
-  const handleSegmentTimelineTextChange = (segmentIndex: number, event: ChangeEvent<HTMLTextAreaElement>) => {
+  const handleSegmentTimelineTextChange = (segmentIndex: number, value: string) => {
     setAdaptedVoiceTextOriginal(null);
-    applySegmentTimelineTextValue(segmentIndex, event.target.value);
+    applySegmentTimelineTextValue(segmentIndex, value);
   };
   const handleSegmentTimelineVoiceTextAdapt = async () => {
     const segment = segmentTimelineVoiceMenuSegment;

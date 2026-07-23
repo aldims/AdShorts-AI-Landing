@@ -4,6 +4,7 @@ import type {
   ReactNode,
   RefObject,
 } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS } from "../../../shared/studio-credit-costs";
 import type { Locale } from "../../lib/i18n";
@@ -536,7 +537,7 @@ type WorkspaceSegmentTimelineVoiceMenuProps = {
   onAdaptTextToVisual: () => void;
   onRestoreAdaptedText: () => void;
   onLanguageSelect: (segmentIndex: number, language: StudioLanguage) => void;
-  onTextChange: (segmentIndex: number, event: ChangeEvent<HTMLTextAreaElement>) => void;
+  onTextChange: (segmentIndex: number, value: string) => void;
   onUseGlobalVoice: (segmentIndex: number) => void;
   onVoicePreview: (voice: StudioVoiceOption) => void | Promise<void>;
   onVoiceSelect: (segmentIndex: number, voiceId: StudioVoiceOption["id"]) => void;
@@ -591,6 +592,12 @@ export function WorkspaceSegmentTimelineVoiceMenu({
   visualAudioWarningText,
   voiceOptions,
 }: WorkspaceSegmentTimelineVoiceMenuProps) {
+  const [textValue, setTextValue] = useState(segment?.text ?? "");
+
+  useEffect(() => {
+    setTextValue(segment?.text ?? "");
+  }, [segment?.index, segment?.text]);
+
   if (!segment || !style || typeof document === "undefined") {
     return null;
   }
@@ -772,16 +779,20 @@ export function WorkspaceSegmentTimelineVoiceMenu({
               <span>{workspaceText(locale, "Вернуть исходный текст", "Restore original text")}</span>
             </button>
           ) : null}
-          <small>{workspaceText(locale, `Сцена ${segmentArrayIndex + 1} · ${segment.text.length}/${STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS}`, `Scene ${segmentArrayIndex + 1} · ${segment.text.length}/${STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS}`)}</small>
+          <small>{workspaceText(locale, `Сцена ${segmentArrayIndex + 1} · ${textValue.length}/${STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS}`, `Scene ${segmentArrayIndex + 1} · ${textValue.length}/${STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS}`)}</small>
         </div>
         <textarea
           id={textAreaId}
           className="studio-voice-selector__bulk-textarea studio-segment-editor__timeline-voice-textarea"
-          value={segment.text}
+          value={textValue}
           rows={5}
           maxLength={STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS}
           placeholder={workspaceText(locale, "Введите текст для этой сцены", "Enter text for this scene")}
-          onChange={(event) => onTextChange(segment.index, event)}
+          onChange={(event) => {
+            const nextValue = event.currentTarget.value.slice(0, STUDIO_SEGMENT_VOICEOVER_MAX_TEXT_CHARS);
+            setTextValue(nextValue);
+            onTextChange(segment.index, nextValue);
+          }}
           onKeyDown={(event) => {
             if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
               event.preventDefault();

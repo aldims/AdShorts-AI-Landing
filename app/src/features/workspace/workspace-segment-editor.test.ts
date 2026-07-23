@@ -53,6 +53,7 @@ import {
   clearWorkspaceSegmentEditorVoiceoverGenerationState,
   ensureWorkspaceSegmentEditorDraftId,
   getWorkspaceSegmentEditorDraftId,
+  isWorkspaceSegmentEditorJobTargetDraft,
   normalizeLegacyWorkspaceSegmentEditorDraftSession,
   rebuildWorkspaceSegmentEditorDraftSessionTimeline,
   repairWorkspaceSegmentEditorSpeechWordBoundaries,
@@ -409,6 +410,49 @@ describe("workspace segment editor draft identity", () => {
     expect(draft.draftId).toMatch(/^scratch:/);
     expect(getWorkspaceSegmentEditorDraftId(draft)).toBe(draft.draftId);
     expect(ensureWorkspaceSegmentEditorDraftId(draft)).toBe(draft);
+  });
+
+  it("matches completed jobs to a persisted project even if its transient draft id changed", () => {
+    const draft = {
+      ...createProjectVoiceoverDraft([createProjectVoiceoverSegment()]),
+      draftId: "scratch:promoted-before-save",
+    };
+
+    expect(
+      isWorkspaceSegmentEditorJobTargetDraft(draft, {
+        allowPersistedProjectDraftIdMismatch: true,
+        draftId: "project:77",
+        projectId: 77,
+      }),
+    ).toBe(true);
+    expect(
+      isWorkspaceSegmentEditorJobTargetDraft(draft, {
+        draftId: "project:77",
+        projectId: 77,
+      }),
+    ).toBe(false);
+    expect(
+      isWorkspaceSegmentEditorJobTargetDraft(draft, {
+        projectId: 77,
+      }),
+    ).toBe(true);
+  });
+
+  it("keeps scratch job results isolated by their unique draft id", () => {
+    const draft = createWorkspaceSegmentEditorScratchDraftSession();
+
+    expect(
+      isWorkspaceSegmentEditorJobTargetDraft(draft, {
+        draftId: draft.draftId,
+        projectId: 0,
+      }),
+    ).toBe(true);
+    expect(
+      isWorkspaceSegmentEditorJobTargetDraft(draft, {
+        draftId: "scratch:another-draft",
+        projectId: 0,
+      }),
+    ).toBe(false);
   });
 });
 

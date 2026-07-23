@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -116,6 +116,40 @@ describe("WorkspaceSegmentTimelineVoiceMenu", () => {
     const textarea = screen.getByRole("textbox", { name: "Текст озвучки" }) as HTMLTextAreaElement;
     expect(textarea.maxLength).toBe(200);
     expect(screen.getByText("Сцена 1 · 11/200")).toBeTruthy();
+  });
+
+  it("keeps the in-progress text and caret while the timeline draft catches up", () => {
+    const onTextChange = vi.fn();
+    const { rerender } = render(
+      <WorkspaceSegmentTimelineVoiceMenu
+        {...baseProps}
+        onTextChange={onTextChange}
+      />,
+    );
+    const textarea = screen.getByRole("textbox", { name: "Текст озвучки" }) as HTMLTextAreaElement;
+    const nextText = "Текст новой сцены";
+
+    fireEvent.change(textarea, {
+      target: {
+        selectionEnd: 10,
+        selectionStart: 10,
+        value: nextText,
+      },
+    });
+    textarea.setSelectionRange(10, 10);
+
+    rerender(
+      <WorkspaceSegmentTimelineVoiceMenu
+        {...baseProps}
+        generateLabel="Обновлённая кнопка"
+        onTextChange={onTextChange}
+      />,
+    );
+
+    expect(textarea.value).toBe(nextText);
+    expect(textarea.selectionStart).toBe(10);
+    expect(textarea.selectionEnd).toBe(10);
+    expect(onTextChange).toHaveBeenCalledWith(0, nextText);
   });
 
   it("offers AI text adaptation when voiceover is longer than the visual", () => {

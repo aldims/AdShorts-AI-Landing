@@ -8506,6 +8506,33 @@ export const getWorkspaceSegmentEditorDraftId = (
   return Number.isInteger(projectId) && projectId > 0 ? `project:${projectId}` : null;
 };
 
+export const isWorkspaceSegmentEditorJobTargetDraft = (
+  session: Pick<WorkspaceSegmentEditorDraftSession, "draftId" | "projectId"> | null | undefined,
+  target: {
+    allowPersistedProjectDraftIdMismatch?: boolean;
+    draftId?: string | null;
+    projectId: number;
+  },
+) => {
+  if (!session || session.projectId !== target.projectId) {
+    return false;
+  }
+
+  const targetDraftId = String(target.draftId ?? "").trim();
+  if (
+    target.projectId !== WORKSPACE_SEGMENT_EDITOR_SCRATCH_PROJECT_ID &&
+    target.allowPersistedProjectDraftIdMismatch
+  ) {
+    return true;
+  }
+
+  if (!targetDraftId) {
+    return target.projectId !== WORKSPACE_SEGMENT_EDITOR_SCRATCH_PROJECT_ID;
+  }
+
+  return getWorkspaceSegmentEditorDraftId(session) === targetDraftId;
+};
+
 export const ensureWorkspaceSegmentEditorDraftId = (
   session: WorkspaceSegmentEditorDraftSession,
 ): WorkspaceSegmentEditorDraftSession => {
