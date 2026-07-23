@@ -608,3 +608,191 @@
     height: auto !important;
   }
 }
+
+/*
+ * The 862px reference canvas is reduced to roughly 83.5% at 1280 × 720.
+ * Restore the apparent UI type size on this short-desktop profile and keep
+ * timeline symbols in one shared leading column. Creative subtitle styling is
+ * deliberately excluded because its size belongs to the video design itself.
+ */
+@media (min-width: 1181px) and (max-height: 760px) and (orientation: landscape) {
+  #app .studio-canvas-route.is-segment-editor .site-header--workspace .brand span {
+    font-size: 1.032rem !important;
+  }
+
+  #app
+    .studio-canvas-route.is-segment-editor
+    .site-header--workspace
+    .studio-create-mode-switch__btn {
+    font-size: 0.96rem !important;
+  }
+
+  #app
+    .studio-canvas-route.is-segment-editor
+    .site-header--workspace
+    .site-nav--studio-tabs {
+    width: 458px !important;
+    max-width: 458px !important;
+  }
+
+  #app
+    .studio-canvas-route.is-segment-editor
+    .site-header--workspace
+    .site-nav--studio-tabs
+    .site-nav__content
+    > .site-nav__item {
+    font-size: 1.08rem !important;
+  }
+
+  #app
+    .studio-canvas-route.is-segment-editor
+    .site-header--workspace
+    .site-nav__studio-count {
+    font-size: 0.708rem !important;
+  }
+
+  #app .studio-canvas-route.is-segment-editor .site-header--workspace
+    :is(.language-switcher__trigger, .site-header__billing, .site-header__account) {
+    font-size: 0.96rem !important;
+  }
+
+  #app
+    .studio-canvas-route.is-segment-editor
+    .site-header--workspace
+    .site-header__billing
+    strong {
+    font-size: 0.84rem !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__card-visual-status {
+    font-size: 0.744rem !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__card-copy strong {
+    font-size: 0.936rem !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__card-copy span {
+    font-size: 0.696rem !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__card-badge {
+    font-size: 0.744rem !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__brand-add {
+    font-size: 0.84rem !important;
+  }
+
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__timeline-submit-row
+    :is(.studio-segment-editor__timeline-preview-controls, .studio-segment-editor__timeline-preview-toggle) {
+    font-size: 0.936rem !important;
+  }
+
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__timeline-submit-row
+    .studio-segment-editor__prompt-submit {
+    font-size: clamp(0.984rem, 1.08vw, 1.152rem) !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-label {
+    font-size: 0.864rem !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-tick,
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-timecode {
+    font-size: 0.744rem !important;
+  }
+
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__timeline-row:not(.studio-segment-editor__timeline-row--visual)
+    .studio-segment-editor__timeline-cell-copy {
+    display: flex !important;
+    align-items: center !important;
+    align-content: center !important;
+    gap: 6px !important;
+    height: 100% !important;
+  }
+
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__timeline-row:not(.studio-segment-editor__timeline-row--visual)
+    .studio-segment-editor__timeline-cell-copy
+    strong {
+    flex: 0 1 auto;
+    font-size: 0.744rem !important;
+    line-height: 1 !important;
+  }
+
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__timeline-row:not(.studio-segment-editor__timeline-row--visual)
+    .studio-segment-editor__timeline-cell-copy
+    small {
+    flex: 1 1 auto;
+    font-size: 0.624rem !important;
+    line-height: 1 !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-play {
+    left: 8px !important;
+    width: 30px !important;
+    min-width: 30px !important;
+    height: 30px !important;
+    min-height: 30px !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-cell--has-play,
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__timeline-cell--has-play.studio-segment-editor__timeline-cell--has-history {
+    padding-left: 46px !important;
+  }
+
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__timeline-row--text
+    .studio-segment-editor__timeline-subtitle-value {
+    display: grid !important;
+    grid-template-columns: 30px minmax(0, 1fr);
+    align-items: center !important;
+    gap: 8px !important;
+    width: 100%;
+    max-width: none;
+  }
+
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__timeline-row--text
+    .studio-segment-editor__timeline-subtitle-swatch {
+    justify-self: center;
+    width: 11px !important;
+    height: 11px !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-scene-number {
+    font-size: 0.84rem !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-duration-badge {
+    font-size: 0.696rem !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-status {
+    font-size: 0.648rem !important;
+  }
+
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__timeline-cell.is-edited:not(.studio-segment-editor__timeline-cell--visual)::after {
+    font-size: 0.624rem !important;
+  }
+
+  #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-playhead-bubble {
+    font-size: 0.696rem !important;
+  }
+}
