@@ -69,17 +69,12 @@
     min-height: 0 !important;
     height: 100% !important;
     max-height: 100% !important;
-    overflow: hidden !important;
+    overflow: visible !important;
   }
 
-  /* These two nested workspaces must never become programmatic scroll
-   * containers. A focused timeline control could scroll both `overflow:
-   * hidden` ancestors and shift the complete editor upward without moving
-   * the document. `clip` preserves the intended crop without a scrollport. */
-  #app .studio-canvas-main.is-segment-editor .studio-canvas-preview.is-segment-editor,
-  #app .studio-canvas-main.is-segment-editor .studio-segment-editor {
-    overflow: clip !important;
-  }
+  /* The shell is the single clipping boundary and already reserves the 30px
+   * bottom inset. These intermediate boxes are 10px shorter than the layout,
+   * so clipping any of them cuts the timeline frame and its bottom shadow. */
 
   #app .studio-canvas-main.is-segment-editor .studio-canvas-create.is-segment-editor {
     padding-bottom: 0 !important;
@@ -139,7 +134,7 @@
     align-items: stretch !important;
     align-content: stretch !important;
     padding: 0 !important;
-    overflow: hidden !important;
+    overflow: visible !important;
   }
 
   #app
@@ -489,7 +484,7 @@
           var(--studio-segment-editor-timeline-add-rail-width)
       )
       clamp(4px, 0.93cqh, 8px) clamp(4px, 1.16cqh, 10px) !important;
-    border-radius: clamp(12px, 2.1cqh, 18px) !important;
+    border-radius: 26px !important;
     overflow: hidden !important;
   }
 
