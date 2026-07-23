@@ -2396,17 +2396,7 @@
 }
 
 /* Subtitle swatch chip in the text row */
-.studio-canvas-main.is-segment-editor
-  .studio-segment-editor__timeline-row--text
-  .studio-segment-editor__timeline-cell-copy {
-  position: static;
-}
-
 .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-subtitle-swatch {
-  position: absolute;
-  left: 16px;
-  top: 50%;
-  transform: translateY(-50%);
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.18),
     0 0 10px -2px rgba(150, 110, 255, 0.5);
@@ -2599,10 +2589,6 @@
 
   .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-timecode-boundary--end {
     margin-right: -4px !important;
-  }
-
-  .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-subtitle-swatch {
-    left: 12px;
   }
 }
 
