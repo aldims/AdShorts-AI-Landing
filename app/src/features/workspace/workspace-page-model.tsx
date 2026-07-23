@@ -225,14 +225,14 @@ export const shouldDisableWorkspaceScenesCreateMode = (options: {
 }) => options.isEditHidden || options.isGenerationVisible;
 
 export const WORKSPACE_SCENES_COMPACT_VIEWPORT_MEDIA_QUERY =
-  "(pointer: coarse) and (max-width: 640px), (pointer: coarse) and (max-height: 500px)";
+  "(max-width: 640px), (max-height: 500px)";
 
 export const shouldShowWorkspaceScenesCompactWarning = (options: {
   hasAcceptedWarning: boolean;
-  isCompactTouchViewport: boolean;
+  isCompactViewport: boolean;
   isSegmentEditorActive: boolean;
 }) =>
-  options.isCompactTouchViewport &&
+  options.isCompactViewport &&
   !options.hasAcceptedWarning &&
   !options.isSegmentEditorActive;
 

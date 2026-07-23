@@ -1977,7 +1977,7 @@ export function WorkspacePage({
   const [hasAcceptedScenesCompactWarning, setHasAcceptedScenesCompactWarning] = useState(() =>
     readAcceptedStudioScenesCompactWarning(session.email),
   );
-  const [isScenesCompactTouchViewport, setIsScenesCompactTouchViewport] = useState(() =>
+  const [isScenesCompactViewport, setIsScenesCompactViewport] = useState(() =>
     typeof window !== "undefined" && typeof window.matchMedia === "function"
       ? window.matchMedia(WORKSPACE_SCENES_COMPACT_VIEWPORT_MEDIA_QUERY).matches
       : false,
@@ -1992,7 +1992,7 @@ export function WorkspacePage({
   const [isStudioIdeaPromptImproving, setIsStudioIdeaPromptImproving] = useState(false);
   const shouldGuardScenesCompactEntry = shouldShowWorkspaceScenesCompactWarning({
     hasAcceptedWarning: hasAcceptedScenesCompactWarning,
-    isCompactTouchViewport: isScenesCompactTouchViewport,
+    isCompactViewport: isScenesCompactViewport,
     isSegmentEditorActive: createMode === "segment-editor",
   });
 
@@ -2003,7 +2003,7 @@ export function WorkspacePage({
 
     const compactViewportQuery = window.matchMedia(WORKSPACE_SCENES_COMPACT_VIEWPORT_MEDIA_QUERY);
     const syncCompactViewport = () => {
-      setIsScenesCompactTouchViewport(compactViewportQuery.matches);
+      setIsScenesCompactViewport(compactViewportQuery.matches);
     };
 
     syncCompactViewport();

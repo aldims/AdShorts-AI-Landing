@@ -34,6 +34,7 @@ import {
   shouldUseWorkspaceStudioExpandedPromptLayout,
   shouldShowWorkspaceStartFreshScenesAction,
   shouldShowWorkspaceSegmentEditorFullPreviewBusyIndicator,
+  WORKSPACE_SCENES_COMPACT_VIEWPORT_MEDIA_QUERY,
   type WorkspacePublishBootstrapPayload,
 } from "./workspace-page-model";
 
@@ -293,32 +294,35 @@ describe("studio creation mode switching", () => {
     ).toBe(true);
   });
 
-  it("warns only before the first compact-touch entry into scenes mode", () => {
+  it("warns before the first compact viewport entry regardless of pointer type", () => {
+    expect(WORKSPACE_SCENES_COMPACT_VIEWPORT_MEDIA_QUERY).toBe(
+      "(max-width: 640px), (max-height: 500px)",
+    );
     expect(
       shouldShowWorkspaceScenesCompactWarning({
         hasAcceptedWarning: false,
-        isCompactTouchViewport: true,
+        isCompactViewport: true,
         isSegmentEditorActive: false,
       }),
     ).toBe(true);
     expect(
       shouldShowWorkspaceScenesCompactWarning({
         hasAcceptedWarning: true,
-        isCompactTouchViewport: true,
+        isCompactViewport: true,
         isSegmentEditorActive: false,
       }),
     ).toBe(false);
     expect(
       shouldShowWorkspaceScenesCompactWarning({
         hasAcceptedWarning: false,
-        isCompactTouchViewport: false,
+        isCompactViewport: false,
         isSegmentEditorActive: false,
       }),
     ).toBe(false);
     expect(
       shouldShowWorkspaceScenesCompactWarning({
         hasAcceptedWarning: false,
-        isCompactTouchViewport: true,
+        isCompactViewport: true,
         isSegmentEditorActive: true,
       }),
     ).toBe(false);
