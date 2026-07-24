@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { LocaleProvider } from "../../lib/i18n";
 import { WorkspaceProjectCard } from "./workspace-project-cards";
+import { formatProjectDate } from "./workspace-publish-helpers";
 import type { WorkspaceProject } from "./workspace-types";
 import { WorkspaceProjectPage } from "./workspace-project-page";
 
@@ -157,7 +158,11 @@ describe("WorkspaceProjectPage", () => {
       "/api/workspace/projects/42/segment-editor",
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
-    expect(screen.getByText("Обновлено")).toBeTruthy();
+    const activity = screen.getByText("Активность").closest("section");
+    expect(activity).toBeTruthy();
+    expect(within(activity as HTMLElement).getByText("Создано")).toBeTruthy();
+    expect(within(activity as HTMLElement).getByText(formatProjectDate(readyProject.createdAt, "ru"))).toBeTruthy();
+    expect(within(activity as HTMLElement).queryByText(formatProjectDate(readyProject.updatedAt, "ru"))).toBeNull();
     expect(screen.getByText("Публикация")).toBeTruthy();
     expect(screen.queryByText("Короткое описание ролика")).toBeNull();
     expect(screen.queryByText("#shorts")).toBeNull();

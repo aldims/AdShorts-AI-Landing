@@ -230,7 +230,7 @@ export function WorkspaceProjectPage({
     );
   }
 
-  const updateLabel = formatProjectDate(project.updatedAt || project.generatedAt || project.createdAt, locale);
+  const createdLabel = formatProjectDate(project.createdAt, locale);
   const statusLabel =
     project.status === "ready"
       ? workspaceText(locale, "Готово", "Ready")
@@ -500,8 +500,8 @@ export function WorkspaceProjectPage({
             </div>
             <div className="studio-project-page__dates">
               <div>
-                <span>{workspaceText(locale, "Обновлено", "Updated")}</span>
-                <strong>{updateLabel}</strong>
+                <span>{workspaceText(locale, "Создано", "Created")}</span>
+                <strong>{createdLabel}</strong>
               </div>
               <div>
                 <span>{workspaceText(locale, "Публикация", "Publication")}</span>
