@@ -253,7 +253,7 @@ export function PrimarySiteNav({
               type="button"
               onClick={() => handleStudioSectionSelect(item.id)}
             >
-              <span>{item.label}</span>
+              <span title={studioSectionLabels?.[item.id]}>{studioSectionLabels?.[item.id] ?? item.label}</span>
               {item.id === "projects" && projectsCount > 0 ? <span className="site-nav__studio-count">{projectsCount}</span> : null}
             </button>
           ))}

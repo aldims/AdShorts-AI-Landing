@@ -667,10 +667,8 @@ import {
   openWorkspaceProjectEditorAfterSuccessfulLoad,
   isWorkspaceSegmentEditorPreparingError,
   isStudioGenerationUserFacing,
-  resolveWorkspaceLatestStoredScenesDraft,
   resolveWorkspaceStudioCreateModeDuringGeneration,
-  resolveWorkspaceRetainedScenesDraftState,
-  resolveWorkspaceScenesModeSwitchTarget,
+  shouldRestoreWorkspaceBootstrapGenerationPreview,
   shouldDisableWorkspaceScenesCreateMode,
   shouldShowWorkspaceScenesCompactWarning,
   shouldNotifyStudioGenerationError,
@@ -1983,7 +1981,6 @@ export function WorkspacePage({
     return "default";
   });
   const [createMode, setCreateMode] = useState<StudioCreateMode>("default");
-  const lastStudioCreateModeRef = useRef<StudioCreateMode>(initialStudioCreateMode);
   const [hasAcceptedScenesCompactWarning, setHasAcceptedScenesCompactWarning] = useState(() =>
     readAcceptedStudioScenesCompactWarning(session.email),
   );
@@ -2190,7 +2187,6 @@ export function WorkspacePage({
   const studioCreateRestoreRouteKeyRef = useRef<string | null>(null);
 
   const rememberStudioCreateMode = (mode: StudioCreateMode) => {
-    lastStudioCreateModeRef.current = mode;
     persistStudioCreateMode(session.email, mode);
   };
 
@@ -8523,12 +8519,24 @@ export function WorkspacePage({
         : createMode === "segment-editor" && !isScratchSegmentEditorDraft
           ? "edit"
           : "create";
-  const studioNavSectionLabels =
-    createMode === "segment-editor" && !isScratchSegmentEditorDraft
-      ? {
-          create: "Редактор Shorts",
-        }
-      : undefined;
+  const segmentEditorProjectContextTitle =
+    createMode === "segment-editor" && segmentEditorDraft && !isScratchSegmentEditorDraft
+      ? segmentEditorDraft.title.trim() ||
+        workspaceText(
+          locale,
+          `Проект #${segmentEditorDraft.projectId}`,
+          `Project #${segmentEditorDraft.projectId}`,
+        )
+      : null;
+  const studioNavSectionLabels = segmentEditorProjectContextTitle
+    ? {
+        create: workspaceText(
+          locale,
+          `Редактор · ${segmentEditorProjectContextTitle}`,
+          `Editor · ${segmentEditorProjectContextTitle}`,
+        ),
+      }
+    : undefined;
   const shouldShowStudioSidebar = false;
   const studioSidebarSubtitleSelection = getWorkspaceSegmentEditorEffectiveSubtitleSelection(segmentEditorDraft, {
     subtitleColorId: selectedSubtitleColorId,
@@ -11869,25 +11877,6 @@ export function WorkspacePage({
     detachedSegmentEditorDraftRef.current = null;
   };
 
-  const getRetainedSegmentEditorDraftState = () => {
-    const storedDraft = resolveWorkspaceLatestStoredScenesDraft([
-      readStoredWorkspaceSegmentEditorScratchDraft(session.email),
-      ...readStoredWorkspaceSegmentEditorDrafts(session.email),
-    ]);
-
-    return resolveWorkspaceRetainedScenesDraftState(
-      segmentEditorDraftRef.current ?? segmentEditorDraft,
-      activeSegmentIndex,
-      detachedSegmentEditorDraftRef.current,
-      storedDraft
-        ? {
-            activeSegmentIndex: 0,
-            draft: storedDraft,
-          }
-        : null,
-    );
-  };
-
   const cancelPendingSegmentEditorLoad = (reason = "segment-editor-hidden") => {
     const controller = segmentEditorRequestAbortRef.current;
     if (!controller) {
@@ -12090,7 +12079,11 @@ export function WorkspacePage({
       return;
     }
 
-    openScratchSegmentEditor({ replaceRoute: true });
+    openScratchSegmentEditor({
+      emptyDescription: true,
+      forceFreshDraft: true,
+      replaceRoute: true,
+    });
   }, [
     createMode,
     generatedMediaLibraryEntries,
@@ -12941,54 +12934,14 @@ export function WorkspacePage({
       return;
     }
 
-    suppressScratchSegmentEditorRouteOpenRef.current = false;
-    const currentScenesDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
-    const retainedScenesDraftState = getRetainedSegmentEditorDraftState();
-    const retainedScenesDraft = retainedScenesDraftState?.draft ?? null;
-    const target = resolveWorkspaceScenesModeSwitchTarget({
-      hasDisplayedGeneratedProject: Boolean(studioInlinePreview?.video.adId),
-      hasRetainedScenesDraft: Boolean(retainedScenesDraft),
-      isIdeaEmptyStateVisible: shouldShowStudioIdeaEmptyState,
-      isSegmentEditorActive: createMode === "segment-editor",
-      latestProjectId: studioInlinePreview?.video.adId,
-      latestProjectUpdatedAt: studioInlinePreview?.video.generatedAt,
-      retainedDraftProjectId: retainedScenesDraft?.projectId,
-      retainedDraftUpdatedAt: retainedScenesDraft?.clientUpdatedAt,
-    });
-
-    if (target === "project" && !isGeneratedVideoProjectReadyForEditing) {
-      setSegmentEditorLoadError(generatedVideoScenesUnavailableTitle);
-      showStudioToast(generatedVideoScenesUnavailableTitle, { durationMs: 6000, kind: "warning" });
-      return;
-    }
-
     rememberStudioCreateMode("segment-editor");
-    if (target === "current") {
-      if (!currentScenesDraft && retainedScenesDraftState) {
-        const restoredArrayIndex = Math.max(
-          0,
-          Math.min(
-            retainedScenesDraftState.activeSegmentIndex,
-            Math.max(0, retainedScenesDraftState.draft.segments.length - 1),
-          ),
-        );
-        openSegmentEditorWithDraft(retainedScenesDraftState.draft, {
-          initialSegmentIndex: restoredArrayIndex,
-          initialSegmentMode: "array",
-        });
-        syncSegmentEditorRouteForArrayIndex(retainedScenesDraftState.draft, restoredArrayIndex, { replace: true });
-      } else if (createMode !== "segment-editor") {
-        void handleStudioCreateModeSwitch("segment-editor");
-      }
-      return;
-    }
-    if (target === "project") {
-      void handleOpenSegmentEditor();
-      return;
-    }
-    if (segmentEditorDraft && !isWorkspaceSegmentEditorScratchDraft(segmentEditorDraft)) {
+    suppressProjectFallbackPreviewRef.current = true;
+    suppressScratchSegmentEditorRouteOpenRef.current = false;
+    if (segmentEditorDraftRef.current ?? segmentEditorDraft) {
       stashCurrentSegmentEditorDraft();
     }
+    clearDetachedSegmentEditorDraft();
+    setGeneratedVideo(null);
     openScratchSegmentEditor({ emptyDescription: true, forceFreshDraft: true, replaceRoute: true });
   };
 
@@ -13076,79 +13029,37 @@ export function WorkspacePage({
       return;
     }
 
-    if (lastStudioCreateModeRef.current === "segment-editor") {
-      const currentScenesDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
-      const retainedScenesDraftState = getRetainedSegmentEditorDraftState();
-      const retainedScenesDraft = retainedScenesDraftState?.draft ?? null;
-      const target = resolveWorkspaceScenesModeSwitchTarget({
-        hasDisplayedGeneratedProject: Boolean(studioInlinePreview?.video.adId),
-        hasRetainedScenesDraft: Boolean(retainedScenesDraft),
-        isSegmentEditorActive: createMode === "segment-editor",
-        latestProjectId: studioInlinePreview?.video.adId,
-        latestProjectUpdatedAt: studioInlinePreview?.video.generatedAt,
-        retainedDraftProjectId: retainedScenesDraft?.projectId,
-        retainedDraftUpdatedAt: retainedScenesDraft?.clientUpdatedAt,
-      });
-      if (target === "current" && retainedScenesDraftState) {
-        const retainedScenesDraft = retainedScenesDraftState.draft;
-        const restoredArrayIndex = Math.max(
-          0,
-          Math.min(
-            retainedScenesDraftState.activeSegmentIndex,
-            Math.max(0, retainedScenesDraft.segments.length - 1),
-          ),
-        );
-        setStudioView("create");
-        if (currentScenesDraft) {
-          setCreateMode("segment-editor");
-        } else {
-          openSegmentEditorWithDraft(retainedScenesDraft, {
-            initialSegmentIndex: restoredArrayIndex,
-            initialSegmentMode: "array",
-          });
-        }
-        syncSegmentEditorRouteForArrayIndex(retainedScenesDraft, restoredArrayIndex, { replace: true });
-        return;
-      }
-
-      if (target === "project") {
-        setStudioView("create");
-        void handleOpenSegmentEditor();
-        return;
-      }
-
-      markPendingStudioRouteSection("create");
-      cancelPendingSegmentEditorLoad();
-      closeSegmentAiPhotoModal({ immediate: true });
-      resetSegmentEditorPreviewPlaybackState({ clearRefs: true });
-      setSegmentEditorVideoError(null);
-      setActiveSegmentIndex(0);
-      openScratchSegmentEditor({ replaceRoute: false });
-      return;
-    }
-
-    const shouldRestoreGeneratedVideoActions = createMode === "segment-editor" || Boolean(segmentEditorDraft);
-
     markPendingStudioRouteSection("create");
+    suppressProjectFallbackPreviewRef.current = true;
     flushSync(() => {
       cancelPendingSegmentEditorLoad();
       stashCurrentSegmentEditorDraft();
+      clearDetachedSegmentEditorDraft();
       segmentEditorRouteRestoreKeyRef.current = null;
       segmentEditorHandledRouteRestoreKeyRef.current = null;
       segmentEditorFreshRouteFetchKeyRef.current = null;
       segmentEditorFreshRouteAttemptedKeyRef.current = null;
-      if (shouldRestoreGeneratedVideoActions && generatedVideo) {
-        setGeneratedVideoActionMode("expanded");
-        updateDismissedStudioPreviewKey(null);
-      }
       closeSegmentAiPhotoModal({ immediate: true });
       resetSegmentEditorPreviewPlaybackState({ clearRefs: true });
+      segmentEditorDraftRef.current = null;
       setSegmentEditorDraft(null);
+      setSegmentEditorLoadedSession(null);
+      setSegmentEditorAppliedSession(null);
+      setSegmentEditorError(null);
+      setSegmentEditorLoadError(null);
       setSegmentEditorVideoError(null);
       setCreateMode("default");
+      rememberStudioCreateMode("default");
       restoreStoredStudioCreateSettings();
       setStudioView("create");
       setActiveSegmentIndex(0);
+      setGeneratedVideo(null);
+      clearStudioPromptInput();
+      setGenerateError(null);
+      setActiveProjectPreviewId(null);
+      setIsPreviewModalOpen(false);
+      setProjectPreviewModal(null);
+      updateDismissedStudioPreviewKey(null);
     });
     syncStudioRouteSection("create");
   };
@@ -26217,23 +26128,7 @@ export function WorkspacePage({
   };
 
   const handleCreateNewShorts = () => {
-    markPendingStudioRouteSection("create");
-    suppressProjectFallbackPreviewRef.current = true;
-    flushSync(() => {
-      cancelPendingSegmentEditorLoad();
-      restoreStoredStudioCreateSettings();
-      setActiveTab("studio");
-      setStudioView("create");
-      setCreateMode("default");
-      setGeneratedVideo(null);
-      setTopicInput("");
-      setGenerateError(null);
-      setActiveProjectPreviewId(null);
-      setIsPreviewModalOpen(false);
-      setProjectPreviewModal(null);
-      updateDismissedStudioPreviewKey(null);
-    });
-    syncStudioRouteSection("create");
+    handleStudioTopMenuSelect("create");
   };
 
   const handleOpenProjectPage = (project: WorkspaceProject) => {
@@ -26457,13 +26352,10 @@ export function WorkspacePage({
           ? resolveStudioGenerationErrorMessage(latestGeneration.error)
           : null;
 
-        if (latestGeneration.generation) {
-          suppressProjectFallbackPreviewRef.current = false;
-          setGeneratedVideo(latestGeneration.generation);
-          setGenerateError(latestGenerationError);
-        }
-
         if (latestGeneration.status === "done" && latestGeneration.generation) {
+          suppressProjectFallbackPreviewRef.current = true;
+          setGeneratedVideo(null);
+          setGenerateError(null);
           setStatus("");
           setIsGenerating(false);
           setGenerationUiSource("idle");
@@ -26471,12 +26363,22 @@ export function WorkspacePage({
         }
 
         if (latestGeneration.status === "done") {
-          suppressProjectFallbackPreviewRef.current = false;
+          suppressProjectFallbackPreviewRef.current = true;
+          setGeneratedVideo(null);
           setGenerateError(null);
           setStatus("");
           setIsGenerating(false);
           setGenerationUiSource("idle");
           return;
+        }
+
+        if (
+          latestGeneration.generation &&
+          shouldRestoreWorkspaceBootstrapGenerationPreview(latestGeneration.status)
+        ) {
+          suppressProjectFallbackPreviewRef.current = false;
+          setGeneratedVideo(latestGeneration.generation);
+          setGenerateError(latestGenerationError);
         }
 
         if (latestGeneration.status === "failed") {

@@ -54,6 +54,21 @@ describe("PrimarySiteNav", () => {
     expect(screen.queryByRole("link", { name: "Тарифы" })).toBeNull();
   });
 
+  it("shows the selected project name in the editor navigation context", () => {
+    renderPrimarySiteNav(
+      <PrimarySiteNav
+        activeItem="studio"
+        activeStudioSection="edit"
+        onOpenStudio={() => undefined}
+        onOpenStudioSection={() => undefined}
+        showStudioPricingLink={false}
+        studioSectionLabels={{ create: "Редактор · Сильный хук за 30 секунд" }}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Редактор · Сильный хук за 30 секунд" })).toBeTruthy();
+  });
+
   it("opens studio directly without expanding the intermediate menu", () => {
     const handleOpenStudioSection = vi.fn();
 

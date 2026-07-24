@@ -219,6 +219,9 @@ export const isStudioGenerationUserFacing = (
   generationUiSource: StudioGenerationUiSource,
 ) => isGenerating && generationUiSource !== "idle";
 
+export const shouldRestoreWorkspaceBootstrapGenerationPreview = (status: string | null | undefined) =>
+  String(status ?? "").trim().toLowerCase() !== "done";
+
 export const shouldDisableWorkspaceScenesCreateMode = (options: {
   isEditHidden: boolean;
   isGenerationVisible: boolean;
@@ -1499,108 +1502,6 @@ export const shouldRedirectWorkspaceScenesModeDuringGeneration = (options: {
   options.isStudioPathname &&
   options.isStudioCreateView &&
   (options.createMode === "segment-editor" || options.isScenesRoute);
-
-export type WorkspaceScenesModeSwitchTarget = "current" | "project" | "scratch";
-
-export type WorkspaceRetainedScenesDraftState<TDraft> = {
-  activeSegmentIndex: number;
-  draft: TDraft;
-};
-
-const normalizeWorkspaceScenesTimestamp = (value: number | string | null | undefined) => {
-  if (typeof value === "number") {
-    return Number.isFinite(value) && value > 0 ? value : null;
-  }
-
-  const parsedValue = Date.parse(String(value ?? ""));
-  return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : null;
-};
-
-export const resolveWorkspaceLatestStoredScenesDraft = <
-  TDraft extends { clientUpdatedAt?: number | string | null },
->(drafts: readonly (TDraft | null | undefined)[]): TDraft | null => {
-  let latestDraft: TDraft | null = null;
-  let latestUpdatedAt: number | null = null;
-
-  drafts.forEach((draft) => {
-    if (!draft) {
-      return;
-    }
-
-    const updatedAt = normalizeWorkspaceScenesTimestamp(draft.clientUpdatedAt);
-    if (!latestDraft || (updatedAt !== null && (latestUpdatedAt === null || updatedAt > latestUpdatedAt))) {
-      latestDraft = draft;
-      latestUpdatedAt = updatedAt;
-    }
-  });
-
-  return latestDraft;
-};
-
-export const resolveWorkspaceRetainedScenesDraftState = <TDraft,>(
-  activeDraft: TDraft | null | undefined,
-  activeSegmentIndex: number,
-  detachedDraftState: WorkspaceRetainedScenesDraftState<TDraft> | null | undefined,
-  storedDraftState?: WorkspaceRetainedScenesDraftState<TDraft> | null,
-): WorkspaceRetainedScenesDraftState<TDraft> | null => {
-  if (activeDraft) {
-    return {
-      activeSegmentIndex,
-      draft: activeDraft,
-    };
-  }
-
-  return detachedDraftState ?? storedDraftState ?? null;
-};
-
-export const resolveWorkspaceScenesModeSwitchTarget = (options: {
-  hasDisplayedGeneratedProject: boolean;
-  hasRetainedScenesDraft?: boolean;
-  isIdeaEmptyStateVisible?: boolean;
-  isSegmentEditorActive: boolean;
-  latestProjectId?: number | null;
-  latestProjectUpdatedAt?: number | string | null;
-  retainedDraftProjectId?: number | null;
-  retainedDraftUpdatedAt?: number | string | null;
-}): WorkspaceScenesModeSwitchTarget => {
-  if (options.isIdeaEmptyStateVisible) {
-    return "scratch";
-  }
-
-  if (options.isSegmentEditorActive || options.hasRetainedScenesDraft) {
-    if (!options.isSegmentEditorActive && options.hasDisplayedGeneratedProject) {
-      const latestProjectId = Number(options.latestProjectId);
-      const retainedDraftProjectId = Number(options.retainedDraftProjectId);
-      if (
-        Number.isInteger(latestProjectId) &&
-        latestProjectId > 0 &&
-        Number.isInteger(retainedDraftProjectId) &&
-        retainedDraftProjectId > 0 &&
-        latestProjectId === retainedDraftProjectId
-      ) {
-        return "current";
-      }
-
-      const retainedDraftUpdatedAt = normalizeWorkspaceScenesTimestamp(options.retainedDraftUpdatedAt);
-      const latestProjectUpdatedAt = normalizeWorkspaceScenesTimestamp(options.latestProjectUpdatedAt);
-      if (latestProjectUpdatedAt !== null && retainedDraftUpdatedAt === null) {
-        return "project";
-      }
-      if (
-        latestProjectUpdatedAt !== null &&
-        retainedDraftUpdatedAt !== null &&
-        latestProjectUpdatedAt > retainedDraftUpdatedAt
-      ) {
-        return "project";
-      }
-    }
-    return "current";
-  }
-  if (options.hasDisplayedGeneratedProject) {
-    return "project";
-  }
-  return "scratch";
-};
 
 export const shouldShowWorkspaceStartFreshScenesAction = (options: {
   hasContent: boolean;

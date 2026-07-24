@@ -17,11 +17,9 @@ import {
   isWorkspaceSegmentLibraryLoadMoreSentinelNearViewport,
   isWorkspaceSegmentSceneSoundRunBusy,
   isStudioGenerationUserFacing,
-  resolveWorkspaceLatestStoredScenesDraft,
   resolveWorkspaceStudioCreateModeDuringGeneration,
-  resolveWorkspaceRetainedScenesDraftState,
-  resolveWorkspaceScenesModeSwitchTarget,
   shouldDisableWorkspaceScenesCreateMode,
+  shouldRestoreWorkspaceBootstrapGenerationPreview,
   shouldShowWorkspaceScenesCompactWarning,
   shouldNotifyStudioGenerationError,
   shouldRedirectWorkspaceScenesModeDuringGeneration,
@@ -245,6 +243,12 @@ describe("studio creation mode switching", () => {
     expect(resolveWorkspaceStudioCreateModeDuringGeneration("segment-editor", false)).toBe("segment-editor");
   });
 
+  it("does not restore a completed historical generation into standalone creation", () => {
+    expect(shouldRestoreWorkspaceBootstrapGenerationPreview("done")).toBe(false);
+    expect(shouldRestoreWorkspaceBootstrapGenerationPreview("processing")).toBe(true);
+    expect(shouldRestoreWorkspaceBootstrapGenerationPreview("queued")).toBe(true);
+  });
+
   it("redirects direct scenes routes during generation without blocking other Studio sections", () => {
     const baseOptions = {
       createMode: "default" as const,
@@ -326,167 +330,6 @@ describe("studio creation mode switching", () => {
         isSegmentEditorActive: true,
       }),
     ).toBe(false);
-  });
-
-  it("restores a detached scenes draft after leaving the editor", () => {
-    const detachedDraft = { projectId: 4178, segments: [{ index: 0 }, { index: 1 }] };
-
-    expect(
-      resolveWorkspaceRetainedScenesDraftState(null, 0, {
-        activeSegmentIndex: 1,
-        draft: detachedDraft,
-      }),
-    ).toEqual({
-      activeSegmentIndex: 1,
-      draft: detachedDraft,
-    });
-  });
-
-  it("prefers the active scenes draft over an older detached snapshot", () => {
-    const activeDraft = { projectId: 4178, segments: [{ index: 0 }] };
-    const detachedDraft = { projectId: 4178, segments: [{ index: 0 }, { index: 1 }] };
-
-    expect(
-      resolveWorkspaceRetainedScenesDraftState(activeDraft, 0, {
-        activeSegmentIndex: 1,
-        draft: detachedDraft,
-      }),
-    ).toEqual({
-      activeSegmentIndex: 0,
-      draft: activeDraft,
-    });
-  });
-
-  it("restores a stored scenes draft after the Studio page was unmounted", () => {
-    const storedDraft = {
-      clientUpdatedAt: Date.parse("2026-07-17T12:05:00.000Z"),
-      projectId: 4178,
-      segments: [{ index: 0 }],
-    };
-
-    expect(
-      resolveWorkspaceRetainedScenesDraftState(null, 0, null, {
-        activeSegmentIndex: 0,
-        draft: storedDraft,
-      }),
-    ).toEqual({
-      activeSegmentIndex: 0,
-      draft: storedDraft,
-    });
-  });
-
-  it("prefers the in-memory detached snapshot over its stored fallback", () => {
-    const detachedDraft = { projectId: 4178, segments: [{ index: 0 }, { index: 1 }] };
-    const storedDraft = { projectId: 4178, segments: [{ index: 0 }] };
-
-    expect(
-      resolveWorkspaceRetainedScenesDraftState(
-        null,
-        0,
-        { activeSegmentIndex: 1, draft: detachedDraft },
-        { activeSegmentIndex: 0, draft: storedDraft },
-      ),
-    ).toEqual({
-      activeSegmentIndex: 1,
-      draft: detachedDraft,
-    });
-  });
-
-  it("selects the most recently refined stored project or scratch draft", () => {
-    const olderProjectDraft = {
-      clientUpdatedAt: Date.parse("2026-07-17T12:00:00.000Z"),
-      projectId: 4178,
-    };
-    const newerScratchDraft = {
-      clientUpdatedAt: Date.parse("2026-07-17T12:05:00.000Z"),
-      projectId: 0,
-    };
-
-    expect(resolveWorkspaceLatestStoredScenesDraft([olderProjectDraft, newerScratchDraft])).toBe(
-      newerScratchDraft,
-    );
-  });
-
-  it("opens the displayed video project before creating a scratch draft", () => {
-    expect(
-      resolveWorkspaceScenesModeSwitchTarget({
-        hasDisplayedGeneratedProject: true,
-        isSegmentEditorActive: false,
-      }),
-    ).toBe("project");
-  });
-
-  it("restores a retained scenes draft before the displayed video project", () => {
-    expect(
-      resolveWorkspaceScenesModeSwitchTarget({
-        hasDisplayedGeneratedProject: true,
-        hasRetainedScenesDraft: true,
-        isSegmentEditorActive: false,
-      }),
-    ).toBe("current");
-  });
-
-  it("opens a newer generated video instead of an older retained scenes draft", () => {
-    expect(
-      resolveWorkspaceScenesModeSwitchTarget({
-        hasDisplayedGeneratedProject: true,
-        hasRetainedScenesDraft: true,
-        isSegmentEditorActive: false,
-        latestProjectId: 4202,
-        latestProjectUpdatedAt: "2026-07-17T12:05:00.000Z",
-        retainedDraftProjectId: 4178,
-        retainedDraftUpdatedAt: Date.parse("2026-07-17T12:00:00.000Z"),
-      }),
-    ).toBe("project");
-  });
-
-  it("restores newer scene refinements instead of an older generated video", () => {
-    expect(
-      resolveWorkspaceScenesModeSwitchTarget({
-        hasDisplayedGeneratedProject: true,
-        hasRetainedScenesDraft: true,
-        isSegmentEditorActive: false,
-        latestProjectId: 4202,
-        latestProjectUpdatedAt: "2026-07-17T12:00:00.000Z",
-        retainedDraftProjectId: 4178,
-        retainedDraftUpdatedAt: Date.parse("2026-07-17T12:05:00.000Z"),
-      }),
-    ).toBe("current");
-  });
-
-  it("keeps retained scene settings when they belong to the latest video", () => {
-    expect(
-      resolveWorkspaceScenesModeSwitchTarget({
-        hasDisplayedGeneratedProject: true,
-        hasRetainedScenesDraft: true,
-        isSegmentEditorActive: false,
-        latestProjectId: 4202,
-        latestProjectUpdatedAt: "2026-07-17T12:05:00.000Z",
-        retainedDraftProjectId: 4202,
-        retainedDraftUpdatedAt: null,
-      }),
-    ).toBe("current");
-  });
-
-  it("creates a fresh scenes project when Idea mode has no editable project", () => {
-    expect(
-      resolveWorkspaceScenesModeSwitchTarget({
-        hasDisplayedGeneratedProject: false,
-        isSegmentEditorActive: false,
-      }),
-    ).toBe("scratch");
-  });
-
-  it("creates a fresh scenes project from the visible Idea empty state instead of restoring a retained draft", () => {
-    expect(
-      resolveWorkspaceScenesModeSwitchTarget({
-        hasDisplayedGeneratedProject: false,
-        hasRetainedScenesDraft: true,
-        isIdeaEmptyStateVisible: true,
-        isSegmentEditorActive: false,
-        retainedDraftProjectId: 4178,
-      }),
-    ).toBe("scratch");
   });
 
   it("shows the start-fresh action for content or unsaved editor changes", () => {
