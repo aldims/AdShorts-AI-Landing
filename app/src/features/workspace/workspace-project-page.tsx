@@ -253,7 +253,9 @@ export function WorkspaceProjectPage({
         </button>
         <div className="studio-project-page__heading">
           <h1>{title}</h1>
-          <span className={`studio-project-page__status is-${project.status}`}>{statusLabel}</span>
+          {project.status === "ready" ? null : (
+            <span className={`studio-project-page__status is-${project.status}`}>{statusLabel}</span>
+          )}
         </div>
       </header>
 
@@ -384,7 +386,6 @@ export function WorkspaceProjectPage({
         >
           <div className="studio-project-page__info-head">
             <div>
-              <span>{workspaceText(locale, "Проект", "Project")}</span>
               <h2>{workspaceText(locale, "Сведения", "Details")}</h2>
             </div>
             <div className="studio-project-page__menu" ref={projectMenuRef}>

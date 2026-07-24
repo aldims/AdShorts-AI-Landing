@@ -22758,11 +22758,11 @@ textarea {
 }
 
 .studio-project-page__info-head > div:first-child {
-  display: grid;
-  gap: 3px;
+  display: flex;
+  align-items: center;
+  min-height: 34px;
 }
 
-.studio-project-page__info-head > div:first-child > span,
 .studio-project-page__section-head > span {
   color: rgba(164, 176, 199, 0.52);
   font-size: 0.65rem;

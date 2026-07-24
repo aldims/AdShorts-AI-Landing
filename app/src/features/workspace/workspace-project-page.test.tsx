@@ -115,6 +115,9 @@ describe("WorkspaceProjectPage", () => {
     expect(regenerate.className).toBe(createNew.className);
     expect(heading.closest(".studio-project-page__header")?.textContent).not.toContain("Обновлено");
     expect(heading.closest(".studio-project-page__header")?.textContent).not.toContain("Опубликовано");
+    expect(heading.closest(".studio-project-page__header")?.textContent).not.toContain("Готово");
+    expect(screen.getByRole("heading", { name: "Сведения" })).toBeTruthy();
+    expect(screen.queryByText("Проект")).toBeNull();
   });
 
   it("connects the primary and secondary project actions", () => {
