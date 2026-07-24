@@ -190,6 +190,83 @@ describe("WorkspaceProjectPage", () => {
     expect(onDismiss).toHaveBeenCalledOnce();
   });
 
+  it.each([
+    [
+      "YouTube",
+      {
+        instagramPublication: null,
+        youtubePublication: {
+          channelName: "AdShorts",
+          channelPk: 7,
+          link: "https://www.youtube.com/watch?v=video-42",
+          platform: "youtube" as const,
+          providerMediaId: "video-42",
+          publishedAt: "2026-07-21T12:00:00.000Z",
+          scheduledAt: null,
+          state: "published",
+          youtubeVideoId: "video-42",
+        },
+      },
+      "Открыть на YouTube",
+    ],
+    [
+      "Instagram",
+      {
+        instagramPublication: {
+          channelName: "AdShorts",
+          channelPk: 8,
+          link: "https://www.instagram.com/reel/reel-42/",
+          platform: "instagram" as const,
+          providerMediaId: "reel-42",
+          publishedAt: "2026-07-21T12:00:00.000Z",
+          scheduledAt: null,
+          state: "published",
+          youtubeVideoId: null,
+        },
+        youtubePublication: null,
+      },
+      "Открыть в Instagram",
+    ],
+  ])("links a published project to its canonical %s URL", (_platform, publications, linkLabel) => {
+    renderProjectPage({
+      project: {
+        ...readyProject,
+        ...publications,
+      },
+    });
+
+    const link = screen.getByRole("link", { name: linkLabel });
+    expect(link.getAttribute("href")).toBe(
+      publications.instagramPublication?.link ?? publications.youtubePublication?.link,
+    );
+    expect(link.getAttribute("target")).toBe("_blank");
+    expect(link.getAttribute("rel")).toBe("noopener noreferrer");
+  });
+
+  it.each([
+    ["не опубликован", "scheduled", "https://www.youtube.com/watch?v=video-42"],
+    ["не имеет валидной ссылки", "published", "javascript:alert(1)"],
+  ])("does not expose an external publication link when the project %s", (_label, state, link) => {
+    renderProjectPage({
+      project: {
+        ...readyProject,
+        youtubePublication: {
+          channelName: "AdShorts",
+          channelPk: 7,
+          link,
+          platform: "youtube",
+          providerMediaId: "video-42",
+          publishedAt: state === "published" ? "2026-07-21T12:00:00.000Z" : null,
+          scheduledAt: state === "scheduled" ? "2026-07-22T12:00:00.000Z" : null,
+          state,
+          youtubeVideoId: "video-42",
+        },
+      },
+    });
+
+    expect(screen.queryByRole("link", { name: /Открыть на YouTube/ })).toBeNull();
+  });
+
   it("switches real versions and exposes create and delete workflows", () => {
     const olderVersion: WorkspaceProject = {
       ...readyProject,

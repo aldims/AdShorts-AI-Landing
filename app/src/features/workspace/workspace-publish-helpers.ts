@@ -191,6 +191,28 @@ export const normalizePublishJobStatus = (value: string | null | undefined) =>
     .trim()
     .toLowerCase();
 
+export const getPublishedPublicationExternalUrl = (
+  publication: WorkspaceProjectPublication | null | undefined,
+) => {
+  if (normalizePublishJobStatus(publication?.state) !== "published") {
+    return null;
+  }
+
+  const link = String(publication?.link ?? "").trim();
+  if (!link) {
+    return null;
+  }
+
+  try {
+    const url = new URL(link);
+    return (url.protocol === "https:" || url.protocol === "http:") && Boolean(url.hostname)
+      ? url.toString()
+      : null;
+  } catch {
+    return null;
+  }
+};
+
 export const isPublishJobProgressStatus = (status: string) =>
   ["pending", "queued", "processing", "running", "started", "uploading", "in_progress"].includes(status);
 

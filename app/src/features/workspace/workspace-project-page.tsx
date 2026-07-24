@@ -5,7 +5,11 @@ import { getWorkspaceProjectDisplayTitle, getWorkspaceVideoDownloadName } from "
 import { appendUrlToken } from "./workspace-media-library-helpers";
 import { getWorkspaceSegmentEditorSessionUrl, type WorkspaceSegmentEditorResponse } from "./workspace-page-model";
 import { WorkspaceModalVideoPlayer } from "./workspace-preview-components";
-import { formatProjectDate, getPublicationMetaLabel } from "./workspace-publish-helpers";
+import {
+  formatProjectDate,
+  getPublicationMetaLabel,
+  getPublishedPublicationExternalUrl,
+} from "./workspace-publish-helpers";
 import type { WorkspaceProject } from "./workspace-types";
 
 type WorkspaceProjectPageProps = {
@@ -104,7 +108,25 @@ export function WorkspaceProjectPage({
   const shouldShowRegenerate = project?.prefillSettings?.creationMode === "idea";
   const canRegenerate = Boolean(shouldShowRegenerate && project?.prompt.trim() && primaryVideoUrl);
   const canPublish = Boolean(project?.adId && project.status === "ready" && primaryVideoUrl);
-  const publication = project?.instagramPublication ?? project?.youtubePublication ?? null;
+  const publicationWithExternalUrl = (
+    [
+      { platform: "instagram" as const, publication: project?.instagramPublication ?? null },
+      { platform: "youtube" as const, publication: project?.youtubePublication ?? null },
+    ]
+  ).find(({ publication }) => Boolean(getPublishedPublicationExternalUrl(publication)));
+  const publication =
+    publicationWithExternalUrl?.publication ??
+    project?.instagramPublication ??
+    project?.youtubePublication ??
+    null;
+  const publicationPlatform =
+    publicationWithExternalUrl?.platform ??
+    (publication === project?.instagramPublication
+      ? "instagram"
+      : publication === project?.youtubePublication
+        ? "youtube"
+        : null);
+  const publicationExternalUrl = getPublishedPublicationExternalUrl(publication);
   const publicationMeta = getPublicationMetaLabel(publication, locale);
   const safeVersions = versions.length > 0 ? versions : project ? [project] : [];
 
@@ -482,7 +504,23 @@ export function WorkspaceProjectPage({
               </div>
               <div>
                 <span>{workspaceText(locale, "Публикация", "Publication")}</span>
-                <strong>{publicationMeta || workspaceText(locale, "Не опубликовано", "Not published")}</strong>
+                <div className="studio-project-page__publication-value">
+                  <strong>{publicationMeta || workspaceText(locale, "Не опубликовано", "Not published")}</strong>
+                  {publicationExternalUrl && publicationPlatform ? (
+                    <a
+                      href={publicationExternalUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {publicationPlatform === "instagram"
+                        ? workspaceText(locale, "Открыть в Instagram", "Open on Instagram")
+                        : workspaceText(locale, "Открыть на YouTube", "Open on YouTube")}
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M9 5h10v10M19 5 8 16M5 9v10h10" />
+                      </svg>
+                    </a>
+                  ) : null}
+                </div>
               </div>
             </div>
           </section>
