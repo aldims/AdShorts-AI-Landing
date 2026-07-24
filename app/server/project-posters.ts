@@ -93,6 +93,27 @@ const buildFfmpegHeaderArgs = (upstreamUrl: URL, upstreamHeaders?: Record<string
   return headerLines ? ["-headers", `${headerLines}\r\n`] : [];
 };
 
+export const buildWorkspacePosterCaptureInputArgs = (
+  source: Pick<WorkspacePosterSource, "upstreamHeaders" | "upstreamUrl">,
+  frameTimeSeconds: number,
+) => {
+  const inputArgs = [
+    ...buildFfmpegHeaderArgs(source.upstreamUrl, source.upstreamHeaders),
+    "-i",
+    resolvePosterCaptureInput(source.upstreamUrl),
+  ];
+  const seekArgs = frameTimeSeconds > 0 ? ["-ss", String(frameTimeSeconds)] : [];
+
+  if (source.upstreamUrl.protocol === "file:") {
+    return [...seekArgs, ...inputArgs];
+  }
+
+  // HTTP segment endpoints can return a valid MP4 while not supporting the
+  // random-access pattern ffmpeg uses for input seeking. Seek after opening
+  // remote inputs so ffmpeg decodes forward instead of receiving a partial MP4.
+  return [...inputArgs, ...seekArgs];
+};
+
 const runPosterCaptureCommand = async (source: WorkspacePosterSource, frameTimeSeconds: number) => {
   let stdout: Buffer;
 
@@ -104,11 +125,7 @@ const runPosterCaptureCommand = async (source: WorkspacePosterSource, frameTimeS
         "-loglevel",
         "error",
         "-y",
-        "-ss",
-        String(frameTimeSeconds),
-        ...buildFfmpegHeaderArgs(source.upstreamUrl, source.upstreamHeaders),
-        "-i",
-        resolvePosterCaptureInput(source.upstreamUrl),
+        ...buildWorkspacePosterCaptureInputArgs(source, frameTimeSeconds),
         "-frames:v",
         "1",
         "-vf",
