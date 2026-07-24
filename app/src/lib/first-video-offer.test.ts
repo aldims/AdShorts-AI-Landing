@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { activeFirstVideoOfferVariant, isFirstVideoOfferEligible } from "./first-video-offer";
+import {
+  activeFirstVideoOfferVariant,
+  isFirstVideoOfferEligible,
+  isProjectFirstVideoOfferEligible,
+} from "./first-video-offer";
 
 const eligibleInput = {
   firstVideoActionsExpanded: true,
@@ -24,5 +28,22 @@ describe("first video offer", () => {
     expect(isFirstVideoOfferEligible({ ...eligibleInput, plan: "START" })).toBe(false);
     expect(isFirstVideoOfferEligible({ ...eligibleInput, startPlanUsed: true })).toBe(false);
     expect(isFirstVideoOfferEligible({ ...eligibleInput, readyProjectsCount: 2 })).toBe(false);
+  });
+
+  it("reuses the same eligibility for a ready project without requiring expanded generation actions", () => {
+    const projectInput = {
+      hasLoadedProjects: true,
+      hasReadyProject: true,
+      locale: "ru" as const,
+      plan: "FREE",
+      projectsFailed: false,
+      readyProjectsCount: 1,
+      startPlanUsed: false,
+    };
+
+    expect(isProjectFirstVideoOfferEligible(projectInput)).toBe(true);
+    expect(isProjectFirstVideoOfferEligible({ ...projectInput, hasReadyProject: false })).toBe(false);
+    expect(isProjectFirstVideoOfferEligible({ ...projectInput, plan: "START" })).toBe(false);
+    expect(isProjectFirstVideoOfferEligible({ ...projectInput, readyProjectsCount: 2 })).toBe(false);
   });
 });

@@ -981,6 +981,7 @@ import { logClientEvent } from "../lib/client-log";
 import {
   activeFirstVideoOfferVariant,
   isFirstVideoOfferEligible,
+  isProjectFirstVideoOfferEligible,
   type FirstVideoOfferVariant,
 } from "../lib/first-video-offer";
 import { useLocale } from "../lib/i18n";
@@ -6054,12 +6055,14 @@ export function WorkspacePage({
     balance,
     plan,
     productId,
+    projectId,
     variant,
   }: {
     addedCredits: number | null;
     balance: number | null;
     plan: string | null;
     productId: CheckoutProductId;
+    projectId?: number | null;
     variant: FirstVideoOfferVariant;
   }) => {
     const eventKey = [productId, plan ?? "", balance ?? "", addedCredits ?? "", variant].join(":");
@@ -6075,7 +6078,7 @@ export function WorkspacePage({
       path: `${location.pathname}${location.search}`,
       plan,
       productId,
-      projectId: generatedVideo?.adId ?? null,
+      projectId: projectId ?? routeProject?.adId ?? generatedVideo?.adId ?? null,
       source: "first_free_video_offer",
       variant,
     });
@@ -6089,7 +6092,12 @@ export function WorkspacePage({
   };
   const requestWorkspaceCheckout = async (
     productId: CheckoutProductId,
-    options?: { source?: "first_free_video_offer"; variant?: FirstVideoOfferVariant },
+    options?: {
+      projectId?: number | null;
+      returnPath?: string;
+      source?: "first_free_video_offer";
+      variant?: FirstVideoOfferVariant;
+    },
   ) => {
     const setCheckoutError = options?.source ? setFirstVideoCheckoutError : setWorkspaceCheckoutError;
     setCheckoutError(null);
@@ -6127,6 +6135,7 @@ export function WorkspacePage({
             balance: simulatedPayment.profile.balance,
             plan: simulatedPayment.profile.plan,
             productId,
+            projectId: options.projectId,
             variant: options.variant,
           });
         }
@@ -6141,7 +6150,7 @@ export function WorkspacePage({
         if (options?.source && options.variant) {
           void logClientEvent("checkout_widget_opened", {
             productId,
-            projectId: generatedVideo?.adId ?? null,
+            projectId: options.projectId ?? generatedVideo?.adId ?? null,
             source: options.source,
             variant: options.variant,
           });
@@ -6150,7 +6159,9 @@ export function WorkspacePage({
           confirmationToken: payload.data.widget.confirmationToken,
           returnUrl: buildPaymentReturnUrl({
             paymentId: payload.data.widget.paymentId,
-            pricingPath: options?.source ? localizePath("/app/studio") : localizePath("/pricing/"),
+            pricingPath:
+              options?.returnPath ??
+              (options?.source ? localizePath("/app/studio") : localizePath("/pricing/")),
             productId,
             source: options?.source,
             variant: options?.variant,
@@ -6171,7 +6182,7 @@ export function WorkspacePage({
         void logClientEvent("checkout_open_failed", {
           error: errorMessage,
           productId,
-          projectId: generatedVideo?.adId ?? null,
+          projectId: options.projectId ?? generatedVideo?.adId ?? null,
           source: options.source,
           variant: options.variant,
         }, "warn");
@@ -6577,6 +6588,7 @@ export function WorkspacePage({
     startPlanUsed: Boolean(workspaceProfile?.startPlanUsed),
   });
   const shouldShowFirstVideoSuccessOffer =
+    studioView !== "project" &&
     createMode === "default" &&
     Boolean(visibleGeneratedVideo) &&
     Boolean(generatedVideoDismissKey) &&
@@ -6616,6 +6628,42 @@ export function WorkspacePage({
       )?.projects ?? [routeProject]
     );
   }, [accountProjectGroups, routeProject]);
+  const routeProjectOfferDismissKey = getStudioPreviewDismissKey(routeProject);
+  const isEligibleForProjectFirstVideoOffer = isProjectFirstVideoOfferEligible({
+    hasLoadedProjects,
+    hasReadyProject: Boolean(routeProject?.videoUrl && routeProject.status === "ready"),
+    locale,
+    plan: workspacePlan,
+    projectsFailed: Boolean(projectsError),
+    readyProjectsCount,
+    startPlanUsed: Boolean(workspaceProfile?.startPlanUsed),
+  });
+  const shouldShowProjectFirstVideoOffer =
+    studioView === "project" &&
+    Boolean(routeProjectOfferDismissKey) &&
+    routeProjectOfferDismissKey !== dismissedFirstVideoOfferKey &&
+    isEligibleForProjectFirstVideoOffer;
+
+  useEffect(() => {
+    if (!shouldShowProjectFirstVideoOffer || !routeProject) {
+      return;
+    }
+
+    void logClientEvent("first_free_video_offer_viewed", {
+      path: `${location.pathname}${location.search}`,
+      plan: workspacePlan,
+      productId: "start",
+      projectId: routeProject.adId,
+      source: "first_free_video_offer",
+      surface: "project_page",
+      variant: resolvedFirstVideoOfferVariant,
+    });
+  }, [
+    routeProject?.adId,
+    routeProjectOfferDismissKey,
+    shouldShowProjectFirstVideoOffer,
+    workspacePlan,
+  ]);
   const currentProjectId = generatedVideo?.adId ?? null;
   const currentAppliedSegmentEditorSession =
     currentProjectId && segmentEditorAppliedSession?.projectId === currentProjectId ? segmentEditorAppliedSession : null;
@@ -10984,6 +11032,51 @@ export function WorkspacePage({
       source: "first_free_video_offer",
       variant: resolvedFirstVideoOfferVariant,
     });
+  };
+  const handleProjectFirstVideoOfferCheckout = () => {
+    void logClientEvent("first_video_offer_checkout_clicked", {
+      path: `${location.pathname}${location.search}`,
+      plan: workspacePlan,
+      productId: "start",
+      projectId: routeProject?.adId ?? null,
+      source: "first_free_video_offer",
+      surface: "project_page",
+      variant: resolvedFirstVideoOfferVariant,
+    });
+    void requestWorkspaceCheckout("start", {
+      projectId: routeProject?.adId ?? null,
+      returnPath: `${location.pathname}${location.search}`,
+      source: "first_free_video_offer",
+      variant: resolvedFirstVideoOfferVariant,
+    });
+  };
+  const handleProjectFirstVideoOfferComparePlans = () => {
+    void logClientEvent("first_video_offer_compare_plans_clicked", {
+      plan: workspacePlan,
+      productId: "start",
+      projectId: routeProject?.adId ?? null,
+      source: "first_free_video_offer",
+      surface: "project_page",
+      variant: resolvedFirstVideoOfferVariant,
+    });
+    handleFirstVideoOfferComparePlans();
+  };
+  const handleProjectFirstVideoOfferDismiss = () => {
+    if (!routeProjectOfferDismissKey) {
+      return;
+    }
+
+    void logClientEvent("first_free_video_offer_dismissed", {
+      plan: workspacePlan,
+      productId: "start",
+      projectId: routeProject?.adId ?? null,
+      source: "first_free_video_offer",
+      surface: "project_page",
+      variant: resolvedFirstVideoOfferVariant,
+    });
+    setFirstVideoCheckoutError(null);
+    setDismissedFirstVideoOfferKey(routeProjectOfferDismissKey);
+    persistDismissedFirstVideoOfferKey(session.email, routeProjectOfferDismissKey);
   };
 
   useEffect(() => {
@@ -39624,6 +39717,17 @@ export function WorkspacePage({
 
             {studioView === "project" ? (
               <WorkspaceProjectPage
+                firstVideoOffer={
+                  shouldShowProjectFirstVideoOffer
+                    ? {
+                        checkoutError: firstVideoCheckoutError,
+                        isCheckoutPending: activeWorkspaceCheckoutProductId === "start",
+                        onCheckoutStart: handleProjectFirstVideoOfferCheckout,
+                        onComparePlans: handleProjectFirstVideoOfferComparePlans,
+                        onDismiss: handleProjectFirstVideoOfferDismiss,
+                      }
+                    : null
+                }
                 isActionBusy={isSegmentEditorLoading || isGenerating || isPublishBootstrapLoading}
                 isDeleteBusy={isProjectDeleteSubmitting}
                 isLoading={!hasLoadedProjects || isProjectsLoading}

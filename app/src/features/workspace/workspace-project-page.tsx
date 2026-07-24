@@ -9,6 +9,13 @@ import { formatProjectDate, getPublicationMetaLabel } from "./workspace-publish-
 import type { WorkspaceProject } from "./workspace-types";
 
 type WorkspaceProjectPageProps = {
+  firstVideoOffer: {
+    checkoutError: string | null;
+    isCheckoutPending: boolean;
+    onCheckoutStart: () => void;
+    onComparePlans: () => void;
+    onDismiss: () => void;
+  } | null;
   isActionBusy: boolean;
   isDeleteBusy: boolean;
   isLoading: boolean;
@@ -60,6 +67,7 @@ const formatSceneCount = (sceneCount: SceneCountState, locale: Locale) => {
 };
 
 export function WorkspaceProjectPage({
+  firstVideoOffer,
   isActionBusy,
   isDeleteBusy,
   isLoading,
@@ -405,6 +413,63 @@ export function WorkspaceProjectPage({
               <strong aria-live="polite">{formatSceneCount(sceneCount, locale)}</strong>
             </div>
           </section>
+
+          {firstVideoOffer ? (
+            <section
+              className="studio-project-page__offer"
+              aria-label={workspaceText(locale, "Предложение тарифа START", "START plan offer")}
+            >
+              <button
+                className="studio-project-page__offer-dismiss"
+                type="button"
+                aria-label={workspaceText(locale, "Скрыть предложение", "Dismiss offer")}
+                onClick={firstVideoOffer.onDismiss}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="m7 7 10 10M17 7 7 17" />
+                </svg>
+              </button>
+              <span className="studio-project-page__offer-eyebrow">
+                {workspaceText(locale, "Первый Shorts готов", "Your first Short is ready")}
+              </span>
+              <strong>
+                {workspaceText(
+                  locale,
+                  "Создайте ещё до 5 Shorts без водяного знака",
+                  "Create up to 5 more Shorts without a watermark",
+                )}
+              </strong>
+              <span className="studio-project-page__offer-plan">
+                START · 50 {workspaceText(locale, "кредитов", "credits")} · 390 ₽
+              </span>
+              <button
+                className="studio-project-page__offer-cta"
+                type="button"
+                disabled={firstVideoOffer.isCheckoutPending}
+                onClick={firstVideoOffer.onCheckoutStart}
+              >
+                {firstVideoOffer.isCheckoutPending
+                  ? workspaceText(locale, "Открываем оплату…", "Opening checkout…")
+                  : workspaceText(locale, "Получить 50 кредитов", "Get 50 credits")}
+              </button>
+              {firstVideoOffer.checkoutError ? (
+                <p className="studio-project-page__offer-error" role="alert">
+                  {firstVideoOffer.checkoutError}
+                </p>
+              ) : (
+                <span className="studio-project-page__offer-trust">
+                  {workspaceText(locale, "Разовая оплата · без автосписаний", "One-time payment · no auto-renewal")}
+                </span>
+              )}
+              <button
+                className="studio-project-page__offer-compare"
+                type="button"
+                onClick={firstVideoOffer.onComparePlans}
+              >
+                {workspaceText(locale, "Сравнить тарифы", "Compare plans")}
+              </button>
+            </section>
+          ) : null}
 
           <section className="studio-project-page__info-section">
             <div className="studio-project-page__section-head">

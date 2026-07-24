@@ -31,3 +31,31 @@ export const isFirstVideoOfferEligible = ({
   hasLoadedProjects &&
   !projectsFailed &&
   readyProjectsCount <= 1;
+
+export const isProjectFirstVideoOfferEligible = ({
+  hasLoadedProjects,
+  hasReadyProject,
+  locale,
+  plan,
+  projectsFailed,
+  readyProjectsCount,
+  startPlanUsed,
+}: {
+  hasLoadedProjects: boolean;
+  hasReadyProject: boolean;
+  locale: "ru" | "en";
+  plan: string | null;
+  projectsFailed: boolean;
+  readyProjectsCount: number;
+  startPlanUsed: boolean;
+}) =>
+  isFirstVideoOfferEligible({
+    firstVideoActionsExpanded: true,
+    hasLoadedProjects,
+    hasVisibleVideo: hasReadyProject,
+    locale,
+    plan,
+    projectsFailed,
+    readyProjectsCount,
+    startPlanUsed,
+  });

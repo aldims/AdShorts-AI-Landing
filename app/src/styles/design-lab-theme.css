@@ -22825,6 +22825,131 @@ textarea {
   font-weight: 720;
 }
 
+.studio-project-page__offer {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 13px 12px 12px;
+  overflow: hidden;
+  border: 1px solid rgba(139, 145, 255, 0.2);
+  border-radius: 13px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(134, 112, 255, 0.16), transparent 48%),
+    rgba(109, 103, 255, 0.055);
+}
+
+.studio-project-page__offer-eyebrow {
+  padding-right: 24px;
+  color: rgba(168, 174, 255, 0.86);
+  font-size: 0.57rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.studio-project-page__offer > strong {
+  padding-right: 16px;
+  color: rgba(246, 248, 253, 0.94);
+  font-family: "Sora", "Manrope", sans-serif;
+  font-size: 0.73rem;
+  font-weight: 650;
+  line-height: 1.42;
+}
+
+.studio-project-page__offer-plan {
+  color: rgba(205, 212, 227, 0.65);
+  font-size: 0.61rem;
+  font-weight: 650;
+}
+
+.studio-project-page__offer-dismiss {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  display: grid;
+  place-items: center;
+  width: 27px;
+  height: 27px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(198, 205, 220, 0.48);
+  cursor: pointer;
+}
+
+.studio-project-page__offer-dismiss:hover,
+.studio-project-page__offer-dismiss:focus-visible {
+  background: rgba(255, 255, 255, 0.055);
+  color: rgba(243, 246, 252, 0.88);
+}
+
+.studio-project-page__offer-dismiss svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-width: 1.8;
+}
+
+.studio-project-page__offer-cta {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid rgba(156, 160, 255, 0.34);
+  border-radius: 10px;
+  background: rgba(118, 112, 255, 0.88);
+  color: #fff;
+  font: inherit;
+  font-size: 0.66rem;
+  font-weight: 760;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(73, 65, 190, 0.18);
+}
+
+.studio-project-page__offer-cta:hover,
+.studio-project-page__offer-cta:focus-visible {
+  background: rgba(132, 126, 255, 0.96);
+}
+
+.studio-project-page__offer-cta:disabled {
+  opacity: 0.62;
+  cursor: wait;
+}
+
+.studio-project-page__offer-trust,
+.studio-project-page__offer-error {
+  margin: 0;
+  color: rgba(184, 193, 211, 0.52);
+  font-size: 0.55rem;
+  line-height: 1.35;
+  text-align: center;
+}
+
+.studio-project-page__offer-error {
+  color: rgba(255, 155, 169, 0.9);
+}
+
+.studio-project-page__offer-compare {
+  justify-self: center;
+  padding: 1px 0;
+  border: 0;
+  background: transparent;
+  color: rgba(190, 197, 255, 0.72);
+  font: inherit;
+  font-size: 0.58rem;
+  font-weight: 680;
+  cursor: pointer;
+}
+
+.studio-project-page__offer-compare:hover,
+.studio-project-page__offer-compare:focus-visible {
+  color: rgba(226, 229, 255, 0.96);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .studio-project-page__dates {
   display: grid;
   gap: 2px;

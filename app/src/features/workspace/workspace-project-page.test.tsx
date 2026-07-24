@@ -61,6 +61,7 @@ afterEach(() => {
 
 const renderProjectPage = (overrides?: Partial<Parameters<typeof WorkspaceProjectPage>[0]>) => {
   const props: Parameters<typeof WorkspaceProjectPage>[0] = {
+    firstVideoOffer: null,
     isActionBusy: false,
     isDeleteBusy: false,
     isLoading: false,
@@ -163,6 +164,30 @@ describe("WorkspaceProjectPage", () => {
     expect(screen.queryByText("Озвучка")).toBeNull();
     expect(screen.queryByText("Музыка")).toBeNull();
     expect(screen.queryByText("Субтитры")).toBeNull();
+  });
+
+  it("renders a non-blocking first-video offer inside project information", () => {
+    const onCheckoutStart = vi.fn();
+    const onComparePlans = vi.fn();
+    const onDismiss = vi.fn();
+    renderProjectPage({
+      firstVideoOffer: {
+        checkoutError: null,
+        isCheckoutPending: false,
+        onCheckoutStart,
+        onComparePlans,
+        onDismiss,
+      },
+    });
+
+    const offer = screen.getByLabelText("Предложение тарифа START");
+    expect(screen.getByLabelText("Информация о проекте").contains(offer)).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Получить 50 кредитов" }));
+    fireEvent.click(screen.getByRole("button", { name: "Сравнить тарифы" }));
+    fireEvent.click(screen.getByRole("button", { name: "Скрыть предложение" }));
+    expect(onCheckoutStart).toHaveBeenCalledOnce();
+    expect(onComparePlans).toHaveBeenCalledOnce();
+    expect(onDismiss).toHaveBeenCalledOnce();
   });
 
   it("switches real versions and exposes create and delete workflows", () => {
