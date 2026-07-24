@@ -1,4 +1,10 @@
-import { useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
+import {
+  useState,
+  type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from "react";
 import type { Locale } from "../../lib/i18n";
 import {
   type WorkspaceSegmentEditorFullPreviewStatus,
@@ -20,6 +26,61 @@ import type {
 } from "./workspace-types";
 
 export type WorkspaceSegmentTimelineAudioPlaybackStatus = "loading" | "playing" | null;
+
+export type WorkspaceSegmentTimelineTrackLabelSettings = {
+  ariaBusy?: boolean;
+  ariaControls?: string;
+  ariaExpanded?: boolean;
+  isBusy?: boolean;
+  label: string;
+  onClick: (event: ReactMouseEvent<HTMLButtonElement>) => void;
+  onPointerDown?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+};
+
+export function WorkspaceSegmentTimelineTrackLabel({
+  icon,
+  label,
+  settings,
+}: {
+  icon: ReactNode;
+  label: string;
+  settings?: WorkspaceSegmentTimelineTrackLabelSettings;
+}) {
+  return (
+    <div
+      className={`studio-segment-editor__timeline-label${
+        settings ? " studio-segment-editor__timeline-label--has-settings" : ""
+      }`}
+    >
+      <span className="studio-segment-editor__timeline-label-icon" aria-hidden="true">
+        {icon}
+      </span>
+      <span className="studio-segment-editor__timeline-label-text">{label}</span>
+      {settings ? (
+        <button
+          className="studio-segment-editor__timeline-label-settings"
+          type="button"
+          aria-busy={settings.ariaBusy ? "true" : undefined}
+          aria-controls={settings.ariaControls}
+          aria-expanded={settings.ariaExpanded}
+          aria-label={settings.label}
+          title={settings.label}
+          onPointerDown={settings.onPointerDown}
+          onClick={settings.onClick}
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M4 7h6M14 7h6M4 17h2M10 17h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            <circle cx="12" cy="7" r="2" stroke="currentColor" strokeWidth="1.8" />
+            <circle cx="8" cy="17" r="2" stroke="currentColor" strokeWidth="1.8" />
+          </svg>
+          {settings.isBusy ? (
+            <span className="studio-segment-editor__timeline-label-settings-busy" aria-hidden="true"></span>
+          ) : null}
+        </button>
+      ) : null}
+    </div>
+  );
+}
 
 export type WorkspaceSegmentTimelineAudioButtonOptions = {
   audioKey: string;

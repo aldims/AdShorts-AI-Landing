@@ -555,6 +555,7 @@ import {
   type WorkspaceSegmentTimelineVoiceSettings,
 } from "../features/workspace/workspace-segment-timeline-labels";
 import {
+  WorkspaceSegmentTimelineTrackLabel,
   renderWorkspaceSegmentEditorFullPreviewPlayhead,
   renderWorkspaceSegmentTimelineAudioButton,
   renderWorkspaceSegmentTimelineBoundaryTimecode,
@@ -34262,16 +34263,16 @@ export function WorkspacePage({
         </div>
 
         <div className="studio-segment-editor__timeline-row studio-segment-editor__timeline-row--visual">
-          <div className="studio-segment-editor__timeline-label">
-            <span className="studio-segment-editor__timeline-label-icon" aria-hidden="true">
+          <WorkspaceSegmentTimelineTrackLabel
+            icon={
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                 <rect x="4" y="5" width="16" height="14" rx="3" stroke="currentColor" strokeWidth="1.8" />
                 <path d="m7 16 4-4 3 3 2-2 2 3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                 <circle cx="15.5" cy="9.5" r="1.2" fill="currentColor" />
               </svg>
-            </span>
-            <span>{workspaceText(locale, "Визуал", "Visual")}</span>
-          </div>
+            }
+            label={workspaceText(locale, "Визуал", "Visual")}
+          />
           <div
             className="studio-segment-editor__timeline-track studio-segment-editor__timeline-track--visual"
             role="list"
@@ -34715,22 +34716,21 @@ export function WorkspacePage({
         </div>
 
         <div className="studio-segment-editor__timeline-row studio-segment-editor__timeline-row--voice">
-          <button
-            className="studio-segment-editor__timeline-label"
-            type="button"
-            aria-label={workspaceText(locale, "Настроить озвучку всего видео", "Configure whole-video voiceover")}
-            title={workspaceText(locale, "Настроить озвучку всего видео", "Configure whole-video voiceover")}
-            onPointerDown={(event) => handleSegmentEditorTimelineGlobalControlPointerDown("voice", event)}
-            onClick={(event) => handleSegmentEditorTimelineGlobalControlClick("voice", event)}
-          >
-            <span className="studio-segment-editor__timeline-label-icon" aria-hidden="true">
+          <WorkspaceSegmentTimelineTrackLabel
+            icon={
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                 <rect x="9" y="4" width="6" height="10" rx="3" stroke="currentColor" strokeWidth="1.9" />
                 <path d="M5 11a7 7 0 0 0 14 0M12 18v3M8.5 21h7" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-            </span>
-            <span>{workspaceText(locale, "Озвучка", "Voice")}</span>
-          </button>
+            }
+            label={workspaceText(locale, "Озвучка", "Voice")}
+            settings={{
+              ariaExpanded: segmentTimelineGlobalControlOpen === "voice",
+              label: workspaceText(locale, "Настроить озвучку всего видео", "Configure whole-video voiceover"),
+              onPointerDown: (event) => handleSegmentEditorTimelineGlobalControlPointerDown("voice", event),
+              onClick: (event) => handleSegmentEditorTimelineGlobalControlClick("voice", event),
+            }}
+          />
           <div className="studio-segment-editor__timeline-track">
             {renderSegmentEditorFullPreviewPlayhead()}
             {segmentEditorTimelineVoiceRow?.spans.map((span) => {
@@ -35119,21 +35119,20 @@ export function WorkspacePage({
         </div>
 
         <div className="studio-segment-editor__timeline-row studio-segment-editor__timeline-row--text">
-          <button
-            className="studio-segment-editor__timeline-label"
-            type="button"
-            aria-label={workspaceText(locale, "Настроить субтитры всего видео", "Configure whole-video subtitles")}
-            title={workspaceText(locale, "Настроить субтитры всего видео", "Configure whole-video subtitles")}
-            onPointerDown={(event) => handleSegmentEditorTimelineGlobalControlPointerDown("subtitle", event)}
-            onClick={(event) => handleSegmentEditorTimelineGlobalControlClick("subtitle", event)}
-          >
-            <span className="studio-segment-editor__timeline-label-icon" aria-hidden="true">
+          <WorkspaceSegmentTimelineTrackLabel
+            icon={
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                 <path d="M5 6h14M12 6v12M8.5 18h7" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-            </span>
-            <span>{workspaceText(locale, "Субтитры", "Subtitles")}</span>
-          </button>
+            }
+            label={workspaceText(locale, "Субтитры", "Subtitles")}
+            settings={{
+              ariaExpanded: segmentTimelineGlobalControlOpen === "subtitle",
+              label: workspaceText(locale, "Настроить субтитры всего видео", "Configure whole-video subtitles"),
+              onPointerDown: (event) => handleSegmentEditorTimelineGlobalControlPointerDown("subtitle", event),
+              onClick: (event) => handleSegmentEditorTimelineGlobalControlClick("subtitle", event),
+            }}
+          />
           <div className="studio-segment-editor__timeline-track">
             {renderSegmentEditorFullPreviewPlayhead()}
             {segmentEditorTimelineTextRow?.spans.map((span) => {
@@ -35207,40 +35206,35 @@ export function WorkspacePage({
         </div>
 
         <div className="studio-segment-editor__timeline-row studio-segment-editor__timeline-row--sound">
-          <button
-            className="studio-segment-editor__timeline-label studio-segment-editor__timeline-label--bulk-sound"
-            type="button"
-            aria-busy={isSegmentEditorBulkSceneSoundGenerating ? "true" : undefined}
-            aria-controls="workspace-bulk-scene-sound-title"
-            aria-expanded={isSegmentEditorBulkSceneSoundModalOpen}
-            aria-label={workspaceText(locale, "Создать звуки для всех сцен", "Create sounds for all scenes")}
-            title={workspaceText(
-              locale,
-              `Создать звуки для всех сцен · ${segmentEditorBulkSceneSoundCreditCost} ⚡`,
-              `Create sounds for all scenes · ${segmentEditorBulkSceneSoundCreditCost} ⚡`,
-            )}
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              setSegmentEditorBulkSceneSoundProgress({ completedCount: 0, failedCount: 0 });
-              setIsSegmentEditorBulkSceneSoundModalOpen(true);
-            }}
-          >
-            <span className="studio-segment-editor__timeline-label-icon" aria-hidden="true">
+          <WorkspaceSegmentTimelineTrackLabel
+            icon={
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                 <path d="M4 12h3l4-4v8l-4-4H4Z" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
                 <path d="M15 9.5c.8.7 1.2 1.5 1.2 2.5s-.4 1.8-1.2 2.5M18 7c1.5 1.3 2.3 3 2.3 5s-.8 3.7-2.3 5" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
               </svg>
-            </span>
-            <span>{workspaceText(locale, "Звуки", "Sounds")}</span>
-            <span className="studio-segment-editor__timeline-label-bulk-mark" aria-hidden="true">
-              {isSegmentEditorBulkSceneSoundGenerating ? (
-                <span className="studio-segment-editor__timeline-label-spinner" />
-              ) : (
-                "+"
-              )}
-            </span>
-          </button>
+            }
+            label={workspaceText(locale, "Звуки", "Sounds")}
+            settings={{
+              ariaBusy: isSegmentEditorBulkSceneSoundGenerating,
+              ariaControls: "workspace-bulk-scene-sound-title",
+              ariaExpanded: isSegmentEditorBulkSceneSoundModalOpen,
+              isBusy: isSegmentEditorBulkSceneSoundGenerating,
+              label: workspaceText(
+                locale,
+                `Создать звуки для всех сцен · ${segmentEditorBulkSceneSoundCreditCost} ⚡`,
+                `Create sounds for all scenes · ${segmentEditorBulkSceneSoundCreditCost} ⚡`,
+              ),
+              onPointerDown: (event) => {
+                event.stopPropagation();
+              },
+              onClick: (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                setSegmentEditorBulkSceneSoundProgress({ completedCount: 0, failedCount: 0 });
+                setIsSegmentEditorBulkSceneSoundModalOpen(true);
+              },
+            }}
+          />
           <div className="studio-segment-editor__timeline-track">
             {renderSegmentEditorFullPreviewPlayhead()}
             {segmentEditorTimelineSoundRow?.spans.map((span) => {
@@ -35333,21 +35327,20 @@ export function WorkspacePage({
         </div>
 
         <div className="studio-segment-editor__timeline-row studio-segment-editor__timeline-row--music">
-          <button
-            className="studio-segment-editor__timeline-label"
-            type="button"
-            aria-label={workspaceText(locale, "Настроить музыку всего видео", "Configure whole-video music")}
-            title={workspaceText(locale, "Настроить музыку всего видео", "Configure whole-video music")}
-            onPointerDown={(event) => handleSegmentEditorTimelineGlobalControlPointerDown("music", event)}
-            onClick={(event) => handleSegmentEditorTimelineGlobalControlClick("music", event)}
-          >
-            <span className="studio-segment-editor__timeline-label-icon" aria-hidden="true">
+          <WorkspaceSegmentTimelineTrackLabel
+            icon={
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                 <path d="M14 5.2v10.1a2.65 2.65 0 1 1-2.15-2.6V7.45l7.9-1.75v7.55a2.65 2.65 0 1 1-2.15-2.6V6.18L14 6.98" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-            </span>
-            <span>{workspaceText(locale, "Музыка", "Music")}</span>
-          </button>
+            }
+            label={workspaceText(locale, "Музыка", "Music")}
+            settings={{
+              ariaExpanded: segmentTimelineGlobalControlOpen === "music",
+              label: workspaceText(locale, "Настроить музыку всего видео", "Configure whole-video music"),
+              onPointerDown: (event) => handleSegmentEditorTimelineGlobalControlPointerDown("music", event),
+              onClick: (event) => handleSegmentEditorTimelineGlobalControlClick("music", event),
+            }}
+          />
           <div className="studio-segment-editor__timeline-track">
             {renderSegmentEditorFullPreviewPlayhead()}
             {segmentEditorTimelineMusicRow?.spans.map((span) => {

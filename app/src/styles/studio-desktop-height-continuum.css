@@ -465,6 +465,7 @@
     .studio-segment-editor__timeline {
     --studio-segment-editor-timeline-add-rail-offset: clamp(4px, 1.16cqh, 10px);
     --studio-segment-editor-timeline-add-rail-width: clamp(72px, 11.5cqh, 86px);
+    --studio-segment-editor-timeline-row-label-width: clamp(104px, 15cqh, 112px);
     --studio-segment-editor-timeline-visual-track-height:
       var(--studio-segment-editor-adaptive-visual-track-height) !important;
     --studio-segment-editor-timeline-scene-track-height:
@@ -508,7 +509,7 @@
 
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-ruler,
   #app .studio-canvas-main.is-segment-editor .studio-segment-editor__timeline-row {
-    grid-template-columns: var(--studio-segment-editor-timeline-add-rail-width) minmax(0, 1fr) !important;
+    grid-template-columns: var(--studio-segment-editor-timeline-row-label-width) minmax(0, 1fr) !important;
     min-width: 0 !important;
     column-gap: clamp(4px, 0.93cqh, 8px) !important;
   }

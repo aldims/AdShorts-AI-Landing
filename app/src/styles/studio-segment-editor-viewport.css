@@ -1973,3 +1973,47 @@
     font-size: 0.78rem !important;
   }
 }
+
+@media (max-width: 1180.98px) {
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__timeline-label--has-settings {
+    justify-content: flex-start !important;
+    gap: 2px !important;
+  }
+
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__timeline-label--has-settings
+    .studio-segment-editor__timeline-label-icon {
+    display: inline-flex;
+    width: 16px !important;
+    height: 16px !important;
+  }
+
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__timeline-label-settings {
+    width: 24px;
+    height: 24px;
+    margin-left: 0;
+    border-radius: 7px;
+  }
+}
+
+@media (max-width: 380px) {
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__timeline-label--has-settings
+    .studio-segment-editor__timeline-label-icon {
+    width: 14px !important;
+    height: 14px !important;
+  }
+
+  #app
+    .studio-canvas-main.is-segment-editor
+    .studio-segment-editor__timeline-label-settings {
+    width: 22px;
+    height: 22px;
+  }
+}

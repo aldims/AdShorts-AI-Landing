@@ -31027,10 +31027,10 @@ body .studio-canvas-route:not(.is-segment-editor):has(.studio-canvas-prompt__inn
 .studio-segment-editor__timeline-ruler,
 .studio-segment-editor__timeline-row {
   display: grid;
-  grid-template-columns: 86px minmax(var(--studio-segment-editor-timeline-track-width), 1fr);
+  grid-template-columns: 112px minmax(var(--studio-segment-editor-timeline-track-width), 1fr);
   gap: 8px;
   align-items: stretch;
-  min-width: calc(86px + 8px + var(--studio-segment-editor-timeline-track-width));
+  min-width: calc(112px + 8px + var(--studio-segment-editor-timeline-track-width));
 }
 
 .studio-segment-editor__timeline-ruler {
@@ -31067,30 +31067,62 @@ body .studio-canvas-route:not(.is-segment-editor):has(.studio-canvas-prompt__inn
   white-space: nowrap;
 }
 
-button.studio-segment-editor__timeline-label {
+.studio-segment-editor__timeline-label--has-settings {
+  gap: 4px;
+  padding-right: 2px;
+}
+
+.studio-segment-editor__timeline-label--has-settings .studio-segment-editor__timeline-label-icon {
+  display: none;
+}
+
+.studio-segment-editor__timeline-label-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.studio-segment-editor__timeline-label-settings {
   appearance: none;
   -webkit-appearance: none;
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  margin-left: auto;
+  padding: 0;
   border: 0;
+  border-radius: 8px;
+  background: rgba(148, 163, 184, 0.06);
+  color: rgba(203, 213, 225, 0.76);
   font-family: inherit;
-  text-align: left;
   cursor: pointer;
   transition:
     background 0.16s ease,
     color 0.16s ease,
-    box-shadow 0.16s ease;
+    box-shadow 0.16s ease,
+    transform 0.16s ease;
 }
 
-button.studio-segment-editor__timeline-label:hover,
-button.studio-segment-editor__timeline-label:focus-visible {
-  background:
-    linear-gradient(90deg, rgba(10, 20, 34, 0.98) 72%, rgba(10, 20, 34, 0.72));
-  color: rgba(248, 250, 252, 0.96);
+.studio-segment-editor__timeline-label-settings:hover {
+  background: rgba(45, 212, 191, 0.12);
+  color: rgba(204, 251, 241, 0.96);
+  box-shadow: inset 0 0 0 1px rgba(45, 212, 191, 0.2);
+  transform: translateY(-1px);
 }
 
-button.studio-segment-editor__timeline-label:focus-visible {
-  outline: 2px solid rgba(45, 212, 191, 0.42);
+.studio-segment-editor__timeline-label-settings:focus-visible {
+  outline: 2px solid rgba(94, 234, 212, 0.72);
   outline-offset: 2px;
-  box-shadow: 0 0 0 4px rgba(45, 212, 191, 0.08);
+  background: rgba(45, 212, 191, 0.14);
+  color: rgba(240, 253, 250, 0.98);
+  box-shadow: 0 0 0 4px rgba(45, 212, 191, 0.1);
+}
+
+.studio-segment-editor__timeline-label-settings svg {
+  display: block;
 }
 
 .studio-segment-editor__timeline-label-icon {
@@ -31103,32 +31135,13 @@ button.studio-segment-editor__timeline-label:focus-visible {
   color: rgba(203, 213, 225, 0.84);
 }
 
-.studio-segment-editor__timeline-label--bulk-sound {
-  gap: 4px;
-  padding-right: 2px;
-}
-
-.studio-segment-editor__timeline-label-bulk-mark {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  width: 15px;
-  height: 15px;
-  margin-left: 0;
-  border: 1px solid rgba(45, 212, 191, 0.24);
-  border-radius: 6px;
-  background: rgba(20, 184, 166, 0.1);
-  color: rgba(153, 246, 228, 0.94);
-  font-size: 0.68rem;
-  font-weight: 850;
-  line-height: 1;
-}
-
-.studio-segment-editor__timeline-label-spinner {
-  width: 9px;
-  height: 9px;
-  border: 1.5px solid rgba(153, 246, 228, 0.28);
+.studio-segment-editor__timeline-label-settings-busy {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 6px;
+  height: 6px;
+  border: 1px solid rgba(153, 246, 228, 0.32);
   border-top-color: rgba(153, 246, 228, 0.98);
   border-radius: 999px;
   animation: workspace-confirm-modal-spin 0.72s linear infinite;
@@ -34034,7 +34047,7 @@ button.studio-segment-editor__timeline-label:focus-visible {
 
   .studio-segment-editor__timeline.is-standard-fit .studio-segment-editor__timeline-ruler,
   .studio-segment-editor__timeline.is-standard-fit .studio-segment-editor__timeline-row {
-    grid-template-columns: 86px minmax(0, 1fr);
+    grid-template-columns: 112px minmax(0, 1fr);
     min-width: 0;
   }
 }
