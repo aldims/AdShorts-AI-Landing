@@ -6925,6 +6925,7 @@ export async function createStudioGenerationJob(
   const prefillSettings = normalizeExamplePrefillStudioSettings({
     aiVideoGenerateAudioEnabled: normalizedAiVideoGenerateAudioEnabled,
     brandText: normalizedBrandText,
+    creationMode: normalizedSegmentEditor ? "scenes" : "idea",
     language: normalizedLanguage,
     musicType: normalizedMusicType,
     subtitleColorId: normalizedSubtitleColorId,

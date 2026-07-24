@@ -11,6 +11,7 @@ describe("example prefill normalization", () => {
       normalizeExamplePrefillStudioSettings({
         aiVideoGenerateAudioEnabled: true,
         brandText: "  Brand copy  ",
+        creationMode: "scenes",
         language: "ru",
         musicType: "ai",
         subtitleColorId: "purple",
@@ -23,6 +24,7 @@ describe("example prefill normalization", () => {
     ).toEqual({
       aiVideoGenerateAudioEnabled: true,
       brandText: "Brand copy",
+      creationMode: "scenes",
       language: "ru",
       musicType: "ai",
       subtitleColorId: "purple",
@@ -31,6 +33,17 @@ describe("example prefill normalization", () => {
       videoMode: "standard",
       voiceEnabled: false,
       voiceId: "Bys_24000",
+    });
+  });
+
+  it("drops unknown creation modes instead of inventing project metadata", () => {
+    expect(
+      normalizeExamplePrefillStudioSettings({
+        creationMode: "automatic",
+        language: "ru",
+      }),
+    ).toEqual({
+      language: "ru",
     });
   });
 

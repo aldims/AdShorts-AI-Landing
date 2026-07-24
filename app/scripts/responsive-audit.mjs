@@ -73,7 +73,7 @@ const popularViewports = [
 const zooms = [1, 1.25, 1.5, 1.75, 2];
 const fontScales = [1, 1.25, 1.5];
 
-const appRoutes = scenesOnly
+const appRouteCatalog = scenesOnly
   ? ["/app/studio?mode=scenes", "/en/app/studio?mode=scenes"]
   : quickMode
     ? [
@@ -87,6 +87,8 @@ const appRoutes = scenesOnly
         "/en/app",
         "/app/studio",
         "/en/app/studio",
+        "/app/studio?section=project&project=audit-project",
+        "/en/app/studio?section=project&project=audit-project",
         "/app/studio?audit=legacy-project",
         "/en/app/studio?audit=legacy-project",
         "/app/studio?mode=scenes",
@@ -105,6 +107,8 @@ const appRoutes = scenesOnly
         "/en/app",
         "/app/studio",
         "/en/app/studio",
+        "/app/studio?section=project&project=audit-project",
+        "/en/app/studio?section=project&project=audit-project",
         "/app/studio?audit=legacy-project",
         "/en/app/studio?audit=legacy-project",
         "/app/studio?mode=scenes",
@@ -112,6 +116,14 @@ const appRoutes = scenesOnly
         "/app/projects",
         "/en/app/projects",
       ];
+const requestedAppRoutes = String(process.env.RESPONSIVE_AUDIT_APP_ROUTES ?? "")
+  .split(",")
+  .map((route) => route.trim())
+  .filter(Boolean);
+const appRoutes =
+  requestedAppRoutes.length > 0
+    ? appRouteCatalog.filter((route) => requestedAppRoutes.includes(route))
+    : appRouteCatalog;
 
 const staticRoutes = scenesOnly
   ? []
@@ -201,7 +213,17 @@ const workspaceProject = {
   updatedAt: nowIso,
   versionRootProjectAdId: null,
   posterUrl: null,
-  prefillSettings: null,
+  prefillSettings: {
+    creationMode: "idea",
+    language: "en",
+    musicType: "calm",
+    subtitleColorId: "purple",
+    subtitleEnabled: true,
+    subtitleStyleId: "modern",
+    videoMode: "ai_photo",
+    voiceEnabled: true,
+    voiceId: "Liam_Timing",
+  },
   videoFallbackUrl: null,
   videoUrl: null,
   youtubePublication: null,
@@ -1411,6 +1433,8 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
     await page.waitForTimeout(180);
 
     const expectsScenesMode = surface === "app" && route.includes("mode=scenes");
+    const auditsProjectPage =
+      surface === "app" && route.includes("section=project");
     const usesSceneHeightContinuum =
       expectsScenesMode &&
       effectiveWidth >= 1181 &&
@@ -1495,6 +1519,37 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
 
     const metrics = await evaluateLayout(page);
     const failures = [];
+    const projectPageMetrics = auditsProjectPage
+      ? await page.evaluate(() => {
+          const pageElement = document.querySelector(".studio-project-page");
+          const player = document.querySelector(".studio-project-page__player-shell");
+          const info = document.querySelector(".studio-project-page__info");
+          const actions = document.querySelector(".studio-project-page__actions");
+          if (!pageElement || !player || !info || !actions) {
+            return null;
+          }
+
+          const pageRect = pageElement.getBoundingClientRect();
+          const playerRect = player.getBoundingClientRect();
+          const infoRect = info.getBoundingClientRect();
+          const actionsRect = actions.getBoundingClientRect();
+          return {
+            actionsBottom: Math.round(actionsRect.bottom),
+            centerPosition: window.getComputedStyle(player.closest(".studio-project-page__center")).position,
+            clientHeight: pageElement.clientHeight,
+            infoBottom: Math.round(infoRect.bottom),
+            infoPosition: window.getComputedStyle(info).position,
+            infoRight: Math.round(infoRect.right),
+            infoTop: Math.round(infoRect.top),
+            matchesMobileLayout: window.matchMedia("(max-width: 980px)").matches,
+            pageBottom: Math.round(pageRect.bottom),
+            pageCenter: Math.round(pageRect.left + pageRect.width / 2),
+            pageRight: Math.round(pageRect.right),
+            playerCenter: Math.round(playerRect.left + playerRect.width / 2),
+            scrollHeight: pageElement.scrollHeight,
+          };
+        })
+      : null;
     let legacyProjectSceneFeedback = null;
     if (auditsLegacyLaptopProject) {
       const scenesTabName = route.startsWith("/en/") ? "By scenes" : "По сценам";
@@ -1705,6 +1760,7 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
       surface === "app" &&
       route.includes("/app/studio") &&
       !route.includes("audit=legacy-project") &&
+      !auditsProjectPage &&
       !expectsScenesMode &&
       scenario.type === "laptop-125";
     if (auditsLaptopIdea) {
@@ -1756,6 +1812,37 @@ const auditRoute = async ({ browser, browserName, baseUrl, route, surface, scena
 
     if (metrics.overlaps.length > 0) {
       failures.push(`header overlaps: ${metrics.overlaps.map((item) => `${item.a}/${item.b}`).join(", ")}`);
+    }
+
+    if (auditsProjectPage) {
+      if (!projectPageMetrics) {
+        failures.push("project page, player, actions or information panel is missing");
+      } else if (effectiveWidth >= 981) {
+        if (Math.abs(projectPageMetrics.playerCenter - projectPageMetrics.pageCenter) > 1) {
+          failures.push(
+            `project player is not centered: ${projectPageMetrics.playerCenter} != ${projectPageMetrics.pageCenter}`,
+          );
+        }
+        if (projectPageMetrics.scrollHeight > projectPageMetrics.clientHeight + 1) {
+          failures.push(
+            `desktop project page scrolls vertically: ${projectPageMetrics.scrollHeight} > ${projectPageMetrics.clientHeight}`,
+          );
+        }
+        if (
+          projectPageMetrics.infoRight > projectPageMetrics.pageRight + 1 ||
+          projectPageMetrics.infoBottom > projectPageMetrics.pageBottom + 1
+        ) {
+          failures.push("desktop project information panel leaves the page viewport");
+        }
+        if (projectPageMetrics.actionsBottom > projectPageMetrics.pageBottom + 1) {
+          failures.push("desktop project actions leave the page viewport");
+        }
+      } else if (projectPageMetrics.infoTop < projectPageMetrics.actionsBottom + 20) {
+        failures.push(
+          `mobile project information overlaps actions: ${projectPageMetrics.infoTop} < ${projectPageMetrics.actionsBottom + 20}; ` +
+            `info=${projectPageMetrics.infoPosition}, center=${projectPageMetrics.centerPosition}, media=${projectPageMetrics.matchesMobileLayout}`,
+        );
+      }
     }
 
     if (auditsLaptopIdea) {

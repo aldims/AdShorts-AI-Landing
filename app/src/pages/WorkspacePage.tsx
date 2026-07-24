@@ -454,6 +454,7 @@ import {
 } from "../features/workspace/workspace-segment-payload-helpers";
 import {
   buildStudioRouteUrl,
+  getStudioGenerationProjectRouteKey,
   getStudioRouteSection,
   getStudioRouteState,
   getStudioViewFromRouteSection,
@@ -1235,6 +1236,7 @@ export {
   shouldSkipWorkspaceSegmentEditorActiveDraftReopen,
   shouldDeferSegmentEditorRouteRestore,
   buildStudioRouteUrl,
+  getStudioGenerationProjectRouteKey,
   getStudioRouteState,
 } from "../features/workspace/workspace-route-helpers";
 export {
@@ -6607,6 +6609,17 @@ export function WorkspacePage({
       ) ?? null
     );
   }, [projects, routeStudioState.projectKey]);
+  const routeProjectVersions = useMemo(() => {
+    if (!routeProject) {
+      return [];
+    }
+
+    return (
+      accountProjectGroups.find((group) =>
+        group.projects.some((project) => project.id === routeProject.id),
+      )?.projects ?? [routeProject]
+    );
+  }, [accountProjectGroups, routeProject]);
   const currentProjectId = generatedVideo?.adId ?? null;
   const currentAppliedSegmentEditorSession =
     currentProjectId && segmentEditorAppliedSession?.projectId === currentProjectId ? segmentEditorAppliedSession : null;
@@ -23470,8 +23483,16 @@ export function WorkspacePage({
       setProjectPendingDelete(null);
       setProjectPendingDeleteProjects([]);
       const deletedAdIds = new Set(projectsToDelete.flatMap((targetProject) => (targetProject.adId !== null ? [targetProject.adId] : [])));
+      const deletedRouteProjectKey = routeStudioState.projectKey;
       const isDeletedRouteProject =
-        routeStudioState.projectId !== null && deletedAdIds.has(routeStudioState.projectId);
+        (routeStudioState.projectId !== null && deletedAdIds.has(routeStudioState.projectId)) ||
+        (deletedRouteProjectKey !== null &&
+          projectsToDelete.some(
+            (targetProject) =>
+              targetProject.id === deletedRouteProjectKey ||
+              targetProject.jobId === deletedRouteProjectKey ||
+              (targetProject.adId !== null && String(targetProject.adId) === deletedRouteProjectKey),
+          ));
       setSegmentEditorDraft((currentDraft) =>
         currentDraft && deletedAdIds.has(currentDraft.projectId) ? null : currentDraft,
       );
@@ -23486,6 +23507,7 @@ export function WorkspacePage({
       }
       if (isDeletedRouteProject) {
         setCreateMode("default");
+        setStudioView("projects");
         syncStudioRouteSection("projects", { replace: true });
       }
       setMediaLibraryReloadToken((currentToken) => currentToken + 1);
@@ -23880,6 +23902,38 @@ export function WorkspacePage({
     );
   };
 
+  const openSuccessfulGenerationProject = (
+    generation: StudioGeneration,
+    generationError: string | null,
+  ) => {
+    const projectKey = getStudioGenerationProjectRouteKey(generation);
+    if (!projectKey) {
+      throw new Error(
+        workspaceText(
+          locale,
+          "Готовое видео не связано с проектом.",
+          "The completed video is not linked to a project.",
+        ),
+      );
+    }
+
+    markPendingStudioRouteSection("project");
+    suppressProjectFallbackPreviewRef.current = true;
+    flushSync(() => {
+      setActiveTab("studio");
+      setStudioView("project");
+      setCreateMode("default");
+      setGeneratedVideo(generation);
+      setGenerateError(generationError);
+      setActiveProjectPreviewId(null);
+      setIsPreviewModalOpen(false);
+      setProjectPreviewModal(null);
+      setPreviewModalPlaybackError(null);
+      setPreviewModalUseFallbackSource(false);
+    });
+    syncStudioRouteSection("project", { projectKey, replace: true });
+  };
+
   const pollGenerationJob = async (
     jobId: string,
     initialStatus = "queued",
@@ -23889,7 +23943,6 @@ export function WorkspacePage({
       clearStoredSegmentEditorScratchDraftOnSuccess?: boolean;
       generationUiSource?: Exclude<StudioGenerationUiSource, "idle">;
       invalidateSegmentEditorOnSuccess?: boolean;
-      openStudioCreateOnSuccess?: boolean;
       projectBrandStateOnSuccess?: WorkspaceSegmentEditorProjectBrandState | null;
       showSegmentEditorGenerationError?: boolean;
     },
@@ -23974,8 +24027,6 @@ export function WorkspacePage({
 
         if (statusData.generation) {
           doneWithoutPreviewAttempts = 0;
-          suppressProjectFallbackPreviewRef.current = false;
-          setGeneratedVideo(statusData.generation);
           if (
             options?.projectBrandStateOnSuccess &&
             typeof statusData.generation.adId === "number" &&
@@ -24009,7 +24060,6 @@ export function WorkspacePage({
           showStudioToast(workspaceText(locale, "✅ Видео готово", "✅ Video ready"));
           setTopicInput("");
           updateDismissedStudioPreviewKey(null);
-          setGenerateError(statusData.error ?? null);
           if (options?.invalidateSegmentEditorOnSuccess) {
             setSegmentEditorLoadedSession(null);
           }
@@ -24027,12 +24077,7 @@ export function WorkspacePage({
             setSegmentEditorDraft(null);
             setSegmentEditorVideoError(null);
           }
-          if (options?.openStudioCreateOnSuccess) {
-            setActiveTab("studio");
-            setStudioView("create");
-            setCreateMode("default");
-            syncStudioRouteSection("create", { replace: true });
-          }
+          openSuccessfulGenerationProject(statusData.generation, statusData.error ?? null);
           setStatus("");
           break;
         }
@@ -25012,7 +25057,6 @@ export function WorkspacePage({
         clearStoredSegmentEditorScratchDraftOnSuccess: isWorkspaceSegmentEditorScratchDraft(options?.segmentEditorSession),
         generationUiSource: isSegmentEditorGeneration ? "segment-editor" : "studio",
         invalidateSegmentEditorOnSuccess: Boolean(options?.isRegeneration && options?.projectId),
-        openStudioCreateOnSuccess: true,
         projectBrandStateOnSuccess,
         showSegmentEditorGenerationError: isSegmentEditorGeneration,
       });
@@ -26172,6 +26216,26 @@ export function WorkspacePage({
     });
   };
 
+  const handleCreateNewShorts = () => {
+    markPendingStudioRouteSection("create");
+    suppressProjectFallbackPreviewRef.current = true;
+    flushSync(() => {
+      cancelPendingSegmentEditorLoad();
+      restoreStoredStudioCreateSettings();
+      setActiveTab("studio");
+      setStudioView("create");
+      setCreateMode("default");
+      setGeneratedVideo(null);
+      setTopicInput("");
+      setGenerateError(null);
+      setActiveProjectPreviewId(null);
+      setIsPreviewModalOpen(false);
+      setProjectPreviewModal(null);
+      updateDismissedStudioPreviewKey(null);
+    });
+    syncStudioRouteSection("create");
+  };
+
   const handleOpenProjectPage = (project: WorkspaceProject) => {
     markPendingStudioRouteSection("project");
     flushSync(() => {
@@ -26537,9 +26601,7 @@ export function WorkspacePage({
 
         if (latestGeneration.generation) {
           activeGenerationJobIdRef.current = null;
-          suppressProjectFallbackPreviewRef.current = false;
-          setGeneratedVideo(latestGeneration.generation);
-          setGenerateError(latestGenerationError);
+          openSuccessfulGenerationProject(latestGeneration.generation, latestGenerationError);
           setStatus("");
           setIsGenerating(false);
           setGenerationUiSource("idle");
@@ -39661,11 +39723,14 @@ export function WorkspacePage({
             {studioView === "project" ? (
               <WorkspaceProjectPage
                 isActionBusy={isSegmentEditorLoading || isGenerating || isPublishBootstrapLoading}
+                isDeleteBusy={isProjectDeleteSubmitting}
                 isLoading={!hasLoadedProjects || isProjectsLoading}
                 onBack={() => {
                   setStudioView("projects");
                   syncStudioRouteSection("projects");
                 }}
+                onCreateNew={handleCreateNewShorts}
+                onDelete={requestProjectDelete}
                 onEdit={(project) => {
                   void handleOpenProjectSegmentEditor(project);
                 }}
@@ -39676,9 +39741,13 @@ export function WorkspacePage({
                   void handleRegenerateProject(project);
                 }}
                 onRetryLoad={() => setHasLoadedProjects(false)}
+                onSelectVersion={handleOpenProjectPage}
                 onVolumeChange={setStudioPreviewVolume}
                 project={routeProject}
                 projectsError={projectsError}
+                subtitleColorOptions={subtitleColorOptions}
+                subtitleStyleOptions={subtitleStyleOptions}
+                versions={routeProjectVersions}
                 volume={studioPreviewVolume}
               />
             ) : null}

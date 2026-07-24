@@ -1,6 +1,7 @@
 import { isSupportedLocale, type Locale } from "./locales.js";
 
 export type ExamplePrefillStudioLanguage = Locale;
+export type ExamplePrefillStudioCreationMode = "idea" | "scenes";
 
 export type ExamplePrefillStudioMusicType =
   | "ai"
@@ -21,6 +22,7 @@ export type ExamplePrefillStudioVideoMode = "ai_photo" | "ai_video" | "custom" |
 export type ExamplePrefillStudioSettings = {
   aiVideoGenerateAudioEnabled?: boolean;
   brandText?: string;
+  creationMode?: ExamplePrefillStudioCreationMode;
   language?: ExamplePrefillStudioLanguage;
   musicType?: ExamplePrefillStudioMusicType;
   subtitleColorId?: string;
@@ -55,9 +57,14 @@ export const normalizeExamplePrefillStudioSettings = (
   const videoMode = normalizeText(payload.videoMode);
   const voiceId = normalizeText(payload.voiceId);
   const brandText = normalizeText(payload.brandText);
+  const creationMode = normalizeText(payload.creationMode);
 
   if (typeof payload.aiVideoGenerateAudioEnabled === "boolean") {
     settings.aiVideoGenerateAudioEnabled = payload.aiVideoGenerateAudioEnabled;
+  }
+
+  if (creationMode === "idea" || creationMode === "scenes") {
+    settings.creationMode = creationMode;
   }
 
   if (isSupportedLocale(language)) {

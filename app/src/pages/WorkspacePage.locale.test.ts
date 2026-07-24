@@ -141,6 +141,7 @@ import {
   getWorkspaceSegmentEditorCarouselSlots,
   getWorkspaceSegmentEditorProjectOpenOptions,
   hasWorkspaceSegmentEditorPersistedLocalChanges,
+  getStudioGenerationProjectRouteKey,
   getStudioRouteState,
   getWorkspaceSegmentMediaIdentityKey,
   getWorkspaceSegmentResolvedMediaSurface,
@@ -3429,6 +3430,14 @@ describe("WorkspacePage studio route transitions", () => {
         segmentIndex: null,
       }),
     );
+  });
+
+  it("routes a completed generation to its persisted project identity", () => {
+    expect(getStudioGenerationProjectRouteKey({ adId: 42, id: "generation:42" })).toBe("42");
+    expect(getStudioGenerationProjectRouteKey({ adId: null, id: " generation:fallback " })).toBe(
+      "generation:fallback",
+    );
+    expect(getStudioGenerationProjectRouteKey({ adId: null, id: " " })).toBeNull();
   });
 
   it("starts scene creation from a fresh draft when requested explicitly", () => {

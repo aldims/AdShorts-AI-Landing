@@ -67,6 +67,18 @@ export const getStudioViewFromRouteSection = (section: StudioRouteSection): Stud
   return "create";
 };
 
+export const getStudioGenerationProjectRouteKey = (
+  generation: { adId?: number | null; id?: string | null } | null | undefined,
+) => {
+  const adId = Number(generation?.adId);
+  if (Number.isInteger(adId) && adId > 0) {
+    return String(adId);
+  }
+
+  const generationId = String(generation?.id ?? "").trim();
+  return generationId ? generationId.slice(0, 240) : null;
+};
+
 export const shouldDeferSegmentEditorRouteRestore = (pendingSection: StudioRouteSection | null) =>
   pendingSection !== null && pendingSection !== "edit";
 
