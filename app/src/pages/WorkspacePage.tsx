@@ -13092,6 +13092,7 @@ export function WorkspacePage({
         segmentEditorHandledRouteRestoreKeyRef.current = null;
         segmentEditorFreshRouteFetchKeyRef.current = null;
         segmentEditorFreshRouteAttemptedKeyRef.current = null;
+        segmentEditorDraftRef.current = null;
         setSegmentEditorDraft(null);
         setSegmentEditorLoadError(null);
         setCreateMode("default");
@@ -13110,6 +13111,7 @@ export function WorkspacePage({
         segmentEditorHandledRouteRestoreKeyRef.current = null;
         segmentEditorFreshRouteFetchKeyRef.current = null;
         segmentEditorFreshRouteAttemptedKeyRef.current = null;
+        segmentEditorDraftRef.current = null;
         setSegmentEditorDraft(null);
         setSegmentEditorLoadError(null);
         setCreateMode("default");
@@ -13125,16 +13127,15 @@ export function WorkspacePage({
       return;
     }
 
-    markPendingStudioRouteSection("create");
-    suppressProjectFallbackPreviewRef.current = true;
-    flushSync(() => {
-      cancelPendingSegmentEditorLoad();
-      stashCurrentSegmentEditorDraft();
-      clearDetachedSegmentEditorDraft();
-      segmentEditorRouteRestoreKeyRef.current = null;
-      segmentEditorHandledRouteRestoreKeyRef.current = null;
-      segmentEditorFreshRouteFetchKeyRef.current = null;
-      segmentEditorFreshRouteAttemptedKeyRef.current = null;
+      markPendingStudioRouteSection("create");
+      suppressProjectFallbackPreviewRef.current = true;
+      flushSync(() => {
+        cancelPendingSegmentEditorLoad();
+        stashCurrentSegmentEditorDraft();
+        segmentEditorRouteRestoreKeyRef.current = null;
+        segmentEditorHandledRouteRestoreKeyRef.current = null;
+        segmentEditorFreshRouteFetchKeyRef.current = null;
+        segmentEditorFreshRouteAttemptedKeyRef.current = null;
       closeSegmentAiPhotoModal({ immediate: true });
       resetSegmentEditorPreviewPlaybackState({ clearRefs: true });
       segmentEditorDraftRef.current = null;
