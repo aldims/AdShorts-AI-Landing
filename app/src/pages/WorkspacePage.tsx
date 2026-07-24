@@ -39647,8 +39647,6 @@ export function WorkspacePage({
                 onVolumeChange={setStudioPreviewVolume}
                 project={routeProject}
                 projectsError={projectsError}
-                subtitleColorOptions={subtitleColorOptions}
-                subtitleStyleOptions={subtitleStyleOptions}
                 versions={routeProjectVersions}
                 volume={studioPreviewVolume}
               />

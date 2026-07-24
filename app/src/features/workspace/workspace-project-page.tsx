@@ -3,16 +3,10 @@ import { useEffect, useRef, useState } from "react";
 import { useLocale, type Locale } from "../../lib/i18n";
 import { getWorkspaceProjectDisplayTitle, getWorkspaceVideoDownloadName } from "../../lib/workspaceMediaLibrary";
 import { appendUrlToken } from "./workspace-media-library-helpers";
+import { getWorkspaceSegmentEditorSessionUrl, type WorkspaceSegmentEditorResponse } from "./workspace-page-model";
 import { WorkspaceModalVideoPlayer } from "./workspace-preview-components";
 import { formatProjectDate, getPublicationMetaLabel } from "./workspace-publish-helpers";
-import { getStudioVoiceOptionById } from "./workspace-studio-defaults-helpers";
-import { getStudioMusicOptionCopy, studioMusicOptions } from "./workspace-studio-options";
-import { getStudioVoiceOptionCopy } from "./workspace-segment-editor";
-import type {
-  StudioSubtitleColorOption,
-  StudioSubtitleStyleOption,
-  WorkspaceProject,
-} from "./workspace-types";
+import type { WorkspaceProject } from "./workspace-types";
 
 type WorkspaceProjectPageProps = {
   isActionBusy: boolean;
@@ -29,110 +23,40 @@ type WorkspaceProjectPageProps = {
   onVolumeChange: (nextVolume: number) => void;
   project: WorkspaceProject | null;
   projectsError: string | null;
-  subtitleColorOptions: StudioSubtitleColorOption[];
-  subtitleStyleOptions: StudioSubtitleStyleOption[];
   versions: WorkspaceProject[];
   volume: number;
 };
 
-type VideoDurationState =
-  | { kind: "available"; seconds: number }
+type SceneCountState =
+  | { count: number; kind: "available" }
   | { kind: "pending" }
   | { kind: "unavailable" };
 
 const workspaceText = (locale: Locale, ru: string, en: string) => (locale === "en" ? en : ru);
 
-const getUnavailableLabel = (locale: Locale) => workspaceText(locale, "Нет данных", "Unavailable");
-
-const getLanguageLabel = (project: WorkspaceProject, locale: Locale) => {
-  if (project.prefillSettings?.language === "ru") {
-    return workspaceText(locale, "Русский", "Russian");
-  }
-  if (project.prefillSettings?.language === "en") {
-    return workspaceText(locale, "Английский", "English");
-  }
-  return getUnavailableLabel(locale);
-};
-
-const getVideoModeLabel = (project: WorkspaceProject, locale: Locale) => {
-  switch (project.prefillSettings?.videoMode) {
-    case "ai_photo":
-      return workspaceText(locale, "ИИ-фото", "AI photos");
-    case "ai_video":
-      return project.prefillSettings.aiVideoGenerateAudioEnabled === true
-        ? workspaceText(locale, "ИИ-видео со звуком", "AI video with sound")
-        : workspaceText(locale, "ИИ-видео", "AI video");
-    case "custom":
-      return workspaceText(locale, "Свой визуал", "Custom visual");
-    case "standard":
-      return workspaceText(locale, "Сцены проекта", "Project scenes");
-    default:
-      return getUnavailableLabel(locale);
-  }
-};
-
-const getMusicLabel = (project: WorkspaceProject, locale: Locale) => {
-  const musicType = project.prefillSettings?.musicType;
-  if (!musicType) {
-    return getUnavailableLabel(locale);
-  }
-
-  const option = studioMusicOptions.find((candidate) => candidate.id === musicType);
-  return option ? getStudioMusicOptionCopy(option, locale).label : musicType;
-};
-
-const getVoiceLabel = (project: WorkspaceProject, locale: Locale) => {
-  const settings = project.prefillSettings;
-  if (!settings || typeof settings.voiceEnabled !== "boolean") {
-    return getUnavailableLabel(locale);
-  }
-  if (!settings.voiceEnabled) {
-    return workspaceText(locale, "Выключена", "Off");
-  }
-
-  const voiceId = String(settings.voiceId ?? "").trim();
-  if (!voiceId) {
-    return workspaceText(locale, "Включена · голос не указан", "On · voice unavailable");
-  }
-
-  const voiceOption = getStudioVoiceOptionById(voiceId);
-  return voiceOption ? getStudioVoiceOptionCopy(voiceOption, locale).label : voiceId;
-};
-
-const getSubtitleLabel = (
-  project: WorkspaceProject,
-  locale: Locale,
-  subtitleColorOptions: StudioSubtitleColorOption[],
-  subtitleStyleOptions: StudioSubtitleStyleOption[],
-) => {
-  const settings = project.prefillSettings;
-  if (!settings || typeof settings.subtitleEnabled !== "boolean") {
-    return getUnavailableLabel(locale);
-  }
-  if (!settings.subtitleEnabled) {
-    return workspaceText(locale, "Выключены", "Off");
-  }
-
-  const styleId = String(settings.subtitleStyleId ?? "").trim();
-  const colorId = String(settings.subtitleColorId ?? "").trim();
-  const styleLabel = subtitleStyleOptions.find((option) => option.id === styleId)?.label || styleId;
-  const colorLabel = subtitleColorOptions.find((option) => option.id === colorId)?.label || colorId;
-  const details = [styleLabel, colorLabel].filter(Boolean).join(" · ");
-  return details || workspaceText(locale, "Включены", "On");
-};
-
-const formatVideoDuration = (durationState: VideoDurationState, locale: Locale) => {
-  if (durationState.kind === "pending") {
+const formatSceneCount = (sceneCount: SceneCountState, locale: Locale) => {
+  if (sceneCount.kind === "pending") {
     return workspaceText(locale, "Определяется…", "Detecting…");
   }
-  if (durationState.kind === "unavailable") {
-    return getUnavailableLabel(locale);
+  if (sceneCount.kind === "unavailable") {
+    return workspaceText(locale, "Нет данных", "Unavailable");
   }
 
-  const roundedSeconds = Math.max(0, Math.round(durationState.seconds));
-  const minutes = Math.floor(roundedSeconds / 60);
-  const seconds = roundedSeconds % 60;
-  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  if (locale === "en") {
+    return `${sceneCount.count} ${sceneCount.count === 1 ? "scene" : "scenes"}`;
+  }
+
+  const modulo100 = sceneCount.count % 100;
+  const modulo10 = sceneCount.count % 10;
+  const suffix =
+    modulo100 >= 11 && modulo100 <= 14
+      ? "сцен"
+      : modulo10 === 1
+        ? "сцена"
+        : modulo10 >= 2 && modulo10 <= 4
+          ? "сцены"
+          : "сцен";
+  return `${sceneCount.count} ${suffix}`;
 };
 
 export function WorkspaceProjectPage({
@@ -150,8 +74,6 @@ export function WorkspaceProjectPage({
   onVolumeChange,
   project,
   projectsError,
-  subtitleColorOptions,
-  subtitleStyleOptions,
   versions,
   volume,
 }: WorkspaceProjectPageProps) {
@@ -159,7 +81,7 @@ export function WorkspaceProjectPage({
   const projectMenuRef = useRef<HTMLDivElement | null>(null);
   const [isProjectMenuOpen, setIsProjectMenuOpen] = useState(false);
   const [useFallbackVideo, setUseFallbackVideo] = useState(false);
-  const [videoDuration, setVideoDuration] = useState<VideoDurationState>({ kind: "pending" });
+  const [sceneCount, setSceneCount] = useState<SceneCountState>({ kind: "pending" });
   const title = project ? getWorkspaceProjectDisplayTitle(project) : "";
   const playbackToken = project
     ? project.updatedAt || project.generatedAt || project.createdAt || project.id
@@ -171,7 +93,8 @@ export function WorkspaceProjectPage({
   const downloadUrl = appendUrlToken(primaryVideoUrl, "download", playbackToken);
   const downloadName = getWorkspaceVideoDownloadName(title);
   const canEdit = Boolean(project?.adId && project.status === "ready" && primaryVideoUrl);
-  const canRegenerate = Boolean(project?.prompt.trim() && primaryVideoUrl);
+  const shouldShowRegenerate = project?.prefillSettings?.creationMode === "idea";
+  const canRegenerate = Boolean(shouldShowRegenerate && project?.prompt.trim() && primaryVideoUrl);
   const canPublish = Boolean(project?.adId && project.status === "ready" && primaryVideoUrl);
   const publication = project?.instagramPublication ?? project?.youtubePublication ?? null;
   const publicationMeta = getPublicationMetaLabel(publication, locale);
@@ -180,8 +103,37 @@ export function WorkspaceProjectPage({
   useEffect(() => {
     setUseFallbackVideo(false);
     setIsProjectMenuOpen(false);
-    setVideoDuration(project?.videoUrl ? { kind: "pending" } : { kind: "unavailable" });
   }, [project?.id, project?.updatedAt, project?.videoUrl]);
+
+  useEffect(() => {
+    const projectId = Number(project?.adId ?? 0);
+    if (!Number.isInteger(projectId) || projectId <= 0) {
+      setSceneCount({ kind: "unavailable" });
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    setSceneCount({ kind: "pending" });
+
+    void (async () => {
+      try {
+        const response = await fetch(getWorkspaceSegmentEditorSessionUrl(projectId), {
+          signal: controller.signal,
+        });
+        const payload = (await response.json().catch(() => null)) as WorkspaceSegmentEditorResponse | null;
+        if (!response.ok || !Array.isArray(payload?.data?.segments)) {
+          throw new Error(payload?.error || "Project scenes are unavailable.");
+        }
+        setSceneCount({ count: payload.data.segments.length, kind: "available" });
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          setSceneCount({ kind: "unavailable" });
+        }
+      }
+    })();
+
+    return () => controller.abort("project-page-replaced");
+  }, [project?.adId, project?.updatedAt]);
 
   useEffect(() => {
     if (!isProjectMenuOpen) {
@@ -287,18 +239,8 @@ export function WorkspaceProjectPage({
                   onError={() => {
                     if (!useFallbackVideo && fallbackVideoUrl) {
                       setUseFallbackVideo(true);
-                      setVideoDuration({ kind: "pending" });
                       return;
                     }
-                    setVideoDuration({ kind: "unavailable" });
-                  }}
-                  onLoadedMetadata={(event) => {
-                    const duration = event.currentTarget.duration;
-                    setVideoDuration(
-                      Number.isFinite(duration) && duration > 0
-                        ? { kind: "available", seconds: duration }
-                        : { kind: "unavailable" },
-                    );
                   }}
                   poster={project.posterUrl}
                   preload="metadata"
@@ -373,19 +315,25 @@ export function WorkspaceProjectPage({
                 <span>{workspaceText(locale, "Скачать", "Download")}</span>
               </a>
             </div>
-            <div className="studio-project-page__action-row studio-project-page__action-row--secondary">
-              <button
-                className="studio-project-page__action studio-project-page__action--secondary"
-                type="button"
-                disabled={!canRegenerate || isActionBusy}
-                onClick={() => onRegenerate(project)}
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M20 7v5h-5" />
-                  <path d="M18.2 16.3A8 8 0 1 1 19.5 9" />
-                </svg>
-                <span>{workspaceText(locale, "Сгенерировать заново", "Generate again")}</span>
-              </button>
+            <div
+              className={`studio-project-page__action-row studio-project-page__action-row--secondary${
+                shouldShowRegenerate ? "" : " is-single"
+              }`}
+            >
+              {shouldShowRegenerate ? (
+                <button
+                  className="studio-project-page__action studio-project-page__action--secondary"
+                  type="button"
+                  disabled={!canRegenerate || isActionBusy}
+                  onClick={() => onRegenerate(project)}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M20 7v5h-5" />
+                    <path d="M18.2 16.3A8 8 0 1 1 19.5 9" />
+                  </svg>
+                  <span>{workspaceText(locale, "Сгенерировать заново", "Generate again")}</span>
+                </button>
+              ) : null}
               <button
                 className="studio-project-page__action studio-project-page__action--secondary"
                 type="button"
@@ -445,44 +393,17 @@ export function WorkspaceProjectPage({
             </div>
           </div>
 
-          <section className="studio-project-page__info-section">
+          <section className="studio-project-page__info-section studio-project-page__info-section--summary">
             <div className="studio-project-page__section-head">
-              <span>{workspaceText(locale, "Видео", "Video")}</span>
+              <span>{workspaceText(locale, "Промпт", "Prompt")}</span>
             </div>
-            <dl className="studio-project-page__facts">
-              <div>
-                <dt>{workspaceText(locale, "Длительность", "Duration")}</dt>
-                <dd>{formatVideoDuration(videoDuration, locale)}</dd>
-              </div>
-              <div>
-                <dt>{workspaceText(locale, "Язык", "Language")}</dt>
-                <dd>{getLanguageLabel(project, locale)}</dd>
-              </div>
-              <div className="studio-project-page__fact-wide">
-                <dt>{workspaceText(locale, "Визуал", "Visual")}</dt>
-                <dd>{getVideoModeLabel(project, locale)}</dd>
-              </div>
-            </dl>
-          </section>
-
-          <section className="studio-project-page__info-section">
-            <div className="studio-project-page__section-head">
-              <span>{workspaceText(locale, "Звук и оформление", "Sound and style")}</span>
+            <p className="studio-project-page__prompt">
+              {project.prompt.trim() || workspaceText(locale, "Промпт не сохранён", "Prompt unavailable")}
+            </p>
+            <div className="studio-project-page__scene-count">
+              <span>{workspaceText(locale, "Сцены", "Scenes")}</span>
+              <strong aria-live="polite">{formatSceneCount(sceneCount, locale)}</strong>
             </div>
-            <dl className="studio-project-page__settings">
-              <div>
-                <dt>{workspaceText(locale, "Озвучка", "Voice")}</dt>
-                <dd>{getVoiceLabel(project, locale)}</dd>
-              </div>
-              <div>
-                <dt>{workspaceText(locale, "Музыка", "Music")}</dt>
-                <dd>{getMusicLabel(project, locale)}</dd>
-              </div>
-              <div>
-                <dt>{workspaceText(locale, "Субтитры", "Subtitles")}</dt>
-                <dd>{getSubtitleLabel(project, locale, subtitleColorOptions, subtitleStyleOptions)}</dd>
-              </div>
-            </dl>
           </section>
 
           <section className="studio-project-page__info-section">

@@ -22637,6 +22637,7 @@ textarea {
   flex: 1 1 auto;
   width: 100%;
   min-height: 0;
+  margin-top: 12px;
 }
 
 .studio-project-page__center {
@@ -22644,10 +22645,10 @@ textarea {
   inset: 0;
   z-index: 1;
   display: grid;
-  grid-template-rows: min(690px, calc(100% - 88px)) auto;
+  grid-template-rows: min(690px, calc(100% - 110px)) auto;
   align-content: start;
   justify-items: center;
-  gap: 7px;
+  gap: 14px;
   min-width: 0;
   min-height: 0;
 }
@@ -22784,30 +22785,6 @@ textarea {
   height: 34px;
 }
 
-.studio-project-page__facts {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-  margin: 8px 0 0;
-}
-
-.studio-project-page__facts > div {
-  display: grid;
-  align-content: start;
-  gap: 4px;
-  min-width: 0;
-  padding: 9px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.055);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.025);
-}
-
-.studio-project-page__facts .studio-project-page__fact-wide {
-  grid-column: 1 / -1;
-}
-
-.studio-project-page__facts dt,
-.studio-project-page__settings dt,
 .studio-project-page__dates span {
   color: rgba(161, 173, 196, 0.5);
   font-size: 0.56rem;
@@ -22815,48 +22792,37 @@ textarea {
   line-height: 1.2;
 }
 
-.studio-project-page__facts dd {
-  margin: 0;
-  overflow: hidden;
-  color: rgba(234, 238, 247, 0.83);
+.studio-project-page__prompt {
+  margin: 8px 0 0;
+  color: rgba(235, 239, 248, 0.84);
+  font-size: 0.7rem;
+  font-weight: 560;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.studio-project-page__scene-count {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 9px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.055);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.studio-project-page__scene-count span {
+  color: rgba(161, 173, 196, 0.52);
+  font-size: 0.59rem;
+  font-weight: 720;
+}
+
+.studio-project-page__scene-count strong {
+  color: rgba(235, 239, 248, 0.86);
   font-size: 0.68rem;
-  font-weight: 650;
-  line-height: 1.3;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.studio-project-page__settings {
-  display: grid;
-  gap: 2px;
-  margin: 7px 0 0;
-}
-
-.studio-project-page__settings > div {
-  display: grid;
-  grid-template-columns: minmax(72px, 0.72fr) minmax(0, 1.28fr);
-  align-items: baseline;
-  gap: 9px;
-  min-width: 0;
-  padding: 7px 8px;
-  border-radius: 8px;
-}
-
-.studio-project-page__settings > div:nth-child(odd) {
-  background: rgba(255, 255, 255, 0.022);
-}
-
-.studio-project-page__settings dd {
-  min-width: 0;
-  margin: 0;
-  overflow: hidden;
-  color: rgba(232, 236, 245, 0.78);
-  font-size: 0.66rem;
-  font-weight: 650;
-  line-height: 1.35;
-  text-align: right;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-weight: 720;
 }
 
 .studio-project-page__dates {
@@ -22993,21 +22959,12 @@ textarea {
     padding: 12px;
   }
 
-  .studio-project-page__facts {
-    margin-top: 9px;
-  }
-
-  .studio-project-page__facts > div {
-    padding-block: 7px;
-  }
-
   .studio-project-page__info-section,
   .studio-project-page__versions {
     margin-top: 9px;
     padding-top: 9px;
   }
 
-  .studio-project-page__settings > div,
   .studio-project-page__dates > div {
     padding-block: 5px;
   }
@@ -23035,7 +22992,7 @@ textarea {
     gap: 24px;
     width: 100%;
     min-height: max-content;
-    margin-top: 8px;
+    margin-top: 12px;
   }
 
   .studio-project-page__center {
@@ -23044,7 +23001,7 @@ textarea {
     flex: 0 0 auto;
     flex-direction: column;
     align-items: center;
-    gap: 13px;
+    gap: 18px;
     width: 100%;
     min-height: max-content;
   }
@@ -23107,6 +23064,14 @@ textarea {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .studio-project-page__action-row--secondary.is-single {
+    display: flex;
+  }
+
+  .studio-project-page__action-row--secondary.is-single .studio-project-page__action {
+    width: min(50%, 280px);
+  }
+
   .studio-project-page__action {
     width: 100%;
     min-width: 0;
@@ -23131,14 +23096,6 @@ textarea {
     width: min(100%, 300px);
     height: min(56dvh, 500px);
     min-height: 360px;
-  }
-
-  .studio-project-page__facts {
-    grid-template-columns: 1fr;
-  }
-
-  .studio-project-page__facts .studio-project-page__fact-wide {
-    grid-column: auto;
   }
 
   .studio-project-page__action-row--main {

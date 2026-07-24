@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { LocaleProvider } from "../../lib/i18n";
 import { WorkspaceProjectCard } from "./workspace-project-cards";
@@ -41,6 +41,24 @@ const readyProject: WorkspaceProject = {
   youtubePublication: null,
 };
 
+beforeEach(() => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue({
+      json: async () => ({
+        data: {
+          segments: [{ index: 0 }, { index: 1 }, { index: 2 }],
+        },
+      }),
+      ok: true,
+    }),
+  );
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
 const renderProjectPage = (overrides?: Partial<Parameters<typeof WorkspaceProjectPage>[0]>) => {
   const props: Parameters<typeof WorkspaceProjectPage>[0] = {
     isActionBusy: false,
@@ -57,34 +75,6 @@ const renderProjectPage = (overrides?: Partial<Parameters<typeof WorkspaceProjec
     onVolumeChange: vi.fn(),
     project: readyProject,
     projectsError: null,
-    subtitleColorOptions: [
-      {
-        accent: "#ffffff",
-        id: "white",
-        label: "Белые",
-        outline: "#000000",
-        surface: "transparent",
-        text: "#ffffff",
-      },
-    ],
-    subtitleStyleOptions: [
-      {
-        defaultColorId: "white",
-        description: "",
-        fontFamily: "Inter",
-        fontSize: 48,
-        id: "classic",
-        label: "Классические",
-        logicMode: "line",
-        marginBottom: 48,
-        outlineWidth: 2,
-        position: "bottom",
-        transitionMode: "none",
-        usesAccentColor: false,
-        windowSize: 1,
-        wordEffect: "none",
-      },
-    ],
     versions: [readyProject],
     volume: 0.8,
     ...overrides,
@@ -138,22 +128,41 @@ describe("WorkspaceProjectPage", () => {
     expect(props.onPublish).toHaveBeenCalledWith(readyProject);
   });
 
-  it("shows real project metadata and measures the rendered video duration", () => {
+  it.each([
+    ["По сценам", { ...readyProject.prefillSettings, creationMode: "scenes" as const }],
+    ["без сохранённого происхождения", { ...readyProject.prefillSettings, creationMode: undefined }],
+  ])("hides regeneration and centers create new for a project created %s", (_label, prefillSettings) => {
+    renderProjectPage({
+      project: {
+        ...readyProject,
+        prefillSettings,
+      },
+    });
+
+    expect(screen.queryByRole("button", { name: "Сгенерировать заново" })).toBeNull();
+    const createNew = screen.getByRole("button", { name: "Создать новое" });
+    expect(createNew.closest(".studio-project-page__action-row--secondary")?.className).toContain("is-single");
+  });
+
+  it("shows the saved prompt and canonical scene count without editor-level settings", async () => {
     renderProjectPage();
 
-    expect(screen.getByText("Русский")).toBeTruthy();
-    expect(screen.getByText("Александр")).toBeTruthy();
+    expect(screen.getByText("Как подготовить сильный хук")).toBeTruthy();
+    expect(await screen.findByText("3 сцены")).toBeTruthy();
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/workspace/projects/42/segment-editor",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
     expect(screen.getByText("Обновлено")).toBeTruthy();
     expect(screen.getByText("Публикация")).toBeTruthy();
-    expect(screen.queryByText("Как подготовить сильный хук")).toBeNull();
     expect(screen.queryByText("Короткое описание ролика")).toBeNull();
     expect(screen.queryByText("#shorts")).toBeNull();
-
-    const video = document.querySelector("video");
-    expect(video).toBeTruthy();
-    Object.defineProperty(video, "duration", { configurable: true, value: 42.2 });
-    fireEvent.loadedMetadata(video as HTMLVideoElement);
-    expect(screen.getByText("00:42")).toBeTruthy();
+    expect(screen.queryByText("Длительность")).toBeNull();
+    expect(screen.queryByText("Язык")).toBeNull();
+    expect(screen.queryByText("Визуал")).toBeNull();
+    expect(screen.queryByText("Озвучка")).toBeNull();
+    expect(screen.queryByText("Музыка")).toBeNull();
+    expect(screen.queryByText("Субтитры")).toBeNull();
   });
 
   it("switches real versions and exposes create and delete workflows", () => {
