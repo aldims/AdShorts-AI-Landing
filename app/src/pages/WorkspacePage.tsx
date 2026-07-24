@@ -896,10 +896,7 @@ import {
   studioMusicOptions,
   type StudioMusicType,
 } from "../features/workspace/workspace-studio-options";
-import {
-  WorkspaceSegmentEditorBrandAddButton,
-  WorkspaceSegmentEditorBrandOverlay,
-} from "../features/workspace/workspace-brand-ui";
+import { WorkspaceSegmentEditorBrandOverlay } from "../features/workspace/workspace-brand-ui";
 import {
   clampWorkspaceUnitValue,
   createWorkspaceTalkingCharacterDraftTargetFromPoints,
@@ -8570,38 +8567,6 @@ export function WorkspacePage({
         : createMode === "segment-editor" && !isScratchSegmentEditorDraft
           ? "edit"
           : "create";
-  const segmentEditorProjectContextTitle = (() => {
-    if (createMode !== "segment-editor") {
-      return null;
-    }
-
-    const routeProjectId =
-      routeStudioState.section === "edit" && routeStudioState.projectId
-        ? routeStudioState.projectId
-        : null;
-    if (!routeProjectId && isScratchSegmentEditorDraft) {
-      return null;
-    }
-
-    const projectId = routeProjectId ?? segmentEditorDraft?.projectId ?? null;
-    if (!projectId) {
-      return null;
-    }
-
-    const matchingProject = projects.find((project) => project.adId === projectId);
-    if (matchingProject) {
-      return getWorkspaceProjectDisplayTitle(matchingProject);
-    }
-
-    if (segmentEditorDraft?.projectId === projectId) {
-      const normalizedTitle = segmentEditorDraft.title.trim();
-      if (normalizedTitle) {
-        return normalizedTitle;
-      }
-    }
-
-    return workspaceText(locale, `Проект #${projectId}`, `Project #${projectId}`);
-  })();
   const shouldShowStudioSidebar = false;
   const studioSidebarSubtitleSelection = getWorkspaceSegmentEditorEffectiveSubtitleSelection(segmentEditorDraft, {
     subtitleColorId: selectedSubtitleColorId,
@@ -8815,14 +8780,6 @@ export function WorkspacePage({
     const normalizedTitle = segmentEditorDraft.title.trim();
     return normalizedTitle || `Проект #${segmentEditorDraft.projectId}`;
   })();
-  const studioCanvasPageTitle = segmentEditorProjectContextTitle
-    ? workspaceText(
-        locale,
-        `Редактирование · ${segmentEditorProjectContextTitle}`,
-        `Editing · ${segmentEditorProjectContextTitle}`,
-      )
-    : "";
-  const showStudioCanvasPageTitle = Boolean(studioCanvasPageTitle);
   const cancelSegmentEditorSyntheticPlayback = () => {
     if (segmentEditorSyntheticPlaybackFrameRef.current !== null) {
       window.cancelAnimationFrame(segmentEditorSyntheticPlaybackFrameRef.current);
@@ -27881,6 +27838,7 @@ export function WorkspacePage({
     setSegmentTimelineSoundMenuSegmentIndex(null);
     setSegmentTimelineTextMenuSegmentIndex(null);
     setSegmentEditorBrandCloseRequestId((current) => current + 1);
+    setSegmentEditorBrandAnchorRect(null);
 
     if (segmentTimelineGlobalControlOpen === control) {
       setSegmentTimelineGlobalControlOpen(null);
@@ -28386,8 +28344,16 @@ export function WorkspacePage({
       selectTab: handleSegmentEditorPromptVisualToolSelect,
     });
   };
-  const handleSegmentEditorPromptBrandToolButtonClick = (event: ReactMouseEvent<HTMLButtonElement>) => {
+  const openSegmentEditorTimelineBrandSettings = (
+    event: ReactMouseEvent<HTMLButtonElement> | ReactPointerEvent<HTMLButtonElement>,
+  ) => {
     event.currentTarget.blur();
+    if (segmentEditorBrandAnchorRect) {
+      setSegmentEditorBrandCloseRequestId((current) => current + 1);
+      setSegmentEditorBrandAnchorRect(null);
+      return;
+    }
+
     setReleasedSegmentEditorPromptTool(null);
     setSegmentTimelineDurationMenuSegmentIndex(null);
     setSegmentTimelineVisualMenuSegmentIndex(null);
@@ -28399,6 +28365,23 @@ export function WorkspacePage({
     setSegmentTimelineGlobalControlAnchorRect(null);
     setSegmentEditorBrandAnchorRect(getStudioMenuAnchorRect(event.currentTarget));
     setSegmentEditorBrandOpenRequestId((current) => current + 1);
+  };
+  const handleSegmentEditorTimelineBrandSettingsPointerDown = (
+    event: ReactPointerEvent<HTMLButtonElement>,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openSegmentEditorTimelineBrandSettings(event);
+  };
+  const handleSegmentEditorTimelineBrandSettingsClick = (
+    event: ReactMouseEvent<HTMLButtonElement>,
+  ) => {
+    if (event.detail !== 0) {
+      event.preventDefault();
+      return;
+    }
+
+    openSegmentEditorTimelineBrandSettings(event);
   };
   const clearSegmentEditorPromptToolHoverRelease = (tab: WorkspaceSegmentEditorPromptToolTab) => {
     setReleasedSegmentEditorPromptTool((current) => (current === tab ? null : current));
@@ -34272,6 +34255,12 @@ export function WorkspacePage({
               </svg>
             }
             label={workspaceText(locale, "Визуал", "Visual")}
+            settings={{
+              ariaExpanded: Boolean(segmentEditorBrandAnchorRect),
+              label: workspaceText(locale, "Настроить бренд всего видео", "Configure whole-video brand"),
+              onPointerDown: handleSegmentEditorTimelineBrandSettingsPointerDown,
+              onClick: handleSegmentEditorTimelineBrandSettingsClick,
+            }}
           />
           <div
             className="studio-segment-editor__timeline-track studio-segment-editor__timeline-track--visual"
@@ -37376,25 +37365,13 @@ export function WorkspacePage({
   const appliedSegmentEditorBrandLogoPreviewUrl = getStudioCustomAssetPreviewUrl(
     appliedSegmentEditorBrandSnapshot.brandLogoFile,
   );
-  const renderSegmentEditorBrandOverlay = (
-    variant: "card" | "thumb" | "ghost" = "card",
-    options?: { editable?: boolean },
-  ) => (
+  const renderSegmentEditorBrandOverlay = (variant: "card" | "thumb" | "ghost" = "card") => (
     <WorkspaceSegmentEditorBrandOverlay
       brandLogoPreviewUrl={appliedSegmentEditorBrandLogoPreviewUrl}
       brandSummary={hasAppliedSegmentEditorBranding ? getStudioBrandSummary(appliedSegmentEditorBrandSnapshot, locale) : ""}
       brandText={appliedSegmentEditorBrandSnapshot.brandText}
-      editable={Boolean(options?.editable)}
       hasBranding={hasAppliedSegmentEditorBranding}
-      locale={locale}
-      onEdit={handleSegmentEditorPromptBrandToolButtonClick}
       variant={variant}
-    />
-  );
-  const renderSegmentEditorBrandAddButton = () => (
-    <WorkspaceSegmentEditorBrandAddButton
-      locale={locale}
-      onClick={handleSegmentEditorPromptBrandToolButtonClick}
     />
   );
   const activeSegmentSceneSoundAsset = activeSegment
@@ -38761,15 +38738,6 @@ export function WorkspacePage({
 
             <div className="studio-canvas-stage">
           <div className={`studio-canvas-create${createMode === "segment-editor" ? " is-segment-editor" : ""}`} hidden={studioView !== "create"}>
-            {showStudioCanvasPageTitle ? (
-              <div
-                className={`studio-canvas-page-title${createMode === "segment-editor" ? " is-segment-editor" : ""}`}
-                aria-label={locale === "en" ? "Page title" : "Заголовок страницы"}
-              >
-                <h1>{studioCanvasPageTitle}</h1>
-              </div>
-            ) : null}
-
               <div className={`studio-canvas-content${createMode === "segment-editor" ? " is-segment-editor" : ""}`}>
                 {createMode === "segment-editor" && visibleSegmentEditorError ? (
                   <div className="studio-segment-editor__status is-error" role="status" aria-live="polite">
@@ -39327,15 +39295,7 @@ export function WorkspacePage({
                                           subtitleStyleOptions={subtitleStyleOptions}
                                         />
                                       ) : null}
-                                      {renderSegmentEditorBrandOverlay("card", {
-                                        editable:
-                                          isActiveCard &&
-                                          hasAppliedSegmentEditorBranding,
-                                      })}
-                                      {isActiveCard &&
-                                      !hasAppliedSegmentEditorBranding
-                                        ? renderSegmentEditorBrandAddButton()
-                                        : null}
+                                      {renderSegmentEditorBrandOverlay("card")}
                                       {isActiveCard &&
                                       isPromptTalkingPhotoMode &&
                                       mediaUrl &&

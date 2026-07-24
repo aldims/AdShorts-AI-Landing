@@ -158,10 +158,13 @@ describe("WorkspaceProjectPage", () => {
       "/api/workspace/projects/42/segment-editor",
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
+    const summary = screen.getByText("Промпт").closest("section");
     const activity = screen.getByText("Активность").closest("section");
+    expect(summary).toBeTruthy();
     expect(activity).toBeTruthy();
-    expect(within(activity as HTMLElement).getByText("Режим создания")).toBeTruthy();
-    expect(within(activity as HTMLElement).getByText("Из идеи")).toBeTruthy();
+    expect(within(summary as HTMLElement).getByText("Режим создания")).toBeTruthy();
+    expect(within(summary as HTMLElement).getByText("Из идеи")).toBeTruthy();
+    expect(within(activity as HTMLElement).queryByText("Режим создания")).toBeNull();
     expect(within(activity as HTMLElement).getByText("Создано")).toBeTruthy();
     expect(within(activity as HTMLElement).getByText(formatProjectDate(readyProject.createdAt, "ru"))).toBeTruthy();
     expect(within(activity as HTMLElement).queryByText(formatProjectDate(readyProject.updatedAt, "ru"))).toBeNull();
@@ -187,10 +190,10 @@ describe("WorkspaceProjectPage", () => {
       },
     });
 
-    const activity = screen.getByText("Активность").closest("section");
-    expect(activity).toBeTruthy();
-    expect(within(activity as HTMLElement).getByText("Режим создания")).toBeTruthy();
-    expect(within(activity as HTMLElement).getByText("По сценам")).toBeTruthy();
+    const summary = screen.getByText("Промпт").closest("section");
+    expect(summary).toBeTruthy();
+    expect(within(summary as HTMLElement).getByText("Режим создания")).toBeTruthy();
+    expect(within(summary as HTMLElement).getByText("По сценам")).toBeTruthy();
     expect(screen.queryByText("Способ создания")).toBeNull();
     expect(screen.queryByText("Визуал")).toBeNull();
   });
@@ -319,6 +322,13 @@ describe("WorkspaceProjectPage", () => {
     expect(screen.getByRole("button", { name: "Меню проекта" }).closest("aside")).toBeTruthy();
     fireEvent.click(screen.getByRole("menuitem", { name: "Удалить проект" }));
     expect(props.onDelete).toHaveBeenCalledWith(readyProject);
+  });
+
+  it("hides version history until there is a previous version", () => {
+    renderProjectPage();
+
+    expect(screen.queryByText("Версии видео")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Версия 1/ })).toBeNull();
   });
 
   it("renders a recoverable not-found state for a stale direct link", () => {

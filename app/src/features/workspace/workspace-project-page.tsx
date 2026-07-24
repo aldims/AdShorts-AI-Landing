@@ -437,9 +437,17 @@ export function WorkspaceProjectPage({
             <p className="studio-project-page__prompt">
               {project.prompt.trim() || workspaceText(locale, "Промпт не сохранён", "Prompt unavailable")}
             </p>
-            <div className="studio-project-page__scene-count">
-              <span>{workspaceText(locale, "Сцены", "Scenes")}</span>
-              <strong aria-live="polite">{formatSceneCount(sceneCount, locale)}</strong>
+            <div className="studio-project-page__summary-meta">
+              {creationModeLabel ? (
+                <div className="studio-project-page__scene-count">
+                  <span>{workspaceText(locale, "Режим создания", "Creation mode")}</span>
+                  <strong>{creationModeLabel}</strong>
+                </div>
+              ) : null}
+              <div className="studio-project-page__scene-count">
+                <span>{workspaceText(locale, "Сцены", "Scenes")}</span>
+                <strong aria-live="polite">{formatSceneCount(sceneCount, locale)}</strong>
+              </div>
             </div>
           </section>
 
@@ -505,12 +513,6 @@ export function WorkspaceProjectPage({
               <span>{workspaceText(locale, "Активность", "Activity")}</span>
             </div>
             <div className="studio-project-page__dates">
-              {creationModeLabel ? (
-                <div>
-                  <span>{workspaceText(locale, "Режим создания", "Creation mode")}</span>
-                  <strong>{creationModeLabel}</strong>
-                </div>
-              ) : null}
               <div>
                 <span>{workspaceText(locale, "Создано", "Created")}</span>
                 <strong>{createdLabel}</strong>
@@ -538,40 +540,44 @@ export function WorkspaceProjectPage({
             </div>
           </section>
 
-          <section className="studio-project-page__versions">
-            <div className="studio-project-page__section-head">
-              <span>{workspaceText(locale, "Версии видео", "Video versions")}</span>
-              <strong>{safeVersions.length}</strong>
-            </div>
-            <div className="studio-project-page__version-list">
-              {safeVersions.map((version, index) => {
-                const versionNumber = safeVersions.length - index;
-                const isCurrent = version.id === project.id;
-                return (
-                  <button
-                    className={isCurrent ? "is-current" : undefined}
-                    type="button"
-                    key={version.id}
-                    aria-current={isCurrent ? "true" : undefined}
-                    onClick={() => {
-                      if (!isCurrent) {
-                        onSelectVersion(version);
-                      }
-                    }}
-                  >
-                    <span>{versionNumber}</span>
-                    <div>
-                      <strong>
-                        {workspaceText(locale, `Версия ${versionNumber}`, `Version ${versionNumber}`)}
-                      </strong>
-                      <small>{formatProjectDate(version.generatedAt || version.createdAt || version.updatedAt, locale)}</small>
-                    </div>
-                    {isCurrent ? <em>{workspaceText(locale, "Открыта", "Open")}</em> : null}
-                  </button>
-                );
-              })}
-            </div>
-          </section>
+          {safeVersions.length > 1 ? (
+            <section className="studio-project-page__versions">
+              <div className="studio-project-page__section-head">
+                <span>{workspaceText(locale, "Версии видео", "Video versions")}</span>
+                <strong>{safeVersions.length}</strong>
+              </div>
+              <div className="studio-project-page__version-list">
+                {safeVersions.map((version, index) => {
+                  const versionNumber = safeVersions.length - index;
+                  const isCurrent = version.id === project.id;
+                  return (
+                    <button
+                      className={isCurrent ? "is-current" : undefined}
+                      type="button"
+                      key={version.id}
+                      aria-current={isCurrent ? "true" : undefined}
+                      onClick={() => {
+                        if (!isCurrent) {
+                          onSelectVersion(version);
+                        }
+                      }}
+                    >
+                      <span>{versionNumber}</span>
+                      <div>
+                        <strong>
+                          {workspaceText(locale, `Версия ${versionNumber}`, `Version ${versionNumber}`)}
+                        </strong>
+                        <small>
+                          {formatProjectDate(version.generatedAt || version.createdAt || version.updatedAt, locale)}
+                        </small>
+                      </div>
+                      {isCurrent ? <em>{workspaceText(locale, "Открыта", "Open")}</em> : null}
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          ) : null}
         </aside>
       </div>
     </article>
