@@ -114,8 +114,14 @@ describe("WorkspaceProjectPage", () => {
     const publish = screen.getByRole("button", { name: "Опубликовать" });
     const download = screen.getByRole("link", { name: "Скачать" });
     const regenerate = screen.getByRole("button", { name: "Сгенерировать заново" });
+    const createNew = screen.getByRole("button", { name: "Создать новое" });
+    const mainActionRow = publish.closest(".studio-project-page__action-row--main");
+    const secondaryActionRow = regenerate.closest(".studio-project-page__action-row--secondary");
     expect(publish.compareDocumentPosition(download) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(download.compareDocumentPosition(regenerate) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(mainActionRow?.contains(download)).toBe(true);
+    expect(secondaryActionRow?.contains(regenerate)).toBe(true);
+    expect(secondaryActionRow?.contains(createNew)).toBe(true);
+    expect(regenerate.className).toBe(createNew.className);
     expect(heading.closest(".studio-project-page__header")?.textContent).not.toContain("Обновлено");
     expect(heading.closest(".studio-project-page__header")?.textContent).not.toContain("Опубликовано");
   });
@@ -135,12 +141,13 @@ describe("WorkspaceProjectPage", () => {
   it("shows real project metadata and measures the rendered video duration", () => {
     renderProjectPage();
 
-    expect(screen.getByText("Из идеи")).toBeTruthy();
     expect(screen.getByText("Русский")).toBeTruthy();
     expect(screen.getByText("Александр")).toBeTruthy();
-    expect(screen.getByText("Как подготовить сильный хук")).toBeTruthy();
     expect(screen.getByText("Обновлено")).toBeTruthy();
-    expect(screen.getByText("Опубликовано")).toBeTruthy();
+    expect(screen.getByText("Публикация")).toBeTruthy();
+    expect(screen.queryByText("Как подготовить сильный хук")).toBeNull();
+    expect(screen.queryByText("Короткое описание ролика")).toBeNull();
+    expect(screen.queryByText("#shorts")).toBeNull();
 
     const video = document.querySelector("video");
     expect(video).toBeTruthy();
@@ -169,6 +176,7 @@ describe("WorkspaceProjectPage", () => {
     expect(props.onCreateNew).toHaveBeenCalledOnce();
 
     fireEvent.click(screen.getByRole("button", { name: "Меню проекта" }));
+    expect(screen.getByRole("button", { name: "Меню проекта" }).closest("aside")).toBeTruthy();
     fireEvent.click(screen.getByRole("menuitem", { name: "Удалить проект" }));
     expect(props.onDelete).toHaveBeenCalledWith(readyProject);
   });

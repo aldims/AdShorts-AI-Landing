@@ -44,17 +44,6 @@ const workspaceText = (locale: Locale, ru: string, en: string) => (locale === "e
 
 const getUnavailableLabel = (locale: Locale) => workspaceText(locale, "Нет данных", "Unavailable");
 
-const getCreationModeLabel = (project: WorkspaceProject, locale: Locale) => {
-  const creationMode = project.prefillSettings?.creationMode;
-  if (creationMode === "idea") {
-    return workspaceText(locale, "Из идеи", "From idea");
-  }
-  if (creationMode === "scenes" || project.editedFromProjectAdId !== null) {
-    return workspaceText(locale, "По сценам", "By scenes");
-  }
-  return getUnavailableLabel(locale);
-};
-
 const getLanguageLabel = (project: WorkspaceProject, locale: Locale) => {
   if (project.prefillSettings?.language === "ru") {
     return workspaceText(locale, "Русский", "Russian");
@@ -169,7 +158,6 @@ export function WorkspaceProjectPage({
   const { locale } = useLocale();
   const projectMenuRef = useRef<HTMLDivElement | null>(null);
   const [isProjectMenuOpen, setIsProjectMenuOpen] = useState(false);
-  const [isPromptExpanded, setIsPromptExpanded] = useState(false);
   const [useFallbackVideo, setUseFallbackVideo] = useState(false);
   const [videoDuration, setVideoDuration] = useState<VideoDurationState>({ kind: "pending" });
   const title = project ? getWorkspaceProjectDisplayTitle(project) : "";
@@ -191,7 +179,6 @@ export function WorkspaceProjectPage({
 
   useEffect(() => {
     setUseFallbackVideo(false);
-    setIsPromptExpanded(false);
     setIsProjectMenuOpen(false);
     setVideoDuration(project?.videoUrl ? { kind: "pending" } : { kind: "unavailable" });
   }, [project?.id, project?.updatedAt, project?.videoUrl]);
@@ -268,9 +255,6 @@ export function WorkspaceProjectPage({
       : project.status === "failed"
         ? workspaceText(locale, "Ошибка генерации", "Generation failed")
         : workspaceText(locale, "Создаётся", "Generating");
-  const prompt = project.prompt.trim();
-  const canExpandPrompt = prompt.length > 170;
-
   return (
     <article className="studio-project-page">
       <header className="studio-project-page__header">
@@ -288,40 +272,6 @@ export function WorkspaceProjectPage({
         <div className="studio-project-page__heading">
           <h1>{title}</h1>
           <span className={`studio-project-page__status is-${project.status}`}>{statusLabel}</span>
-        </div>
-        <div className="studio-project-page__menu" ref={projectMenuRef}>
-          <button
-            className="studio-project-page__menu-trigger"
-            type="button"
-            aria-label={workspaceText(locale, "Меню проекта", "Project menu")}
-            aria-expanded={isProjectMenuOpen}
-            aria-haspopup="menu"
-            onClick={() => setIsProjectMenuOpen((current) => !current)}
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <circle cx="12" cy="5" r="1.45" />
-              <circle cx="12" cy="12" r="1.45" />
-              <circle cx="12" cy="19" r="1.45" />
-            </svg>
-          </button>
-          {isProjectMenuOpen ? (
-            <div className="studio-project-page__menu-popover" role="menu">
-              <button
-                type="button"
-                role="menuitem"
-                disabled={isDeleteBusy}
-                onClick={() => {
-                  setIsProjectMenuOpen(false);
-                  onDelete(project);
-                }}
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M4 7h16M9 3h6m-8 4 1 13h8l1-13M10 11v5m4-5v5" />
-                </svg>
-                <span>{workspaceText(locale, "Удалить проект", "Delete project")}</span>
-              </button>
-            </div>
-          ) : null}
         </div>
       </header>
 
@@ -375,74 +325,78 @@ export function WorkspaceProjectPage({
             className="studio-project-page__actions"
             aria-label={workspaceText(locale, "Действия с видео", "Video actions")}
           >
-            <button
-              className="studio-project-page__action studio-project-page__action--primary"
-              type="button"
-              disabled={!canEdit || isActionBusy}
-              title={
-                canEdit
-                  ? workspaceText(locale, "Открыть редактор сцен", "Open scene editor")
-                  : workspaceText(locale, "Редактирование доступно после готовности видео", "Editing is available when the video is ready")
-              }
-              onClick={() => onEdit(project)}
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M4 20h4l10-10-4-4L4 16v4Z" />
-                <path d="m13 7 4 4" />
-              </svg>
-              <span>{workspaceText(locale, "Редактировать видео", "Edit video")}</span>
-            </button>
-            <button
-              className="studio-project-page__action"
-              type="button"
-              disabled={!canPublish || isActionBusy}
-              onClick={() => onPublish(project)}
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 19V5" />
-                <path d="m6.5 10.5 5.5-5.5 5.5 5.5" />
-              </svg>
-              <span>{workspaceText(locale, "Опубликовать", "Publish")}</span>
-            </button>
-            <a
-              className={`studio-project-page__action${downloadUrl ? "" : " is-disabled"}`}
-              href={downloadUrl ?? undefined}
-              download={downloadName}
-              aria-disabled={!downloadUrl}
-              tabIndex={downloadUrl ? 0 : -1}
-              onClick={(event) => {
-                if (!downloadUrl) {
-                  event.preventDefault();
+            <div className="studio-project-page__action-row studio-project-page__action-row--main">
+              <button
+                className="studio-project-page__action studio-project-page__action--primary"
+                type="button"
+                disabled={!canEdit || isActionBusy}
+                title={
+                  canEdit
+                    ? workspaceText(locale, "Открыть редактор сцен", "Open scene editor")
+                    : workspaceText(locale, "Редактирование доступно после готовности видео", "Editing is available when the video is ready")
                 }
-              }}
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 4v10m0 0 4-4m-4 4-4-4M5 19h14" />
-              </svg>
-              <span>{workspaceText(locale, "Скачать", "Download")}</span>
-            </a>
-            <button
-              className="studio-project-page__action studio-project-page__action--quiet"
-              type="button"
-              disabled={!canRegenerate || isActionBusy}
-              onClick={() => onRegenerate(project)}
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M20 7v5h-5" />
-                <path d="M18.2 16.3A8 8 0 1 1 19.5 9" />
-              </svg>
-              <span>{workspaceText(locale, "Сгенерировать заново", "Generate again")}</span>
-            </button>
-            <button
-              className="studio-project-page__create-new"
-              type="button"
-              onClick={onCreateNew}
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 5v14M5 12h14" />
-              </svg>
-              <span>{workspaceText(locale, "Создать новое", "Create new")}</span>
-            </button>
+                onClick={() => onEdit(project)}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M4 20h4l10-10-4-4L4 16v4Z" />
+                  <path d="m13 7 4 4" />
+                </svg>
+                <span>{workspaceText(locale, "Редактировать видео", "Edit video")}</span>
+              </button>
+              <button
+                className="studio-project-page__action"
+                type="button"
+                disabled={!canPublish || isActionBusy}
+                onClick={() => onPublish(project)}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 19V5" />
+                  <path d="m6.5 10.5 5.5-5.5 5.5 5.5" />
+                </svg>
+                <span>{workspaceText(locale, "Опубликовать", "Publish")}</span>
+              </button>
+              <a
+                className={`studio-project-page__action${downloadUrl ? "" : " is-disabled"}`}
+                href={downloadUrl ?? undefined}
+                download={downloadName}
+                aria-disabled={!downloadUrl}
+                tabIndex={downloadUrl ? 0 : -1}
+                onClick={(event) => {
+                  if (!downloadUrl) {
+                    event.preventDefault();
+                  }
+                }}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 4v10m0 0 4-4m-4 4-4-4M5 19h14" />
+                </svg>
+                <span>{workspaceText(locale, "Скачать", "Download")}</span>
+              </a>
+            </div>
+            <div className="studio-project-page__action-row studio-project-page__action-row--secondary">
+              <button
+                className="studio-project-page__action studio-project-page__action--secondary"
+                type="button"
+                disabled={!canRegenerate || isActionBusy}
+                onClick={() => onRegenerate(project)}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M20 7v5h-5" />
+                  <path d="M18.2 16.3A8 8 0 1 1 19.5 9" />
+                </svg>
+                <span>{workspaceText(locale, "Сгенерировать заново", "Generate again")}</span>
+              </button>
+              <button
+                className="studio-project-page__action studio-project-page__action--secondary"
+                type="button"
+                onClick={onCreateNew}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+                <span>{workspaceText(locale, "Создать новое", "Create new")}</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -453,82 +407,99 @@ export function WorkspaceProjectPage({
           <div className="studio-project-page__info-head">
             <div>
               <span>{workspaceText(locale, "Проект", "Project")}</span>
-              <h2>{workspaceText(locale, "Информация", "Information")}</h2>
+              <h2>{workspaceText(locale, "Сведения", "Details")}</h2>
             </div>
-            <span className="studio-project-page__version-count">
-              {safeVersions.length}
-              <small>{workspaceText(locale, "верс.", "ver.")}</small>
-            </span>
-          </div>
-
-          <dl className="studio-project-page__facts">
-            <div>
-              <dt>{workspaceText(locale, "Способ создания", "Creation method")}</dt>
-              <dd>{getCreationModeLabel(project, locale)}</dd>
-            </div>
-            <div>
-              <dt>{workspaceText(locale, "Длительность", "Duration")}</dt>
-              <dd>{formatVideoDuration(videoDuration, locale)}</dd>
-            </div>
-            <div>
-              <dt>{workspaceText(locale, "Язык", "Language")}</dt>
-              <dd>{getLanguageLabel(project, locale)}</dd>
-            </div>
-            <div>
-              <dt>{workspaceText(locale, "Озвучка", "Voice")}</dt>
-              <dd>{getVoiceLabel(project, locale)}</dd>
-            </div>
-            <div>
-              <dt>{workspaceText(locale, "Визуал", "Visual")}</dt>
-              <dd>{getVideoModeLabel(project, locale)}</dd>
-            </div>
-            <div>
-              <dt>{workspaceText(locale, "Музыка", "Music")}</dt>
-              <dd>{getMusicLabel(project, locale)}</dd>
-            </div>
-            <div className="studio-project-page__fact-wide">
-              <dt>{workspaceText(locale, "Субтитры", "Subtitles")}</dt>
-              <dd>{getSubtitleLabel(project, locale, subtitleColorOptions, subtitleStyleOptions)}</dd>
-            </div>
-          </dl>
-
-          <div className="studio-project-page__dates">
-            <div>
-              <span>{workspaceText(locale, "Обновлено", "Updated")}</span>
-              <strong>{updateLabel}</strong>
-            </div>
-            <div>
-              <span>{workspaceText(locale, "Опубликовано", "Published")}</span>
-              <strong>{publicationMeta || workspaceText(locale, "Не опубликовано", "Not published")}</strong>
-            </div>
-          </div>
-
-          <section className="studio-project-page__prompt">
-            <span>{workspaceText(locale, "Промпт", "Prompt")}</span>
-            <p className={isPromptExpanded ? "is-expanded" : undefined}>
-              {prompt || getUnavailableLabel(locale)}
-            </p>
-            {canExpandPrompt ? (
-              <button type="button" onClick={() => setIsPromptExpanded((current) => !current)}>
-                {isPromptExpanded
-                  ? workspaceText(locale, "Свернуть", "Collapse")
-                  : workspaceText(locale, "Показать полностью", "Show full prompt")}
+            <div className="studio-project-page__menu" ref={projectMenuRef}>
+              <button
+                className="studio-project-page__menu-trigger"
+                type="button"
+                aria-label={workspaceText(locale, "Меню проекта", "Project menu")}
+                aria-expanded={isProjectMenuOpen}
+                aria-haspopup="menu"
+                onClick={() => setIsProjectMenuOpen((current) => !current)}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="12" cy="5" r="1.45" />
+                  <circle cx="12" cy="12" r="1.45" />
+                  <circle cx="12" cy="19" r="1.45" />
+                </svg>
               </button>
-            ) : null}
-          </section>
-
-          {project.description || project.hashtags.length > 0 ? (
-            <section className="studio-project-page__summary">
-              {project.description ? <p>{project.description}</p> : null}
-              {project.hashtags.length > 0 ? (
-                <div className="studio-project-page__hashtags">
-                  {project.hashtags.map((hashtag) => (
-                    <span key={hashtag}>{hashtag}</span>
-                  ))}
+              {isProjectMenuOpen ? (
+                <div className="studio-project-page__menu-popover" role="menu">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={isDeleteBusy}
+                    onClick={() => {
+                      setIsProjectMenuOpen(false);
+                      onDelete(project);
+                    }}
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M4 7h16M9 3h6m-8 4 1 13h8l1-13M10 11v5m4-5v5" />
+                    </svg>
+                    <span>{workspaceText(locale, "Удалить проект", "Delete project")}</span>
+                  </button>
                 </div>
               ) : null}
-            </section>
-          ) : null}
+            </div>
+          </div>
+
+          <section className="studio-project-page__info-section">
+            <div className="studio-project-page__section-head">
+              <span>{workspaceText(locale, "Видео", "Video")}</span>
+            </div>
+            <dl className="studio-project-page__facts">
+              <div>
+                <dt>{workspaceText(locale, "Длительность", "Duration")}</dt>
+                <dd>{formatVideoDuration(videoDuration, locale)}</dd>
+              </div>
+              <div>
+                <dt>{workspaceText(locale, "Язык", "Language")}</dt>
+                <dd>{getLanguageLabel(project, locale)}</dd>
+              </div>
+              <div className="studio-project-page__fact-wide">
+                <dt>{workspaceText(locale, "Визуал", "Visual")}</dt>
+                <dd>{getVideoModeLabel(project, locale)}</dd>
+              </div>
+            </dl>
+          </section>
+
+          <section className="studio-project-page__info-section">
+            <div className="studio-project-page__section-head">
+              <span>{workspaceText(locale, "Звук и оформление", "Sound and style")}</span>
+            </div>
+            <dl className="studio-project-page__settings">
+              <div>
+                <dt>{workspaceText(locale, "Озвучка", "Voice")}</dt>
+                <dd>{getVoiceLabel(project, locale)}</dd>
+              </div>
+              <div>
+                <dt>{workspaceText(locale, "Музыка", "Music")}</dt>
+                <dd>{getMusicLabel(project, locale)}</dd>
+              </div>
+              <div>
+                <dt>{workspaceText(locale, "Субтитры", "Subtitles")}</dt>
+                <dd>{getSubtitleLabel(project, locale, subtitleColorOptions, subtitleStyleOptions)}</dd>
+              </div>
+            </dl>
+          </section>
+
+          <section className="studio-project-page__info-section">
+            <div className="studio-project-page__section-head">
+              <span>{workspaceText(locale, "Активность", "Activity")}</span>
+            </div>
+            <div className="studio-project-page__dates">
+              <div>
+                <span>{workspaceText(locale, "Обновлено", "Updated")}</span>
+                <strong>{updateLabel}</strong>
+              </div>
+              <div>
+                <span>{workspaceText(locale, "Публикация", "Publication")}</span>
+                <strong>{publicationMeta || workspaceText(locale, "Не опубликовано", "Not published")}</strong>
+              </div>
+            </div>
+          </section>
 
           <section className="studio-project-page__versions">
             <div className="studio-project-page__section-head">
