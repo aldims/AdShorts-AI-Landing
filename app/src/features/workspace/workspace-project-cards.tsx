@@ -129,7 +129,7 @@ type WorkspaceProjectCardProps = {
   onDeactivate: (projectId: string) => void;
   onDelete: (project: WorkspaceProject) => void;
   onEdit: (project: WorkspaceProject) => void;
-  onOpenPreview: (project: WorkspaceProject) => void;
+  onOpenProject: (project: WorkspaceProject) => void;
   onPublish: (project: WorkspaceProject) => void;
   onToggleStack?: () => void;
   project: WorkspaceProject;
@@ -151,7 +151,7 @@ export function WorkspaceProjectCard({
   onDeactivate,
   onDelete,
   onEdit,
-  onOpenPreview,
+  onOpenProject,
   onPublish,
   onToggleStack,
   project,
@@ -187,7 +187,6 @@ export function WorkspaceProjectCard({
   const handleToggleStack = typeof onToggleStack === "function" ? onToggleStack : null;
   const hasStackBadge = Boolean(stackBadgeLabel);
   const hasCollapseHandle = Boolean(handleToggleStack && showStackCollapseHandle);
-  const shouldToggleStackFromCard = Boolean(handleToggleStack && hasStackBadge);
   const shouldShowStatusBadge = shouldShowProjectStatusBadge(project.status);
 
   useEffect(() => {
@@ -314,29 +313,39 @@ export function WorkspaceProjectCard({
             </div>
           </div>
         </div>
-        {project.videoUrl ? (
-          <button
-            className="studio-project-card__thumb-trigger"
-            type="button"
-            aria-label={
-              shouldToggleStackFromCard
-                ? isStackExpanded
+        <button
+          className="studio-project-card__thumb-trigger"
+          type="button"
+          aria-label={workspaceText(locale, `Открыть проект: ${projectTitle}`, `Open project: ${projectTitle}`)}
+          onClick={() => {
+            if (project.videoUrl) {
+              setShouldLoadPreview(true);
+            }
+            onOpenProject(project);
+          }}
+        />
+        {stackBadgeLabel ? (
+          handleToggleStack ? (
+            <button
+              className="studio-project-card__stack-label is-button"
+              type="button"
+              aria-expanded={isStackExpanded}
+              aria-label={
+                isStackExpanded
                   ? workspaceText(locale, `Свернуть версии: ${projectTitle}`, `Collapse versions: ${projectTitle}`)
                   : workspaceText(locale, `Показать версии: ${projectTitle}`, `Show versions: ${projectTitle}`)
-                : workspaceText(locale, `Открыть превью: ${projectTitle}`, `Open preview: ${projectTitle}`)
-            }
-            onClick={() => {
-              if (shouldToggleStackFromCard) {
-                handleToggleStack?.();
-                return;
               }
-
-              setShouldLoadPreview(true);
-              onOpenPreview(project);
-            }}
-          />
+              onClick={(event) => {
+                event.stopPropagation();
+                handleToggleStack();
+              }}
+            >
+              {stackBadgeLabel}
+            </button>
+          ) : (
+            <span className="studio-project-card__stack-label">{stackBadgeLabel}</span>
+          )
         ) : null}
-        {stackBadgeLabel ? <span className="studio-project-card__stack-label">{stackBadgeLabel}</span> : null}
       <div className="studio-project-card__quick-actions" onClick={(event) => event.stopPropagation()}>
           <button
             className="studio-canvas-preview__quick-action"

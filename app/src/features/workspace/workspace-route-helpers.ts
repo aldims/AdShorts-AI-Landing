@@ -1,12 +1,14 @@
 import type { StudioEntryIntentSection } from "../../lib/studio-entry-intent";
 
-export type StudioView = "create" | "projects" | "media";
+export type StudioView = "create" | "project" | "projects" | "media";
 export type StudioRouteMode = "idea" | "scenes";
+export type StudioRouteSection = StudioEntryIntentSection | "project";
 
 export type StudioRouteState = {
   mode: StudioRouteMode;
   projectId: number | null;
-  section: StudioEntryIntentSection;
+  projectKey: string | null;
+  section: StudioRouteSection;
   segmentIndex: number | null;
 };
 
@@ -31,20 +33,29 @@ export const getStudioRouteState = (search: string): StudioRouteState => {
   const searchParams = new URLSearchParams(search);
   const section = searchParams.get("section");
   const mode = searchParams.get("mode");
+  const projectKey = String(searchParams.get("project") ?? "").trim();
 
   return {
     mode: mode === "scenes" ? "scenes" : "idea",
     projectId: parseStudioRouteInteger(searchParams.get("projectId")),
-    section: section === "projects" || section === "media" || section === "edit" ? section : "create",
+    projectKey: projectKey ? projectKey.slice(0, 240) : null,
+    section:
+      section === "project" || section === "projects" || section === "media" || section === "edit"
+        ? section
+        : "create",
     segmentIndex: parseStudioRouteInteger(searchParams.get("segment"), { allowZero: true }),
   };
 };
 
-export const getStudioRouteSection = (search: string): StudioEntryIntentSection => {
+export const getStudioRouteSection = (search: string): StudioRouteSection => {
   return getStudioRouteState(search).section;
 };
 
-export const getStudioViewFromRouteSection = (section: StudioEntryIntentSection): StudioView => {
+export const getStudioViewFromRouteSection = (section: StudioRouteSection): StudioView => {
+  if (section === "project") {
+    return "project";
+  }
+
   if (section === "projects") {
     return "projects";
   }
@@ -56,7 +67,7 @@ export const getStudioViewFromRouteSection = (section: StudioEntryIntentSection)
   return "create";
 };
 
-export const shouldDeferSegmentEditorRouteRestore = (pendingSection: StudioEntryIntentSection | null) =>
+export const shouldDeferSegmentEditorRouteRestore = (pendingSection: StudioRouteSection | null) =>
   pendingSection !== null && pendingSection !== "edit";
 
 export const resolveWorkspaceSegmentEditorPendingRouteSync = (
@@ -214,15 +225,27 @@ export const shouldSkipWorkspaceSegmentEditorActiveDraftReopen = (
 
 export const buildStudioRouteUrl = (
   search: string,
-  section: StudioEntryIntentSection,
-  options?: { mode?: StudioRouteMode | null; projectId?: number | null; segmentIndex?: number | null },
+  section: StudioRouteSection,
+  options?: {
+    mode?: StudioRouteMode | null;
+    projectId?: number | null;
+    projectKey?: string | null;
+    segmentIndex?: number | null;
+  },
 ) => {
   const searchParams = new URLSearchParams(search);
 
-  if (section === "projects" || section === "media" || section === "edit") {
+  if (section === "project" || section === "projects" || section === "media" || section === "edit") {
     searchParams.set("section", section);
   } else {
     searchParams.delete("section");
+  }
+
+  const normalizedProjectKey = String(options?.projectKey ?? "").trim();
+  if (section === "project" && normalizedProjectKey) {
+    searchParams.set("project", normalizedProjectKey.slice(0, 240));
+  } else {
+    searchParams.delete("project");
   }
 
   if (section === "edit" && typeof options?.projectId === "number" && Number.isInteger(options.projectId) && options.projectId > 0) {

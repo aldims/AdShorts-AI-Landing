@@ -469,6 +469,7 @@ import {
   shouldSkipWorkspaceSegmentEditorActiveDraftReopen,
   shouldDeferSegmentEditorRouteRestore,
   type StudioRouteMode,
+  type StudioRouteSection,
   type StudioView,
 } from "../features/workspace/workspace-route-helpers";
 import {
@@ -495,6 +496,7 @@ import {
   mergeWorkspaceProjectDeletionSnapshots,
   removeWorkspaceProjectDeletionSnapshots,
 } from "../features/workspace/workspace-project-cards";
+import { WorkspaceProjectPage } from "../features/workspace/workspace-project-page";
 import {
   WorkspaceModalVideoPlayer,
   WorkspaceSegmentPreviewCardMedia,
@@ -1969,7 +1971,11 @@ export function WorkspacePage({
     if (routeStudioState.section === "edit" || routeStudioState.mode === "scenes") {
       return "segment-editor";
     }
-    if (routeStudioState.section === "projects" || routeStudioState.section === "media") {
+    if (
+      routeStudioState.section === "project" ||
+      routeStudioState.section === "projects" ||
+      routeStudioState.section === "media"
+    ) {
       return readStoredStudioCreateMode(session.email) ?? "default";
     }
     return "default";
@@ -2818,7 +2824,7 @@ export function WorkspacePage({
     activeSegmentIndex: number;
     draft: WorkspaceSegmentEditorDraftSession;
   } | null>(null);
-  const pendingStudioRouteSectionRef = useRef<StudioEntryIntentSection | null>(null);
+  const pendingStudioRouteSectionRef = useRef<StudioRouteSection | null>(null);
   const pendingStudioRouteSectionResetTimerRef = useRef<number | null>(null);
   const segmentEditorPreviewVideoRefs = useRef<Record<number, HTMLVideoElement | null>>({});
   const segmentEditorPreviewVideoRefCallbacks = useRef<Record<number, (element: HTMLVideoElement | null) => void>>({});
@@ -3758,7 +3764,7 @@ export function WorkspacePage({
     hasExplicitSegmentEditorRouteRef.current = hasExplicitSegmentEditorRoute;
   }, [hasExplicitSegmentEditorRoute]);
 
-  const markPendingStudioRouteSection = (section: StudioEntryIntentSection) => {
+  const markPendingStudioRouteSection = (section: StudioRouteSection) => {
     if (pendingStudioRouteSectionResetTimerRef.current) {
       window.clearTimeout(pendingStudioRouteSectionResetTimerRef.current);
       pendingStudioRouteSectionResetTimerRef.current = null;
@@ -3766,7 +3772,7 @@ export function WorkspacePage({
     pendingStudioRouteSectionRef.current = section;
   };
 
-  const clearPendingStudioRouteSection = (section?: StudioEntryIntentSection) => {
+  const clearPendingStudioRouteSection = (section?: StudioRouteSection) => {
     if (section && pendingStudioRouteSectionRef.current !== section) {
       return;
     }
@@ -3779,14 +3785,21 @@ export function WorkspacePage({
   };
 
   const syncStudioRouteSection = (
-    section: StudioEntryIntentSection,
-    options?: { mode?: StudioRouteMode | null; projectId?: number | null; replace?: boolean; segmentIndex?: number | null },
+    section: StudioRouteSection,
+    options?: {
+      mode?: StudioRouteMode | null;
+      projectId?: number | null;
+      projectKey?: string | null;
+      replace?: boolean;
+      segmentIndex?: number | null;
+    },
   ) => {
     const baseSearch = isStudioPathname ? location.search : "";
     const nextUrl = localizePath(
       buildStudioRouteUrl(baseSearch, section, {
         mode: options?.mode,
         projectId: options?.projectId,
+        projectKey: options?.projectKey,
         segmentIndex: options?.segmentIndex,
       }),
     );
@@ -6579,6 +6592,21 @@ export function WorkspacePage({
     () => buildWorkspaceProjectStackGroups(projects),
     [projects],
   );
+  const routeProject = useMemo(() => {
+    const projectKey = routeStudioState.projectKey;
+    if (!projectKey) {
+      return null;
+    }
+
+    return (
+      projects.find(
+        (project) =>
+          project.id === projectKey ||
+          project.jobId === projectKey ||
+          (project.adId !== null && String(project.adId) === projectKey),
+      ) ?? null
+    );
+  }, [projects, routeStudioState.projectKey]);
   const currentProjectId = generatedVideo?.adId ?? null;
   const currentAppliedSegmentEditorSession =
     currentProjectId && segmentEditorAppliedSession?.projectId === currentProjectId ? segmentEditorAppliedSession : null;
@@ -8475,7 +8503,7 @@ export function WorkspacePage({
     ? getWorkspaceSegmentEditorPlaybackDuration(activeSegment)
     : 0;
   const studioSidebarActiveItem =
-    studioView === "projects"
+    studioView === "project" || studioView === "projects"
       ? "projects"
       : studioView === "media"
         ? "media"
@@ -25227,6 +25255,38 @@ export function WorkspacePage({
     await handleGenerate(generatedVideo.prompt, buildCurrentRegenerationOptions());
   };
 
+  const handleRegenerateProject = async (project: WorkspaceProject) => {
+    const prompt = project.prompt.trim();
+    if (!prompt || isGenerating) {
+      return;
+    }
+
+    const settings = project.prefillSettings ?? null;
+    const restoredVideoMode = resolveWorkspaceRestoredStudioVideoMode(settings?.videoMode);
+    const restoredMusicType =
+      settings?.musicType && settings.musicType !== "custom"
+        ? studioMusicOptions.find((option) => option.id === settings.musicType)?.id
+        : undefined;
+
+    applyExamplePrefillSettings(settings);
+    await handleGenerate(prompt, {
+      aiVideoGenerateAudioEnabled: settings?.aiVideoGenerateAudioEnabled,
+      ...(settings?.brandText ? { brandText: settings.brandText } : {}),
+      isRegeneration: true,
+      language: settings?.language,
+      musicType: restoredMusicType,
+      projectId: project.adId ?? undefined,
+      subtitleColorId: settings?.subtitleColorId,
+      subtitleEnabled: settings?.subtitleEnabled,
+      subtitleStyleId: settings?.subtitleStyleId,
+      videoMode: restoredVideoMode ?? "ai_photo",
+      videoModeChanged: false,
+      versionRootProjectAdId: project.versionRootProjectAdId ?? project.adId ?? undefined,
+      voiceEnabled: settings?.voiceEnabled,
+      voiceId: settings?.voiceId,
+    });
+  };
+
   const playVideoElement = async (element: HTMLVideoElement | null, preferMutedFallback = false) => {
     if (!element) return;
 
@@ -26112,10 +26172,8 @@ export function WorkspacePage({
     });
   };
 
-  const handleOpenProjectPreviewModal = (project: WorkspaceProject) => {
-    if (!project.videoUrl) return;
-
-    markPendingStudioRouteSection("projects");
+  const handleOpenProjectPage = (project: WorkspaceProject) => {
+    markPendingStudioRouteSection("project");
     flushSync(() => {
       cancelPendingSegmentEditorLoad();
       stashCurrentSegmentEditorDraft();
@@ -26123,17 +26181,14 @@ export function WorkspacePage({
       segmentEditorHandledRouteRestoreKeyRef.current = null;
       setSegmentEditorDraft(null);
       setCreateMode("default");
-      setStudioView("projects");
+      setStudioView("project");
       setActiveProjectPreviewId(null);
       setIsPreviewModalOpen(false);
-      setProjectPreviewModal(project);
-      setProjectPreviewModalAspectRatio(null);
-      setPreviewModalOpenToken(Date.now());
+      setProjectPreviewModal(null);
       setPreviewModalPlaybackError(null);
       setPreviewModalUseFallbackSource(false);
     });
-    syncStudioRouteSection("projects", { replace: true });
-    queuePreviewModalPlayback({ immediate: true, resetToStart: true });
+    syncStudioRouteSection("project", { projectKey: project.id });
   };
 
   const handleRetryPreviewModalPlayback = () => {
@@ -39603,6 +39658,31 @@ export function WorkspacePage({
             ) : null}
           </div>
 
+            {studioView === "project" ? (
+              <WorkspaceProjectPage
+                isActionBusy={isSegmentEditorLoading || isGenerating || isPublishBootstrapLoading}
+                isLoading={!hasLoadedProjects || isProjectsLoading}
+                onBack={() => {
+                  setStudioView("projects");
+                  syncStudioRouteSection("projects");
+                }}
+                onEdit={(project) => {
+                  void handleOpenProjectSegmentEditor(project);
+                }}
+                onPublish={(project) => {
+                  void handleOpenProjectPublish(project);
+                }}
+                onRegenerate={(project) => {
+                  void handleRegenerateProject(project);
+                }}
+                onRetryLoad={() => setHasLoadedProjects(false)}
+                onVolumeChange={setStudioPreviewVolume}
+                project={routeProject}
+                projectsError={projectsError}
+                volume={studioPreviewVolume}
+              />
+            ) : null}
+
             {studioView === "projects" ? (
               <div className="studio-projects">
               {projectDeleteError ? (
@@ -39665,7 +39745,7 @@ export function WorkspacePage({
                           onDeactivate={deactivateProjectPreview}
                           onDelete={requestProjectDelete}
                           onEdit={(targetProject) => void handleOpenProjectSegmentEditor(targetProject)}
-                          onOpenPreview={handleOpenProjectPreviewModal}
+                          onOpenProject={handleOpenProjectPage}
                           onPublish={(targetProject) => void handleOpenProjectPublish(targetProject)}
                           project={group.leadProject}
                         />,
@@ -39691,7 +39771,7 @@ export function WorkspacePage({
                         onDeactivate={deactivateProjectPreview}
                         onDelete={requestProjectDelete}
                           onEdit={(targetProject) => void handleOpenProjectSegmentEditor(targetProject)}
-                        onOpenPreview={handleOpenProjectPreviewModal}
+                        onOpenProject={handleOpenProjectPage}
                           onPublish={(targetProject) => void handleOpenProjectPublish(targetProject)}
                           onToggleStack={index === 0 ? toggleStack : undefined}
                         project={project}
@@ -39717,7 +39797,7 @@ export function WorkspacePage({
                             onDeactivate={deactivateProjectPreview}
                             onDelete={() => requestProjectStackDelete(group.projects)}
                             onEdit={(targetProject) => void handleOpenProjectSegmentEditor(targetProject)}
-                            onOpenPreview={handleOpenProjectPreviewModal}
+                            onOpenProject={handleOpenProjectPage}
                             onPublish={(targetProject) => void handleOpenProjectPublish(targetProject)}
                             onToggleStack={toggleStack}
                             project={group.leadProject}

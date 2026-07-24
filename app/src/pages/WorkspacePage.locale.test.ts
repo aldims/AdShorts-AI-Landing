@@ -3416,6 +3416,21 @@ describe("WorkspacePage studio route transitions", () => {
     );
   });
 
+  it("builds a reload-safe project page route without leaking editor parameters", () => {
+    expect(buildStudioRouteUrl("?mode=scenes&segment=3", "project", { projectKey: "project:42" })).toBe(
+      "/app/studio?section=project&project=project%3A42",
+    );
+    expect(getStudioRouteState("?section=project&project=project%3A42")).toEqual(
+      expect.objectContaining({
+        mode: "idea",
+        projectId: null,
+        projectKey: "project:42",
+        section: "project",
+        segmentIndex: null,
+      }),
+    );
+  });
+
   it("starts scene creation from a fresh draft when requested explicitly", () => {
     expect(
       resolveWorkspaceSegmentEditorScratchDraftOpenSource({
