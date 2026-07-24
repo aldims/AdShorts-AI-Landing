@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { areWorkspaceProfilesEqual } from "./workspace-profile-helpers";
 
 import {
@@ -13,7 +13,7 @@ import {
   isWorkspaceSegmentCustomVisualUploadBusy,
   isWorkspaceExplicitSegmentEditorRoute,
   isWorkspaceSegmentEditorProjectUnavailableError,
-  openWorkspaceProjectEditorAfterSuccessfulLoad,
+  openWorkspaceProjectEditorImmediately,
   isWorkspaceSegmentLibraryLoadMoreSentinelNearViewport,
   isWorkspaceSegmentSceneSoundRunBusy,
   isStudioGenerationUserFacing,
@@ -527,28 +527,31 @@ describe("segment editor project availability errors", () => {
     expect(isWorkspaceSegmentEditorProjectUnavailableError("Not found")).toBe(false);
   });
 
-  it("does not open an editor when project compatibility loading fails", async () => {
-    const openedDrafts: string[] = [];
-
-    const didOpen = await openWorkspaceProjectEditorAfterSuccessfulLoad<string>(
-      async () => null,
-      (draft) => openedDrafts.push(draft),
+  it("enters the editor before a project draft request resolves", async () => {
+    let resolveDraft!: (draft: string | null) => void;
+    const enterEditor = vi.fn();
+    const loadDraft = vi.fn(
+      () =>
+        new Promise<string | null>((resolve) => {
+          resolveDraft = resolve;
+        }),
     );
 
-    expect(didOpen).toBe(false);
-    expect(openedDrafts).toEqual([]);
+    const openResult = openWorkspaceProjectEditorImmediately(enterEditor, loadDraft);
+
+    expect(enterEditor).toHaveBeenCalledOnce();
+    expect(loadDraft).toHaveBeenCalledOnce();
+    resolveDraft("compatible-draft");
+    await expect(openResult).resolves.toBe(true);
   });
 
-  it("opens an editor only after a compatible project draft is loaded", async () => {
-    const openedDrafts: string[] = [];
+  it("keeps the editor context open when project loading fails", async () => {
+    const enterEditor = vi.fn();
 
-    const didOpen = await openWorkspaceProjectEditorAfterSuccessfulLoad(
-      async () => "compatible-draft",
-      (draft) => openedDrafts.push(draft),
-    );
-
-    expect(didOpen).toBe(true);
-    expect(openedDrafts).toEqual(["compatible-draft"]);
+    await expect(
+      openWorkspaceProjectEditorImmediately(enterEditor, async () => null),
+    ).resolves.toBe(false);
+    expect(enterEditor).toHaveBeenCalledOnce();
   });
 });
 

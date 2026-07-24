@@ -4,7 +4,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { LocaleProvider } from "../../lib/i18n";
-import { WorkspaceProjectCard } from "./workspace-project-cards";
+import { AccountProjectListCard, WorkspaceProjectCard } from "./workspace-project-cards";
 import { formatProjectDate } from "./workspace-publish-helpers";
 import type { WorkspaceProject } from "./workspace-types";
 import { WorkspaceProjectPage } from "./workspace-project-page";
@@ -358,7 +358,6 @@ describe("WorkspaceProjectCard project navigation", () => {
           onAddToExamples={() => undefined}
           onBlur={() => undefined}
           onDeactivate={() => undefined}
-          onDelete={() => undefined}
           onEdit={() => undefined}
           onOpenProject={onOpenProject}
           onPublish={() => undefined}
@@ -385,7 +384,6 @@ describe("WorkspaceProjectCard project navigation", () => {
           onAddToExamples={() => undefined}
           onBlur={() => undefined}
           onDeactivate={() => undefined}
-          onDelete={() => undefined}
           onEdit={() => undefined}
           onOpenProject={onOpenProject}
           onPublish={() => undefined}
@@ -403,5 +401,19 @@ describe("WorkspaceProjectCard project navigation", () => {
     fireEvent.click(screen.getByRole("button", { name: "Показать версии: Сильный хук за 30 секунд" }));
     expect(onToggleStack).toHaveBeenCalledOnce();
     expect(onOpenProject).toHaveBeenCalledOnce();
+    expect(screen.getByRole("button", { name: "Открыть Shorts по сценам" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Опубликовать в YouTube" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Скачать видео" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Удалить проект" })).toBeNull();
+  });
+
+  it("does not expose deletion from the account project list card", () => {
+    render(
+      <LocaleProvider locale="ru">
+        <AccountProjectListCard project={readyProject} />
+      </LocaleProvider>,
+    );
+
+    expect(screen.queryByRole("button", { name: "Удалить проект" })).toBeNull();
   });
 });

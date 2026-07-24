@@ -1313,17 +1313,13 @@ export const isWorkspaceSegmentEditorProjectUnavailableError = (value: string) =
   );
 };
 
-export const openWorkspaceProjectEditorAfterSuccessfulLoad = async <TDraft,>(
+export const openWorkspaceProjectEditorImmediately = async <TDraft,>(
+  enterEditor: () => void,
   loadDraft: () => Promise<TDraft | null | undefined>,
-  openDraft: (draft: TDraft) => void,
 ) => {
+  enterEditor();
   const draft = await loadDraft();
-  if (!draft) {
-    return false;
-  }
-
-  openDraft(draft);
-  return true;
+  return Boolean(draft);
 };
 
 export const isWorkspaceSegmentEditorPreparingError = (value: string) => {

@@ -665,7 +665,7 @@ import {
   WORKSPACE_CHECKOUT_REQUEST_TIMEOUT_MS,
   isWorkspaceSegmentEditorNotFoundError,
   isWorkspaceSegmentEditorProjectUnavailableError,
-  openWorkspaceProjectEditorAfterSuccessfulLoad,
+  openWorkspaceProjectEditorImmediately,
   isWorkspaceSegmentEditorPreparingError,
   isStudioGenerationUserFacing,
   resolveWorkspaceStudioCreateModeDuringGeneration,
@@ -8569,24 +8569,38 @@ export function WorkspacePage({
         : createMode === "segment-editor" && !isScratchSegmentEditorDraft
           ? "edit"
           : "create";
-  const segmentEditorProjectContextTitle =
-    createMode === "segment-editor" && segmentEditorDraft && !isScratchSegmentEditorDraft
-      ? segmentEditorDraft.title.trim() ||
-        workspaceText(
-          locale,
-          `Проект #${segmentEditorDraft.projectId}`,
-          `Project #${segmentEditorDraft.projectId}`,
-        )
-      : null;
-  const studioNavSectionLabels = segmentEditorProjectContextTitle
-    ? {
-        create: workspaceText(
-          locale,
-          `Редактор · ${segmentEditorProjectContextTitle}`,
-          `Editor · ${segmentEditorProjectContextTitle}`,
-        ),
+  const segmentEditorProjectContextTitle = (() => {
+    if (createMode !== "segment-editor") {
+      return null;
+    }
+
+    const routeProjectId =
+      routeStudioState.section === "edit" && routeStudioState.projectId
+        ? routeStudioState.projectId
+        : null;
+    if (!routeProjectId && isScratchSegmentEditorDraft) {
+      return null;
+    }
+
+    const projectId = routeProjectId ?? segmentEditorDraft?.projectId ?? null;
+    if (!projectId) {
+      return null;
+    }
+
+    const matchingProject = projects.find((project) => project.adId === projectId);
+    if (matchingProject) {
+      return getWorkspaceProjectDisplayTitle(matchingProject);
+    }
+
+    if (segmentEditorDraft?.projectId === projectId) {
+      const normalizedTitle = segmentEditorDraft.title.trim();
+      if (normalizedTitle) {
+        return normalizedTitle;
       }
-    : undefined;
+    }
+
+    return workspaceText(locale, `Проект #${projectId}`, `Project #${projectId}`);
+  })();
   const shouldShowStudioSidebar = false;
   const studioSidebarSubtitleSelection = getWorkspaceSegmentEditorEffectiveSubtitleSelection(segmentEditorDraft, {
     subtitleColorId: selectedSubtitleColorId,
@@ -8800,8 +8814,14 @@ export function WorkspacePage({
     const normalizedTitle = segmentEditorDraft.title.trim();
     return normalizedTitle || `Проект #${segmentEditorDraft.projectId}`;
   })();
-  const studioCanvasPageTitle = "";
-  const showStudioCanvasPageTitle = false;
+  const studioCanvasPageTitle = segmentEditorProjectContextTitle
+    ? workspaceText(
+        locale,
+        `Редактирование · ${segmentEditorProjectContextTitle}`,
+        `Editing · ${segmentEditorProjectContextTitle}`,
+      )
+    : "";
+  const showStudioCanvasPageTitle = Boolean(studioCanvasPageTitle);
   const cancelSegmentEditorSyntheticPlayback = () => {
     if (segmentEditorSyntheticPlaybackFrameRef.current !== null) {
       window.cancelAnimationFrame(segmentEditorSyntheticPlaybackFrameRef.current);
@@ -23430,22 +23450,6 @@ export function WorkspacePage({
     setProjectPendingDeleteProjects([project]);
   };
 
-  const requestProjectStackDelete = (targetProjects: WorkspaceProject[]) => {
-    const projectsToDelete = targetProjects.filter(
-      (project, index, array) =>
-        !pendingProjectDeleteIdsRef.current.has(project.id) &&
-        array.findIndex((candidate) => candidate.id === project.id) === index,
-    );
-
-    if (isProjectDeleteSubmitting || projectsToDelete.length === 0) {
-      return;
-    }
-
-    setProjectDeleteError(null);
-    setProjectPendingDelete(projectsToDelete[0] ?? null);
-    setProjectPendingDeleteProjects(projectsToDelete);
-  };
-
   const handleDeleteProject = async () => {
     const project = projectPendingDelete;
     if (!project) {
@@ -25276,32 +25280,43 @@ export function WorkspacePage({
       return;
     }
 
-    if (segmentEditorDraft?.projectId && segmentEditorDraft.projectId !== projectId) {
+    const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+    if (currentDraft && currentDraft.projectId !== projectId) {
       stashCurrentSegmentEditorDraft();
+      segmentEditorDraftRef.current = null;
+      setSegmentEditorDraft(null);
     }
 
-    await openWorkspaceProjectEditorAfterSuccessfulLoad(
-      () =>
-        ensureSegmentEditorDraftForProject(
-          projectId,
-          {
-            ...getWorkspaceSegmentEditorProjectOpenOptions(),
-            bypassCache: true,
-            onLoadFailure: (message) => {
-              showStudioToast(message, { durationMs: 5000, kind: "warning" });
-            },
-            openDraft: false,
-            syncRoute: false,
-          },
-        ),
-      (draft) => {
+    const restoreKey = `${projectId}:0`;
+    segmentEditorRouteRestoreKeyRef.current = restoreKey;
+    segmentEditorHandledRouteRestoreKeyRef.current = null;
+    segmentEditorFreshRouteAttemptedKeyRef.current = restoreKey;
+
+    await openWorkspaceProjectEditorImmediately(
+      () => {
         setActiveTab("studio");
         setStudioView("create");
-        openSegmentEditorWithDraft(draft);
+        rememberStudioCreateMode("segment-editor");
+        setCreateMode("segment-editor");
         syncStudioRouteSection("edit", {
           projectId,
           segmentIndex: 0,
         });
+      },
+      async () => {
+        const draft = await ensureSegmentEditorDraftForProject(projectId, {
+          ...getWorkspaceSegmentEditorProjectOpenOptions(),
+          initialSegmentIndex: 0,
+          initialSegmentMode: "route",
+          syncRoute: false,
+        });
+        segmentEditorFreshRouteAttemptedKeyRef.current =
+          resolveWorkspaceSegmentEditorFreshRouteAttemptedKeyAfterLoad(
+            restoreKey,
+            segmentEditorFreshRouteAttemptedKeyRef.current,
+            draft !== null,
+          );
+        return draft;
       },
     );
   };
@@ -38719,7 +38734,6 @@ export function WorkspacePage({
                 onOpenStudioSection={handleStudioTopMenuSelect}
                 projectsCount={projects.length}
                 showStudioPricingLink={false}
-                studioSectionLabels={studioNavSectionLabels}
                 onStudioBack={isSegmentEditorPageActive && !isScratchSegmentEditorDraft ? () => handleStudioTopMenuSelect("create") : null}
               />
             </div>
@@ -39841,7 +39855,6 @@ export function WorkspacePage({
                           onActivate={activateProjectPreview}
                           onBlur={handleProjectCardBlur(group.leadProject.id)}
                           onDeactivate={deactivateProjectPreview}
-                          onDelete={requestProjectDelete}
                           onEdit={(targetProject) => void handleOpenProjectSegmentEditor(targetProject)}
                           onOpenProject={handleOpenProjectPage}
                           onPublish={(targetProject) => void handleOpenProjectPublish(targetProject)}
@@ -39867,7 +39880,6 @@ export function WorkspacePage({
                         onActivate={activateProjectPreview}
                         onBlur={handleProjectCardBlur(project.id)}
                         onDeactivate={deactivateProjectPreview}
-                        onDelete={requestProjectDelete}
                           onEdit={(targetProject) => void handleOpenProjectSegmentEditor(targetProject)}
                         onOpenProject={handleOpenProjectPage}
                           onPublish={(targetProject) => void handleOpenProjectPublish(targetProject)}
@@ -39893,7 +39905,6 @@ export function WorkspacePage({
                             onActivate={activateProjectPreview}
                             onBlur={handleProjectCardBlur(group.leadProject.id)}
                             onDeactivate={deactivateProjectPreview}
-                            onDelete={() => requestProjectStackDelete(group.projects)}
                             onEdit={(targetProject) => void handleOpenProjectSegmentEditor(targetProject)}
                             onOpenProject={handleOpenProjectPage}
                             onPublish={(targetProject) => void handleOpenProjectPublish(targetProject)}
@@ -41881,7 +41892,6 @@ export function WorkspacePage({
                           return [
                             <AccountProjectListCard
                               key={group.leadProject.id}
-                              onDelete={requestProjectDelete}
                               project={group.leadProject}
                             />,
                           ];
@@ -41898,7 +41908,6 @@ export function WorkspacePage({
                             <AccountProjectListCard
                               isStackExpanded={index === 0}
                               key={project.id}
-                              onDelete={requestProjectDelete}
                               onToggleStack={index === 0 ? toggleStack : undefined}
                               project={project}
                               showStackCollapseHandle={index === 0}
@@ -41916,7 +41925,6 @@ export function WorkspacePage({
                               <AccountProjectListCard
                                 isStackExpanded={isExpanded}
                                 isStackLead
-                                onDelete={() => requestProjectStackDelete(group.projects)}
                                 onToggleStack={toggleStack}
                                 project={group.leadProject}
                                 stackBadgeLabel={formatProjectVersionsLabel(group.projects.length, locale)}

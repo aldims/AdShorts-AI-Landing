@@ -30,6 +30,7 @@ import {
   resolveWorkspaceProjectSceneReferenceForTarget,
 } from "../features/workspace/workspace-reference-helpers";
 import type { WorkspaceReferenceVisualOption } from "../features/workspace/workspace-prompt-helpers";
+import { getWorkspaceSegmentEditorSessionUrl } from "../features/workspace/workspace-page-model";
 import {
   hasStoredWorkspaceSegmentSceneSoundAssetChangedSinceStart,
   readStoredWorkspaceSegmentEditorDraft,
@@ -1211,11 +1212,16 @@ describe("WorkspacePage example prefill settings", () => {
 
 describe("WorkspacePage segment editor draft persistence", () => {
   it("preserves local drafts when a project is opened from the projects list", () => {
-    expect(getWorkspaceSegmentEditorProjectOpenOptions()).toEqual({
+    const openOptions = getWorkspaceSegmentEditorProjectOpenOptions();
+
+    expect(openOptions).toEqual({
       bypassCache: false,
       discardLocalDraft: false,
       forceRefresh: false,
     });
+    expect(getWorkspaceSegmentEditorSessionUrl(4213, openOptions)).toBe(
+      "/api/workspace/projects/4213/segment-editor",
+    );
   });
 
   it("only discards local drafts for an explicit refresh", () => {

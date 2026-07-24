@@ -14,7 +14,6 @@ type Props = {
   preferStudioSections?: boolean;
   projectsCount?: number;
   showStudioPricingLink?: boolean;
-  studioSectionLabels?: Partial<Record<StudioEntryIntentSection, string>>;
   onStudioBack?: (() => void) | null;
 };
 
@@ -69,7 +68,6 @@ export function PrimarySiteNav({
   preferStudioSections = false,
   projectsCount = 0,
   showStudioPricingLink = true,
-  studioSectionLabels,
   onStudioBack = null,
 }: Props) {
   const { localizePath, t } = useLocale();
@@ -198,10 +196,10 @@ export function PrimarySiteNav({
 
   const activeStudioSectionLabel =
     resolvedActiveStudioSection === "projects"
-      ? studioSectionLabels?.projects ?? t(navMessages.projects)
+      ? t(navMessages.projects)
       : resolvedActiveStudioSection === "media"
-        ? studioSectionLabels?.media ?? t(navMessages.media)
-        : studioSectionLabels?.create ?? t(navMessages.studioCreate);
+        ? t(navMessages.media)
+        : t(navMessages.studioCreate);
   const compactToggleLabel =
     isStudioActive && shouldRenderStudioSections
       ? activeStudioSectionLabel
@@ -253,7 +251,7 @@ export function PrimarySiteNav({
               type="button"
               onClick={() => handleStudioSectionSelect(item.id)}
             >
-              <span title={studioSectionLabels?.[item.id]}>{studioSectionLabels?.[item.id] ?? item.label}</span>
+              <span>{item.label}</span>
               {item.id === "projects" && projectsCount > 0 ? <span className="site-nav__studio-count">{projectsCount}</span> : null}
             </button>
           ))}
@@ -340,7 +338,7 @@ export function PrimarySiteNav({
                     tabIndex={isStudioMenuOpen ? 0 : -1}
                     onClick={() => handleStudioSectionSelect(item.id)}
                   >
-                    <span>{studioSectionLabels?.[item.id] ?? item.label}</span>
+                    <span>{item.label}</span>
                     {item.id === "projects" && projectsCount > 0 ? <span className="site-nav__studio-count">{projectsCount}</span> : null}
                   </button>
                 ))}

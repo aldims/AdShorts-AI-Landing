@@ -127,7 +127,6 @@ type WorkspaceProjectCardProps = {
   onActivate: (projectId: string, hasVideo: boolean) => void;
   onBlur: (event: ReactFocusEvent<HTMLElement>) => void;
   onDeactivate: (projectId: string) => void;
-  onDelete: (project: WorkspaceProject) => void;
   onEdit: (project: WorkspaceProject) => void;
   onOpenProject: (project: WorkspaceProject) => void;
   onPublish: (project: WorkspaceProject) => void;
@@ -149,7 +148,6 @@ export function WorkspaceProjectCard({
   onActivate,
   onBlur,
   onDeactivate,
-  onDelete,
   onEdit,
   onOpenProject,
   onPublish,
@@ -433,24 +431,6 @@ export function WorkspaceProjectCard({
           <div className="studio-project-card__thumb-meta">
             <span className="studio-project-card__date">{formatProjectDate(project.updatedAt, locale)}</span>
           </div>
-          <button
-            className="studio-project-card__delete workspace-delete-btn"
-            type="button"
-            aria-label={workspaceText(locale, "Удалить проект", "Delete project")}
-            title={workspaceText(locale, "Удалить проект", "Delete project")}
-            onClick={(event) => {
-              event.stopPropagation();
-              onDelete(project);
-            }}
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-              <path d="M4 7h16" strokeLinecap="round" />
-              <path d="M9 3h6" strokeLinecap="round" />
-              <path d="M10 11v6" strokeLinecap="round" />
-              <path d="M14 11v6" strokeLinecap="round" />
-              <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
         </div>
       </div>
       {hasCollapseHandle ? (
@@ -568,7 +548,6 @@ type AccountProjectListCardProps = {
   isChild?: boolean;
   isStackExpanded?: boolean;
   isStackLead?: boolean;
-  onDelete: (project: WorkspaceProject) => void;
   onToggleStack?: () => void;
   project: WorkspaceProject;
   showStackCollapseHandle?: boolean;
@@ -579,7 +558,6 @@ export function AccountProjectListCard({
   isChild = false,
   isStackExpanded = false,
   isStackLead = false,
-  onDelete,
   onToggleStack,
   project,
   showStackCollapseHandle = false,
@@ -669,30 +647,6 @@ export function AccountProjectListCard({
           {workspaceText(locale, "Создан", "Created")}: {formatProjectDate(project.createdAt, locale)}
           {project.generatedAt ? ` · ${workspaceText(locale, "Готов", "Ready")}: ${formatProjectDate(project.generatedAt, locale)}` : ""}
         </span>
-
-        <div className="account-project-card__actions">
-          <button
-            className="account-linkbtn account-linkbtn--subtle-danger workspace-delete-btn"
-            type="button"
-            aria-label={workspaceText(locale, "Удалить проект", "Delete project")}
-            title={workspaceText(locale, "Удалить проект", "Delete project")}
-            onKeyDown={(event) => {
-              event.stopPropagation();
-            }}
-            onClick={(event) => {
-              event.stopPropagation();
-              onDelete(project);
-            }}
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-              <path d="M4 7h16" strokeLinecap="round" />
-              <path d="M9 3h6" strokeLinecap="round" />
-              <path d="M10 11v6" strokeLinecap="round" />
-              <path d="M14 11v6" strokeLinecap="round" />
-              <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-        </div>
       </div>
       {hasCollapseHandle ? (
         <button

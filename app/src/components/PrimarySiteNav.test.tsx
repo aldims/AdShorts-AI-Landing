@@ -54,7 +54,7 @@ describe("PrimarySiteNav", () => {
     expect(screen.queryByRole("link", { name: "Тарифы" })).toBeNull();
   });
 
-  it("shows the selected project name in the editor navigation context", () => {
+  it("keeps the create tab label unchanged in a project editor", () => {
     renderPrimarySiteNav(
       <PrimarySiteNav
         activeItem="studio"
@@ -62,11 +62,11 @@ describe("PrimarySiteNav", () => {
         onOpenStudio={() => undefined}
         onOpenStudioSection={() => undefined}
         showStudioPricingLink={false}
-        studioSectionLabels={{ create: "Редактор · Сильный хук за 30 секунд" }}
       />,
     );
 
-    expect(screen.getByRole("button", { name: "Редактор · Сильный хук за 30 секунд" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Создать Shorts" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Редактор/ })).toBeNull();
   });
 
   it("opens studio directly without expanding the intermediate menu", () => {
