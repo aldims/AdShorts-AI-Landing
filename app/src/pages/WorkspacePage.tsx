@@ -460,6 +460,7 @@ import {
   getStudioViewFromRouteSection,
   hasWorkspaceSegmentEditorPersistedLocalChanges,
   resolveWorkspaceSegmentEditorFreshRouteAttemptedKeyAfterLoad,
+  resolveWorkspaceSegmentEditorScenesEntryDraft,
   resolveWorkspaceSegmentEditorScratchDraftOpenSource,
   resolveWorkspaceSegmentEditorPendingRouteSync,
   shouldPreserveWorkspaceSegmentEditorExplicitReset,
@@ -1224,6 +1225,7 @@ export {
 } from "../lib/workspaceSegmentPreview";
 export {
   hasWorkspaceSegmentEditorPersistedLocalChanges,
+  resolveWorkspaceSegmentEditorScenesEntryDraft,
   resolveWorkspaceSegmentEditorScratchDraftOpenSource,
   resolveWorkspaceSegmentEditorPendingRouteSync,
   resolveWorkspaceSegmentEditorFreshRouteAttemptedKeyAfterLoad,
@@ -12984,10 +12986,24 @@ export function WorkspacePage({
       return;
     }
 
-    const currentScenesDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+    const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+    const detachedDraftState = detachedSegmentEditorDraftRef.current;
+    const currentScenesDraft = resolveWorkspaceSegmentEditorScenesEntryDraft({
+      currentDraft,
+      detachedDraft: detachedDraftState?.draft,
+      intent: "mode-switch",
+    });
     if (currentScenesDraft) {
+      const restoredSegmentIndex = currentDraft
+        ? activeSegmentIndex
+        : detachedDraftState?.activeSegmentIndex ?? 0;
+      if (!currentDraft) {
+        openSegmentEditorWithDraft(currentScenesDraft, {
+          initialSegmentIndex: restoredSegmentIndex,
+        });
+      }
       lockSegmentEditorPromptHeight();
-      const segment = currentScenesDraft.segments[activeSegmentIndex];
+      const segment = currentScenesDraft.segments[restoredSegmentIndex];
       setSegmentEditorPromptSceneMode("create");
       if (segment) {
         setSegmentAiPhotoModalTab(resolveWorkspaceSegmentVisualModalTab(segment, "ai_photo"));
@@ -12995,7 +13011,7 @@ export function WorkspacePage({
         setSegmentAiPhotoModalTab("ai_photo");
       }
       setCreateMode("segment-editor");
-      syncSegmentEditorRouteForArrayIndex(currentScenesDraft, activeSegmentIndex, { replace: true });
+      syncSegmentEditorRouteForArrayIndex(currentScenesDraft, restoredSegmentIndex, { replace: true });
       return;
     }
 
@@ -13003,6 +13019,7 @@ export function WorkspacePage({
   };
 
   const handleStudioCreateIdeaModeSelect = () => {
+    stashCurrentSegmentEditorDraft();
     rememberStudioCreateMode("default");
     suppressScratchSegmentEditorRouteOpenRef.current = true;
     void handleStudioCreateModeSwitch("default");
@@ -13029,11 +13046,19 @@ export function WorkspacePage({
 
     rememberStudioCreateMode("segment-editor");
     suppressProjectFallbackPreviewRef.current = true;
-    suppressScratchSegmentEditorRouteOpenRef.current = false;
-    if (segmentEditorDraftRef.current ?? segmentEditorDraft) {
-      stashCurrentSegmentEditorDraft();
+    const currentDraft = segmentEditorDraftRef.current ?? segmentEditorDraft;
+    const resumableDraft = resolveWorkspaceSegmentEditorScenesEntryDraft({
+      currentDraft,
+      detachedDraft: detachedSegmentEditorDraftRef.current?.draft,
+      intent: "mode-switch",
+    });
+    if (resumableDraft) {
+      suppressScratchSegmentEditorRouteOpenRef.current = true;
+      void handleStudioCreateModeSwitch("segment-editor");
+      return;
     }
-    clearDetachedSegmentEditorDraft();
+
+    suppressScratchSegmentEditorRouteOpenRef.current = false;
     setGeneratedVideo(null);
     openScratchSegmentEditor({ emptyDescription: true, forceFreshDraft: true, replaceRoute: true });
   };

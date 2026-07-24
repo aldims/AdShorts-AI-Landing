@@ -106,6 +106,12 @@ export function WorkspaceProjectPage({
   const downloadName = getWorkspaceVideoDownloadName(title);
   const canEdit = Boolean(project?.adId && project.status === "ready" && primaryVideoUrl);
   const shouldShowRegenerate = project?.prefillSettings?.creationMode === "idea";
+  const creationModeLabel =
+    project?.prefillSettings?.creationMode === "scenes"
+      ? workspaceText(locale, "По сценам", "By scenes")
+      : project?.prefillSettings?.creationMode === "idea"
+        ? workspaceText(locale, "Из идеи", "From idea")
+        : null;
   const canRegenerate = Boolean(shouldShowRegenerate && project?.prompt.trim() && primaryVideoUrl);
   const canPublish = Boolean(project?.adId && project.status === "ready" && primaryVideoUrl);
   const publicationWithExternalUrl = (
@@ -499,6 +505,12 @@ export function WorkspaceProjectPage({
               <span>{workspaceText(locale, "Активность", "Activity")}</span>
             </div>
             <div className="studio-project-page__dates">
+              {creationModeLabel ? (
+                <div>
+                  <span>{workspaceText(locale, "Режим создания", "Creation mode")}</span>
+                  <strong>{creationModeLabel}</strong>
+                </div>
+              ) : null}
               <div>
                 <span>{workspaceText(locale, "Создано", "Created")}</span>
                 <strong>{createdLabel}</strong>

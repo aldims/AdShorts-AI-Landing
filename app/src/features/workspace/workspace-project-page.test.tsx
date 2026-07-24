@@ -160,6 +160,8 @@ describe("WorkspaceProjectPage", () => {
     );
     const activity = screen.getByText("Активность").closest("section");
     expect(activity).toBeTruthy();
+    expect(within(activity as HTMLElement).getByText("Режим создания")).toBeTruthy();
+    expect(within(activity as HTMLElement).getByText("Из идеи")).toBeTruthy();
     expect(within(activity as HTMLElement).getByText("Создано")).toBeTruthy();
     expect(within(activity as HTMLElement).getByText(formatProjectDate(readyProject.createdAt, "ru"))).toBeTruthy();
     expect(within(activity as HTMLElement).queryByText(formatProjectDate(readyProject.updatedAt, "ru"))).toBeNull();
@@ -172,6 +174,25 @@ describe("WorkspaceProjectPage", () => {
     expect(screen.queryByText("Озвучка")).toBeNull();
     expect(screen.queryByText("Музыка")).toBeNull();
     expect(screen.queryByText("Субтитры")).toBeNull();
+  });
+
+  it("shows the canonical scenes creation mode without restoring removed technical fields", () => {
+    renderProjectPage({
+      project: {
+        ...readyProject,
+        prefillSettings: {
+          ...readyProject.prefillSettings,
+          creationMode: "scenes",
+        },
+      },
+    });
+
+    const activity = screen.getByText("Активность").closest("section");
+    expect(activity).toBeTruthy();
+    expect(within(activity as HTMLElement).getByText("Режим создания")).toBeTruthy();
+    expect(within(activity as HTMLElement).getByText("По сценам")).toBeTruthy();
+    expect(screen.queryByText("Способ создания")).toBeNull();
+    expect(screen.queryByText("Визуал")).toBeNull();
   });
 
   it("renders a non-blocking first-video offer inside project information", () => {

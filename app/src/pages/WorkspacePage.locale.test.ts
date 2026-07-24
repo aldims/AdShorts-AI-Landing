@@ -167,6 +167,7 @@ import {
   resolveWorkspaceSegmentEditorLoadedBaselineSession,
   resolveWorkspaceSegmentEditorFreshRouteAttemptedKeyAfterLoad,
   resolveWorkspaceSegmentEditorPendingRouteSync,
+  resolveWorkspaceSegmentEditorScenesEntryDraft,
   resolveWorkspaceSegmentEditorScratchDraftOpenSource,
   shouldResetWorkspaceSegmentEditorConsumedSourceProject,
   shouldPreserveWorkspaceSegmentEditorExplicitReset,
@@ -3460,6 +3461,40 @@ describe("WorkspacePage studio route transitions", () => {
       }),
     ).toBe("stored");
     expect(resolveWorkspaceSegmentEditorScratchDraftOpenSource({})).toBe("fresh");
+  });
+
+  it("restores only the active scene editor draft when switching creation modes", () => {
+    const currentDraft = { projectId: 42, unsavedPrompt: "Последняя правка" };
+    const detachedDraft = { projectId: 41, unsavedPrompt: "Сохранённый снимок" };
+
+    expect(
+      resolveWorkspaceSegmentEditorScenesEntryDraft({
+        currentDraft,
+        detachedDraft,
+        intent: "mode-switch",
+      }),
+    ).toBe(currentDraft);
+    expect(
+      resolveWorkspaceSegmentEditorScenesEntryDraft({
+        currentDraft: null,
+        detachedDraft,
+        intent: "mode-switch",
+      }),
+    ).toBe(detachedDraft);
+    expect(
+      resolveWorkspaceSegmentEditorScenesEntryDraft({
+        currentDraft,
+        detachedDraft,
+        intent: "standalone",
+      }),
+    ).toBeNull();
+    expect(
+      resolveWorkspaceSegmentEditorScenesEntryDraft({
+        currentDraft,
+        detachedDraft,
+        intent: "create-new",
+      }),
+    ).toBeNull();
   });
 });
 

@@ -187,6 +187,20 @@ export const resolveWorkspaceSegmentEditorScratchDraftOpenSource = (
   return "fresh";
 };
 
+export type WorkspaceSegmentEditorScenesEntryIntent = "mode-switch" | "standalone" | "create-new";
+
+export const resolveWorkspaceSegmentEditorScenesEntryDraft = <TDraft>(options: {
+  currentDraft?: TDraft | null;
+  detachedDraft?: TDraft | null;
+  intent: WorkspaceSegmentEditorScenesEntryIntent;
+}): TDraft | null => {
+  if (options.intent !== "mode-switch") {
+    return null;
+  }
+
+  return options.currentDraft ?? options.detachedDraft ?? null;
+};
+
 export const shouldResetWorkspaceSegmentEditorConsumedSourceProject = (
   projectId: number | null | undefined,
   isConsumedSourceProject: boolean,
